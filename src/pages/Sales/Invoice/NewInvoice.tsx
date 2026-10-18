@@ -6,7 +6,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FiPrinter, FiSave, FiCheck, FiX, FiUserCheck, FiTrash2, FiUser } from 'react-icons/fi';
+import { FiPrinter, FiSave, FiCheck, FiX, FiUserCheck, FiTrash2, FiUser, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
 import { SearchableDropdown } from '../../../components/SearchableDropdown';
 import { useAuth } from '../../../Context/Auth';
 import { logActivity } from '../../../service/auditLogger';
@@ -111,8 +111,8 @@ const NewInvoice = () => {
       if (match && Number(match[1]) > 0) pcsPerBox = Number(match[1]);
       else pcsPerBox = 4;
     }
-    const boxes = Math.floor(totStock / pcsPerBox);
-    const loose = totStock % pcsPerBox;
+    const boxes = Math.floor(totStock);
+    const loose = Math.round((totStock - boxes) * pcsPerBox);
     return { totStock, boxes, loose, pcsPerBox };
   };
 
@@ -122,6 +122,10 @@ const NewInvoice = () => {
   };
 
   const [showCustomerModal, setShowCustomerModal] = useState<boolean>(false);
+  const [showStockWarningModal, setShowStockWarningModal] = useState<boolean>(false);
+  const [stockWarningItems, setStockWarningItems] = useState<any[]>([]);
+  const [bypassNegativeStockWarning, setBypassNegativeStockWarning] = useState<boolean>(false);
+  const [activeFormikSetFieldValue, setActiveFormikSetFieldValue] = useState<any>(null);
   const [customerModalType, setCustomerModalType] = useState<'walkin' | 'recorded'>('walkin');
   const [walkinName, setWalkinName] = useState<string>('');
   const [walkinPhone, setWalkinPhone] = useState<string>('');
@@ -743,7 +747,7 @@ const NewInvoice = () => {
     return { grossBase, activeGstRate, activeFTaxPer, gstAmt, fTaxAmt, discountAmt, remainingRetail, netTotal };
   };
 
-  const executeInvoicePersistence = async (values: any, customerFinalName: string) => {
+  const executeInvoicePersistence = async (values: any, customerFinalName: string, bypassNegativeCheck: boolean = false) => {
     try {
       setLoading(true);
       
@@ -767,7 +771,7 @@ const NewInvoice = () => {
         const priorUsed = consumedInInvoice[itemKey] || 0;
         const availableForRow = Math.max(0, maxAllowed - priorUsed);
 
-        if (Number(item.qty) > availableForRow) {
+        if (!bypassNegativeCheck && Number(item.qty) > availableForRow) {
           toast.error(`Insufficient stock for ${item.itemName} (Row #${i + 1}). Max Available: ${availableForRow.toLocaleString()}, Requested: ${Number(item.qty).toLocaleString()}`);
           setLoading(false);
           return;
@@ -788,7 +792,7 @@ const NewInvoice = () => {
         const pcsPerBox = Math.max(1, Number(tItem.piecesPerBox) || 4);
         const reqPcs = (Number(tItem.boxQty || 0) * pcsPerBox) + Number(tItem.loosePcs || 0);
 
-        let maxAllowed = Number(tItem.availableQty || 0);
+        let maxAllowedPcs = Math.round(Number(tItem.availableQty || 0) * pcsPerBox);
         if (editData && editData.items) {
           const oldItems = typeof editData.items === 'string' ? JSON.parse(editData.items || '[]') : (editData.items || []);
           const original = oldItems.find((oi: any) => oi.skuCode === tItem.skuCode && (oi.warehouse || editData.dispatch_warehouse || 'Main Warehouse') === (tItem.warehouse || values.dispatchWarehouse || 'Main Warehouse'));
@@ -796,17 +800,17 @@ const NewInvoice = () => {
             const origPcs = original.isTileItem
               ? ((Number(original.boxQty || 0) * pcsPerBox) + Number(original.loosePcs || 0))
               : Math.round(Number(original.qty || 0) * pcsPerBox);
-            maxAllowed += origPcs;
+            maxAllowedPcs += origPcs;
           }
         }
 
         const priorUsed = consumedInInvoice[itemKey] || 0;
-        const availableForRow = Math.max(0, maxAllowed - priorUsed);
+        const availableForRowPcs = Math.max(0, maxAllowedPcs - priorUsed);
 
-        if (reqPcs > availableForRow) {
-          const avBoxes = Math.floor(availableForRow / pcsPerBox);
-          const avLoose = availableForRow % pcsPerBox;
-          toast.error(`Insufficient tile stock for ${tItem.itemName} (Tile Row #${i + 1}). Max Available: ${avBoxes} Boxes + ${avLoose} Pcs (${availableForRow} Pcs total).`);
+        if (!bypassNegativeCheck && reqPcs > availableForRowPcs) {
+          const avBoxes = Math.floor(availableForRowPcs / pcsPerBox);
+          const avLoose = availableForRowPcs % pcsPerBox;
+          toast.error(`Insufficient tile stock for ${tItem.itemName} (Tile Row #${i + 1}). Max Available: ${avBoxes} Boxes${avLoose > 0 ? ` + ${avLoose} Pcs` : ''} (${availableForRowPcs} Pcs total).`);
           setLoading(false);
           return;
         }
@@ -1425,13 +1429,189 @@ const NewInvoice = () => {
       }
     }
 
-    await executeInvoicePersistence(pendingFormValues, finalCustomerName);
+    await executeInvoicePersistence(pendingFormValues, finalCustomerName, bypassNegativeStockWarning);
   };
 
   if (initialLoading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
 
   return (
     <div className="mx-auto max-w-7xl text-black dark:text-bodydark text-xs font-sans relative">
+      
+      {/* ⚠️ WAREHOUSE STOCK MISMATCH / LOW STOCK WARNING MODAL */}
+      {showStockWarningModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-boxdark w-full max-w-xl rounded-2xl shadow-2xl p-6 border border-amber-300 dark:border-amber-700/60 animate-in fade-in zoom-in duration-200">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <FiAlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Warehouse Stock Warning
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    The chosen warehouse has insufficient stock, but items are available in another location:
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowStockWarningModal(false)}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg transition"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+
+            {/* List of Warning Items */}
+            <div className="my-4 max-h-72 overflow-y-auto space-y-3 pr-1">
+              {stockWarningItems.map((item, wIdx) => {
+                const hasAlt = item.bestAlternative && item.bestAlternative.stock > 0;
+                return (
+                  <div
+                    key={wIdx}
+                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs"
+                  >
+                    <div className="flex justify-between items-start gap-2 mb-2">
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-white text-xs">
+                          {item.itemName}
+                        </div>
+                        {item.skuCode && (
+                          <div className="text-[10px] font-mono text-slate-400">Code: {item.skuCode}</div>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-bold font-mono px-2 py-0.5 rounded bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 text-[11px]">
+                          Need: {item.itemType === 'tile' ? `${item.requestedBoxes} Box + ${item.requestedLoose} Pcs` : `${item.requestedQty} ${item.uom}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-[11px]">
+                      <div>
+                        <span className="text-slate-400">Selected Location:</span>
+                        <div className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1 font-mono">
+                          <span>{item.currentWarehouse}</span>
+                          <span>(Available: {item.itemType === 'tile' ? `${item.currentStock} Box + ${item.currentLoose} Pcs` : `${item.currentStock} ${item.uom}`})</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-400">Stock Found in:</span>
+                        {hasAlt ? (
+                          <div className="flex items-center justify-between gap-1 mt-0.5">
+                            <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                              {item.bestAlternative.warehouse} ({item.itemType === 'tile' ? `${item.bestAlternative.boxes} Box + ${item.bestAlternative.loose} Pcs` : `${item.bestAlternative.stock} ${item.uom}`})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const targetWh = item.bestAlternative.warehouse;
+                                if (activeFormikSetFieldValue) {
+                                  if (item.itemType === 'standard') {
+                                    activeFormikSetFieldValue(`items.${item.index}.warehouse`, targetWh);
+                                    activeFormikSetFieldValue(`items.${item.index}.availableQty`, item.bestAlternative.stock);
+                                  } else {
+                                    activeFormikSetFieldValue(`tileItems.${item.index}.warehouse`, targetWh);
+                                    activeFormikSetFieldValue(`tileItems.${item.index}.availableQty`, item.bestAlternative.stock);
+                                  }
+                                }
+                                if (pendingFormValues) {
+                                  if (item.itemType === 'standard' && pendingFormValues.items?.[item.index]) {
+                                    pendingFormValues.items[item.index].warehouse = targetWh;
+                                    pendingFormValues.items[item.index].availableQty = item.bestAlternative.stock;
+                                  } else if (item.itemType === 'tile' && pendingFormValues.tileItems?.[item.index]) {
+                                    pendingFormValues.tileItems[item.index].warehouse = targetWh;
+                                    pendingFormValues.tileItems[item.index].availableQty = item.bestAlternative.stock;
+                                  }
+                                }
+                                setStockWarningItems(prev => prev.filter((_, idx) => idx !== wIdx));
+                                toast.success(`Switched ${item.itemName} to ${targetWh}`);
+                              }}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-300 transition cursor-pointer"
+                            >
+                              Switch
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="font-bold text-slate-400 italic">No other warehouse has stock</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setShowStockWarningModal(false)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold transition cursor-pointer"
+              >
+                Cancel & Edit Rows
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStockWarningModal(false);
+                    openCustomerCheckoutModal(pendingFormValues, true);
+                  }}
+                  className="w-full sm:w-auto px-3 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-bold transition cursor-pointer text-center"
+                  title="Allows invoice to proceed with negative stock in the selected location"
+                >
+                  Proceed with Negative Stock
+                </button>
+
+                {stockWarningItems.some(i => i.bestAlternative && i.bestAlternative.stock > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stockWarningItems.forEach(item => {
+                        if (item.bestAlternative && item.bestAlternative.stock > 0) {
+                          const targetWh = item.bestAlternative.warehouse;
+                          if (activeFormikSetFieldValue) {
+                            if (item.itemType === 'standard') {
+                              activeFormikSetFieldValue(`items.${item.index}.warehouse`, targetWh);
+                              activeFormikSetFieldValue(`items.${item.index}.availableQty`, item.bestAlternative.stock);
+                            } else {
+                              activeFormikSetFieldValue(`tileItems.${item.index}.warehouse`, targetWh);
+                              activeFormikSetFieldValue(`tileItems.${item.index}.availableQty`, item.bestAlternative.stock);
+                            }
+                          }
+                          if (pendingFormValues) {
+                            if (item.itemType === 'standard' && pendingFormValues.items?.[item.index]) {
+                              pendingFormValues.items[item.index].warehouse = targetWh;
+                              pendingFormValues.items[item.index].availableQty = item.bestAlternative.stock;
+                            } else if (item.itemType === 'tile' && pendingFormValues.tileItems?.[item.index]) {
+                              pendingFormValues.tileItems[item.index].warehouse = targetWh;
+                              pendingFormValues.tileItems[item.index].availableQty = item.bestAlternative.stock;
+                            }
+                          }
+                        }
+                      });
+                      toast.success('All items switched to warehouses with stock!');
+                      setShowStockWarningModal(false);
+                      openCustomerCheckoutModal(pendingFormValues, false);
+                    }}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>Switch to Available Stock & Save</span>
+                    <FiArrowRight size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CUSTOMER CHECKOUT MODAL */}
       {showCustomerModal && (() => {
         const modalReturnVal = (pendingFormValues?.returnItems || []).reduce((acc: number, r: any) => acc + (Number(r.qty || 0) * Number(r.rp ?? r.rate ?? 0)), 0);
@@ -1610,7 +1790,11 @@ const NewInvoice = () => {
             setShowCustomerModal(true);
           }}
         >
-          {({ values, handleChange, setFieldValue, errors, touched, submitCount, submitForm, isSubmitting, isValidating, validateForm }) => {
+          {({ values, handleChange, setFieldValue, errors, touched, submitCount, submitForm, isSubmitting, isValidating }) => {
+            // Keep setFieldValue available for stock modal auto-switch
+            if (activeFormikSetFieldValue !== setFieldValue) {
+              setActiveFormikSetFieldValue(() => setFieldValue);
+            }
             const hasAttempted = submitCount > 0;
             const isModalLoading = isOpeningCustomerModal || isSubmitting || isValidating;
             const returnTotalValue = (values.returnItems || []).reduce((acc: number, rItem: any) => {
@@ -2801,8 +2985,10 @@ const NewInvoice = () => {
                                   const pcsPerBox = Math.max(1, Number(tItem.piecesPerBox) || 4);
                                   const sqmPerBox = Math.max(0.01, Number(tItem.sqmPerBox) || 1.44);
                                   const currentStockVal = Number(tItem.availableQty || 0);
-                                  const availBoxes = Math.floor(currentStockVal / pcsPerBox);
-                                  const availLoose = currentStockVal % pcsPerBox;
+                                  const availBoxes = Math.floor(currentStockVal);
+                                  const availLoose = Math.round((currentStockVal - availBoxes) * pcsPerBox);
+                                  const totalAvailPieces = Math.round(currentStockVal * pcsPerBox);
+                                  const totalAvailSqm = Number((currentStockVal * sqmPerBox).toFixed(2));
                                   const itemLineSqm = Number(tItem.totalSqm) > 0
                                     ? Number(tItem.totalSqm)
                                     : Number(((Number(tItem.boxQty || 0) * sqmPerBox) + ((Number(tItem.loosePcs || 0) / pcsPerBox) * sqmPerBox)).toFixed(2));
@@ -3029,8 +3215,8 @@ const NewInvoice = () => {
                                               {filteredWhs.map((wh, wIdx) => {
                                                 const pcsPerBox = Math.max(1, Number(tItem.piecesPerBox) || 4);
                                                 const whStock = tItem.itemName ? getItemWarehouseStock(tItem.itemName, wh) : null;
-                                                const whBoxes = whStock !== null ? Math.floor(whStock / pcsPerBox) : 0;
-                                                const whLoose = whStock !== null ? (whStock % pcsPerBox) : 0;
+                                                const whBoxes = whStock !== null ? Math.floor(whStock) : 0;
+                                                const whLoose = whStock !== null ? Math.round((whStock - whBoxes) * pcsPerBox) : 0;
                                                 const hasStock = whStock !== null && whStock > 0;
                                                 return (
                                                   <div
@@ -3071,13 +3257,13 @@ const NewInvoice = () => {
                                       {/* STOCK IN WAREHOUSE */}
                                       <td className="p-2 w-32 text-center">
                                         <div className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                                          {availBoxes} Boxes + {availLoose} Pcs
+                                          {availBoxes} Boxes{availLoose > 0 ? ` + ${availLoose} Pcs` : ''}
                                         </div>
                                         <div className="text-[10px] text-teal-700 dark:text-teal-300 font-mono font-bold">
-                                          {((availBoxes * sqmPerBox) + ((availLoose / pcsPerBox) * sqmPerBox)).toFixed(2)} m²
+                                          {totalAvailSqm.toFixed(2)} m²
                                         </div>
                                         <div className="text-[10px] text-slate-400 font-mono">
-                                          ({currentStockVal} Total Pcs)
+                                          ({totalAvailPieces} Total Pcs)
                                         </div>
                                       </td>
 
@@ -3869,51 +4055,21 @@ const NewInvoice = () => {
                       : (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)));
                     const isOverpaid = totalPaidNow > currentSubtotalValue + 0.01;
 
-                    const handleInvoiceSubmitAttempt = async (action: 'save' | 'print') => {
-                      if (isOverpaid) {
-                        toast.error(`Payment (Rs. ${totalPaidNow.toLocaleString()}) cannot exceed bill total (Rs. ${currentSubtotalValue.toLocaleString()})!`);
-                        return;
-                      }
-
-                      // Check validation actively
-                      const formErrors: any = await validateForm();
-                      if (formErrors && Object.keys(formErrors).length > 0) {
-                        let errorMsg = 'Please complete all required fields before logging the invoice.';
-                        if (formErrors.items) {
-                          if (typeof formErrors.items === 'string') {
-                            errorMsg = formErrors.items;
-                          } else if (Array.isArray(formErrors.items)) {
-                            const firstIt: any = formErrors.items.find(Boolean);
-                            if (firstIt) {
-                              errorMsg = typeof firstIt === 'string' ? firstIt : (firstIt.itemName || firstIt.warehouse || firstIt.qty || firstIt.rp || 'Please select a product for all item rows.');
-                            }
-                          }
-                        } else if (formErrors.gatePasses) {
-                          errorMsg = typeof formErrors.gatePasses === 'string' ? formErrors.gatePasses : 'Please provide gate passes for all dispatch locations.';
-                        } else if (formErrors.salesman) {
-                          errorMsg = String(formErrors.salesman);
-                        } else if (formErrors.saleDate) {
-                          errorMsg = String(formErrors.saleDate);
-                        } else {
-                          const firstVal = Object.values(formErrors)[0];
-                          if (typeof firstVal === 'string') errorMsg = firstVal;
-                        }
-                        toast.error(errorMsg);
-                        return;
-                      }
-
-                      setSubmitAction(action);
-                      setIsOpeningCustomerModal(true);
-                      submitForm().finally(() => {
-                        setTimeout(() => setIsOpeningCustomerModal(false), 1200);
-                      });
-                    };
-
                     return (
                       <>
                         <button
                           type="button"
-                          onClick={() => handleInvoiceSubmitAttempt('print')}
+                          onClick={() => {
+                            if (isOverpaid) {
+                              toast.error(`Payment (Rs. ${totalPaidNow.toLocaleString()}) cannot exceed bill total (Rs. ${currentSubtotalValue.toLocaleString()})!`);
+                              return;
+                            }
+                            setSubmitAction('print');
+                            setIsOpeningCustomerModal(true);
+                            submitForm().finally(() => {
+                              setTimeout(() => setIsOpeningCustomerModal(false), 1200);
+                            });
+                          }}
                           disabled={loading || isModalLoading || isOverpaid}
                           className={`rounded-xl py-3 px-6 font-bold text-white transition shadow-md text-xs cursor-pointer flex items-center gap-2 ${
                             isOverpaid || isModalLoading ? 'bg-gray-400 cursor-not-allowed opacity-75' : 'bg-teal-600 hover:bg-teal-700'
@@ -3933,7 +4089,17 @@ const NewInvoice = () => {
 
                         <button
                           type="button"
-                          onClick={() => handleInvoiceSubmitAttempt('save')}
+                          onClick={() => {
+                            if (isOverpaid) {
+                              toast.error(`Payment (Rs. ${totalPaidNow.toLocaleString()}) cannot exceed bill total (Rs. ${currentSubtotalValue.toLocaleString()})!`);
+                              return;
+                            }
+                            setSubmitAction('save');
+                            setIsOpeningCustomerModal(true);
+                            submitForm().finally(() => {
+                              setTimeout(() => setIsOpeningCustomerModal(false), 1200);
+                            });
+                          }}
                           disabled={loading || isModalLoading || isOverpaid}
                           className={`rounded-xl py-3 px-8 font-bold text-white transition shadow-md text-xs cursor-pointer flex items-center gap-2 ${
                             isOverpaid || isModalLoading ? 'bg-gray-400 cursor-not-allowed opacity-75' : 'bg-emerald-600 hover:bg-emerald-700'
