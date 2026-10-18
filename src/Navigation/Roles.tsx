@@ -288,6 +288,12 @@ export const adminRoutes = [
         component: <PurchaseList />,
         icon: MdShoppingCart
       },
+        {
+          label: 'Goods Receipt (GRN)',
+          path: '/Purchase/GRN/List',
+          component: <GRNList />,
+          icon: MdInventory
+        },
 
       {
         label: 'Inward Challan (Warehouse)',
