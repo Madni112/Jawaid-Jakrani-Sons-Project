@@ -56,6 +56,11 @@ export function applyAccentColor(hexColor: string) {
       document.documentElement.style.setProperty('--color-primary-rgb', `${r} ${g} ${b}`);
     }
 
+    const darkerR = Math.max(0, Math.round(r * 0.82));
+    const darkerG = Math.max(0, Math.round(g * 0.82));
+    const darkerB = Math.max(0, Math.round(b * 0.82));
+    const darkerHex = `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
+
     // Dynamic style tag that globally overrides red brand classes to the active accent color
     let styleTag = document.getElementById('al-muhammadi-dynamic-theme');
     if (!styleTag) {
@@ -70,67 +75,125 @@ export function applyAccentColor(hexColor: string) {
         --color-primary-rgb: ${r}, ${g}, ${b};
       }
 
-      /* Primary & Red brand backgrounds */
+      /* Solid Backgrounds */
       .bg-red-600,
       .bg-red-500,
+      .bg-red-700,
+      .bg-emerald-600,
+      .bg-emerald-500,
+      .bg-emerald-700,
       .bg-primary,
       .bg-\\[\\#DC2626\\] {
         background-color: ${hexColor} !important;
       }
 
-      /* Light / Transparent background tints */
+      /* Hover Backgrounds */
+      .hover\\:bg-red-700:hover,
+      .hover\\:bg-red-600:hover,
+      .hover\\:bg-emerald-700:hover,
+      .hover\\:bg-emerald-800:hover,
+      .hover\\:bg-primary-hover:hover {
+        background-color: ${darkerHex} !important;
+      }
+
+      /* Light / Translucent Background Tints */
       .bg-red-50,
       .bg-red-50\\/80,
       .bg-red-600\\/10,
-      .bg-red-500\\/10 {
+      .bg-red-500\\/10,
+      .bg-emerald-50,
+      .bg-emerald-50\\/80,
+      .bg-emerald-600\\/10,
+      .bg-emerald-500\\/10,
+      .bg-emerald-500\\/20,
+      .bg-primary\\/10,
+      .bg-primary\\/5 {
         background-color: rgba(${r}, ${g}, ${b}, 0.1) !important;
       }
 
+      /* Dark Mode Translucent Backgrounds */
       .dark .bg-red-500\\/15,
       .dark .bg-red-950\\/30,
-      .dark .bg-red-900\\/30 {
+      .dark .bg-red-900\\/30,
+      .dark .bg-emerald-500\\/15,
+      .dark .bg-emerald-950\\/30,
+      .dark .bg-emerald-900\\/30,
+      .dark .bg-primary\\/20 {
         background-color: rgba(${r}, ${g}, ${b}, 0.18) !important;
       }
 
-      .bg-red-400 {
+      .bg-red-400,
+      .bg-emerald-400 {
         background-color: ${hexColor} !important;
         opacity: 0.75 !important;
       }
 
-      /* Primary & Red text colors */
+      /* Text Colors */
       .text-red-600,
       .text-red-500,
       .text-red-700,
+      .text-emerald-600,
+      .text-emerald-500,
+      .text-emerald-700,
       .dark .text-red-400,
+      .dark .text-emerald-400,
       .text-primary {
+        color: ${hexColor} !important;
+      }
+
+      /* Hover Text Colors */
+      .hover\\:text-red-600:hover,
+      .hover\\:text-red-500:hover,
+      .hover\\:text-emerald-600:hover,
+      .hover\\:text-emerald-700:hover,
+      .hover\\:text-primary:hover {
         color: ${hexColor} !important;
       }
 
       /* Borders */
       .border-red-600,
       .border-red-500,
-      .border-primary {
+      .border-emerald-600,
+      .border-emerald-500,
+      .border-emerald-500\\/20,
+      .border-primary,
+      .focus\\:border-red-600:focus,
+      .focus\\:border-emerald-500:focus,
+      .focus\\:border-emerald-600:focus,
+      .focus\\:border-primary:focus {
         border-color: ${hexColor} !important;
       }
 
-      /* Glow & box shadows */
+      /* Glow / Shadows */
       .shadow-red-600\\/30,
-      .shadow-red-600\\/20 {
+      .shadow-red-600\\/20,
+      .shadow-emerald-600\\/30,
+      .shadow-emerald-600\\/20 {
         box-shadow: 0 10px 15px -3px rgba(${r}, ${g}, ${b}, 0.28) !important;
       }
 
-      /* Gradients (e.g. TODAY'S SALE card) */
-      .from-red-600 {
+      /* Gradients */
+      .from-red-600,
+      .from-emerald-600 {
         --tw-gradient-from: ${hexColor} var(--tw-gradient-from-position) !important;
         --tw-gradient-to: rgba(${r}, ${g}, ${b}, 0) var(--tw-gradient-to-position) !important;
         --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
       }
-      .via-red-600 {
+      .via-red-600,
+      .via-emerald-600 {
         --tw-gradient-to: rgba(${r}, ${g}, ${b}, 0) var(--tw-gradient-to-position) !important;
         --tw-gradient-stops: var(--tw-gradient-from), ${hexColor} var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
       }
-      .to-rose-700 {
-        --tw-gradient-to: ${hexColor} var(--tw-gradient-to-position) !important;
+      .to-rose-700,
+      .to-emerald-700 {
+        --tw-gradient-to: ${darkerHex} var(--tw-gradient-to-position) !important;
+      }
+
+      .fill-primary {
+        fill: ${hexColor} !important;
+      }
+      .stroke-primary {
+        stroke: ${hexColor} !important;
       }
     `;
   }
