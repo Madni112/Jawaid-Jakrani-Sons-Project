@@ -7,12 +7,14 @@ import { AuthProvider } from './Context/Auth';
 import Alert from './pages/Alert';
 import ErrorPopupModal from './components/ErrorPopupModal';
 import { initErrorInterceptor } from './utils/errorPopup';
+import { applyAccentColor, getSavedAccentColor } from './constant/themeConfig';
 
 // Initialize error interceptor so toast.error triggers modal popup
 initErrorInterceptor();
 
 function App() {
   useEffect(() => {
+    applyAccentColor(getSavedAccentColor());
     initializeSocket();
   }, []);
   return (
