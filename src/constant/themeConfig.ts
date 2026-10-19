@@ -48,12 +48,91 @@ export function applyAccentColor(hexColor: string) {
   if (typeof document !== 'undefined') {
     document.documentElement.style.setProperty('--color-primary', hexColor);
     const hex = hexColor.replace('#', '');
+    let r = 220, g = 38, b = 38;
     if (hex.length === 6) {
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
       document.documentElement.style.setProperty('--color-primary-rgb', `${r} ${g} ${b}`);
     }
+
+    // Dynamic style tag that globally overrides red brand classes to the active accent color
+    let styleTag = document.getElementById('al-muhammadi-dynamic-theme');
+    if (!styleTag) {
+      styleTag = document.createElement('style');
+      styleTag.id = 'al-muhammadi-dynamic-theme';
+      document.head.appendChild(styleTag);
+    }
+
+    styleTag.innerHTML = `
+      :root {
+        --color-primary: ${hexColor};
+        --color-primary-rgb: ${r}, ${g}, ${b};
+      }
+
+      /* Primary & Red brand backgrounds */
+      .bg-red-600,
+      .bg-red-500,
+      .bg-primary,
+      .bg-\\[\\#DC2626\\] {
+        background-color: ${hexColor} !important;
+      }
+
+      /* Light / Transparent background tints */
+      .bg-red-50,
+      .bg-red-50\\/80,
+      .bg-red-600\\/10,
+      .bg-red-500\\/10 {
+        background-color: rgba(${r}, ${g}, ${b}, 0.1) !important;
+      }
+
+      .dark .bg-red-500\\/15,
+      .dark .bg-red-950\\/30,
+      .dark .bg-red-900\\/30 {
+        background-color: rgba(${r}, ${g}, ${b}, 0.18) !important;
+      }
+
+      .bg-red-400 {
+        background-color: ${hexColor} !important;
+        opacity: 0.75 !important;
+      }
+
+      /* Primary & Red text colors */
+      .text-red-600,
+      .text-red-500,
+      .text-red-700,
+      .dark .text-red-400,
+      .text-primary {
+        color: ${hexColor} !important;
+      }
+
+      /* Borders */
+      .border-red-600,
+      .border-red-500,
+      .border-primary {
+        border-color: ${hexColor} !important;
+      }
+
+      /* Glow & box shadows */
+      .shadow-red-600\\/30,
+      .shadow-red-600\\/20 {
+        box-shadow: 0 10px 15px -3px rgba(${r}, ${g}, ${b}, 0.28) !important;
+      }
+
+      /* Gradients (e.g. TODAY'S SALE card) */
+      .from-red-600 {
+        --tw-gradient-from: ${hexColor} var(--tw-gradient-from-position) !important;
+        --tw-gradient-to: rgba(${r}, ${g}, ${b}, 0) var(--tw-gradient-to-position) !important;
+        --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+      }
+      .via-red-600 {
+        --tw-gradient-to: rgba(${r}, ${g}, ${b}, 0) var(--tw-gradient-to-position) !important;
+        --tw-gradient-stops: var(--tw-gradient-from), ${hexColor} var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+      }
+      .to-rose-700 {
+        --tw-gradient-to: ${hexColor} var(--tw-gradient-to-position) !important;
+      }
+    `;
   }
 }
 
