@@ -128,7 +128,12 @@ const ProductList = () => {
               return pCode === itemCode;
             }
             const iName = String(item.product_name || item.itemName || item.item_name || item.item_details || item.pDescription || '').trim().toLowerCase();
-            return iName === name;
+            if (iName === name) {
+              const duplicates = baseProducts.filter(p => String(p.product_name || '').trim().toLowerCase() === name);
+              if (duplicates.length > 1) return false;
+              return true;
+            }
+            return false;
           };
 
           const whBreakdowns: Record<string, any> = {};
@@ -145,7 +150,7 @@ const ProductList = () => {
           (openStocks || []).forEach((os: any) => {
             const osCode = String(os.skuCode || os.item_code || os.itemCode || '').trim().toLowerCase();
             const osName = String(os.product_name || os.item_name || os.itemName || os.item_details || os.itemDetails || '').trim().toLowerCase();
-            const isMatch = (pCode && osCode) ? (pCode === osCode) : (osName === name);
+            const isMatch = (pCode && osCode) ? (pCode === osCode) : (osName === name && baseProducts.filter(p => String(p.product_name || '').trim().toLowerCase() === name).length <= 1);
 
             if (isMatch) {
               const qty = Number(os.quantity || os.qty || 0);
@@ -474,7 +479,7 @@ const ProductList = () => {
     }
     setSelectedStockBreakdown({ ...product, _loading: true });
     try {
-      const detail = await getDetailedBreakdown(product.product_name);
+      const detail = await getDetailedBreakdown(product.product_name, product.item_sr_no);
       setSelectedStockBreakdown({
         ...product,
         breakdown: detail.breakdown,

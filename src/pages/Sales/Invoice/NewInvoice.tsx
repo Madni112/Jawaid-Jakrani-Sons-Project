@@ -116,9 +116,9 @@ const NewInvoice = () => {
     return { totStock, boxes, loose, pcsPerBox };
   };
 
-  const getItemWarehouseStock = (productName: string, warehouseName: string): number => {
+  const getItemWarehouseStock = (productName: string, warehouseName: string, itemCode?: string): number => {
     if (!productName || !warehouseName) return 0;
-    return getWarehouseAvailableStock(productName, warehouseName, stockDataset);
+    return getWarehouseAvailableStock(productName, warehouseName, stockDataset, itemCode);
   };
 
   const [showCustomerModal, setShowCustomerModal] = useState<boolean>(false);
@@ -471,15 +471,15 @@ const NewInvoice = () => {
     ).nullable()
   });
 
-  const fetchStockForWarehouse = async (productName: string, chosenWarehouse: string) => {
+  const fetchStockForWarehouse = async (productName: string, chosenWarehouse: string, itemCode?: string) => {
     if (!productName) return 0;
     try {
       if (!chosenWarehouse) {
-        const t = await getTotalAvailableStock(productName, stockDataset);
+        const t = await getTotalAvailableStock(productName, stockDataset, itemCode);
         console.log(`[Invoice] No WH. Total stock for ${productName}:`, t);
         return t;
       }
-      const s = await getAvailableStock(productName, chosenWarehouse, stockDataset);
+      const s = await getAvailableStock(productName, chosenWarehouse, stockDataset, itemCode);
       console.log(`[Invoice] WH selected (${chosenWarehouse}). Stock for ${productName}:`, s);
       return s;
     } catch (err) {
@@ -529,7 +529,7 @@ const NewInvoice = () => {
       setFieldValue(`items.${index}.availableQty`, 0);
       return;
     }
-    const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse);
+    const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse, selectedProduct.item_sr_no);
     setFieldValue(`items.${index}.availableQty`, availStock);
   };
 
@@ -596,7 +596,7 @@ const NewInvoice = () => {
 
     const effectiveWarehouse = (currentTileItem && currentTileItem.warehouse) ? currentTileItem.warehouse : chosenWarehouse;
     if (effectiveWarehouse) {
-      const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse);
+      const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse, selectedProduct.item_sr_no);
       setFieldValue(`tileItems.${tIdx}.availableQty`, availStock);
     }
   };
@@ -1028,12 +1028,24 @@ const NewInvoice = () => {
         const oldItems = typeof editData.items === 'string' ? JSON.parse(editData.items || '[]') : (editData.items || []);
         for (const oldItem of oldItems) {
           if (!oldItem.itemName || !oldItem.itemName.trim()) continue;
-          const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', oldItem.itemName).maybeSingle();
+          let query = supabase.from('products').select('id, current_stock');
+          if (oldItem.skuCode) {
+            query = query.eq('item_sr_no', oldItem.skuCode);
+          } else {
+            query = query.ilike('product_name', oldItem.itemName);
+          }
+          const { data: prod } = await query.maybeSingle();
           if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) + Number(oldItem.qty || 0) }).eq('id', prod.id);
         }
         for (const newItem of allMergedItems) {
           if (!newItem.itemName || !newItem.itemName.trim()) continue;
-          const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', newItem.itemName).maybeSingle();
+          let query = supabase.from('products').select('id, current_stock');
+          if (newItem.skuCode) {
+            query = query.eq('item_sr_no', newItem.skuCode);
+          } else {
+            query = query.ilike('product_name', newItem.itemName);
+          }
+          const { data: prod } = await query.maybeSingle();
           if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(newItem.qty || 0) }).eq('id', prod.id);
         }
 
@@ -1292,7 +1304,13 @@ const NewInvoice = () => {
         // Update products.current_stock only — warehouse_inventory retired
         for (const item of allMergedItems) {
           if (!item.itemName || !item.itemName.trim()) continue;
-          const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', item.itemName).maybeSingle();
+          let query = supabase.from('products').select('id, current_stock');
+          if (item.skuCode) {
+            query = query.eq('item_sr_no', item.skuCode);
+          } else {
+            query = query.ilike('product_name', item.itemName);
+          }
+          const { data: prod } = await query.maybeSingle();
           if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(item.qty) }).eq('id', prod.id);
         }
         toast.success('Sales Invoice & Delivery Challan(s) logged successfully!');
@@ -2563,7 +2581,7 @@ const NewInvoice = () => {
                                                     const selectedWh = filteredWhs[highlightedWhIndex];
                                                     setFieldValue(`items.${idx}.warehouse`, selectedWh);
                                                     if (item.itemName) {
-                                                      fetchStockForWarehouse(item.itemName, selectedWh).then(stock => setFieldValue(`items.${idx}.availableQty`, stock));
+                                                      fetchStockForWarehouse(item.itemName, selectedWh, item.skuCode).then(stock => setFieldValue(`items.${idx}.availableQty`, stock));
                                                     }
                                                     setActiveWhIndex(null);
                                                   }
@@ -2588,7 +2606,7 @@ const NewInvoice = () => {
                                                   e.stopPropagation();
                                                   setFieldValue(`items.${idx}.warehouse`, '');
                                                   if (item.itemName) {
-                                                    fetchStockForWarehouse(item.itemName, values.dispatchWarehouse || '').then(stock => setFieldValue(`items.${idx}.availableQty`, stock));
+                                                    fetchStockForWarehouse(item.itemName, values.dispatchWarehouse || '', item.skuCode).then(stock => setFieldValue(`items.${idx}.availableQty`, stock));
                                                   }
                                                   setActiveWhIndex(null);
                                                 }}
@@ -2604,7 +2622,7 @@ const NewInvoice = () => {
                                               <div className="absolute left-0 min-w-[230px] max-w-[300px] top-full mt-1 z-[99999] max-h-[200px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300">
                                                 {filteredWhs.map((wh, wIdx) => {
                                                   const isHighlighted = wIdx === highlightedWhIndex;
-                                                  const whStock = item.itemName ? getItemWarehouseStock(item.itemName, wh) : null;
+                                                  const whStock = item.itemName ? getItemWarehouseStock(item.itemName, wh, item.skuCode) : null;
                                                   return (
                                                     <div
                                                       key={wh}
@@ -2614,7 +2632,7 @@ const NewInvoice = () => {
                                                         e.stopPropagation();
                                                         setFieldValue(`items.${idx}.warehouse`, wh);
                                                         if (item.itemName) {
-                                                          const stock = await fetchStockForWarehouse(item.itemName, wh);
+                                                          const stock = await fetchStockForWarehouse(item.itemName, wh, item.skuCode);
                                                           setFieldValue(`items.${idx}.availableQty`, stock);
                                                         }
                                                         setActiveWhIndex(null);
@@ -2624,7 +2642,7 @@ const NewInvoice = () => {
                                                         e.stopPropagation();
                                                         setFieldValue(`items.${idx}.warehouse`, wh);
                                                         if (item.itemName) {
-                                                          const stock = await fetchStockForWarehouse(item.itemName, wh);
+                                                          const stock = await fetchStockForWarehouse(item.itemName, wh, item.skuCode);
                                                           setFieldValue(`items.${idx}.availableQty`, stock);
                                                         }
                                                         setActiveWhIndex(null);
@@ -3207,7 +3225,7 @@ const NewInvoice = () => {
                                                   const selWh = filteredWhs[highlightedTileWhIndex];
                                                   setFieldValue(`tileItems.${tIdx}.warehouse`, selWh);
                                                   if (tItem.itemName) {
-                                                    fetchStockForWarehouse(tItem.itemName, selWh).then(avail => {
+                                                    fetchStockForWarehouse(tItem.itemName, selWh, tItem.skuCode).then(avail => {
                                                       setFieldValue(`tileItems.${tIdx}.availableQty`, avail);
                                                     });
                                                   }
@@ -3234,7 +3252,7 @@ const NewInvoice = () => {
                                                 e.stopPropagation();
                                                 setFieldValue(`tileItems.${tIdx}.warehouse`, '');
                                                 if (tItem.itemName) {
-                                                  fetchStockForWarehouse(tItem.itemName, values.dispatchWarehouse || '').then(avail => {
+                                                  fetchStockForWarehouse(tItem.itemName, values.dispatchWarehouse || '', tItem.skuCode).then(avail => {
                                                     setFieldValue(`tileItems.${tIdx}.availableQty`, avail);
                                                   });
                                                 }
@@ -3251,7 +3269,7 @@ const NewInvoice = () => {
                                             <div className="absolute left-0 min-w-[250px] max-w-[320px] top-full mt-1 z-[99999] max-h-[180px] overflow-y-auto rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin">
                                               {filteredWhs.map((wh, wIdx) => {
                                                 const pcsPerBox = Math.max(1, Number(tItem.piecesPerBox) || 4);
-                                                const whStock = tItem.itemName ? getItemWarehouseStock(tItem.itemName, wh) : null;
+                                                const whStock = tItem.itemName ? getItemWarehouseStock(tItem.itemName, wh, tItem.skuCode) : null;
                                                 const whBoxes = whStock !== null ? Math.floor(whStock) : 0;
                                                 const whLoose = whStock !== null ? Math.round((whStock - whBoxes) * pcsPerBox) : 0;
                                                 const hasStock = whStock !== null && whStock > 0;
@@ -3264,7 +3282,7 @@ const NewInvoice = () => {
                                                       e.stopPropagation();
                                                       setFieldValue(`tileItems.${tIdx}.warehouse`, wh);
                                                       if (tItem.itemName) {
-                                                        fetchStockForWarehouse(tItem.itemName, wh).then(avail => {
+                                                        fetchStockForWarehouse(tItem.itemName, wh, tItem.skuCode).then(avail => {
                                                           setFieldValue(`tileItems.${tIdx}.availableQty`, avail);
                                                         });
                                                       }
@@ -3705,7 +3723,7 @@ const NewInvoice = () => {
                                           {isCurrentWhActive && filteredWhs.length > 0 && (
                                             <div className="absolute left-0 min-w-[230px] max-w-[300px] top-full mt-1 z-[99999] max-h-[180px] overflow-y-auto rounded-xl border border-rose-200 dark:border-rose-800 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin">
                                               {filteredWhs.map((wh, wIdx) => {
-                                                const whStock = rItem.itemName ? getItemWarehouseStock(rItem.itemName, wh) : null;
+                                                const whStock = rItem.itemName ? getItemWarehouseStock(rItem.itemName, wh, rItem.skuCode) : null;
                                                 return (
                                                   <div
                                                     key={wh}
