@@ -329,7 +329,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           {(sidebarOpen || isMobile) ? (
             <div className="flex items-center justify-between w-full">
               <NavLink className="flex items-center gap-3.5 group" to="/">
-                <div className="w-11 h-11 rounded-xl bg-red-600 flex items-center justify-center shadow-md shadow-red-600/30 group-hover:scale-105 transition-all duration-200 text-white font-black text-lg select-none shrink-0">
+                <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center shadow-md shadow-primary/30 group-hover:scale-105 transition-all duration-200 text-white font-black text-lg select-none shrink-0">
                   A
                 </div>
                 <div className="text-left">
@@ -361,7 +361,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               }}
               title="Open Sidebar"
             >
-              <div className="w-11 h-11 rounded-xl bg-red-600 flex items-center justify-center shadow-md shadow-red-600/30 hover:scale-105 transition-all duration-200 text-white font-black text-lg select-none">
+              <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center shadow-md shadow-primary/30 hover:scale-105 transition-all duration-200 text-white font-black text-lg select-none">
                 A
               </div>
             </div>
