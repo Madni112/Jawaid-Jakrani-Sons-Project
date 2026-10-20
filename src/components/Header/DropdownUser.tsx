@@ -41,6 +41,14 @@ const DropdownUser = () => {
     const current = getSavedAccentColor();
     setAccentColor(current);
     applyAccentColor(current);
+
+    const themeHandler = () => {
+      setAccentColor(getSavedAccentColor());
+    };
+    window.addEventListener('zoaib_ali_theme_color_changed', themeHandler);
+    return () => {
+      window.removeEventListener('zoaib_ali_theme_color_changed', themeHandler);
+    };
   }, []);
 
   const handleColorSelect = (hex: string) => {
@@ -65,7 +73,7 @@ const DropdownUser = () => {
         to="#"
       >
         <span className="hidden text-right lg:block">
-          <span className="block text-sm font-black text-black dark:text-white truncate max-w-[200px]">
+          <span className="block text-sm font-bold text-black dark:text-white truncate max-w-[200px]">
             {displayCompanyName}
           </span>
           <span
@@ -204,7 +212,7 @@ const DropdownUser = () => {
                   </span>
                 </div>
 
-                <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:text-red-600 dark:hover:text-red-400 cursor-pointer px-2 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-meta-4 transition">
+                <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer px-2 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-meta-4 transition">
                   <LuPenLine size={12} />
                   <span>Custom</span>
                   <input
