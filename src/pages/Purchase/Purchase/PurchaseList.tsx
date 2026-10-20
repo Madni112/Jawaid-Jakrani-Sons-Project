@@ -4,11 +4,11 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
+import TablePagination from '../../../components/TablePagination';
 import { useAuth } from '../../../Context/Auth';
 import { useModal } from '../../../Context/Modal';
 import { MdStore, MdPerson, MdEvent } from 'react-icons/md';
 import PurchaseStockModal from './PurchaseStockModal';
-import { logActivity } from '../../../service/auditLogger';
 
 const PurchaseList = () => {
   const navigate = useNavigate();
@@ -298,18 +298,10 @@ const PurchaseList = () => {
           });
 
           // 2. All GRN accepted qty INCLUDING this purchase's GRN
-          const [ { data: allGrnItems }, { data: allReceipts } ] = await Promise.all([
-            supabase.from('grn_items').select('*'),
-            supabase.from('grn_receipts').select('id, status')
-          ]);
-          const receiptStatusMap: Record<string, string> = {};
-          (allReceipts || []).forEach((r: any) => {
-            if (r.id) receiptStatusMap[String(r.id)] = r.status || '';
-          });
-
+          const { data: allGrnItems } = await supabase.from('grn_items').select('*, grn_receipts(status)');
           let totalPurchased = 0;
           (allGrnItems || []).forEach((gi: any) => {
-            const grnStatus = receiptStatusMap[String(gi.grn_id || '')] || '';
+            const grnStatus = gi.grn_receipts?.status || '';
             if (!['Confirm', 'Partially Received', 'Billed'].includes(grnStatus)) return;
             const giName = String(gi.product_name || '').trim().toLowerCase();
             if (giName === pNameLower || giName.includes(pNameLower)) {
@@ -463,18 +455,6 @@ const PurchaseList = () => {
 
       const { error } = await supabase.from('supplier_purchases').delete().eq('id', id);
       if (error) throw error;
-
-      logActivity({
-        action: 'DELETE',
-        tableName: 'supplier_purchases',
-        details: {
-          id,
-          purchase_number: targetRecord?.purchase_no || `#${id}`,
-          supplier_name: targetRecord?.supplier_name || targetRecord?.vendor_name,
-          warehouse: targetRecord?.target_warehouse,
-          event: `Deleted purchase consignment #${id} (${targetRecord?.supplier_name || 'Vendor'})`
-        }
-      });
 
       toast.success('Procurement consignment record dropped and stock levels reversed safely!');
       fetchProcurementLogs();
@@ -687,28 +667,15 @@ const PurchaseList = () => {
           </table>
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
-          <div className="text-sm text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Previous
-              </button>
-              <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Next
-              </button>
-            </div>
-        </div>
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalEntries={totalEntries}
+          startIndex={startIndex}
+          endIndex={endIndex}
+          onPageChange={setCurrentPage}
+          itemName="entries"
+        />
 
       </div>
     </div>

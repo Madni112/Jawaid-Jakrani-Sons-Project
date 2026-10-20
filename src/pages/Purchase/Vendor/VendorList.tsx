@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import TablePagination from '../../../components/TablePagination';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
-import { MdEdit, MdDelete, MdMoreVert, MdEmail, MdPhone, MdPerson, MdBusiness, MdAccountBalanceWallet, MdAdd, MdClose, MdCheckCircle } from 'react-icons/md';
+import { MdEdit, MdDelete, MdMoreVert, MdEmail, MdPhone, MdPerson, MdBusiness, MdAccountBalanceWallet, MdAdd, MdClose, MdCheckCircle, MdArrowUpward, MdArrowDownward } from 'react-icons/md';
 
 const VendorList = () => {
     const navigate = useNavigate();
@@ -23,6 +24,7 @@ const VendorList = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [pageSize, setPageSize] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
+    const [pageSortOrder, setPageSortOrder] = useState<'asc' | 'desc' | null>('asc');
 
     const fetchRegisteredVendorsAndCOA = async () => {
         try {
@@ -193,16 +195,59 @@ const VendorList = () => {
         }
     };
 
-    const filteredVendors = vendors.filter(v =>
-        (v.vendor_name || v.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (v.contact_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (v.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (v.cell_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (v.phone_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (v.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (v.address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (v.account_code || '').includes(searchTerm)
-    );
+    const parsePageNumber = (val?: string | null): number | null => {
+        if (!val) return null;
+        const match = String(val).match(/\d+/);
+        return match ? parseInt(match[0], 10) : null;
+    };
+
+    const filteredVendors = vendors
+        .filter(v =>
+            (v.vendor_name || v.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.vendor_code || v.vendorCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.page_no || v.pageNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.contact_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.cell_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.phone_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (v.account_code || '').includes(searchTerm)
+        )
+        .sort((a, b) => {
+            if (!pageSortOrder) {
+                return (a.vendor_name || a.name || '').localeCompare(b.vendor_name || b.name || '');
+            }
+
+            const pageA = a.page_no || a.pageNo;
+            const pageB = b.page_no || b.pageNo;
+            const numA = parsePageNumber(pageA);
+            const numB = parsePageNumber(pageB);
+
+            // If both have numeric page numbers
+            if (numA !== null && numB !== null) {
+                if (numA !== numB) {
+                    return pageSortOrder === 'asc' ? numA - numB : numB - numA;
+                }
+                return String(pageA).localeCompare(String(pageB), undefined, { numeric: true });
+            }
+
+            // If only one has a page number
+            if (numA !== null && numB === null) return pageSortOrder === 'asc' ? -1 : 1;
+            if (numA === null && numB !== null) return pageSortOrder === 'asc' ? 1 : -1;
+
+            // If both have text/alphanumeric page numbers
+            if (pageA && pageB) {
+                return pageSortOrder === 'asc'
+                    ? String(pageA).localeCompare(String(pageB), undefined, { numeric: true })
+                    : String(pageB).localeCompare(String(pageA), undefined, { numeric: true });
+            }
+            if (pageA && !pageB) return pageSortOrder === 'asc' ? -1 : 1;
+            if (!pageA && pageB) return pageSortOrder === 'asc' ? 1 : -1;
+
+            // Fallback secondary sort: alphabetical by vendor name
+            return (a.vendor_name || a.name || '').localeCompare(b.vendor_name || b.name || '');
+        });
 
     const totalEntries = filteredVendors.length;
     const totalPages = Math.ceil(totalEntries / pageSize);
@@ -212,7 +257,7 @@ const VendorList = () => {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, pageSize]);
+    }, [searchTerm, pageSize, pageSortOrder]);
 
     return (
         <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
@@ -254,7 +299,7 @@ const VendorList = () => {
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Search vendor name, phone, account code..."
+                            placeholder="Search vendor name, code, page #, phone..."
                             className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-black dark:text-white text-xs font-semibold"
                         />
                     </div>
@@ -264,7 +309,19 @@ const VendorList = () => {
                     <table className="w-full table-auto border-collapse">
                         <thead>
                             <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                                <th className="py-4 px-4 font-semibold w-16">S#</th>
+                                <th 
+                                    onClick={() => setPageSortOrder(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc')}
+                                    className="py-4 px-4 font-semibold min-w-[95px] cursor-pointer select-none hover:text-primary transition"
+                                    title="Click to toggle Page # sorting"
+                                >
+                                    <div className="flex items-center gap-1">
+                                        <span>Page #</span>
+                                        {pageSortOrder === 'asc' && <MdArrowUpward size={14} className="text-primary font-bold" />}
+                                        {pageSortOrder === 'desc' && <MdArrowDownward size={14} className="text-primary font-bold" />}
+                                        {!pageSortOrder && <span className="text-[10px] text-gray-400 font-normal">⇅</span>}
+                                    </div>
+                                </th>
+                                <th className="py-4 px-4 font-semibold min-w-[100px]">Code</th>
                                 <th className="py-4 px-4 font-semibold min-w-[180px]">Vendor / Business Name</th>
                                 <th className="py-4 px-4 font-semibold min-w-[140px]">Contact Person</th>
                                 <th className="py-4 px-4 font-semibold min-w-[120px]">Mobile / Phone</th>
@@ -276,17 +333,40 @@ const VendorList = () => {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={8} className="text-center py-12 text-sm"><Spinner /></td></tr>
+                                <tr><td colSpan={9} className="text-center py-12 text-sm"><Spinner /></td></tr>
                             ) : paginatedVendors.length === 0 ? (
-                                <tr><td colSpan={8} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No business merchant vendors registered yet.</td></tr>
+                                <tr><td colSpan={9} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No business merchant vendors registered yet.</td></tr>
                             ) : (
-                                paginatedVendors.map((vendor, idx) => {
-                                    const serialNumber = startIndex + idx + 1;
+                                paginatedVendors.map((vendor) => {
                                     const coa = getVendorCOA(vendor);
+                                    const vendCode = vendor.vendor_code || vendor.vendorCode;
+                                    const pageNo = vendor.page_no || vendor.pageNo;
 
                                     return (
                                         <tr key={vendor.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
-                                             <td className="py-3.5 px-4 text-gray-400">{serialNumber}</td>
+                                            {/* 1. Page # */}
+                                            <td className="py-3.5 px-4">
+                                                {pageNo ? (
+                                                    <span className="font-mono font-bold text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded">
+                                                        {pageNo}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-400 font-mono text-xs">-</span>
+                                                )}
+                                            </td>
+
+                                            {/* 2. Code */}
+                                            <td className="py-3.5 px-4">
+                                                {vendCode ? (
+                                                    <span className="font-mono font-bold text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded">
+                                                        {vendCode}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-400 font-mono text-xs">-</span>
+                                                )}
+                                            </td>
+
+                                            {/* 3. Vendor Name */}
                                             <td className="py-3.5 px-4 font-bold text-primary dark:text-white">
                                                 <div className="flex items-center gap-1.5">
                                                     <MdBusiness className="text-gray-400 shrink-0" size={16} />
@@ -355,34 +435,15 @@ const VendorList = () => {
                 </div>
 
                 {/* Footer Strip */}
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 pt-4 border-t border-stroke dark:border-strokedark">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                        Showing {startIndex + 1} to {endIndex} of {totalEntries} entries
-                        {searchTerm && ` (filtered from ${vendors.length} total vendors)`}
-                    </div>
-
-                    {totalPages > 1 && (
-                        <div className="flex items-center gap-1.5">
-                            <button
-                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-                            >
-                                Previous
-                            </button>
-                            <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-                                Page {currentPage} of {totalPages}
-                            </span>
-                            <button
-                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages || totalPages === 0}
-                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-                            >
-                                Next
-                            </button>
-                        </div>
-                    )}
-                </div>
+                <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalEntries={totalEntries}
+          startIndex={startIndex}
+          endIndex={endIndex}
+          onPageChange={setCurrentPage}
+          itemName="entries"
+        />
             </div>
 
             {/* ── ASSIGN / EDIT VENDOR ACCOUNT CODE MODAL ── */}

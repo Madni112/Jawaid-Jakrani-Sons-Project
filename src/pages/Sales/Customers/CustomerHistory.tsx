@@ -4,12 +4,12 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast'; 
 import Spinner from '../../../ui/Spinner'; 
 import TableActions from '../../../ui/TableActions';
+import TablePagination from '../../../components/TablePagination';
 import { useAuth } from '../../../Context/Auth';
-import { MdAccountBalanceWallet, MdAdd, MdEdit, MdClose, MdCheckCircle } from 'react-icons/md';
-import { logActivity } from '../../../service/auditLogger';
+import { MdAccountBalanceWallet, MdAdd, MdEdit, MdClose, MdCheckCircle, MdArrowUpward, MdArrowDownward } from 'react-icons/md';
 
 const CustomerHistory = () => { 
-  const { tenantId, user } = useAuth();
+  const { tenantId } = useAuth();
   const [customers, setCustomers] = useState<any[]>([]); 
   const [coaAccounts, setCoaAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true); 
@@ -23,10 +23,11 @@ const CustomerHistory = () => {
   const [balanceNatureInput, setBalanceNatureInput] = useState<'Debit' | 'Credit'>('Debit');
   const [savingAccount, setSavingAccount] = useState(false);
 
-  // Datatable search and pagination trackers
+  // Datatable search, sorting, and pagination trackers
   const [searchTerm, setSearchTerm] = useState('');
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSortOrder, setPageSortOrder] = useState<'asc' | 'desc' | null>('asc');
 
   useEffect(() => { 
     fetchCustomersAndCOA(); 
@@ -36,29 +37,12 @@ const CustomerHistory = () => {
     setLoading(true); 
     try { 
       const [custRes, coaRes] = await Promise.all([
-        supabase.from('customers').select('*').order('id', { ascending: true }),
+        supabase.from('customers').select('*').order('customerName', { ascending: true }),
         supabase.from('chart_of_accounts').select('*')
       ]);
       
       if (custRes.error) throw custRes.error; 
-      
-      const normalized = (custRes.data || []).map((c: any) => ({
-        ...c,
-        customerName: c.customerName || c.customername || c.name || '',
-        customerCode: c.customerCode || c.customercode || c.customer_code || '',
-        customer_code: c.customer_code || c.customercode || c.customerCode || '',
-        primaryPhone: c.primaryPhone || c.primaryphone || c.phone || '',
-        ntnNo: c.ntnNo || c.ntnno || '',
-        stRegNo: c.stRegNo || c.stregno || '',
-        cnicNo: c.cnicNo || c.cnicno || '',
-        registrationType: c.registrationType || c.registrationtype || '',
-        followUpDate: c.followUpDate || c.followupdate || ''
-      }));
-
-      // Sort alphabetically by customerName
-      normalized.sort((a, b) => a.customerName.localeCompare(b.customerName));
-
-      setCustomers(normalized); 
+      setCustomers(custRes.data || []); 
       if (coaRes.data) setCoaAccounts(coaRes.data);
     } catch (err: any) { 
       toast.error(err.message); 
@@ -68,7 +52,7 @@ const CustomerHistory = () => {
   }; 
 
   const getCustomerCOA = (cust: any) => {
-    const cName = (cust.customerName || cust.customername || cust.name || '').trim().toLowerCase();
+    const cName = (cust.customerName || '').trim().toLowerCase();
     // Match by customer_code / account_code or exact account_title
     return coaAccounts.find(a => 
       (cust.account_code && String(a.account_code).trim() === String(cust.account_code).trim()) ||
@@ -88,6 +72,16 @@ const CustomerHistory = () => {
       }
     });
     return `1020-${String(maxNum + 1).padStart(3, '0')}`;
+  };
+
+  const getLinkedLiabilityCode = (assetCode: string) => {
+    const clean = assetCode.trim();
+    const match = clean.match(/1020-(\d+)/);
+    if (match && match[1]) {
+      return `2020-${match[1]}`;
+    }
+    const cleanDigits = clean.replace(/^[^\d]*/, '');
+    return cleanDigits ? `2020-${cleanDigits}` : `2020-${clean}`;
   };
 
   const handleOpenAccountModal = (cust: any) => {
@@ -130,6 +124,8 @@ const CustomerHistory = () => {
       }
 
       const customerName = (selectedCustomer.customerName || '').trim();
+
+      // 1. Create or Update Asset Receivable Account (1020-xxx)
       const coaPayload: any = {
         category_code: '1. ASSETS',
         sub_category_code: 'Current Assets',
@@ -150,6 +146,33 @@ const CustomerHistory = () => {
           .from('chart_of_accounts')
           .insert([coaPayload]);
         if (error) throw error;
+      }
+
+      // 2. Auto-Create or Update Linked Customer Freight Liability Account (2020-xxx)
+      const liabilityCode = getLinkedLiabilityCode(cleanCode);
+      const existingLiabilityCOA = coaAccounts.find(a => 
+        String(a.account_code).trim().toLowerCase() === liabilityCode.toLowerCase() ||
+        (a.control_code === 'Customer Freight Liability' && (a.account_title || '').toLowerCase() === `${customerName.toLowerCase()} - freight liability`)
+      );
+
+      const liabilityPayload: any = {
+        category_code: '2. LIABILITIES',
+        sub_category_code: 'Current Liabilities',
+        control_code: 'Customer Freight Liability',
+        account_code: liabilityCode,
+        account_title: `${customerName} - Freight Liability`,
+        notes: `Customer freight charges payable liability for ${customerName}`
+      };
+
+      if (existingLiabilityCOA?.id) {
+        await supabase
+          .from('chart_of_accounts')
+          .update(liabilityPayload)
+          .eq('id', existingLiabilityCOA.id);
+      } else {
+        await supabase
+          .from('chart_of_accounts')
+          .insert([liabilityPayload]);
       }
 
       // Record Opening Balance in financial_vouchers if opening balance > 0
@@ -173,7 +196,7 @@ const CustomerHistory = () => {
 
       // Try updating customer record with account_code and currentBalance
       try {
-        const custUpdates: any = { account_code: cleanCode };
+        const custUpdates: any = { account_code: cleanCode, freight_account_code: liabilityCode };
         if (openingBalanceInput) {
           const bal = Number(openingBalanceInput);
           custUpdates.currentBalance = balanceNatureInput === 'Debit' ? bal : -bal;
@@ -191,7 +214,7 @@ const CustomerHistory = () => {
         } catch (_) {}
       }
 
-      toast.success(`Chart of Account for "${selectedCustomer.customerName}" assigned successfully!`);
+      toast.success(`Asset (${cleanCode}) & Freight Liability (${liabilityCode}) accounts assigned for "${selectedCustomer.customerName}"!`);
       setShowAccountModal(false);
       await fetchCustomersAndCOA();
     } catch (err: any) {
@@ -204,21 +227,8 @@ const CustomerHistory = () => {
   const handleDelete = async (id: string) => { 
     if (window.confirm('Are you sure you want to delete this customer? This cannot be undone.')) { 
       try { 
-        const targetCust = customers.find(c => String(c.id) === String(id));
         const { error } = await supabase.from('customers').delete().eq('id', id); 
         if (error) throw error; 
-
-        logActivity({
-          action: 'DELETE',
-          tableName: 'customers',
-          details: {
-            customer_name: targetCust?.customerName || targetCust?.name || id,
-            customer_code: targetCust?.customer_code || targetCust?.customerCode,
-            event: 'Deleted Customer Profile'
-          },
-          performedBy: user?.name || user?.email || 'User'
-        });
-
         toast.success('Customer deleted successfully'); 
         fetchCustomersAndCOA(); 
       } catch (err: any) { 
@@ -228,15 +238,62 @@ const CustomerHistory = () => {
   }; 
 
   // Live filter query filter condition evaluation
-  const filteredCustomers = customers.filter(c => 
-    c.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.customer_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.customerCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.ntnNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.primaryPhone?.includes(searchTerm) ||
-    c.account_code?.includes(searchTerm)
-  );
+  const parsePageNumber = (val?: string | null): number | null => {
+    if (!val) return null;
+    const match = String(val).match(/\d+/);
+    return match ? parseInt(match[0], 10) : null;
+  };
+
+  // Live filter and natural page # sort
+  const filteredCustomers = customers
+    .filter(c => 
+      c.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.customer_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.customerCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.page_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.pageNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.province?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.ntnNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.primaryPhone?.includes(searchTerm) ||
+      c.phone?.includes(searchTerm) ||
+      c.account_code?.includes(searchTerm)
+    )
+    .sort((a, b) => {
+      if (!pageSortOrder) {
+        return (a.customerName || '').localeCompare(b.customerName || '');
+      }
+
+      const pageA = a.page_no || a.pageNo;
+      const pageB = b.page_no || b.pageNo;
+      const numA = parsePageNumber(pageA);
+      const numB = parsePageNumber(pageB);
+
+      // If both have numeric pages
+      if (numA !== null && numB !== null) {
+        if (numA !== numB) {
+          return pageSortOrder === 'asc' ? numA - numB : numB - numA;
+        }
+        return String(pageA).localeCompare(String(pageB), undefined, { numeric: true });
+      }
+
+      // If only one has a page
+      if (numA !== null && numB === null) return pageSortOrder === 'asc' ? -1 : 1;
+      if (numA === null && numB !== null) return pageSortOrder === 'asc' ? 1 : -1;
+
+      // If both have text/alphanumeric
+      if (pageA && pageB) {
+        return pageSortOrder === 'asc' 
+          ? String(pageA).localeCompare(String(pageB), undefined, { numeric: true })
+          : String(pageB).localeCompare(String(pageA), undefined, { numeric: true });
+      }
+      if (pageA && !pageB) return pageSortOrder === 'asc' ? -1 : 1;
+      if (!pageA && pageB) return pageSortOrder === 'asc' ? 1 : -1;
+
+      // Fallback secondary sort: alphabetical by customer name
+      return (a.customerName || '').localeCompare(b.customerName || '');
+    });
 
   // Pagination calculation vectors
   const totalEntries = filteredCustomers.length;
@@ -247,7 +304,7 @@ const CustomerHistory = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, pageSize]);
+  }, [searchTerm, pageSize, pageSortOrder]);
 
   return ( 
     <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5"> 
@@ -265,7 +322,7 @@ const CustomerHistory = () => {
           + Add New Customer
         </button> 
       </div> 
-
+      
       {/* Datatable Filter Control Header Line */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
@@ -288,7 +345,7 @@ const CustomerHistory = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search name, code, phone, NTN..."
+            placeholder="Search name, code, page #, phone, address..."
             className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none focus:border-primary text-sm text-black dark:text-white"
           />
         </div>
@@ -299,12 +356,23 @@ const CustomerHistory = () => {
         <table className="w-full table-auto border-collapse"> 
           <thead> 
             <tr className="bg-gray-2 text-left dark:bg-meta-4"> 
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-sm w-16">S#</th>
+              <th 
+                onClick={() => setPageSortOrder(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc')}
+                className="min-w-[95px] py-4 px-4 font-medium text-black dark:text-white text-sm cursor-pointer select-none hover:text-primary transition"
+                title="Click to toggle Page # sorting"
+              >
+                <div className="flex items-center gap-1">
+                  <span>Page #</span>
+                  {pageSortOrder === 'asc' && <MdArrowUpward size={14} className="text-primary font-bold" />}
+                  {pageSortOrder === 'desc' && <MdArrowDownward size={14} className="text-primary font-bold" />}
+                  {!pageSortOrder && <span className="text-[10px] text-gray-400 font-normal">⇅</span>}
+                </div>
+              </th>
+              <th className="min-w-[100px] py-4 px-4 font-medium text-black dark:text-white text-sm">Code</th> 
               <th className="min-w-[180px] py-4 px-4 font-medium text-black dark:text-white text-sm">Name</th> 
-              <th className="min-w-[140px] py-4 px-4 font-medium text-black dark:text-white text-sm">NTN / CNIC</th> 
-              <th className="min-w-[110px] py-4 px-4 font-medium text-black dark:text-white text-sm">Phone</th> 
-              <th className="min-w-[100px] py-4 px-4 font-medium text-black dark:text-white text-sm">Province</th> 
               <th className="min-w-[160px] py-4 px-4 font-medium text-black dark:text-white text-sm">Accounts</th> 
+              <th className="min-w-[110px] py-4 px-4 font-medium text-black dark:text-white text-sm">Phone</th> 
+              <th className="min-w-[180px] py-4 px-4 font-medium text-black dark:text-white text-sm">Address</th> 
               <th className="py-4 px-4 font-medium text-black dark:text-white text-sm text-center w-28">Actions</th> 
             </tr> 
           </thead> 
@@ -314,32 +382,42 @@ const CustomerHistory = () => {
             ) : paginatedCustomers.length === 0 ? ( 
               <tr><td colSpan={7} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400">No matching customer entries found.</td></tr> 
             ) : ( 
-              paginatedCustomers.map((c, idx) => {
-                const serialNumber = startIndex + idx + 1;
+              paginatedCustomers.map((c) => {
                 const coa = getCustomerCOA(c);
                 const custCode = c.customer_code || c.customerCode;
+                const pageNo = c.page_no || c.pageNo;
 
                 return ( 
                   <tr key={c.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150"> 
-                    <td className="py-3.5 px-4 text-sm text-black dark:text-white">{serialNumber}</td>
+                    {/* 1. Page # */}
+                    <td className="py-3.5 px-4 text-sm">
+                      {pageNo ? (
+                        <span className="font-mono font-bold text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded">
+                          {pageNo}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 font-mono text-xs">-</span>
+                      )}
+                    </td>
+
+                    {/* 2. Code */}
+                    <td className="py-3.5 px-4 text-sm">
+                      {custCode ? (
+                        <span className="font-mono font-bold text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded">
+                          {custCode}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 font-mono text-xs">-</span>
+                      )}
+                    </td>
+
+                    {/* 3. Name */}
                     <td className="py-3.5 px-4 text-sm"> 
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {custCode && (
-                          <span className="font-mono font-bold text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 rounded">
-                            {custCode}
-                          </span>
-                        )}
-                        <span className="font-medium text-black dark:text-white">{c.customerName}</span>
-                      </div>
+                      <span className="font-medium text-black dark:text-white">{c.customerName}</span>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{c.company || 'Private Customer'}</p> 
                     </td> 
-                    <td className="py-3.5 px-4 text-sm"> 
-                      <p className="text-black dark:text-white font-mono text-xs">NTN: {c.ntnNo || 'N/A'}</p> 
-                      {c.stRegNo && <p className="text-[11px] text-primary font-mono font-semibold">STRN: {c.stRegNo}</p>}
-                      <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">CNIC: {c.cnicNo || 'N/A'}</p> 
-                    </td> 
-                    <td className="py-3.5 px-4 text-sm text-black dark:text-white"><p>{c.primaryPhone || 'N/A'}</p></td> 
-                    <td className="py-3.5 px-4 text-sm text-black dark:text-white"><p>{c.province || 'N/A'}</p></td> 
+
+                    {/* 4. Accounts */}
                     <td className="py-3.5 px-4 text-sm">
                       {coa ? (
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -365,6 +443,25 @@ const CustomerHistory = () => {
                         </button>
                       )}
                     </td>
+
+                    {/* 5. Phone */}
+                    <td className="py-3.5 px-4 text-sm text-black dark:text-white">
+                      <p className="font-mono text-xs">{c.primaryPhone || c.phone || 'N/A'}</p>
+                    </td> 
+
+                    {/* 6. Address & Province */}
+                    <td className="py-3.5 px-4 text-sm">
+                      {c.address ? (
+                        <p className="text-black dark:text-white text-xs font-normal leading-snug">{c.address}</p>
+                      ) : (
+                        <p className="text-gray-400 text-xs">N/A</p>
+                      )}
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
+                        Province: {c.province || 'Sindh'}
+                      </p>
+                    </td>
+
+                    {/* 7. Actions */}
                     <td className="py-3.5 px-4 text-center"> 
                       <TableActions
                         onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Customers/customer-details`, { state: { customer: c } })}
@@ -381,36 +478,15 @@ const CustomerHistory = () => {
         </table> 
       </div> 
 
-      {/* CALCULATED DATA COORDS SUMMARY METRIC FOOTER STRIP */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 pt-4 border-t border-stroke dark:border-strokedark">
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          Showing {startIndex + 1} to {endIndex} of {totalEntries} entries
-          {searchTerm && ` (filtered from ${customers.length} total customers)`}
-        </div>
-
-        {/* Dynamic Page Controls Buttons Array Map */}
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-            >
-              Previous
-            </button>
-            <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-            >
-              Next
-            </button>
-          </div>
-        )}
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalEntries={totalEntries}
+        startIndex={startIndex}
+        endIndex={endIndex}
+        onPageChange={setCurrentPage}
+        itemName="entries"
+      />
 
       {/* ── ASSIGN / EDIT ACCOUNT CODE MODAL ── */}
       {showAccountModal && selectedCustomer && (
@@ -473,9 +549,12 @@ const CustomerHistory = () => {
                   required
                   className="w-full rounded border border-stroke dark:border-strokedark px-3 h-10 bg-transparent font-mono font-bold text-sm text-black dark:text-white outline-none focus:border-primary"
                 />
-                <p className="text-[11px] text-gray-400 mt-1">
-                  Auto-suggested prefix <code className="font-mono text-emerald-600">1020-xxx</code>. You can also customize this code.
-                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-500 dark:text-gray-400 mt-1.5 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 p-2 rounded">
+                  <span>
+                    Linked Freight Liability: <strong className="font-mono text-purple-700 dark:text-purple-300 font-bold">{getLinkedLiabilityCode(accountCodeInput || '1020-001')}</strong>
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-medium">(Auto-creates in 2. LIABILITIES)</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import TablePagination from '../../../components/TablePagination';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
@@ -7,10 +8,9 @@ import TableActions from '../../../ui/TableActions';
 import { MdReceipt, MdAssignment, MdDelete } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
 import { recalculateInvoiceSettlementStatus } from '../../../service/financialCalculations';
-import { logActivity } from '../../../service/auditLogger';
 
 function VoucherList() {
-  const { tenantId, user } = useAuth();
+  const { tenantId } = useAuth();
   const navigate = useNavigate();
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +48,7 @@ function VoucherList() {
       // 1. Fetch voucher details to check for linked invoice
       const { data: voucherToDelete } = await supabase
         .from('financial_vouchers')
-        .select('*')
+        .select('original_invoice_no')
         .eq('id', id)
         .maybeSingle();
 
@@ -58,19 +58,6 @@ function VoucherList() {
         .eq('id', id);
 
       if (error) throw error;
-
-      // Log audit activity
-      logActivity({
-        action: 'DELETE',
-        tableName: 'financial_vouchers',
-        details: {
-          voucher_no: voucherToDelete?.voucher_no || id,
-          voucher_type: voucherToDelete?.voucher_type,
-          amount: voucherToDelete?.total_amount,
-          event: 'Deleted Financial Voucher'
-        },
-        performedBy: user?.name || user?.email || 'User'
-      });
 
       // 2. Synchronize invoice settlement status
       if (voucherToDelete?.original_invoice_no) {
@@ -204,28 +191,15 @@ function VoucherList() {
           </table>
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Previous
-              </button>
-              <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Next
-              </button>
-            </div>
-        </div>
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalEntries={totalEntries}
+          startIndex={startIndex}
+          endIndex={endIndex}
+          onPageChange={setCurrentPage}
+          itemName="entries"
+        />
       </div>
     </div>
   );

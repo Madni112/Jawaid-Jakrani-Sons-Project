@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import TablePagination from '../../../components/TablePagination';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
@@ -6,10 +7,9 @@ import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
 import { useAuth } from '../../../Context/Auth';
 import { MdStore, MdPerson, MdReceipt, MdEvent, MdAdd } from 'react-icons/md';
-import { logActivity } from '../../../service/auditLogger';
 
 const PurchaseReturnList = () => {
-  const { tenantId, user } = useAuth();
+  const { tenantId } = useAuth();
   const navigate = useNavigate();
   const [returns, setReturns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +72,7 @@ const PurchaseReturnList = () => {
 
     try {
       setLoading(true);
-      const { data: targetRecord } = await supabase.from('purchase_returns').select('*').eq('id', id).single();
+      const { data: targetRecord } = await supabase.from('purchase_returns').select('items, source_warehouse').eq('id', id).single();
       if (targetRecord?.items) {
         for (const item of targetRecord.items) {
           const qty = Number(item.qty || item.quantity || 0);
@@ -91,20 +91,6 @@ const PurchaseReturnList = () => {
       }
       const { error } = await supabase.from('purchase_returns').delete().eq('id', id);
       if (error) throw error;
-
-      // Log audit activity
-      logActivity({
-        action: 'DELETE',
-        tableName: 'purchase_returns',
-        details: {
-          return_no: targetRecord?.return_no || targetRecord?.return_number || id,
-          vendor_name: targetRecord?.vendor_name || targetRecord?.supplier_name,
-          amount: targetRecord?.total_amount || targetRecord?.total,
-          event: 'Deleted Purchase Return'
-        },
-        performedBy: user?.name || user?.email || 'User'
-      });
-
       toast.success('Return note removed and inventory restored cleanly!');
       fetchReturnLogs();
     } catch (err: any) {
@@ -251,28 +237,15 @@ const PurchaseReturnList = () => {
           </table>
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Previous
-              </button>
-              <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Next
-              </button>
-            </div>
-        </div>
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalEntries={totalEntries}
+          startIndex={startIndex}
+          endIndex={endIndex}
+          onPageChange={setCurrentPage}
+          itemName="entries"
+        />
 
       </div>
     </div>
