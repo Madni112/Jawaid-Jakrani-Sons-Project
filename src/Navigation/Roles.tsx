@@ -6,9 +6,7 @@ import {
   MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview,
   MdSpaceDashboard, MdOutlineLaptop, MdTexture, MdPayment, MdAssignmentReturn,
   MdAssessment, MdDashboardCustomize, MdTrendingUp, MdBarChart, MdAccountBalanceWallet,
-  MdBalance, MdPauseCircleFilled, MdInbox, MdPointOfSale, MdWarehouse,
-  MdTune, MdPayments, MdPriceCheck, MdCloudUpload, MdStore, MdAssignmentReturned,
-  MdLocalMall, MdCorporateFare, MdStorefront
+  MdBalance, MdPauseCircleFilled, MdInbox, MdPointOfSale, MdWarehouse
 } from 'react-icons/md';
 import HoldingReport from '../pages/Reports/Holding Report/HoldingReport';
 import HoldingReportPrint from '../pages/Reports/Holding Report/HoldingReportPrint';
@@ -90,6 +88,18 @@ import StockReportPrint from '../pages/Reports/Stock Report/StockReportPrint';
 import AccountReportPrint from '../pages/Reports/Account Report/AccountReportPrint';
 import BalanceSheet from '../pages/Reports/BalanceSheet';
 import DedicatedReportFilter from '../pages/Reports/DedicatedReportFilter';
+import { EmployeesPage } from '../pages/Human Resources/Employees';
+import AddEmployee from '../pages/Human Resources/AddEmployee';
+import { AttendanceSheetPage } from '../pages/Human Resources/AttendanceSheet';
+import { SalarySheetPage } from '../pages/Human Resources/SalarySheet';
+import { SalaryStructurePage } from '../pages/Human Resources/SalaryStructure';
+import { PayHeadsPage } from '../pages/Human Resources/PayHeads';
+import { LeavePage } from '../pages/Human Resources/Leave';
+import { LoansPage } from '../pages/Human Resources/Loans';
+import QuotationList from '../pages/CRM/Quotations/QuotationList';
+import AddQuotation from '../pages/CRM/Quotations/AddQuotation';
+import PrintQuotation from '../pages/CRM/Quotations/PrintQuotation';
+import FollowUps from '../pages/CRM/FollowUps';
 
 export const adminRoutes = [
   {
@@ -113,8 +123,8 @@ export const adminRoutes = [
     hideFromSidebar: true,
   },
   {
-    label: 'Control Panel',
-    icon: MdTune,
+    label: 'Administation',
+    icon: MdAdminPanelSettings,
     children: [
       {
         path: '/Administration/Categories/List',
@@ -144,13 +154,13 @@ export const adminRoutes = [
       */
       {
         label: 'Products',
-        icon: MdInventory2,
+        icon: MdDashboard,
         path: '/Administration/Products/List',
         component: <ProductList />,
       },
       {
         label: 'Bulk Upload',
-        icon: MdCloudUpload,
+        icon: MdDashboard,
         path: '/Administration/Products/Bulk-Upload',
         component: <BulkProductUpload />,
       },
@@ -183,8 +193,8 @@ export const adminRoutes = [
     ]
   },
   {
-    label: 'Finance',
-    icon: MdAccountBalanceWallet,
+    label: 'REGISTRATION',
+    icon: MdFormatListBulleted,
     children: [
       {
         path: '/Registration/Chart-of-Account/List',
@@ -214,8 +224,14 @@ export const adminRoutes = [
   },
   {
     label: 'Sales',
-    icon: MdPointOfSale,
+    icon: MdReceipt,
     children: [
+      {
+        label: 'Quotations',
+        icon: MdRequestPage,
+        path: '/crm/quotations',
+        component: <QuotationList />
+      },
       {
         label: 'Invoice',
         icon: MdReceipt,
@@ -226,17 +242,17 @@ export const adminRoutes = [
         path: '/Sales/InvoiceReceipt/List',
         component: <InvoiceReceiptList />,
         label: 'Invoice Receipt',
-        icon: MdPayments
+        icon: MdReceipt
       },
       {
         label: 'Sales Return',
-        icon: MdAssignmentReturn,
+        icon: MdEdit,
         path: '/Sales/Sales-Return/List',
         component: <SalesReturnList />,
       },
       {
         label: 'Sales Return Receipt',
-        icon: MdPriceCheck,
+        icon: MdEdit,
         path: '/Sales/Sales-Return-Receipt/List',
         component: <SaleReturnReceiptList />
       },
@@ -250,19 +266,19 @@ export const adminRoutes = [
         label: 'Salesman',
         path: '/Sales/Salesman/List',
         component: <SalesmanHistory />,
-        icon: MdBadge,
+        icon: MdPeople,
       },
       {
         label: 'Delivery Challan',
         path: '/Sales/Delivery-Challan/List',
         component: <DeliveryChallanHistory />,
-        icon: MdLocalShipping,
+        icon: MdEmojiTransportation,
       },
       {
         label: 'Shop Dispatch Queue (SDQ)',
         path: '/Sales/Shop-Dispatch/List',
         component: <ShopDispatchQueue />,
-        icon: MdStore,
+        icon: MdEmojiTransportation,
       },
       {
         label: 'Return Challan',
@@ -274,19 +290,19 @@ export const adminRoutes = [
         label: 'Shop Return Queue',
         path: '/Warehouse/Shop-Return',
         component: <ReturnChallanList locationFilter="SHOP" />,
-        icon: MdAssignmentReturned
+        icon: MdAssignmentReturn
       }
     ],
   },
   {
     label: 'Purchase',
-    icon: MdLocalMall,
+    icon: MdLaptop,
     children: [
       {
         label: 'Purchases',
         path: '/Purchase/Purchases/List',
         component: <PurchaseList />,
-        icon: MdShoppingCart
+        icon: MdLaptopChromebook
       },
         {
           label: 'Goods Receipt (GRN)',
@@ -305,7 +321,7 @@ export const adminRoutes = [
         label: 'Shop Receiving Queue',
         path: '/Purchase/Shop-Receiving',
         component: <InwardChallanList locationFilter="SHOP" />,
-        icon: MdStorefront
+        icon: MdInbox
       },
 
       {
@@ -330,9 +346,45 @@ export const adminRoutes = [
         label: 'Vendor',
         path: '/Purchase/Vendor/List',
         component: <VendorList />,
-        icon: MdCorporateFare
+        icon: MdPeople
       }
 
+    ]
+  },
+  {
+    label: 'Human Resource',
+    icon: MdBadge,
+    children: [
+      {
+        label: 'Employees',
+        path: '/Human-Resources/Employees',
+        component: <EmployeesPage />,
+        icon: MdPeople
+      },
+      {
+        label: 'Attendance Sheet',
+        path: '/Human-Resources/Attendance',
+        component: <AttendanceSheetPage />,
+        icon: MdClass
+      },
+      {
+        label: 'Salary Sheet (Payroll)',
+        path: '/Human-Resources/Salary-Sheet',
+        component: <SalarySheetPage />,
+        icon: MdPayment
+      },
+      {
+        label: 'Leaves',
+        path: '/Human-Resources/Leaves',
+        component: <LeavePage />,
+        icon: MdAssignmentReturn
+      },
+      {
+        label: 'Loans & Advances',
+        path: '/Human-Resources/Loans',
+        component: <LoansPage />,
+        icon: MdAccountBalanceWallet
+      }
     ]
   },
   {
@@ -616,6 +668,26 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/Human-Resources/Employees/Add',
+    component: <AddEmployee />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Human-Resources/Employees/add',
+    component: <AddEmployee />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Human-Resources/Employees/employee-details',
+    component: <AddEmployee />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Human-Resources/Employees/Edit',
+    component: <AddEmployee />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Salesman/add',
     component: <AddSalesman />,
     hideFromSidebar: true
@@ -824,6 +896,36 @@ export const adminRoutes = [
     path: '/Sales-Return-Receipt/Print/:id',
     component: <PrintSalesReturnReceipt />,
     label: 'Print Sales Return Receipt',
+    hideFromSidebar: true
+  },
+  {
+    path: '/crm/quotations',
+    component: <QuotationList />,
+    label: 'Quotations',
+    hideFromSidebar: true
+  },
+  {
+    path: '/crm/quotations/add',
+    component: <AddQuotation />,
+    label: 'New Quotation',
+    hideFromSidebar: true
+  },
+  {
+    path: '/crm/quotations/edit/:id',
+    component: <AddQuotation />,
+    label: 'Edit Quotation',
+    hideFromSidebar: true
+  },
+  {
+    path: '/crm/quotations/print/:id',
+    component: <PrintQuotation />,
+    label: 'Print Quotation',
+    hideFromSidebar: true
+  },
+  {
+    path: '/crm/follow-ups',
+    component: <FollowUps />,
+    label: 'Follow-ups',
     hideFromSidebar: true
   }
 ];
