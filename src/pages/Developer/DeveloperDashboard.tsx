@@ -5,7 +5,6 @@ import { toast } from 'react-hot-toast';
 import { createClient } from '@supabase/supabase-js';
 import Spinner from '../../ui/Spinner';
 import DarkModeSwitcher from '../../components/Header/DarkModeSwitcher';
-import { isThemeColorPickerEnabled, setThemeColorPickerEnabled } from '../../constant/themeConfig';
 import {
   MdDashboard,
   MdPeople,
@@ -42,11 +41,22 @@ import {
   MdPerson,
   MdCode,
   MdInfoOutline,
+  MdLink,
+  MdGroup,
+  MdSwapHoriz,
   MdDelete,
-  MdDeleteOutline,
-  MdPalette,
+  MdAdd,
+  MdTune,
 } from 'react-icons/md';
 import { ROLE_PRESETS, RolePreset, getModulesForRole } from '../../constant/roles';
+import {
+  getModulePermissions,
+  setModulePermissions,
+  isReadOnlyModule,
+  cleanBaseModuleId,
+  PermissionAction,
+  PermissionLevel,
+} from '../../utils/permissionUtils';
 
 export interface PermissionSubNode {
   id: string;
@@ -62,148 +72,139 @@ export interface PermissionNode {
 export const PERMISSION_TREE: PermissionNode[] = [
   {
     id: 'dashboards',
-    label: 'Dashboards',
+    label: 'Home & Core Dashboards',
     children: [
-      { id: 'dashboard', label: 'Main / Executive Dashboard' },
+      { id: '/', label: 'Home (Operations & Quick Launchpad)' },
+      { id: '/dashboard', label: 'Executive BI & Deep Analytics' },
       { id: '/Dashboard/Salesman', label: 'Salesman Dashboard' },
       { id: '/Dashboard/Warehouse', label: 'Warehouse (Location) Dashboard' },
     ],
   },
   {
-    id: 'administration',
-    label: 'Control Panel',
+    id: 'crm',
+    label: 'CRM & Customer Inquiries',
     children: [
-      { id: '/Administration/Categories/List', label: 'Categories' },
-      { id: '/Administration/Surface-Finish', label: 'Brand / Surface Finish' },
-      { id: '/Administration/UOM/List', label: 'UOM (Units of Measure)' },
-      { id: '/Administration/Products/List', label: 'Products' },
-      { id: '/Administration/Products/Bulk-Upload', label: 'Bulk Product Upload' },
-      { id: '/Administration/Locations/List', label: 'Locations' },
-      { id: '/Administration/Transportation/List', label: 'Transportation' },
-      { id: '/Administration/StockTransfer/List', label: 'Stock Transfer' },
-      { id: '/company', label: 'Company Profile' },
-    ],
-  },
-  {
-    id: 'registration',
-    label: 'Finance',
-    children: [
-      { id: '/Registration/Chart-of-Account/List', label: 'Chart of Account' },
-      { id: '/Registration/Vouchers/List', label: 'Financial Vouchers' },
-      { id: '/Registration/Bank-Account/BankAccountList', label: 'Bank Accounts' },
-      { id: '/Inventory/OpeningStock/List', label: 'Opening Stock' },
+      { id: '/crm/leads', label: 'Leads & Demand Capture' },
+      { id: '/crm/quotations', label: 'Quotations' },
+      { id: '/Sales/Customers/List', label: 'Customers Directory' },
+      { id: '/Sales/Salesman/List', label: 'Salesmen Ledger' },
+      { id: '/crm/due-list', label: 'Customer Due List' },
+      { id: '/crm/follow-ups', label: 'Follow-ups' },
+      { id: '/crm/recovery-history', label: 'Recovery History' },
     ],
   },
   {
     id: 'sales',
-    label: 'Sales',
+    label: 'Sales Operations',
     children: [
-      { id: '/Sales/Invoice/List', label: 'Sales Invoice' },
-      { id: '/Sales/InvoiceReceipt/List', label: 'Invoice Receipts' },
+      { id: '/Sales/Invoice/List', label: 'Sales Invoices' },
+      { id: '/sales/orders', label: 'Sales Orders' },
+      { id: '/sales/price-lists', label: 'Customer Price Lists' },
+      { id: '/Sales/Delivery-Challan/List', label: 'Delivery Challan (A-39 WDQ)' },
+      { id: '/Sales/Shop-Dispatch/List', label: 'Shop Dispatch Queue (SDQ)' },
       { id: '/Sales/Sales-Return/List', label: 'Sales Returns' },
       { id: '/Sales-Return/Debit-Notes/List', label: 'Debit Notes' },
       { id: '/Sales/Sales-Return-Receipt/List', label: 'Sales Return Receipts' },
-      { id: '/Sales/Customers/List', label: 'Customers Directory' },
-      { id: '/Sales/Salesman/List', label: 'Salesmen Ledger' },
-      { id: '/Sales/Delivery-Challan/List', label: 'Delivery Challan (A-39 WDQ)' },
-      { id: '/Sales/Shop-Dispatch/List', label: 'Shop Dispatch Queue (SHOP SDQ)' },
+      { id: '/Registration/InvoiceReceipt/List', label: 'Invoice Receipts' },
     ],
   },
   {
     id: 'purchase',
-    label: 'Purchase',
+    label: 'Purchase & Vendor Procurement',
     children: [
-      { id: '/Purchase/Purchases/List', label: 'Purchases (PO & Invoices)' },
-      { id: '/Purchase/Inward-Challan/List', label: 'Inward Challan (A-39 Warehouse)' },
-      { id: '/Purchase/Shop-Receiving', label: 'Shop Receiving Queue (SHOP)' },
-      { id: '/Purchase/Purchase-Receipt/List', label: 'Purchase Receipts' },
+      { id: '/Purchase/Purchases/List', label: 'Supplier Purchases (PO & Invoices)' },
+      { id: '/purchase/orders', label: 'Purchase Orders' },
+      { id: '/purchase/quotations', label: 'Supplier Quotations' },
+      { id: '/Purchase/GRN/List', label: 'Goods Receiving Note (GRN)' },
+      { id: '/Purchase/Inward-Challan/List', label: 'A-39 Inward Challans (Receiving)' },
+      { id: '/Purchase/Shop-Receiving', label: 'Shop Incoming Stock Receiving' },
       { id: '/Purchase/Purchase-Return/List', label: 'Purchase Returns' },
       { id: '/Purchase/Purchase-Return-Receipt/List', label: 'Purchase Return Receipts' },
-      { id: '/Purchase/Vendor/List', label: 'Vendors Directory' },
+      { id: '/Purchase/Purchase-Receipt/List', label: 'Vendor Payment Receipts' },
+      { id: '/purchase/vendor-ledger', label: 'Vendor Ledger' },
+      { id: '/Purchase/Vendor/List', label: 'Suppliers / Vendors Directory' },
     ],
   },
   {
-    id: 'warehouse',
-    label: 'Warehouse & Logistics (A-39 & SHOP)',
+    id: 'pos',
+    label: 'POS (Point of Sale)',
     children: [
-      { id: '/Sales/Delivery-Challan/List', label: 'A-39 Outward Delivery Challan (WDQ)' },
-      { id: '/Sales/Shop-Dispatch/List', label: 'Shop Counter Dispatch Queue (SDQ)' },
-      { id: '/Purchase/Inward-Challan/List', label: 'A-39 Supplier Inward Challan (Receiving)' },
-      { id: '/Purchase/Shop-Receiving', label: 'Shop Incoming Stock Receiving' },
+      { id: '/pos/terminal', label: 'POS Terminal' },
+      { id: '/pos/register', label: 'POS Shift Register' },
+      { id: '/pos/hold-orders', label: 'Hold Orders Queue' },
+      { id: '/pos/barcode-generator', label: 'Barcode Generator' },
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory, Stock & Warehouses',
+    children: [
+      { id: '/inventory/warehouse-terminal', label: 'Warehouse Terminal' },
+      { id: '/Administration/Products/List', label: 'Item Master / Products' },
+      { id: '/Administration/Products/Bulk-Upload', label: 'Bulk Product Upload' },
+      { id: '/Administration/StockTransfer/List', label: 'Inter-Warehouse Stock Transfers' },
+      { id: '/inventory/stock-adjustments', label: 'Stock Adjustments' },
+      { id: '/inventory/stock-audits', label: 'Stock Audits & Reconciliation' },
+      { id: '/inventory/adjustment-types', label: 'Adjustment Reason Codes' },
+      { id: '/inventory/stock-ledger', label: 'Stock Movement Ledger' },
+      { id: '/inventory/scheduled-valuations', label: 'Scheduled Valuations' },
       { id: '/Warehouse/Return-Challan', label: 'A-39 Customer Return Challans' },
       { id: '/Warehouse/Shop-Return', label: 'Shop Return Receiving Queue' },
-      { id: '/Administration/StockTransfer/List', label: 'Inter-Warehouse Stock Transfers' },
+      { id: '/Inventory/OpeningStock/List', label: 'Opening Stock Balance' },
     ],
   },
   {
-    id: 'reports_hub',
-    label: 'Reports Directory Hub',
+    id: 'accounts',
+    label: 'Accounts & Finance',
     children: [
-      { id: '/Reports/Reports-Dashboard', label: 'Reports Directory Main Hub' },
+      { id: '/Registration/Chart-of-Account/List', label: 'Chart of Accounts' },
+      { id: '/Registration/Vouchers/List', label: 'Financial Vouchers' },
+      { id: '/registration/journal-vouchers', label: 'Journal Vouchers (JV)' },
+      { id: '/Registration/Bank-Account/BankAccountList', label: 'Bank Accounts' },
+      { id: '/registration/bank-reconciliation', label: 'Bank Reconciliation (BRS)' },
+      { id: '/registration/trial-balance', label: 'Trial Balance' },
+      { id: '/Registration/Multi-Invoice-Receipt/Add', label: 'Multi-Invoice Receipt' },
     ],
   },
   {
-    id: 'reports_sales',
-    label: 'Sales Reports (8 Available)',
+    id: 'administration',
+    label: 'Classification & Settings',
     children: [
-      { id: 'report:category-wise-sales', label: 'Category-Wise Sales & Volume Report' },
-      { id: 'report:product-sales-history', label: 'Product Sales History Report' },
-      { id: 'report:sale-inv-detail', label: 'Sales Invoice Detail Report' },
-      { id: 'report:commercial-sale-ledger', label: 'Commercial Sales Audit Ledger' },
-      { id: 'report:sales-query-center', label: 'Sales Filter & Parameter Builder' },
-      { id: 'report:sales-return-ledger', label: 'Sales Return & Credit Ledger' },
-      { id: 'report:customer-sales-breakdown', label: 'Customer Sales & Volume Analysis' },
-      { id: 'report:customer-loyalty-ledger', label: 'Customer Financial Statement & Invoice Ledger' },
+      { id: '/Administration/Categories/List', label: 'Categories' },
+      { id: '/administration/subcategories', label: 'Sub-Categories' },
+      { id: '/Administration/Surface-Finish', label: 'Brand' },
+      { id: '/administration/tile-dimensions', label: 'Tile Dimensions Matrix' },
+      { id: '/Administration/UOM/List', label: 'Units of Measure (UOM)' },
+      { id: '/Administration/Locations/List', label: 'Locations / Warehouses' },
+      { id: '/Administration/Transportation/List', label: 'Transportation & Couriers' },
+      { id: '/administration/drivers', label: 'Drivers & Fleet Directory' },
+      { id: '/company', label: 'Company Profile' },
     ],
   },
   {
-    id: 'reports_purchases',
-    label: 'Purchases & Payables Reports (8 Available)',
+    id: 'reports',
+    label: 'Reports & Analytics',
     children: [
-      { id: 'report:purchase-ledger', label: 'Purchase Invoice Register' },
-      { id: 'report:category-purchases', label: 'Category-Wise Purchases & Volume Report' },
-      { id: 'report:product-purchase-history', label: 'Product Purchase History & Price Trend' },
-      { id: 'report:purchase-invoice-detail', label: 'Purchase Invoice Detail Report' },
-      { id: 'report:purchase-query-center', label: 'Purchase Parameter Builder' },
-      { id: 'report:vendor-return-ledger', label: 'Purchase Returns & Debit Ledger' },
-      { id: 'report:vendor-balance-detail-pur', label: 'Vendor Balance Detail & Account Ledger' },
-      { id: 'report:vendor-outstanding-report-pur', label: 'Vendor Outstanding Payables Schedule' },
+      { id: '/Reports/Reports-Dashboard', label: 'Reports Dashboard' },
+      { id: '/Reports/Sales-Report', label: 'Sales Reports' },
+      { id: '/Reports/Purchase-Report', label: 'Purchase Reports' },
+      { id: '/Reports/Stock-Report', label: 'Stock Reports' },
+      { id: '/Reports/Holding-Report', label: 'Holding Reports' },
+      { id: '/Reports/Account-Report', label: 'Account Ledger Reports' },
+      { id: '/Reports/Balance-Sheet', label: 'Balance Sheet & P&L' },
     ],
   },
   {
-    id: 'reports_inventory',
-    label: 'Inventory & Stock Reports (7 Available)',
+    id: 'hr',
+    label: 'Human Resources (HR)',
     children: [
-      { id: 'report:stock-activity-ledger', label: 'Stock Activity & Movement Ledger' },
-      { id: 'report:current-stock-balance', label: 'Stock Balances & Valuation Registry' },
-      { id: 'report:as-of-date-stock-status', label: 'As-Of-Date Stock Status Report' },
-      { id: 'report:inter-warehouse-transfers', label: 'Inter-Warehouse Transfer Statement' },
-      { id: 'report:category-wise-stock', label: 'Category-Wise Stock Valuation Ledger' },
-      { id: 'report:warehouse-location-report', label: 'Warehouse Bin & Location Stock Breakdown' },
-      { id: 'report:holding-stock-report', label: 'Holding Stock & Gatepass Queue' },
-    ],
-  },
-  {
-    id: 'reports_accounts',
-    label: 'Accounts & Financials Reports (9 Available)',
-    children: [
-      { id: 'report:customer-balance-detail', label: 'Customer Balance Detail Report' },
-      { id: 'report:vendor-balance-detail', label: 'Vendor Balance Detail & Account Ledger' },
-      { id: 'report:customer-ledger', label: 'Customer Account Ledger (General Ledger)' },
-      { id: 'report:daybook-activity-report', label: 'Daily Cash & Bank Daybook' },
-      { id: 'report:customer-aging-report', label: 'Customer Receivables Aging Analysis' },
-      { id: 'report:voucher-audit-register', label: 'Financial Voucher Audit Register' },
-      { id: 'report:trial-balance-statement', label: 'Trial Balance Audit Statement' },
-      { id: 'report:vendor-outstanding-report', label: 'Vendor Outstanding Payables Schedule' },
-      { id: 'report:expense-ledger', label: 'Operational Expense Statement' },
-    ],
-  },
-  {
-    id: 'reports_business',
-    label: 'Business Overview Reports (2 Available)',
-    children: [
-      { id: 'report:balance-sheet-stat', label: 'Balance Sheet Financial Statement' },
-      { id: 'report:executive-summary-report', label: 'Commercial Executive Summary' },
+      { id: '/Human-Resources/Employees', label: 'Employees Directory' },
+      { id: '/Human-Resources/Attendance', label: 'Daily Attendance Sheet' },
+      { id: '/Human-Resources/Salary-Sheet', label: 'Monthly Salary Sheet' },
+      { id: '/Human-Resources/Salary-Structure', label: 'Salary Structure' },
+      { id: '/Human-Resources/Pay-Heads', label: 'Pay Heads' },
+      { id: '/Human-Resources/Leaves', label: 'Leave Policy & Approvals' },
+      { id: '/Human-Resources/Loans', label: 'Employee Loans & Advances' },
     ],
   },
 ];
@@ -231,46 +232,14 @@ export interface EmployeeAccount {
 
 // Master Super Admin / Developer Credentials
 const DEV_EMAIL = 'admin@almuhammadi.com';
-const ALMUHAMMADI_DEV_EMAIL = 'admin@almuhammadi.com';
 const DEV_PASSWORD = 'admin123';
 const BACKUP_DEV_EMAIL = 'developer@noorhorizontechnologies.com';
 const BACKUP_DEV_PASSWORD = 'NoorHorizon@5923';
 
-export const normalizePermissionId = (id: string) => String(id || '').trim().toLowerCase();
-
-export const isPermissionSelected = (selected: string[], targetId: string) => {
-  const norm = normalizePermissionId(targetId);
-  return (selected || []).some(s => normalizePermissionId(s) === norm);
-};
-
-export const canonicalizePermissions = (rawList: string[]): string[] => {
-  if (!rawList || !Array.isArray(rawList)) return [];
-  const map: Record<string, string> = {};
-  PERMISSION_TREE.forEach(node => {
-    map[normalizePermissionId(node.id)] = node.id;
-    node.children?.forEach(c => {
-      map[normalizePermissionId(c.id)] = c.id;
-    });
-  });
-
-  const res = new Set<string>();
-  rawList.forEach(item => {
-    const norm = normalizePermissionId(item);
-    if (map[norm]) {
-      res.add(map[norm]);
-    }
-  });
-  return Array.from(res);
-};
-
-export const getActivePageCount = (modules: string[]) => {
-  if (!modules || !Array.isArray(modules)) return 0;
-  const parentKeys = new Set(PERMISSION_TREE.map(p => normalizePermissionId(p.id)));
-  return modules.filter(m => !parentKeys.has(normalizePermissionId(m))).length;
-};
-
 /**
- * Hierarchical Permission Tree Selector Component with Group Expand/Collapse & Toggle All
+ * Hierarchical Granular Permission Tree Selector Component
+ * Supports: Untick (None), View Only, Full Access (Tick), and Custom (View, Add, Edit, Delete).
+ * Read-only pages (Dashboards, Reports, Ledgers) stay as simple Enabled / Disabled toggles.
  */
 const PermissionTreeEditor: React.FC<{
   selectedIds: string[];
@@ -278,18 +247,15 @@ const PermissionTreeEditor: React.FC<{
 }> = ({ selectedIds, onChange }) => {
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     dashboards: true,
-    administration: true,
-    registration: true,
+    crm: true,
     sales: true,
     purchase: true,
-    warehouse: true,
-    reports_hub: true,
-    reports_sales: true,
-    reports_purchases: true,
-    reports_inventory: true,
-    reports_accounts: true,
-    reports_business: true,
+    pos: true,
+    inventory: true,
+    accounts: true,
+    administration: true,
     reports: true,
+    hr: true,
   });
 
   const toggleExpand = (nodeId: string) => {
@@ -297,65 +263,87 @@ const PermissionTreeEditor: React.FC<{
   };
 
   const handleToggleParent = (node: PermissionNode) => {
-    const parentNorm = normalizePermissionId(node.id);
     if (!node.children || node.children.length === 0) {
-      const isSelected = isPermissionSelected(selectedIds, node.id);
-      const next = isSelected
-        ? selectedIds.filter(id => normalizePermissionId(id) !== parentNorm)
-        : [...selectedIds, node.id];
-      onChange(next);
+      const isSelected = selectedIds.some(id => cleanBaseModuleId(id) === node.id);
+      onChange(isSelected ? selectedIds.filter(id => cleanBaseModuleId(id) !== node.id) : [...selectedIds, node.id]);
       return;
     }
 
     const childIds = node.children.map(c => c.id);
-    const childNorms = childIds.map(normalizePermissionId);
-    const allSelected = childIds.every(id => isPermissionSelected(selectedIds, id));
+    const allFull = childIds.every(id => getModulePermissions(selectedIds, id).level === 'full');
 
-    if (allSelected) {
-      onChange(selectedIds.filter(id => {
-        const n = normalizePermissionId(id);
-        return n !== parentNorm && !childNorms.includes(n);
-      }));
-    } else {
-      const remaining = selectedIds.filter(id => {
-        const n = normalizePermissionId(id);
-        return n !== parentNorm && !childNorms.includes(n);
+    if (allFull) {
+      // Remove all tokens for these children and the parent category
+      const cleaned = selectedIds.filter(id => {
+        const base = cleanBaseModuleId(id);
+        return !childIds.includes(base) && base !== node.id;
       });
-      onChange([...remaining, node.id, ...childIds]);
+      onChange(cleaned);
+    } else {
+      // Grant full access to all children and the parent
+      const cleaned = selectedIds.filter(id => {
+        const base = cleanBaseModuleId(id);
+        return !childIds.includes(base) && base !== node.id;
+      });
+      onChange(Array.from(new Set([...cleaned, node.id, ...childIds])));
     }
   };
 
-  const handleToggleChild = (childId: string, parentNode: PermissionNode) => {
-    const childNorm = normalizePermissionId(childId);
-    const parentNorm = normalizePermissionId(parentNode.id);
-    const isSelected = isPermissionSelected(selectedIds, childId);
-
-    let nextIds = isSelected
-      ? selectedIds.filter(id => normalizePermissionId(id) !== childNorm)
-      : [...selectedIds, childId];
+  const handleLevelChange = (moduleId: string, parentNode: PermissionNode, level: PermissionLevel) => {
+    let nextIds = setModulePermissions(selectedIds, moduleId, level, {
+      view: true,
+      add: false,
+      edit: false,
+      delete: false,
+    });
 
     if (parentNode.children) {
-      const anyChildActive = parentNode.children.some(c => isPermissionSelected(nextIds, c.id));
-      if (anyChildActive) {
-        if (!isPermissionSelected(nextIds, parentNode.id)) {
-          nextIds.push(parentNode.id);
-        }
-      } else {
-        nextIds = nextIds.filter(id => normalizePermissionId(id) !== parentNorm);
+      const anyActive = parentNode.children.some(c => {
+        const baseClean = c.id.toLowerCase();
+        return nextIds.some(id => cleanBaseModuleId(id).toLowerCase() === baseClean);
+      });
+      const parentIncluded = nextIds.some(id => cleanBaseModuleId(id).toLowerCase() === parentNode.id.toLowerCase());
+      if (anyActive && !parentIncluded) {
+        nextIds = [...nextIds, parentNode.id];
+      } else if (!anyActive && parentIncluded) {
+        nextIds = nextIds.filter(id => cleanBaseModuleId(id).toLowerCase() !== parentNode.id.toLowerCase());
       }
     }
 
     onChange(nextIds);
   };
 
+  const handleCustomActionToggle = (
+    moduleId: string,
+    action: PermissionAction,
+    currentPerm: ReturnType<typeof getModulePermissions>
+  ) => {
+    const nextActions = {
+      view: currentPerm.canView,
+      add: currentPerm.canAdd,
+      edit: currentPerm.canEdit,
+      delete: currentPerm.canDelete,
+      [action]: !currentPerm[action === 'view' ? 'canView' : action === 'add' ? 'canAdd' : action === 'edit' ? 'canEdit' : 'canDelete'],
+    };
+
+    // If unchecking view while other actions are checked, keep view enabled
+    if (!nextActions.view && (nextActions.add || nextActions.edit || nextActions.delete)) {
+      nextActions.view = true;
+    }
+
+    const nextIds = setModulePermissions(selectedIds, moduleId, 'custom', nextActions);
+    onChange(nextIds);
+  };
+
   return (
-    <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+    <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
       {PERMISSION_TREE.map(node => {
         const hasChildren = Boolean(node.children && node.children.length > 0);
         const isExpanded = expandedNodes[node.id];
 
         if (!hasChildren) {
-          const isChecked = isPermissionSelected(selectedIds, node.id);
+          const perm = getModulePermissions(selectedIds, node.id);
+          const isChecked = perm.hasAccess;
           return (
             <div
               key={node.id}
@@ -381,10 +369,10 @@ const PermissionTreeEditor: React.FC<{
         }
 
         const childIds = node.children!.map(c => c.id);
-        const selectedChildrenCount = childIds.filter(id => isPermissionSelected(selectedIds, id)).length;
+        const activeChildrenCount = childIds.filter(id => getModulePermissions(selectedIds, id).hasAccess).length;
         const totalChildren = childIds.length;
-        const allSelected = selectedChildrenCount === totalChildren && totalChildren > 0;
-        const partiallySelected = selectedChildrenCount > 0 && selectedChildrenCount < totalChildren;
+        const allFull = childIds.every(id => getModulePermissions(selectedIds, id).level === 'full');
+        const partiallyActive = activeChildrenCount > 0 && !allFull;
 
         return (
           <div
@@ -405,7 +393,7 @@ const PermissionTreeEditor: React.FC<{
                 )}
                 <span>{node.label}</span>
                 <span className="text-[10px] bg-gray-200 dark:bg-meta-4 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full font-mono">
-                  {selectedChildrenCount} / {totalChildren} active
+                  {activeChildrenCount} / {totalChildren} active
                 </span>
               </button>
 
@@ -413,43 +401,240 @@ const PermissionTreeEditor: React.FC<{
                 type="button"
                 onClick={() => handleToggleParent(node)}
                 className={`text-[11px] px-2.5 py-1 rounded font-semibold transition cursor-pointer flex items-center gap-1 ${
-                  allSelected
+                  allFull
                     ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                    : partiallySelected
+                    : partiallyActive
                     ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30'
                     : 'bg-white dark:bg-boxdark text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white border border-stroke dark:border-strokedark'
                 }`}
               >
-                {allSelected ? (
+                {allFull ? (
                   <>
-                    <MdCheckCircle className="text-xs text-emerald-600" /> All Selected
+                    <MdCheckCircle className="text-xs text-emerald-600" /> All Full Access
                   </>
                 ) : (
-                  'Toggle All'
+                  'Toggle All (Full)'
                 )}
               </button>
             </div>
 
             {/* EXPANDED SUB-PAGES / CATEGORIES */}
             {isExpanded && (
-              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 bg-gray-50/50 dark:bg-meta-4/10">
+              <div className="p-3 space-y-2.5 bg-gray-50/50 dark:bg-meta-4/10">
                 {node.children!.map(child => {
-                  const isChildChecked = isPermissionSelected(selectedIds, child.id);
+                  const isReadOnly = isReadOnlyModule(child.id);
+                  const perm = getModulePermissions(selectedIds, child.id);
+
+                  if (isReadOnly) {
+                    // Simple Enabled / Disabled Toggle for Read-Only items (Dashboards, Reports, Ledgers)
+                    return (
+                      <div
+                        key={child.id}
+                        className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-3 ${
+                          perm.hasAccess
+                            ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-300/80 dark:border-emerald-800/60'
+                            : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${perm.hasAccess ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+                          <span className="text-xs font-semibold text-black dark:text-white truncate">
+                            {child.label}
+                          </span>
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 shrink-0">
+                            Read-Only
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleLevelChange(child.id, node, perm.hasAccess ? 'none' : 'full')}
+                          className={`text-xs px-3 py-1 rounded-lg font-bold transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                            perm.hasAccess
+                              ? 'bg-emerald-600 text-white shadow-xs hover:bg-emerald-700'
+                              : 'bg-gray-100 dark:bg-meta-4 text-gray-500 hover:text-black dark:hover:text-white border border-stroke dark:border-strokedark'
+                          }`}
+                        >
+                          {perm.hasAccess ? (
+                            <>
+                              <MdCheckCircle className="text-sm" /> Enabled
+                            </>
+                          ) : (
+                            'Disabled'
+                          )}
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  // CRUD Module with 4-way granular selector: Unticked | View Only | Full Access | Custom
                   return (
                     <div
                       key={child.id}
-                      onClick={() => handleToggleChild(child.id, node)}
-                      className={`p-2.5 rounded-lg border text-xs font-medium flex items-center justify-between transition cursor-pointer ${
-                        isChildChecked
-                          ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 text-emerald-700 dark:text-emerald-300 font-semibold'
-                          : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark text-gray-700 dark:text-gray-300 hover:border-emerald-500'
+                      className={`p-2.5 rounded-xl border transition space-y-2 ${
+                        perm.level === 'full'
+                          ? 'bg-emerald-50/40 dark:bg-emerald-950/15 border-emerald-300/80 dark:border-emerald-800/60'
+                          : perm.level === 'view'
+                          ? 'bg-sky-50/40 dark:bg-sky-950/15 border-sky-300/80 dark:border-sky-800/60'
+                          : perm.level === 'custom'
+                          ? 'bg-amber-50/40 dark:bg-amber-950/15 border-amber-300/80 dark:border-amber-800/60'
+                          : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark'
                       }`}
                     >
-                      <span className="truncate">{child.label}</span>
-                      {isChildChecked ? (
-                        <MdCheckCircle className="text-emerald-600 dark:text-emerald-400 text-sm shrink-0 ml-2" />
-                      ) : (
-                        <div className="w-3.5 h-3.5 rounded-full border border-stroke dark:border-strokedark shrink-0 ml-2" />
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        {/* Title & Status */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              perm.level === 'full'
+                                ? 'bg-emerald-500'
+                                : perm.level === 'view'
+                                ? 'bg-sky-500'
+                                : perm.level === 'custom'
+                                ? 'bg-amber-500'
+                                : 'bg-gray-300 dark:bg-gray-600'
+                            }`}
+                          />
+                          <span className="text-xs font-bold text-black dark:text-white truncate">
+                            {child.label}
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                              perm.level === 'full'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                                : perm.level === 'view'
+                                ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300'
+                                : perm.level === 'custom'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
+                                : 'bg-gray-100 text-gray-500 dark:bg-meta-4 dark:text-gray-400'
+                            }`}
+                          >
+                            {perm.level === 'full'
+                              ? 'Full Access'
+                              : perm.level === 'view'
+                              ? 'Only View'
+                              : perm.level === 'custom'
+                              ? 'Custom'
+                              : 'Unticked'}
+                          </span>
+                        </div>
+
+                        {/* 4-Way Segmented Control */}
+                        <div className="inline-flex items-center p-0.5 bg-gray-100 dark:bg-meta-4 rounded-lg border border-stroke dark:border-strokedark shrink-0 self-start sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => handleLevelChange(child.id, node, 'none')}
+                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition cursor-pointer ${
+                              perm.level === 'none'
+                                ? 'bg-white dark:bg-boxdark text-gray-800 dark:text-gray-200 shadow-xs'
+                                : 'text-gray-500 hover:text-black dark:hover:text-white'
+                            }`}
+                            title="No access to this module"
+                          >
+                            Unticked
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLevelChange(child.id, node, 'view')}
+                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
+                              perm.level === 'view'
+                                ? 'bg-sky-600 text-white shadow-xs'
+                                : 'text-gray-500 hover:text-sky-600 dark:hover:text-sky-400'
+                            }`}
+                            title="Can view list, but add/edit/delete disabled"
+                          >
+                            <MdVisibility className="text-xs" /> Only View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLevelChange(child.id, node, 'full')}
+                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
+                              perm.level === 'full'
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400'
+                            }`}
+                            title="Full access (View, Add, Edit, Delete)"
+                          >
+                            <MdCheckCircle className="text-xs" /> Full
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleLevelChange(child.id, node, 'custom')}
+                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
+                              perm.level === 'custom'
+                                ? 'bg-amber-600 text-white shadow-xs'
+                                : 'text-gray-500 hover:text-amber-600 dark:hover:text-amber-400'
+                            }`}
+                            title="Pick exact actions (Only add, only edit, etc.)"
+                          >
+                            <MdTune className="text-xs" /> Custom
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Custom Sub-Bar: Visible only when Custom is chosen */}
+                      {perm.level === 'custom' && (
+                        <div className="pt-2 border-t border-dashed border-amber-200 dark:border-amber-900/50 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 mr-1">
+                            Actions:
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCustomActionToggle(child.id, 'view', perm)}
+                            className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 transition cursor-pointer border ${
+                              perm.canView
+                                ? 'bg-sky-500 text-white border-sky-600 shadow-2xs'
+                                : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark text-gray-400 hover:border-sky-400'
+                            }`}
+                          >
+                            <MdVisibility className="text-xs" />
+                            <span>View</span>
+                            {perm.canView && <MdCheck className="text-xs" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCustomActionToggle(child.id, 'add', perm)}
+                            className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 transition cursor-pointer border ${
+                              perm.canAdd
+                                ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark text-gray-400 hover:border-emerald-400'
+                            }`}
+                          >
+                            <MdAdd className="text-xs" />
+                            <span>Add / Create</span>
+                            {perm.canAdd && <MdCheck className="text-xs" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCustomActionToggle(child.id, 'edit', perm)}
+                            className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 transition cursor-pointer border ${
+                              perm.canEdit
+                                ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
+                                : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark text-gray-400 hover:border-amber-400'
+                            }`}
+                          >
+                            <MdEdit className="text-xs" />
+                            <span>Edit / Update</span>
+                            {perm.canEdit && <MdCheck className="text-xs" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCustomActionToggle(child.id, 'delete', perm)}
+                            className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 transition cursor-pointer border ${
+                              perm.canDelete
+                                ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
+                                : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark text-gray-400 hover:border-rose-400'
+                            }`}
+                          >
+                            <MdDelete className="text-xs" />
+                            <span>Delete</span>
+                            {perm.canDelete && <MdCheck className="text-xs" />}
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -464,19 +649,6 @@ const PermissionTreeEditor: React.FC<{
 };
 
 const DeveloperDashboard: React.FC = () => {
-  const [colorPickerEnabled, setColorPickerEnabled] = useState<boolean>(isThemeColorPickerEnabled());
-
-  const toggleThemeColorPicker = () => {
-    const next = !colorPickerEnabled;
-    setColorPickerEnabled(next);
-    setThemeColorPickerEnabled(next);
-    toast.success(
-      next
-        ? 'Theme Color Palette is now VISIBLE in Navbar Profile'
-        : 'Theme Color Palette is now HIDDEN from Navbar Profile'
-    );
-  };
-
   const navigate = useNavigate();
 
   // Developer Session State
@@ -490,7 +662,191 @@ const DeveloperDashboard: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'create' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'salesmen' | 'create' | 'logs'>('overview');
+
+  // Salesmen Linking State
+  const [salesmenList, setSalesmenList] = useState<any[]>([]);
+  const [salesmenLoading, setSalesmenLoading] = useState(false);
+  const [selectedSalesmanToLink, setSelectedSalesmanToLink] = useState<any | null>(null);
+  const [selectedPartnerNames, setSelectedPartnerNames] = useState<string[]>([]);
+  const [syncBidirectional, setSyncBidirectional] = useState(true);
+  const [savingLinks, setSavingLinks] = useState(false);
+
+  // Salesman Login Assign Modal State
+  const [salesmanToAssignLogin, setSalesmanToAssignLogin] = useState<any | null>(null);
+  const [assignLoginEmail, setAssignLoginEmail] = useState('');
+  const [assignLoginPassword, setAssignLoginPassword] = useState('');
+  const [assignLoginRole, setAssignLoginRole] = useState('Salesman');
+  const [isAssigningLogin, setIsAssigningLogin] = useState(false);
+
+  const handleOpenAssignLoginModal = (salesman: any) => {
+    setSalesmanToAssignLogin(salesman);
+    const cleanPrefix = (salesman.name || 'salesman').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const suggestedEmail = salesman.email || `${cleanPrefix}@nhtenterprise.com`;
+    setAssignLoginEmail(suggestedEmail);
+    setAssignLoginPassword('');
+    setAssignLoginRole('Salesman');
+  };
+
+  const handleSaveSalesmanLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!salesmanToAssignLogin || !assignLoginEmail || !assignLoginPassword) {
+      toast.error('Please enter email and password');
+      return;
+    }
+
+    try {
+      setIsAssigningLogin(true);
+      const cleanSlug = salesmanToAssignLogin.name.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-');
+      const roleModules = ROLE_PRESETS[assignLoginRole]?.modules || ROLE_PRESETS['Salesman'].modules;
+
+      const secondaryAuthClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL || 'https://zzjxukhrhvmuxxznjbos.supabase.co',
+        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_1rECaTLSxzwonvR12iOOKQ_XEI8wqCb',
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+
+      const { data: authData, error: authError } = await secondaryAuthClient.auth.signUp({
+        email: assignLoginEmail.trim(),
+        password: assignLoginPassword,
+        options: {
+          data: {
+            name: salesmanToAssignLogin.name.trim(),
+            full_name: salesmanToAssignLogin.name.trim(),
+            role: assignLoginRole,
+            tenant_id: cleanSlug,
+            business_name: 'NHT ENTERPRISE',
+            allowed_modules: roleModules,
+          },
+        },
+      });
+
+      if (authError) throw authError;
+
+      // Upsert into tenants table
+      await supabase.from('tenants').upsert([
+        {
+          name: salesmanToAssignLogin.name.trim(),
+          slug: cleanSlug,
+          email: assignLoginEmail.trim(),
+          business_activity: assignLoginRole,
+          seller_address: 'NHT ENTERPRISE Headquarters',
+          allowed_modules: roleModules,
+        },
+      ], { onConflict: 'slug' });
+
+      // Link user_id and email in salesmen table
+      const userId = authData?.user?.id;
+      const { error: smErr } = await supabase
+        .from('salesmen')
+        .update({
+          user_id: userId,
+          email: assignLoginEmail.trim()
+        })
+        .eq('id', salesmanToAssignLogin.id);
+
+      if (smErr) throw smErr;
+
+      toast.success(`Login credentials created & linked for "${salesmanToAssignLogin.name}"!`);
+      setSalesmanToAssignLogin(null);
+      await fetchSalesmenData();
+      await fetchDevData();
+    } catch (err: any) {
+      toast.error('Failed to create login: ' + err.message);
+    } finally {
+      setIsAssigningLogin(false);
+    }
+  };
+
+  const fetchSalesmenData = async () => {
+    try {
+      setSalesmenLoading(true);
+      const { data, error } = await supabase
+        .from('salesmen')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setSalesmenList(data || []);
+    } catch (err: any) {
+      console.error('Failed to load salesmen:', err);
+    } finally {
+      setSalesmenLoading(false);
+    }
+  };
+
+  const handleOpenLinkModal = (salesman: any) => {
+    setSelectedSalesmanToLink(salesman);
+    const existing = Array.isArray(salesman.linked_salesmen) ? salesman.linked_salesmen : [];
+    setSelectedPartnerNames(existing);
+  };
+
+  const togglePartnerName = (name: string) => {
+    setSelectedPartnerNames(prev => {
+      if (prev.includes(name)) {
+        return prev.filter(n => n !== name);
+      } else {
+        return [...prev, name];
+      }
+    });
+  };
+
+  const handleSaveSalesmanLinks = async () => {
+    if (!selectedSalesmanToLink) return;
+    try {
+      setSavingLinks(true);
+      const targetName = selectedSalesmanToLink.name;
+      const targetId = selectedSalesmanToLink.id;
+      const cleanPartners = selectedPartnerNames.filter(n => n && n !== targetName);
+
+      // 1. Update the target salesman
+      const { error: primaryErr } = await supabase
+        .from('salesmen')
+        .update({ linked_salesmen: cleanPartners })
+        .eq('id', targetId);
+
+      if (primaryErr) throw primaryErr;
+
+      // 2. If syncBidirectional is true, update the linked partners as well
+      if (syncBidirectional) {
+        const fullGroup = Array.from(new Set([targetName, ...cleanPartners]));
+
+        for (const partnerName of cleanPartners) {
+          const otherMembers = fullGroup.filter(n => n !== partnerName);
+          await supabase
+            .from('salesmen')
+            .update({ linked_salesmen: otherMembers })
+            .ilike('name', partnerName.trim());
+        }
+
+        // Also clean up any unlinked partners that were previously linked
+        const previouslyLinked = Array.isArray(selectedSalesmanToLink.linked_salesmen) ? selectedSalesmanToLink.linked_salesmen : [];
+        const unlinked = previouslyLinked.filter((p: string) => !cleanPartners.includes(p));
+        for (const unlinkedName of unlinked) {
+          const { data: currentPartner } = await supabase
+            .from('salesmen')
+            .select('linked_salesmen')
+            .ilike('name', unlinkedName.trim())
+            .maybeSingle();
+          if (currentPartner && Array.isArray(currentPartner.linked_salesmen)) {
+            const updated = currentPartner.linked_salesmen.filter((n: string) => n !== targetName);
+            await supabase
+              .from('salesmen')
+              .update({ linked_salesmen: updated })
+              .ilike('name', unlinkedName.trim());
+          }
+        }
+      }
+
+      toast.success(`Linked partner salesmen for "${targetName}" updated successfully!`);
+      await fetchSalesmenData();
+      setSelectedSalesmanToLink(null);
+    } catch (err: any) {
+      toast.error('Failed to update salesman links: ' + err.message);
+    } finally {
+      setSavingLinks(false);
+    }
+  };
 
   // Audit Logs State
   const [logs, setLogs] = useState<any[]>([]);
@@ -540,12 +896,6 @@ const DeveloperDashboard: React.FC = () => {
   const [editModules, setEditModules] = useState<string[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // Delete Employee State (requires developer password verification)
-  const [deletingEmployee, setDeletingEmployee] = useState<EmployeeAccount | null>(null);
-  const [deletePasswordInput, setDeletePasswordInput] = useState('');
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   // Create Employee Form State
   const [newEmployee, setNewEmployee] = useState({
     name: '',
@@ -561,12 +911,16 @@ const DeveloperDashboard: React.FC = () => {
     if (isDevAuthorized) {
       fetchDevData();
       fetchAuditLogs();
+      fetchSalesmenData();
     }
   }, [isDevAuthorized]);
 
   useEffect(() => {
     if (isDevAuthorized && activeTab === 'logs') {
       fetchAuditLogs();
+    }
+    if (isDevAuthorized && activeTab === 'salesmen') {
+      fetchSalesmenData();
     }
   }, [isDevAuthorized, activeTab]);
 
@@ -577,7 +931,6 @@ const DeveloperDashboard: React.FC = () => {
     const enteredEmail = emailInput.trim().toLowerCase();
     if (
       (enteredEmail === DEV_EMAIL.toLowerCase() && passwordInput === DEV_PASSWORD) ||
-      (enteredEmail === ALMUHAMMADI_DEV_EMAIL.toLowerCase() && passwordInput === DEV_PASSWORD) ||
       (enteredEmail === BACKUP_DEV_EMAIL.toLowerCase() && passwordInput === BACKUP_DEV_PASSWORD)
     ) {
       sessionStorage.setItem('nht_dev_auth_session', 'authorized');
@@ -616,7 +969,7 @@ const DeveloperDashboard: React.FC = () => {
       let formattedEmployees: EmployeeAccount[] = [];
       if (tenantData && tenantData.length > 0) {
         formattedEmployees = tenantData.map((t: any) => ({
-          id: String(t.id),
+          id: t.id,
           name: t.name,
           slug: t.slug,
           email: t.email,
@@ -624,6 +977,8 @@ const DeveloperDashboard: React.FC = () => {
           allowed_modules: Array.isArray(t.allowed_modules) && t.allowed_modules.length > 0 ? t.allowed_modules : getAllPermissionIds(),
           created_at: t.created_at || new Date().toISOString(),
         }));
+      } else {
+        formattedEmployees = [];
       }
 
       setEmployees(formattedEmployees);
@@ -671,8 +1026,8 @@ const DeveloperDashboard: React.FC = () => {
       // 1. Create User in Supabase Auth with allowed modules and role
       // Create a secondary client so we don't log out the active session
       const secondaryAuthClient = createClient(
-        import.meta.env.VITE_SUPABASE_URL || 'https://ioxsprfchcytqbyriwby.supabase.co',
-        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_59EOl26obYAzn_Z9pZQ9Bw_T0iKDKZJ',
+        import.meta.env.VITE_SUPABASE_URL || 'https://zzjxukhrhvmuxxznjbos.supabase.co',
+        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_1rECaTLSxzwonvR12iOOKQ_XEI8wqCb',
         { auth: { persistSession: false, autoRefreshToken: false } }
       );
       
@@ -685,7 +1040,7 @@ const DeveloperDashboard: React.FC = () => {
             full_name: newEmployee.name.trim(),
             role: newEmployee.role,
             tenant_id: cleanSlug,
-            business_name: 'AL MUHAMMADI',
+            business_name: 'NHT ENTERPRISE',
             allowed_modules: newEmployee.modules,
           },
         },
@@ -695,19 +1050,39 @@ const DeveloperDashboard: React.FC = () => {
 
       // 2. Record employee in tenants table
       try {
-        await supabase.from('tenants').upsert([
+        const { error: tenantErr } = await supabase.from('tenants').upsert([
           {
             name: newEmployee.name.trim(),
             slug: cleanSlug,
             email: newEmployee.email.trim(),
             business_activity: newEmployee.role,
-            seller_address: 'AL MUHAMMADI Headquarters',
+            seller_address: 'NHT ENTERPRISE Headquarters',
             allowed_modules: newEmployee.modules,
             location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
           },
         ], { onConflict: 'slug' });
-      } catch (err) {
-        console.warn('Tenants table upsert:', err);
+
+        if (tenantErr) {
+          console.warn('Upsert fallback to insert:', tenantErr);
+          const { error: insertErr } = await supabase.from('tenants').insert([
+            {
+              name: newEmployee.name.trim(),
+              slug: cleanSlug,
+              email: newEmployee.email.trim(),
+              business_activity: newEmployee.role,
+              seller_address: 'NHT ENTERPRISE Headquarters',
+              allowed_modules: newEmployee.modules,
+              location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
+            },
+          ]);
+          if (insertErr) {
+            console.error('Tenants table insert error:', insertErr);
+            toast.error(`Auth user created, but could not save profile to 'tenants' table: ${insertErr.message}`);
+          }
+        }
+      } catch (err: any) {
+        console.error('Tenants table upsert exception:', err);
+        toast.error(`Profile record error: ${err.message || err}`);
       }
 
       // 3. Auto-link Salesman role to Salesmen directory
@@ -721,7 +1096,6 @@ const DeveloperDashboard: React.FC = () => {
           console.warn('Salesmen table insert:', err);
         }
       }
-
 
       setCreatedResult({
         name: newEmployee.name.trim(),
@@ -739,7 +1113,9 @@ const DeveloperDashboard: React.FC = () => {
         location_id: '',
         modules: ROLE_PRESETS['Warehouse Manager'].modules,
       });
-      fetchDevData();
+
+      await fetchDevData();
+      setActiveTab('employees');
     } catch (err: any) {
       toast.error('Registration failed: ' + err.message);
     } finally {
@@ -751,11 +1127,22 @@ const DeveloperDashboard: React.FC = () => {
     setEditingEmployee(emp);
     setEditName(emp.name || '');
     setEditRole(emp.role || 'Warehouse Manager');
-    setEditModules(canonicalizePermissions(emp.allowed_modules || getAllPermissionIds()));
+    setEditModules(emp.allowed_modules || getAllPermissionIds());
   };
 
   const handleSaveEmployeePermissions = async () => {
     if (!editingEmployee) return;
+
+    const isSuperAdminAccount =
+      editingEmployee.role === 'Super Admin' ||
+      editingEmployee.slug === 'zoaib-admin' ||
+      editingEmployee.name?.toLowerCase().includes('super admin');
+
+    if (isSuperAdminAccount) {
+      toast.error('The Super Admin role is permanent and cannot be modified or downgraded.');
+      setEditingEmployee(null);
+      return;
+    }
 
     try {
       setIsSavingEdit(true);
@@ -808,71 +1195,24 @@ const DeveloperDashboard: React.FC = () => {
     }
   };
 
-  const handleOpenDeleteModal = (emp: EmployeeAccount) => {
-    setDeletingEmployee(emp);
-    setDeletePasswordInput('');
-    setDeleteError(null);
-  };
-
-  const handleConfirmDeleteEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!deletingEmployee) return;
-
-    // Validate Developer / Super Admin Password
-    const entered = deletePasswordInput.trim();
-    if (entered !== DEV_PASSWORD && entered !== BACKUP_DEV_PASSWORD) {
-      setDeleteError('Incorrect Developer Password. Access denied.');
+  const handleDeleteEmployee = async (emp: EmployeeAccount) => {
+    if (!window.confirm(`Are you sure you want to delete employee "${emp.name}"?`)) {
       return;
     }
-
     try {
-      setIsDeleting(true);
-      setDeleteError(null);
-
-      // 1. Delete from tenants table
-      if (deletingEmployee.slug) {
-        const { error: delErr } = await supabase.from('tenants').delete().eq('slug', deletingEmployee.slug);
-        if (delErr) console.warn('Tenant delete error:', delErr);
-      } else if (deletingEmployee.id) {
-        const { error: delErr } = await supabase.from('tenants').delete().eq('id', deletingEmployee.id);
-        if (delErr) console.warn('Tenant delete error:', delErr);
-      }
-
-      // 2. If Salesman, also remove from salesmen directory
-      if (deletingEmployee.role === 'Salesman' || deletingEmployee.name) {
-        try {
-          await supabase
-            .from('salesmen')
-            .delete()
-            .eq('name', deletingEmployee.name);
-        } catch (err) {
-          console.warn('Salesman cleanup warning:', err);
-        }
-      }
-
-      // 3. Clear local storage permissions cache
-      try {
-        localStorage.removeItem(`nht_modules_${deletingEmployee.slug}`);
-      } catch (_) {}
-
-      // Update state locally for instant UI update
-      setEmployees(prev => prev.filter(e => e.id !== deletingEmployee.id && e.slug !== deletingEmployee.slug));
-
-      toast.success(`Employee account "${deletingEmployee.name}" deleted successfully.`);
-      setDeletingEmployee(null);
-      setDeletePasswordInput('');
+      const { error } = await supabase.from('tenants').delete().eq('id', emp.id);
+      if (error) throw error;
+      toast.success(`Employee account "${emp.name}" removed successfully.`);
       fetchDevData();
     } catch (err: any) {
-      console.error('Delete employee failed:', err);
-      toast.error('Failed to delete employee: ' + (err.message || 'Unknown error'));
-    } finally {
-      setIsDeleting(false);
+      toast.error('Failed to delete employee: ' + err.message);
     }
   };
 
   // Resolve employee friendly name, role, and avatar from performed_by identifier
-  const getEmployeeInfo = (performedBy?: string) => {
-    if (!performedBy || performedBy.toLowerCase() === 'system') {
+  const getEmployeeInfo = (performedBy?: any) => {
+    const raw = String(performedBy || '').trim();
+    if (!raw || raw.toLowerCase() === 'system') {
       return {
         name: 'System Automated',
         role: 'Background System',
@@ -882,7 +1222,7 @@ const DeveloperDashboard: React.FC = () => {
         badgeColor: 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300 border-gray-300 dark:border-strokedark',
       };
     }
-    const lower = performedBy.toLowerCase();
+    const lower = raw.toLowerCase();
     if (
       lower.includes('admin') ||
       lower === 'system administrator' ||
@@ -890,53 +1230,54 @@ const DeveloperDashboard: React.FC = () => {
       lower === BACKUP_DEV_EMAIL.toLowerCase()
     ) {
       return {
-        name: 'Al Muhammadi',
+        name: 'Zoaib Ali',
         role: 'Super Admin',
-        email: lower.includes('@') ? performedBy : DEV_EMAIL,
-        initials: 'AM',
+        email: lower.includes('@') ? raw : DEV_EMAIL,
+        initials: 'ZA',
         avatarBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
         badgeColor: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
       };
     }
 
-    const matched = employees.find(
+    const matched = (employees || []).find(
       e =>
-        (e.email && e.email.toLowerCase() === lower) ||
-        (e.name && e.name.toLowerCase() === lower) ||
-        (e.slug && e.slug.toLowerCase() === lower)
+        (e?.email && String(e.email).toLowerCase() === lower) ||
+        (e?.name && String(e.name).toLowerCase() === lower) ||
+        (e?.slug && String(e.slug).toLowerCase() === lower)
     );
 
-    if (matched) {
-      const parts = matched.name.split(' ');
-      const initials = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+    if (matched && matched.name) {
+      const parts = String(matched.name).trim().split(' ').filter(Boolean);
+      const initials = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : (parts[0] ? parts[0].slice(0, 2).toUpperCase() : 'EM');
       return {
         name: matched.name,
         role: matched.role || 'Staff Member',
-        email: matched.email || performedBy,
+        email: matched.email || raw,
         initials,
         avatarBg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
         badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-300 dark:border-blue-800',
       };
     }
 
-    if (performedBy.includes('@')) {
-      const username = performedBy.split('@')[0];
+    if (raw.includes('@')) {
+      const username = raw.split('@')[0] || 'User';
       const prettyName = username.charAt(0).toUpperCase() + username.slice(1);
       return {
         name: prettyName,
         role: 'Staff User',
-        email: performedBy,
+        email: raw,
         initials: prettyName.slice(0, 2).toUpperCase(),
         avatarBg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300',
         badgeColor: 'bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border-purple-300 dark:border-purple-800',
       };
     }
 
+    const initials = raw.length > 1 ? raw.slice(0, 2).toUpperCase() : (raw.toUpperCase() || 'ST');
     return {
-      name: performedBy,
+      name: raw,
       role: 'Staff Member',
-      email: performedBy,
-      initials: performedBy.slice(0, 2).toUpperCase(),
+      email: raw,
+      initials,
       avatarBg: 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300',
       badgeColor: 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300 border-gray-300 dark:border-strokedark',
     };
@@ -1184,18 +1525,20 @@ const DeveloperDashboard: React.FC = () => {
     const list: { key: string; label: string }[] = [];
     const added = new Set<string>();
 
-    employees.forEach(emp => {
-      if (emp.name && !added.has(emp.name.toLowerCase())) {
-        added.add(emp.name.toLowerCase());
+    (employees || []).forEach(emp => {
+      if (emp?.name && !added.has(String(emp.name).toLowerCase())) {
+        added.add(String(emp.name).toLowerCase());
         list.push({ key: emp.name, label: `${emp.name} (${emp.role || 'Staff'})` });
       }
     });
 
-    logs.forEach(log => {
-      const info = getEmployeeInfo(log.performed_by);
-      if (info.name && !added.has(info.name.toLowerCase())) {
-        added.add(info.name.toLowerCase());
-        list.push({ key: info.name, label: `${info.name} (${info.role})` });
+    (logs || []).forEach(log => {
+      if (log) {
+        const info = getEmployeeInfo(log.performed_by);
+        if (info?.name && !added.has(String(info.name).toLowerCase())) {
+          added.add(String(info.name).toLowerCase());
+          list.push({ key: info.name, label: `${info.name} (${info.role})` });
+        }
       }
     });
 
@@ -1205,6 +1548,7 @@ const DeveloperDashboard: React.FC = () => {
   // Audit Logs computed filtering & pagination
   const filteredLogs = (logs || []).filter(log => {
     if (!log) return false;
+
     // Action filter
     if (logFilterAction !== 'ALL') {
       const act = String(log.action_type || '').toUpperCase();
@@ -1234,7 +1578,7 @@ const DeveloperDashboard: React.FC = () => {
       const matchCategory = String(activity.category || '').toLowerCase().includes(q);
       const matchTitle = String(activity.title || '').toLowerCase().includes(q);
       const matchSummary = String(activity.summary || '').toLowerCase().includes(q);
-      const matchEmpName = String(empInfo.name || '').toLowerCase() === q || String(empInfo.name || '').toLowerCase().includes(q);
+      const matchEmpName = String(empInfo.name || '').toLowerCase().includes(q);
       const matchEmpRole = String(empInfo.role || '').toLowerCase().includes(q);
       const matchDetails = JSON.stringify(log.details || {}).toLowerCase().includes(q);
       return matchAction || matchCategory || matchTitle || matchSummary || matchEmpName || matchEmpRole || matchDetails;
@@ -1247,7 +1591,7 @@ const DeveloperDashboard: React.FC = () => {
   const totalPages = Math.ceil(filteredLogs.length / pageSize) || 1;
   const paginatedLogs = filteredLogs.slice((logPage - 1) * pageSize, logPage * pageSize);
 
-// IF NOT AUTHENTICATED AS DEVELOPER -> SHOW SECURE LOGIN FORM
+  // IF NOT AUTHENTICATED AS DEVELOPER -> SHOW SECURE LOGIN FORM
   if (!isDevAuthorized) {
     return (
       <div className="min-h-screen bg-gray-50 text-body dark:bg-boxdark-2 dark:text-bodydark flex flex-col items-center justify-center p-6 font-sans transition-colors duration-200">
@@ -1264,7 +1608,7 @@ const DeveloperDashboard: React.FC = () => {
               <MdSecurity />
             </div>
             <h2 className="text-2xl font-black tracking-tight text-black dark:text-white">Master Role & Dev Console</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for AL Muhammadi</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for NHT ENTERPRISE</p>
           </div>
 
           {authError && (
@@ -1327,13 +1671,13 @@ const DeveloperDashboard: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">AL Muhammadi</h1>
+              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">NHT ENTERPRISE</h1>
               <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                 Employee Role & Access Control
               </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
-              Admin & Role Console: <span className="text-black dark:text-gray-200 font-medium">admin@almuhammadi.com</span>
+              Admin & Role Console: <span className="text-black dark:text-gray-200 font-medium">{DEV_EMAIL}</span>
             </p>
           </div>
         </div>
@@ -1358,6 +1702,14 @@ const DeveloperDashboard: React.FC = () => {
               <MdPeople /> Employee Accounts ({employees.length})
             </button>
             <button
+              onClick={() => setActiveTab('salesmen')}
+              className={`py-1.5 px-3 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'salesmen' ? 'bg-emerald-600 text-white shadow-xs font-bold' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              <MdLink /> Merge / Link Salesmen ({salesmenList.length})
+            </button>
+            <button
               onClick={() => setActiveTab('create')}
               className={`py-1.5 px-3 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'create' ? 'bg-emerald-600 text-white shadow-xs font-bold' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
@@ -1374,22 +1726,6 @@ const DeveloperDashboard: React.FC = () => {
               <MdHistory /> Logs {logs.length > 0 && `(${logs.length})`}
             </button>
           </div>
-
-          
-          {/* Theme Color Picker Toggle */}
-          <button
-            type="button"
-            onClick={toggleThemeColorPicker}
-            title={colorPickerEnabled ? 'Theme Color Palette is Visible in Navbar' : 'Theme Color Palette is Hidden from Navbar'}
-            className={`py-1.5 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer select-none ${
-              colorPickerEnabled
-                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700 opacity-75'
-            }`}
-          >
-            <MdPalette size={16} />
-            <span>Theme Colors: {colorPickerEnabled ? 'ON' : 'OFF'}</span>
-          </button>
 
           <ul className="flex items-center gap-2 list-none m-0">
             <DarkModeSwitcher />
@@ -1507,47 +1843,204 @@ const DeveloperDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stroke dark:divide-strokedark">
-                  {employees.map(emp => (
-                    <tr key={emp.id} className="hover:bg-gray-50 dark:hover:bg-meta-4/20 transition">
-                      <td className="p-4 font-bold text-black dark:text-white flex items-center gap-2">
-                        <MdBadge className="text-emerald-600 text-base shrink-0" />
-                        <span>{emp.name}</span>
-                      </td>
-                      <td className="p-4">
-                        <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2.5 py-1 rounded-md text-[11px] font-bold">
-                          {emp.role || 'Staff'}
-                        </span>
-                      </td>
-                      <td className="p-4 font-mono text-gray-600 dark:text-gray-400">
-                        {emp.email || '—'}
-                      </td>
-                      <td className="p-4">
-                        <span className="bg-gray-100 dark:bg-meta-4 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-md text-[11px] font-mono border border-stroke dark:border-strokedark font-bold">
-                          {emp.allowed_modules?.length || 0} pages allowed
-                        </span>
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                  {employees.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 px-4 text-center">
+                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                          <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 text-xl font-bold mb-3">
+                            <MdBadge />
+                          </div>
+                          <h4 className="text-sm font-bold text-black dark:text-white mb-1">No Active Employee Accounts</h4>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                            All previous user accounts have been cleared. You can add new employee accounts with custom roles anytime.
+                          </p>
                           <button
-                            onClick={() => handleOpenEditModal(emp)}
-                            className="inline-flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition shadow-xs"
+                            onClick={() => setActiveTab('create')}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 transition shadow-xs cursor-pointer"
                           >
-                            <MdEdit /> Edit Role & Permissions
-                          </button>
-                          <button
-                            onClick={() => handleOpenDeleteModal(emp)}
-                            className="inline-flex items-center gap-1 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition shadow-xs"
-                            title="Delete Employee Account"
-                          >
-                            <MdDeleteOutline className="text-sm" /> Delete
+                            <MdAddCircle /> Add New Employee User
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    employees.map(emp => (
+                      <tr key={emp.id} className="hover:bg-gray-50 dark:hover:bg-meta-4/20 transition">
+                        <td className="p-4 font-bold text-black dark:text-white flex items-center gap-2">
+                          <MdBadge className="text-emerald-600 text-base shrink-0" />
+                          <span>{emp.name}</span>
+                        </td>
+                        <td className="p-4">
+                          <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2.5 py-1 rounded-md text-[11px] font-bold">
+                            {emp.role || 'Staff'}
+                          </span>
+                        </td>
+                        <td className="p-4 font-mono text-gray-600 dark:text-gray-400">
+                          {emp.email || '—'}
+                        </td>
+                        <td className="p-4">
+                          <span className="bg-gray-100 dark:bg-meta-4 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-md text-[11px] font-mono border border-stroke dark:border-strokedark font-bold">
+                            {emp.allowed_modules?.length || 0} pages allowed
+                          </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleOpenEditModal(emp)}
+                              className="inline-flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition shadow-xs"
+                            >
+                              <MdEdit /> Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEmployee(emp)}
+                              className="inline-flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/30 px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition shadow-xs"
+                              title="Delete employee account"
+                            >
+                              <MdDelete /> Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* TAB: SALESMEN LINKING & MERGING */}
+        {activeTab === 'salesmen' && (
+          <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-default overflow-hidden transition-colors duration-200">
+            <div className="p-6 border-b border-stroke dark:border-strokedark flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
+                  <MdLink className="text-emerald-600 text-xl" />
+                  <span>Salesmen Multi-Account Linking & Merging Manager</span>
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Merge 2 or more salesmen so they can create invoices on behalf of each other and view each other's sales in their dashboards.
+                </p>
+              </div>
+              <button
+                onClick={fetchSalesmenData}
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-meta-4 dark:hover:bg-meta-4/80 text-black dark:text-white font-bold text-xs py-2 px-3.5 rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <MdRefresh /> Refresh
+              </button>
+            </div>
+
+            {salesmenLoading ? (
+              <div className="p-12 flex justify-center items-center">
+                <Spinner color="border-emerald-600" size="w-8 h-8" />
+              </div>
+            ) : salesmenList.length === 0 ? (
+              <div className="p-12 text-center text-xs text-gray-400">
+                No salesmen registered in the database yet.
+              </div>
+            ) : (
+              <div className="max-w-full overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-meta-4/30 text-gray-600 dark:text-gray-300 font-bold uppercase tracking-wider border-b border-stroke dark:border-strokedark">
+                      <th className="p-4">Salesman Name</th>
+                      <th className="p-4">Invoice Prefix</th>
+                      <th className="p-4">Phone / Area</th>
+                      <th className="p-4">Linked Partner Salesmen</th>
+                      <th className="p-4">Login Account</th>
+                      <th className="p-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                    {salesmenList.map((sm: any) => {
+                      const partners: string[] = Array.isArray(sm.linked_salesmen) ? sm.linked_salesmen : [];
+                      const hasPartners = partners.length > 0;
+                      const hasLogin = !!(sm.user_id || sm.email);
+
+                      return (
+                        <tr key={sm.id} className="hover:bg-gray-50 dark:hover:bg-meta-4/20 transition">
+                          <td className="p-4 font-bold text-black dark:text-white">
+                            <div className="flex items-center gap-2">
+                              <span className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-black text-xs">
+                                {sm.name ? sm.name.charAt(0).toUpperCase() : 'S'}
+                              </span>
+                              <span>{sm.name}</span>
+                            </div>
+                          </td>
+                          <td className="p-4 font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                            {sm.invoice_name || (sm.invoice_names && sm.invoice_names[0]) ? (
+                              <span className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded text-[11px]">
+                                {sm.invoice_name || sm.invoice_names[0]}-
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 font-normal">—</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-gray-600 dark:text-gray-400">
+                            <div>{sm.phone || '—'}</div>
+                            <div className="text-[10px] text-gray-400">{sm.area || 'General'}</div>
+                          </td>
+                          <td className="p-4">
+                            {hasPartners ? (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {partners.map((pName: string, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/80 px-2 py-0.5 rounded-md text-[11px] font-bold flex items-center gap-1"
+                                  >
+                                    <MdGroup className="text-xs" />
+                                    {pName}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-[11px] italic">
+                                Single / Unlinked
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            {hasLogin ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-md w-fit">
+                                  <MdCheck className="text-xs" /> Active Login
+                                </span>
+                                <span className="text-[11px] text-gray-500 font-mono truncate max-w-[180px]">{sm.email || 'Linked to Auth'}</span>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md">
+                                No Login Account
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-center">
+                            <div className="inline-flex items-center gap-2">
+                              {!hasLogin && (
+                                <button
+                                  onClick={() => handleOpenAssignLoginModal(sm)}
+                                  className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition shadow-xs"
+                                  title="Create login credentials for this salesman"
+                                >
+                                  <MdVpnKey className="text-sm" />
+                                  <span>Assign Login</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleOpenLinkModal(sm)}
+                                className="inline-flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition shadow-xs"
+                              >
+                                <MdLink className="text-sm" />
+                                <span>{hasPartners ? `Edit Links (${partners.length})` : 'Link Partners'}</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -1575,7 +2068,7 @@ const DeveloperDashboard: React.FC = () => {
                   </p>
                 </div>
                 <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-semibold flex items-center gap-1.5">
-                  <MdSecurity /> AL MUHAMMADI RBAC
+                  <MdSecurity /> NHT ENTERPRISE RBAC
                 </span>
               </div>
 
@@ -1641,7 +2134,7 @@ const DeveloperDashboard: React.FC = () => {
                       <input
                         type="email"
                         required
-                        placeholder="e.g. warehouse@almuhammadi.com"
+                        placeholder="e.g. warehouse@zoaibalicompany.com"
                         value={newEmployee.email}
                         onChange={e => setNewEmployee({ ...newEmployee, email: e.target.value })}
                         className="w-full bg-white dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-lg p-2.5 text-black dark:text-white text-xs outline-none focus:border-emerald-500"
@@ -2019,12 +2512,12 @@ const DeveloperDashboard: React.FC = () => {
                 </p>
               </div>
               <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] px-3 py-1 rounded-md font-mono font-bold border border-emerald-200 dark:border-emerald-800/60">
-                {getActivePageCount(editModules)} Pages Permitted
+                {editModules.length} Pages Permitted
               </span>
             </div>
 
             {/* QUICK PRESET TEMPLATES */}
-            {editingEmployee.role === 'Super Admin' || editingEmployee.slug === 'almuhammadi-admin' || editingEmployee.slug === 'zoaib-admin' ? (
+            {editingEmployee.role === 'Super Admin' || editingEmployee.slug === 'zoaib-admin' ? (
               <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 rounded-2xl text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-3">
                 <span className="text-2xl">👑</span>
                 <div>
@@ -2093,90 +2586,6 @@ const DeveloperDashboard: React.FC = () => {
               </button>
             </div>
 
-          </div>
-        </div>
-      )}
-
-      {/* DELETE EMPLOYEE CONFIRMATION MODAL WITH MASTER DEV PASSWORD */}
-      {deletingEmployee && (
-        <div className="fixed inset-0 bg-black/60 z-99999 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-boxdark w-full max-w-md rounded-3xl border border-stroke dark:border-strokedark p-6 shadow-2xl space-y-5 transition-colors duration-200 animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center justify-between border-b border-stroke dark:border-strokedark pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 flex items-center justify-center text-xl shrink-0">
-                  <MdDeleteOutline />
-                </div>
-                <div>
-                  <h4 className="text-base font-bold text-black dark:text-white">Delete Employee Account</h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Security Verification Required</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setDeletingEmployee(null);
-                  setDeletePasswordInput('');
-                  setDeleteError(null);
-                }}
-                className="p-1.5 rounded-xl text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-meta-4 transition cursor-pointer"
-              >
-                <MdClose className="text-xl" />
-              </button>
-            </div>
-
-            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 p-4 rounded-2xl space-y-1.5 text-xs text-red-700 dark:text-red-300">
-              <p className="font-bold">
-                Are you sure you want to permanently delete account for <span className="text-red-900 dark:text-red-200 underline underline-offset-2">{deletingEmployee.name}</span> ({deletingEmployee.email || 'No email'})?
-              </p>
-              <p className="text-[11px] text-red-600/90 dark:text-red-400/90">
-                This will revoke their access ({deletingEmployee.allowed_modules?.length || 0} permitted modules) and delete their account profile.
-              </p>
-            </div>
-
-            <form onSubmit={handleConfirmDeleteEmployee} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-black dark:text-white mb-1.5 flex items-center gap-1">
-                  <MdLockOutline className="text-gray-400 text-sm" /> Enter Developer Password to Confirm:
-                </label>
-                <input
-                  type="password"
-                  required
-                  autoFocus
-                  value={deletePasswordInput}
-                  onChange={e => {
-                    setDeletePasswordInput(e.target.value);
-                    setDeleteError(null);
-                  }}
-                  placeholder="Enter master dev password"
-                  className="w-full bg-white dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-xl p-3 text-xs text-black dark:text-white outline-none focus:border-red-500 transition shadow-inner"
-                />
-                {deleteError && (
-                  <div className="mt-2 bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 text-xs p-2.5 rounded-xl border border-red-300 dark:border-red-800 flex items-center gap-1.5 font-semibold">
-                    <MdLockOutline className="shrink-0" /> {deleteError}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-stroke dark:border-strokedark">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeletingEmployee(null);
-                    setDeletePasswordInput('');
-                    setDeleteError(null);
-                  }}
-                  className="px-4 py-2 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4 text-gray-700 dark:text-gray-300 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isDeleting || !deletePasswordInput.trim()}
-                  className="px-5 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isDeleting ? <Spinner /> : <MdDeleteOutline className="text-sm" />} Confirm & Delete
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -2385,6 +2794,250 @@ const DeveloperDashboard: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* 🌟 MODAL: LINK / MERGE PARTNER SALESMEN */}
+      {selectedSalesmanToLink && (
+        <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xl max-w-xl w-full p-6 space-y-5 transition-colors duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-stroke dark:border-strokedark">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <MdLink size={20} />
+                </span>
+                <div>
+                  <h3 className="font-bold text-base text-black dark:text-white">
+                    Link Partner Salesmen with: <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">{selectedSalesmanToLink.name}</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    Select the other salesmen who can create invoices on behalf of {selectedSalesmanToLink.name} and share dashboard views.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedSalesmanToLink(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-meta-4 transition cursor-pointer"
+              >
+                <MdClose size={18} />
+              </button>
+            </div>
+
+            {/* Checklist of other salesmen */}
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-2">
+                Choose Partner Salesmen (Select Multiple):
+              </span>
+
+              {salesmenList
+                .filter((s: any) => s.id !== selectedSalesmanToLink.id && s.name !== selectedSalesmanToLink.name)
+                .map((candidate: any) => {
+                  const isChecked = selectedPartnerNames.includes(candidate.name);
+
+                  return (
+                    <label
+                      key={candidate.id}
+                      onClick={() => togglePartnerName(candidate.name)}
+                      className={`flex items-center justify-between p-3 rounded-xl border transition cursor-pointer select-none ${
+                        isChecked
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-600 text-black dark:text-white'
+                          : 'bg-gray-50 dark:bg-meta-4/20 border-stroke dark:border-strokedark text-gray-700 dark:text-gray-300 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <div>
+                          <div className="font-bold text-xs">{candidate.name}</div>
+                          <div className="text-[10px] text-gray-400 font-mono">
+                            Prefix: <b className="text-emerald-700 dark:text-emerald-300">{candidate.invoice_name || (candidate.invoice_names && candidate.invoice_names[0]) || 'N/A'}-</b> | {candidate.phone || 'No Phone'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {isChecked && (
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <MdCheck /> Linked
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+
+              {salesmenList.filter((s: any) => s.id !== selectedSalesmanToLink.id).length === 0 && (
+                <div className="text-xs text-gray-400 text-center py-6">
+                  No other salesmen registered to link with.
+                </div>
+              )}
+            </div>
+
+            {/* Sync Bidirectional Option */}
+            <div className="p-3.5 bg-slate-50 dark:bg-meta-4/30 rounded-xl border border-stroke dark:border-strokedark">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={syncBidirectional}
+                  onChange={e => setSyncBidirectional(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer"
+                />
+                <div>
+                  <span className="text-xs font-bold text-black dark:text-white flex items-center gap-1">
+                    <MdSwapHoriz className="text-emerald-600 text-sm" /> Automatically Sync Bidirectional Links (Recommended)
+                  </span>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    When enabled, linking {selectedSalesmanToLink.name} with selected partners will also automatically add {selectedSalesmanToLink.name} to each partner's list so they can all see each other.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-stroke dark:border-strokedark">
+              <button
+                type="button"
+                onClick={() => setSelectedPartnerNames([])}
+                className="text-xs text-red-500 hover:text-red-700 font-bold transition cursor-pointer"
+              >
+                Clear All Links
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSalesmanToLink(null)}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-gray-100 dark:bg-meta-4 hover:bg-gray-200 dark:hover:bg-meta-4/80 text-black dark:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveSalesmanLinks}
+                  disabled={savingLinks}
+                  className="px-5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {savingLinks ? <Spinner color="border-white" size="w-3.5 h-3.5" /> : <MdCheck />}
+                  <span>Save Partner Links ({selectedPartnerNames.length})</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ASSIGN LOGIN CREDENTIALS TO SALESMAN */}
+      {salesmanToAssignLogin && (
+        <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-stroke dark:border-strokedark">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl font-bold">
+                  <MdVpnKey />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
+                    <span>Assign Login Credentials</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    Generate an official ERP login and role for <strong className="text-black dark:text-white">{salesmanToAssignLogin.name}</strong>.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSalesmanToAssignLogin(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-meta-4 transition cursor-pointer"
+              >
+                <MdClose size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveSalesmanLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Salesman Name
+                </label>
+                <input
+                  type="text"
+                  value={salesmanToAssignLogin.name}
+                  disabled
+                  className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-gray-100 dark:bg-meta-4/50 text-gray-700 dark:text-gray-300 cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Login Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={assignLoginEmail}
+                  onChange={e => setAssignLoginEmail(e.target.value)}
+                  placeholder="e.g. salesman@nhtenterprise.com"
+                  className="w-full text-xs px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={assignLoginPassword}
+                  onChange={e => setAssignLoginPassword(e.target.value)}
+                  placeholder="Create a secure password (min 6 chars)"
+                  className="w-full text-xs px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Assigned ERP Role
+                </label>
+                <select
+                  value={assignLoginRole}
+                  onChange={e => setAssignLoginRole(e.target.value)}
+                  className="w-full text-xs px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-blue-500 focus:outline-hidden cursor-pointer"
+                >
+                  {Object.keys(ROLE_PRESETS).map(roleKey => (
+                    <option key={roleKey} value={roleKey}>
+                      {ROLE_PRESETS[roleKey].name} ({ROLE_PRESETS[roleKey].modules.length} modules)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                  Default: <strong>Salesman</strong> (Includes Quotations, Invoices, Delivery Challans, Customers & Ledger).
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stroke dark:border-strokedark">
+                <button
+                  type="button"
+                  onClick={() => setSalesmanToAssignLogin(null)}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-gray-100 dark:bg-meta-4 hover:bg-gray-200 dark:hover:bg-meta-4/80 text-black dark:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAssigningLogin}
+                  className="px-5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {isAssigningLogin ? <Spinner color="border-white" size="w-3.5 h-3.5" /> : <MdVpnKey />}
+                  <span>Create & Link Login</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
