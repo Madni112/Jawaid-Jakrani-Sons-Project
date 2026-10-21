@@ -72,6 +72,7 @@ export const ROLE_PRESETS: Record<string, RolePreset> = {
       '/Administration/Brands',
       '/Administration/Products/List',
       '/Administration/Products/Bulk-Upload',
+      'locations',
       '/Administration/Locations/List',
       '/Administration/Transportation/List',
       '/Administration/StockTransfer/List',

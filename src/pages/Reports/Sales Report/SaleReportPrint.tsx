@@ -109,6 +109,28 @@ const SaleReportPrint = () => {
           const allReturns = retRes.data || [];
           const allProducts = prodData || [];
           const allCategories = catRes.data || [];
+          const registeredLocations = (locRes.data || []).map((l: any) => String(l.name || '').trim()).filter(Boolean);
+          const defaultLocName = registeredLocations.find(l => /emporium|showroom|shop|sale/i.test(l)) || registeredLocations[0] || 'AL-MUHAMMADI TILES EMPORIUM';
+
+          const normalizeWarehouse = (raw: string): string => {
+            if (!raw) return defaultLocName;
+            const clean = raw.replace(/[`'"]/g, '').trim();
+            const found = registeredLocations.find(l => l.toLowerCase() === clean.toLowerCase());
+            if (found) return found;
+            if (clean.toLowerCase().includes('fateh') || clean.toLowerCase().includes('39') || clean.toLowerCase().includes('main') || clean.toLowerCase().includes('storage')) {
+              const fateh = registeredLocations.find(l => /fateh/i.test(l) || /main/i.test(l) || /storage/i.test(l));
+              if (fateh) return fateh;
+            }
+            if (clean.toLowerCase().includes('chandni')) {
+              const chandni = registeredLocations.find(l => /chandni/i.test(l));
+              if (chandni) return chandni;
+            }
+            if (clean.toLowerCase().includes('shop') || clean.toLowerCase().includes('showroom') || clean.toLowerCase().includes('emporium') || clean.toLowerCase().includes('sale')) {
+              const shop = registeredLocations.find(l => /emporium|showroom|shop|sale/i.test(l));
+              if (shop) return shop;
+            }
+            return clean;
+          };
 
           const catById = new Map<number, any>();
           const catByName = new Map<string, any>();
@@ -2480,6 +2502,53 @@ const SaleReportPrint = () => {
     const start = (currentPage - 1) * pSize;
     return categoryHierarchyTree.slice(start, start + pSize);
   }, [categoryHierarchyTree, currentPage, pageSize, isPrinting]);
+
+    const isMultiWarehouse = !(filters.location && filters.location.length === 1 && !filters.location.includes('All'));
+
+  const renderWhBreakdown = (whMap: Record<string, number> | undefined, colorType: 'sold' | 'return' | 'net') => {
+    if (!whMap) return null;
+    if (!isMultiWarehouse) return null;
+
+    let targetWarehouses: string[] = [];
+    if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) {
+      const sel = filters.location.filter((l: string) => l && l !== 'All');
+      if (sel.length === 1) return null;
+      if (sel.length > 1) {
+        targetWarehouses = sel;
+      }
+    }
+    if (targetWarehouses.length === 0) {
+      targetWarehouses = reportWarehouses.length > 0 ? reportWarehouses : Object.keys(whMap);
+    }
+
+    if (targetWarehouses.length <= 1) return null;
+    const hasAnyVal = targetWarehouses.some(w => Number(whMap[w] || 0) !== 0);
+    if (!hasAnyVal) return null;
+
+    const colorStyles = {
+      sold: 'text-slate-800 bg-slate-100/90 border-slate-300',
+      return: 'text-rose-700 bg-rose-50 border-rose-300',
+      net: 'text-primary bg-indigo-50/90 border-indigo-200'
+    }[colorType];
+
+    return (
+      <div className="flex flex-col items-end gap-1 mt-1 pt-1 border-t border-dashed border-gray-300 print:mt-0.5 print:pt-0.5 w-full">
+        {targetWarehouses.map((wh) => {
+          const qty = Number(whMap[wh] || 0);
+          return (
+            <span
+              key={wh}
+              className={`inline-flex items-center justify-between gap-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border ${colorStyles} leading-tight min-w-[72px] whitespace-nowrap`}
+              title={`${wh}: ${qty.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            >
+              <span className="font-sans font-bold uppercase text-[9px] opacity-75">{wh}:</span>
+              <span>{qty.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
 

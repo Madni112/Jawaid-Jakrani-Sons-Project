@@ -401,10 +401,23 @@ const StockReportPrint = () => {
                     const locationStockMap: { [loc: string]: number } = {};
 
                     const getNormalizedLocName = (rawLoc: string, isSale: boolean = false) => {
-                        if (!rawLoc) return isSale ? defaultSaleLoc : (registeredLocs[0] || 'SHOP');
-                        const clean = String(rawLoc).trim();
+                        if (!rawLoc) return isSale ? defaultSaleLoc : (registeredLocs[0] || 'FATEH CHOWK');
+                        const clean = String(rawLoc).replace(/[`'"]/g, '').trim();
                         const matched = registeredLocs.find(l => l.toLowerCase() === clean.toLowerCase());
-                        return matched || clean;
+                        if (matched) return matched;
+                        if (clean.toLowerCase().includes('fateh') || clean.toLowerCase().includes('39') || clean.toLowerCase().includes('main') || clean.toLowerCase().includes('storage')) {
+                            const fateh = registeredLocs.find(l => /fateh/i.test(l) || /main/i.test(l) || /storage/i.test(l));
+                            if (fateh) return fateh;
+                        }
+                        if (clean.toLowerCase().includes('chandni')) {
+                            const chandni = registeredLocs.find(l => /chandni/i.test(l));
+                            if (chandni) return chandni;
+                        }
+                        if (clean.toLowerCase().includes('shop') || clean.toLowerCase().includes('showroom') || clean.toLowerCase().includes('emporium') || clean.toLowerCase().includes('sale')) {
+                            const sale = registeredLocs.find(l => /emporium|showroom|shop|sale/i.test(l));
+                            if (sale) return sale;
+                        }
+                        return clean;
                     };
 
                     // 1. Opening Stock
@@ -486,11 +499,11 @@ const StockReportPrint = () => {
                     (sales || []).forEach((s: any) => {
                         const statusClean = String(s.sale_status || '').trim().toLowerCase();
                         if (statusClean !== 'cancel' && statusClean !== 'deleted') {
-                            const loc = getNormalizedLocName(s.dispatch_warehouse || s.location, true);
                             const items = Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]');
                             items.forEach((i: any) => {
                                 const iName = String(i.product_name || i.itemName || i.item_name || '').trim().toLowerCase();
                                 if (iName === name || iName.includes(name)) {
+                                    const loc = getNormalizedLocName(i.warehouse || i.location || s.dispatch_warehouse || s.location, true);
                                     const qty = Number(i.qty || i.quantity || 0);
                                     locationStockMap[loc] = (locationStockMap[loc] || 0) - qty;
                                 }
@@ -501,11 +514,11 @@ const StockReportPrint = () => {
                     // 6. Purchase Returns (Stock Out)
                     (pReturns || []).forEach((pr: any) => {
                         if (String(pr.status).toLowerCase() !== 'cancel') {
-                            const loc = getNormalizedLocName(pr.source_warehouse || pr.location, false);
                             const items = Array.isArray(pr.items) ? pr.items : JSON.parse(pr.items || '[]');
                             items.forEach((i: any) => {
                                 const iName = String(i.product_name || i.itemName || i.item_name || '').trim().toLowerCase();
                                 if (iName === name || iName.includes(name)) {
+                                    const loc = getNormalizedLocName(i.warehouse || i.location || pr.source_warehouse || pr.location, false);
                                     const qty = Number(i.qty || i.quantity || 0);
                                     locationStockMap[loc] = (locationStockMap[loc] || 0) - qty;
                                 }
@@ -637,8 +650,37 @@ const StockReportPrint = () => {
                     const applyStockSort = (list: any[]) => {
                         const sb = filters.sortBy || 'name_asc';
                         return [...list].sort((a: any, b: any) => {
-                            if (sb === 'name_asc') return (a.product_name || '').localeCompare(b.product_name || '');
-                            if (sb === 'name_desc') return (b.product_name || '').localeCompare(a.product_name || '');
+                            if (sb === 'name_asc' || sb === 'name_desc') {
+                                const isDesc = sb === 'name_desc';
+                                // 1. Parent Category (A to Z)
+                                const pA = String(a.sub_sub_category || a.parent_category || '').trim();
+                                const pB = String(b.sub_sub_category || b.parent_category || '').trim();
+                                const compP = pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
+                                if (compP !== 0) return isDesc ? -compP : compP;
+
+                                // 2. Sub Category (A to Z)
+                                const sA = String(a.sub_category || '').trim();
+                                const sB = String(b.sub_category || '').trim();
+                                const compS = sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
+                                if (compS !== 0) return isDesc ? -compS : compS;
+
+                                // 3. Leaf Category (A to Z)
+                                const lA = String(a.category || a.leaf_category || a.category_name || '').trim();
+                                const lB = String(b.category || b.leaf_category || b.category_name || '').trim();
+                                const compL = lA.localeCompare(lB, undefined, { numeric: true, sensitivity: 'base' });
+                                if (compL !== 0) return isDesc ? -compL : compL;
+
+                                // 4. Product Stock Asset Identifier (Product Name A to Z)
+                                const nA = String(a.product_name || a.itemname || a.name || '').trim();
+                                const nB = String(b.product_name || b.itemname || b.name || '').trim();
+                                const compN = nA.localeCompare(nB, undefined, { numeric: true, sensitivity: 'base' });
+                                if (compN !== 0) return isDesc ? -compN : compN;
+
+                                // Tie-breaker by warehouse location
+                                const locA = String(a.warehouse_location || a.location || '').trim();
+                                const locB = String(b.warehouse_location || b.location || '').trim();
+                                return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
+                            }
                             if (sb === 'qty_desc') {
                                 const qA = Number(a.computed_true_stock ?? a.current_stock ?? a.stock ?? 0);
                                 const qB = Number(b.computed_true_stock ?? b.current_stock ?? b.stock ?? 0);
@@ -681,8 +723,37 @@ const StockReportPrint = () => {
                 const applyStockSort = (list: any[]) => {
                     const sb = filters.sortBy || 'name_asc';
                     return [...list].sort((a: any, b: any) => {
-                        if (sb === 'name_asc') return (a.product_name || '').localeCompare(b.product_name || '');
-                        if (sb === 'name_desc') return (b.product_name || '').localeCompare(a.product_name || '');
+                        if (sb === 'name_asc' || sb === 'name_desc') {
+                                const isDesc = sb === 'name_desc';
+                                // 1. Parent Category (A to Z)
+                                const pA = String(a.sub_sub_category || a.parent_category || '').trim();
+                                const pB = String(b.sub_sub_category || b.parent_category || '').trim();
+                                const compP = pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
+                                if (compP !== 0) return isDesc ? -compP : compP;
+
+                                // 2. Sub Category (A to Z)
+                                const sA = String(a.sub_category || '').trim();
+                                const sB = String(b.sub_category || '').trim();
+                                const compS = sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
+                                if (compS !== 0) return isDesc ? -compS : compS;
+
+                                // 3. Leaf Category (A to Z)
+                                const lA = String(a.category || a.leaf_category || a.category_name || '').trim();
+                                const lB = String(b.category || b.leaf_category || b.category_name || '').trim();
+                                const compL = lA.localeCompare(lB, undefined, { numeric: true, sensitivity: 'base' });
+                                if (compL !== 0) return isDesc ? -compL : compL;
+
+                                // 4. Product Stock Asset Identifier (Product Name A to Z)
+                                const nA = String(a.product_name || a.itemname || a.name || '').trim();
+                                const nB = String(b.product_name || b.itemname || b.name || '').trim();
+                                const compN = nA.localeCompare(nB, undefined, { numeric: true, sensitivity: 'base' });
+                                if (compN !== 0) return isDesc ? -compN : compN;
+
+                                // Tie-breaker by warehouse location
+                                const locA = String(a.warehouse_location || a.location || '').trim();
+                                const locB = String(b.warehouse_location || b.location || '').trim();
+                                return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
+                            }
                         if (sb === 'qty_desc') {
                             const qA = Number(a.computed_true_stock ?? a.current_stock ?? a.stock ?? 0);
                             const qB = Number(b.computed_true_stock ?? b.current_stock ?? b.stock ?? 0);
