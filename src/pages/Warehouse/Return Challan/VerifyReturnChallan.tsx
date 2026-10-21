@@ -49,7 +49,12 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
         const isTile = String(prodInfo?.category || '').toUpperCase().includes('TILE');
         const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
 
-        const recItem = receivedItemsData.find((r: any) => r.skuCode === item.skuCode && r.itemName === item.itemName);
+        const itName = item.itemName || item.product_name || '';
+        const itSku = item.skuCode || item.sku || '';
+        const recItem = receivedItemsData.find((r: any) => 
+          (r.skuCode && (r.skuCode === itSku)) || 
+          (r.itemName && String(r.itemName).trim().toLowerCase() === String(itName).trim().toLowerCase())
+        );
         const isUnverified = !recItem;
 
         return {
@@ -126,8 +131,8 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
       const existingReceived = Array.isArray(returnChallan.received_items) ? [...returnChallan.received_items] : [];
       
       const newReceivedData = items.map(uiItem => ({
-        skuCode: uiItem.skuCode,
-        itemName: uiItem.itemName,
+        skuCode: uiItem.skuCode || uiItem.sku || '',
+        itemName: uiItem.itemName || uiItem.product_name || '',
         acceptedQty: uiItem.acceptedQty,
         rejectedQty: uiItem.rejectedQty,
         holdQty: uiItem.holdQty,
@@ -138,7 +143,10 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
 
       // Merge (replace if exists, otherwise push)
       newReceivedData.forEach(newRec => {
-        const idx = existingReceived.findIndex((e: any) => e.skuCode === newRec.skuCode && e.itemName === newRec.itemName);
+        const idx = existingReceived.findIndex((e: any) => 
+          (e.skuCode && newRec.skuCode && e.skuCode === newRec.skuCode) || 
+          (e.itemName && newRec.itemName && String(e.itemName).trim().toLowerCase() === String(newRec.itemName).trim().toLowerCase())
+        );
         if (idx >= 0) existingReceived[idx] = newRec;
         else existingReceived.push(newRec);
       });
@@ -164,9 +172,14 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
 
       // Check if all items across the return have been verified
       const rawItems = Array.isArray(returnChallan.items) ? returnChallan.items : [];
-      const allVerified = rawItems.every((ri: any) => 
-        existingReceived.some((er: any) => er.skuCode === ri.skuCode && er.itemName === ri.itemName)
-      );
+      const allVerified = rawItems.every((ri: any) => {
+        const riSku = ri.skuCode || ri.sku || '';
+        const riName = ri.itemName || ri.product_name || '';
+        return existingReceived.some((er: any) => 
+          (er.skuCode && riSku && er.skuCode === riSku) || 
+          (er.itemName && riName && String(er.itemName).trim().toLowerCase() === String(riName).trim().toLowerCase())
+        );
+      });
 
       const hasRejections = existingReceived.some((r: any) => Number(r.rejectedQty) > 0);
       const allRejected = existingReceived.every((r: any) => Number(r.acceptedQty) === 0);

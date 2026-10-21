@@ -434,17 +434,35 @@ const StockReportPrint = () => {
 
                     // 3. Sales Returns (Stock In)
                     (sReturns || []).forEach((sr: any) => {
-                        if (String(sr.status).toLowerCase() !== 'cancel') {
-                            const loc = getNormalizedLocName(sr.dispatch_warehouse || sr.location, true);
-                            const items = Array.isArray(sr.items) ? sr.items : JSON.parse(sr.items || '[]');
-                            items.forEach((i: any) => {
-                                const iName = String(i.product_name || i.itemName || i.item_name || '').trim().toLowerCase();
-                                if (iName === name || iName.includes(name)) {
-                                    const qty = Number(i.qty || i.quantity || 0);
-                                    locationStockMap[loc] = (locationStockMap[loc] || 0) + qty;
+                        const statusClean = String(sr.status || '').toLowerCase();
+                        const inwardClean = String(sr.inward_status || '').toLowerCase();
+                        if (statusClean === 'cancel' || statusClean === 'deleted' || inwardClean === 'rejected') return;
+
+                        const isPending = inwardClean === 'pending inward' || inwardClean === 'pending';
+                        const loc = getNormalizedLocName(sr.warehouse_name || sr.dispatch_warehouse || sr.source_warehouse || sr.location, true);
+                        const items = Array.isArray(sr.items) ? sr.items : JSON.parse(sr.items || '[]');
+                        const receivedItems = Array.isArray(sr.received_items) ? sr.received_items : JSON.parse(sr.received_items || '[]');
+
+                        items.forEach((i: any) => {
+                            const iName = String(i.product_name || i.itemName || i.item_name || '').trim().toLowerCase();
+                            if (iName === name || iName.includes(name)) {
+                                let acceptedQty = 0;
+                                if (isPending) {
+                                    acceptedQty = 0;
+                                } else if (inwardClean === 'partially received') {
+                                    const rec = receivedItems.find((r: any) =>
+                                        (r.skuCode && String(r.skuCode).trim().toLowerCase() === String(i.sku || i.skuCode || '').trim().toLowerCase()) ||
+                                        (r.itemName && String(r.itemName).trim().toLowerCase() === String(i.itemName || i.product_name || '').trim().toLowerCase())
+                                    );
+                                    acceptedQty = rec ? Number(rec.acceptedQty || 0) : 0;
+                                } else {
+                                    acceptedQty = Number(i.qty || i.quantity || 0);
                                 }
-                            });
-                        }
+                                if (acceptedQty > 0) {
+                                    locationStockMap[loc] = (locationStockMap[loc] || 0) + acceptedQty;
+                                }
+                            }
+                        });
                     });
 
                     // 4. Stock Transfers (Movement between locations)

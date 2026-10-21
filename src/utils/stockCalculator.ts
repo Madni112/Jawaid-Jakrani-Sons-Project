@@ -99,7 +99,7 @@ async function fetchAllStockData() {
     supabase.from('grn_receipts').select('*'),
     supabase.from('grn_items').select('*'),
     supabase.from('sales_invoices').select('items, sale_status, dispatch_warehouse'),
-    supabase.from('sales_returns').select('items, status'),
+    supabase.from('sales_returns').select('items, status, inward_status, received_items, warehouse_name'),
     supabase.from('purchase_returns').select('items, status'),
     supabase.from('stock_transfers').select('items, from_location, to_location, status'),
     supabase.from('delivery_challans').select('items, status, dispatch_warehouse'),
@@ -229,19 +229,54 @@ function buildBreakdown(
     }
   });
 
-  // 4. Sales returns
+  // 4. Sales returns (Only physically verified/received stock increments inventory)
   let totalSalesReturned = 0;
   (sReturns || []).forEach((sr: any) => {
-    if (String(sr.status || '').trim().toLowerCase() !== 'cancel') {
-      const items = Array.isArray(sr.items) ? sr.items : JSON.parse(sr.items || '[]');
-      items.forEach((item: any) => {
-        if (isMatch(item)) {
-          const qty = Number(item.qty || item.quantity || 0);
-          totalSalesReturned += qty;
-          getWh(item.warehouse || item.location || sr.receiving_warehouse || sr.warehouse || 'Global / Unassigned').salesReturned += qty;
+    const statusLower = String(sr.status || '').trim().toLowerCase();
+    const inwardLower = String(sr.inward_status || '').trim().toLowerCase();
+
+    // Skip cancelled, deleted, or rejected returns
+    if (statusLower === 'cancel' || statusLower === 'deleted' || inwardLower === 'rejected') return;
+
+    // If inward_status is explicitly 'Pending Inward' or 'Pending', physical stock has NOT been verified yet
+    const isPendingInward = inwardLower === 'pending inward' || inwardLower === 'pending';
+
+    const items = Array.isArray(sr.items) ? sr.items : JSON.parse(sr.items || '[]');
+    const receivedItems = Array.isArray(sr.received_items) ? sr.received_items : JSON.parse(sr.received_items || '[]');
+
+    items.forEach((item: any) => {
+      if (isMatch(item)) {
+        let acceptedQty = 0;
+        let holdQty = 0;
+
+        if (isPendingInward) {
+          // Awaiting physical warehouse inspection — held out of available stock
+          acceptedQty = 0;
+          holdQty = Number(item.qty || item.quantity || 0);
+        } else if (inwardLower === 'partially received') {
+          // Check specific accepted qty from received_items
+          const rec = receivedItems.find((r: any) =>
+            (r.skuCode && String(r.skuCode).trim().toLowerCase() === String(item.sku || item.skuCode || '').trim().toLowerCase()) ||
+            (r.itemName && String(r.itemName).trim().toLowerCase() === String(item.itemName || item.product_name || '').trim().toLowerCase())
+          );
+          acceptedQty = rec ? Number(rec.acceptedQty || 0) : 0;
+          holdQty = rec ? Number(rec.holdQty || 0) : 0;
+        } else {
+          // 'Received', 'Completed', or older legacy records without inward_status tracking
+          acceptedQty = Number(item.qty || item.quantity || 0);
         }
-      });
-    }
+
+        if (acceptedQty > 0) {
+          totalSalesReturned += acceptedQty;
+          const wh = item.warehouse || item.location || sr.receiving_warehouse || sr.warehouse_name || sr.warehouse || 'Global / Unassigned';
+          getWh(wh).salesReturned += acceptedQty;
+        }
+        if (holdQty > 0) {
+          const wh = item.warehouse || item.location || sr.receiving_warehouse || sr.warehouse_name || sr.warehouse || 'Global / Unassigned';
+          getWh(wh).purchaseHold = (getWh(wh).purchaseHold || 0) + holdQty;
+        }
+      }
+    });
   });
 
   // 5. Purchase returns
