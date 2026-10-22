@@ -133,7 +133,7 @@ const CompanyLanding: React.FC = () => {
       {/* FOOTER */}
       <footer className="border-t border-slate-900 bg-[#05070C] py-8 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span>© {new Date().getFullYear()} AL Muhammadi. All Rights Reserved.</span>
+          <span>© {new Date().getFullYear()} NHT ENTERPRISES • Developed by Abdul Sattar • All Rights Reserved.</span>
           <span className="font-mono text-[11px] text-slate-600">Enterprise Cloud Infrastructure v1.3.8</span>
         </div>
       </footer>

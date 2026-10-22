@@ -71,8 +71,14 @@ const Footer: React.FC = () => {
       </div>
 
       {/* Bottom Sub-line */}
-      <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-400 dark:text-slate-500">
-        <span>© {currentYear} AL MUHAMMADI. All rights reserved.</span>
+      <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-1 text-[10px] text-slate-400 dark:text-slate-500">
+        <div className="flex flex-wrap items-center gap-1">
+          <span>© {currentYear}</span>
+          <span className="font-bold text-slate-700 dark:text-slate-200">NHT ENTERPRISES</span>
+          <span>• Developed by</span>
+          <span className="font-bold text-slate-700 dark:text-slate-200">Abdul Sattar</span>
+          <span>• All rights reserved.</span>
+        </div>
         <span className="font-mono">v1.3.8 • Secure Business Management Infrastructure</span>
       </div>
     </footer>
