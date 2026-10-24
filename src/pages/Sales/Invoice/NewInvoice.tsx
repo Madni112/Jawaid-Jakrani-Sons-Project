@@ -11,10 +11,25 @@ import { SearchableDropdown } from '../../../components/SearchableDropdown';
 import { useAuth } from '../../../Context/Auth';
 import { logActivity } from '../../../service/auditLogger';
 
-// Helper to identify Tile products based on parent category
+// Helper to identify Tile products based on parent category, category, sub-category, description, or UOM
 const isTileProduct = (p: any) => {
-  const parent = String(p?.sub_sub_category || '').toLowerCase().trim();
-  return parent.includes('tile');
+  if (!p) return false;
+  const parent = String(p.sub_sub_category || '').toLowerCase().trim();
+  const subCat = String(p.sub_category || '').toLowerCase().trim();
+  const cat = String(p.category || '').toLowerCase().trim();
+  const desc = String(p.product_description || '').toLowerCase().trim();
+  const name = String(p.product_name || p.itemName || '').toLowerCase().trim();
+  const uom = String(p.uom || '').toLowerCase().trim();
+  return (
+    parent.includes('tile') ||
+    subCat.includes('tile') ||
+    cat.includes('tile') ||
+    desc.includes('[tile') ||
+    desc.includes('box:') ||
+    name.includes('tile') ||
+    uom === 'box' ||
+    Number(p.pieces_per_box || p.pcs_per_box || 0) > 1
+  );
 };
 
 const NewInvoice = () => {
@@ -316,7 +331,27 @@ const NewInvoice = () => {
       try {
         setInitialLoading(true);
         const { data: rawCust } = await supabase.from('customers').select('*');
-        const { data: prod } = await supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges');
+        // Fetch all products across all chunks (overcoming PostgREST 1000-row default limit)
+        const CHUNK_SIZE = 1000;
+        let prod: any[] = [];
+        let pFrom = 0;
+        let hasMoreProds = true;
+        while (hasMoreProds) {
+          const { data: chunk, error: pErr } = await supabase
+            .from('products')
+            .select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges')
+            .range(pFrom, pFrom + CHUNK_SIZE - 1);
+          if (pErr || !chunk || chunk.length === 0) {
+            hasMoreProds = false;
+          } else {
+            prod = prod.concat(chunk);
+            if (chunk.length < CHUNK_SIZE) {
+              hasMoreProds = false;
+            } else {
+              pFrom += CHUNK_SIZE;
+            }
+          }
+        }
         const { data: sm } = await supabase.from('salesmen').select('id, name, invoice_name, invoice_names');
         const { data: trans } = await supabase.from('logistics_transportation').select('id, name, base_charges');
         const { data: locMaster } = await supabase.from('inventory_locations').select('name');
