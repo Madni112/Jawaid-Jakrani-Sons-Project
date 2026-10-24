@@ -11,7 +11,7 @@ import { SearchableDropdown } from '../../../components/SearchableDropdown';
 import { useAuth } from '../../../Context/Auth';
 import { logActivity } from '../../../service/auditLogger';
 
-// Helper to identify Tile products based on parent category, category, sub-category, description, or UOM
+// Helper to identify Tile products based on parent category, category, sub-category, or tile description
 const isTileProduct = (p: any) => {
   if (!p) return false;
   const parent = String(p.sub_sub_category || '').toLowerCase().trim();
@@ -19,16 +19,13 @@ const isTileProduct = (p: any) => {
   const cat = String(p.category || '').toLowerCase().trim();
   const desc = String(p.product_description || '').toLowerCase().trim();
   const name = String(p.product_name || p.itemName || '').toLowerCase().trim();
-  const uom = String(p.uom || '').toLowerCase().trim();
   return (
     parent.includes('tile') ||
     subCat.includes('tile') ||
     cat.includes('tile') ||
     desc.includes('[tile') ||
-    desc.includes('box:') ||
-    name.includes('tile') ||
-    uom === 'box' ||
-    Number(p.pieces_per_box || p.pcs_per_box || 0) > 1
+    desc.includes('tile metric') ||
+    name.includes('tile')
   );
 };
 
