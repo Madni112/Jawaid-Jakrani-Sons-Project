@@ -116,6 +116,7 @@ const NewInvoice = () => {
       const computedBalance = quickCustomerBalNature === 'Credit' ? -Math.abs(parsedOpeningBal) : Math.abs(parsedOpeningBal);
 
       const payload: any = {
+        customername: trimmedName,
         customerName: trimmedName,
         customer_code: cleanCode,
         customerCode: cleanCode,
@@ -125,8 +126,7 @@ const NewInvoice = () => {
         phone: quickCustomerPhone.trim(),
         address: quickCustomerAddress.trim(),
         province: 'Sindh',
-        opening_balance: computedBalance,
-        currentBalance: computedBalance,
+        balance: computedBalance,
       };
 
       const { data: insertData, error: insertError } = await supabase
@@ -139,7 +139,9 @@ const NewInvoice = () => {
       const newCustomerId = insertData?.[0]?.id || Date.now();
       const createdCustObj = {
         id: newCustomerId,
-        ...payload
+        ...payload,
+        currentBalance: computedBalance,
+        opening_balance: computedBalance,
       };
 
       if (cleanCode) {
@@ -150,8 +152,6 @@ const NewInvoice = () => {
             control_code: 'Customers',
             account_code: cleanCode,
             account_title: trimmedName,
-            opening_balance: Math.abs(parsedOpeningBal),
-            balance_nature: quickCustomerBalNature || 'Debit',
             notes: `Customer ledger account for ${trimmedName} (Synced from Quick Add)`
           };
           await supabase.from('chart_of_accounts').insert([coaPayload]);

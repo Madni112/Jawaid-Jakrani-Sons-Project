@@ -199,7 +199,7 @@ const CustomerHistory = () => {
         const custUpdates: any = { account_code: cleanCode, freight_account_code: liabilityCode };
         if (openingBalanceInput) {
           const bal = Number(openingBalanceInput);
-          custUpdates.currentBalance = balanceNatureInput === 'Debit' ? bal : -bal;
+          custUpdates.balance = balanceNatureInput === 'Debit' ? bal : -bal;
         }
         await supabase
           .from('customers')
