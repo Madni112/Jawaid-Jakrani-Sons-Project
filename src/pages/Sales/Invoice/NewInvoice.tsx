@@ -11,22 +11,11 @@ import { SearchableDropdown } from '../../../components/SearchableDropdown';
 import { useAuth } from '../../../Context/Auth';
 import { logActivity } from '../../../service/auditLogger';
 
-// Helper to identify Tile products based on parent category, category, sub-category, or tile description
+// Helper to identify Tile products strictly based on parent category
 const isTileProduct = (p: any) => {
   if (!p) return false;
   const parent = String(p.sub_sub_category || '').toLowerCase().trim();
-  const subCat = String(p.sub_category || '').toLowerCase().trim();
-  const cat = String(p.category || '').toLowerCase().trim();
-  const desc = String(p.product_description || '').toLowerCase().trim();
-  const name = String(p.product_name || p.itemName || '').toLowerCase().trim();
-  return (
-    parent.includes('tile') ||
-    subCat.includes('tile') ||
-    cat.includes('tile') ||
-    desc.includes('[tile') ||
-    desc.includes('tile metric') ||
-    name.includes('tile')
-  );
+  return parent.includes('tile');
 };
 
 // Universal comprehensive search helper matching across Name, Code, Category, Sub Cat, Parent Cat, Brand, and Description
