@@ -29,6 +29,31 @@ const isTileProduct = (p: any) => {
   );
 };
 
+// Universal comprehensive search helper matching across Name, Code, Category, Sub Cat, Parent Cat, Brand, and Description
+const matchesProductSearch = (p: any, query: string): boolean => {
+  if (!query) return true;
+  const q = query.toLowerCase().trim();
+  const name = String(p?.product_name || p?.itemName || '').toLowerCase();
+  const code = String(p?.item_sr_no || p?.skuCode || '').toLowerCase();
+  const cat = String(p?.category || '').toLowerCase();
+  const subCat = String(p?.sub_category || '').toLowerCase();
+  const parentCat = String(p?.sub_sub_category || '').toLowerCase();
+  const brand = String(p?.brand || p?.bin || '').toLowerCase();
+  const desc = String(p?.product_description || '').toLowerCase();
+  const sku = `sku-${p?.id || ''}`.toLowerCase();
+
+  return (
+    name.includes(q) ||
+    code.includes(q) ||
+    cat.includes(q) ||
+    subCat.includes(q) ||
+    parentCat.includes(q) ||
+    brand.includes(q) ||
+    desc.includes(q) ||
+    sku.includes(q)
+  );
+};
+
 const NewInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -3185,10 +3210,7 @@ const NewInvoice = () => {
                                         const nonTileList = productsList.filter(p => !isTileProduct(p));
                                         const filteredProds = nonTileList.filter(p => {
                                           if (!item.skuCode) return true;
-                                          const query = item.skuCode.toLowerCase().trim();
-                                          const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
-                                          const name = (p.product_name || '').toLowerCase();
-                                          return sku.includes(query) || name.includes(query);
+                                          return matchesProductSearch(p, item.skuCode);
                                         });
 
                                         return (
@@ -3305,11 +3327,7 @@ const NewInvoice = () => {
                                         const query = exactSelected ? '' : normText(item.itemName);
                                         const nonTileList = productsList.filter(p => !isTileProduct(p));
                                         let filteredByName = query
-                                          ? nonTileList.filter(p =>
-                                              normText(p.product_name).includes(query) ||
-                                              normText(p.item_sr_no).includes(query) ||
-                                              normText(p.category).includes(query)
-                                            )
+                                          ? nonTileList.filter(p => matchesProductSearch(p, query))
                                           : nonTileList.slice();
                                         filteredByName = filteredByName
                                           .slice()
@@ -3983,14 +4001,7 @@ const NewInvoice = () => {
                                   const tileProducts = productsList.filter(p => isTileProduct(p));
                                   const exactTileSelected = tileProducts.some((p: any) => String(p.product_name || '').toLowerCase().trim() === String(tItem.itemName || '').toLowerCase().trim());
                                   const tileSearch = exactTileSelected ? '' : (tItem.itemName || '').toLowerCase().trim();
-                                  const filteredTileProds = tileProducts.filter((p: any) => {
-                                    if (!tileSearch) return true;
-                                    return (
-                                      (p.product_name && p.product_name.toLowerCase().includes(tileSearch)) ||
-                                      (p.item_sr_no && p.item_sr_no.toLowerCase().includes(tileSearch)) ||
-                                      (`sku-${p.id}`.includes(tileSearch))
-                                    );
-                                  });
+                                  const filteredTileProds = tileProducts.filter((p: any) => matchesProductSearch(p, tileSearch));
 
                                   const currentWh = tItem.warehouse !== undefined ? tItem.warehouse : (values.dispatchWarehouse || '');
                                   const exactTileWhSelected = warehousesList.some(w => String(w || '').toLowerCase().trim() === String(currentWh || '').toLowerCase().trim());
@@ -4430,12 +4441,7 @@ const NewInvoice = () => {
                                   const returnSearch = exactReturnSelected ? '' : (rItem.itemName || '').toLowerCase().trim();
                                   const filteredProducts = productsList.filter((p: any) => {
                                     if (isTileProduct(p)) return false;
-                                    if (!returnSearch) return true;
-                                    return (
-                                      (p.product_name && p.product_name.toLowerCase().includes(returnSearch)) ||
-                                      (p.item_sr_no && p.item_sr_no.toLowerCase().includes(returnSearch)) ||
-                                      (`sku-${p.id}`.includes(returnSearch))
-                                    );
+                                    return matchesProductSearch(p, returnSearch);
                                   });
 
                                   const currentWh = rItem.warehouse !== undefined ? rItem.warehouse : (values.dispatchWarehouse || '');
@@ -4843,12 +4849,7 @@ const NewInvoice = () => {
 
                                   const filteredProducts = productsList.filter((p: any) => {
                                     if (!isTileProduct(p)) return false;
-                                    if (!currentSearchTerm) return true;
-                                    return (
-                                      (p.product_name && p.product_name.toLowerCase().includes(currentSearchTerm)) ||
-                                      (p.item_sr_no && p.item_sr_no.toLowerCase().includes(currentSearchTerm)) ||
-                                      (`sku-${p.id}`.includes(currentSearchTerm))
-                                    );
+                                    return matchesProductSearch(p, currentSearchTerm);
                                   });
 
                                   const currentWh = tItem.warehouse !== undefined ? tItem.warehouse : (values.dispatchWarehouse || '');
