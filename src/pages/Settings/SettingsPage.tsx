@@ -18,8 +18,27 @@ import {
   LuPackage,
   LuUsers,
   LuRotateCcw,
+  LuCreditCard,
+  LuVolume2,
+  LuVolumeX,
+  LuHardDrive,
+  LuDownload,
+  LuShieldAlert,
+  LuLock,
+  LuSearch,
+  LuFilter,
+  LuCheckCircle2,
+  LuAlertTriangle,
+  LuXCircle,
+  LuFileSpreadsheet,
+  LuPlay,
+  LuRefreshCw,
+  LuSave,
 } from 'react-icons/lu';
 import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import { supabase } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import useColorMode from '../../hooks/useColorMode';
 import {
@@ -31,6 +50,23 @@ import {
   getSafeSidebarColor,
   isDarkModeActive,
 } from '../../constant/themeConfig';
+import {
+  fetchSystemMasterConfig,
+  canUserBackup,
+  canUserEditCreditLimit,
+  SystemMasterConfig,
+} from '../../utils/systemPermissions';
+import {
+  fetchCustomerCreditLimits,
+  saveCustomerCreditLimit,
+  getCustomerCreditStatus,
+} from '../../utils/creditLimitUtils';
+import {
+  isUserAudioEnabled,
+  setUserAudioEnabled,
+  triggerFeedbackSound,
+  soundEngine,
+} from '../../utils/audioFeedback';
 
 interface TabItem {
   id: string;
@@ -51,6 +87,24 @@ const SETTINGS_TABS: TabItem[] = [
     label: 'Theme & Appearance',
     description: 'Accent colors, sidebar styles & mode',
     icon: LuPalette,
+  },
+  {
+    id: 'credit_limits',
+    label: 'Customer Credit Limits',
+    description: 'Monitor customer borrowing boundaries',
+    icon: LuCreditCard,
+  },
+  {
+    id: 'sound_effects',
+    label: 'Audio & Sound Effects',
+    description: 'POS audio feedback for billing & scanning',
+    icon: LuVolume2,
+  },
+  {
+    id: 'backup',
+    label: 'Data Backup & Export',
+    description: 'Export records & complete ERP snapshots',
+    icon: LuHardDrive,
   },
 ];
 
@@ -76,6 +130,24 @@ const SettingsPage: React.FC = () => {
   );
   const [wasSidebarAdjusted, setWasSidebarAdjusted] = useState<boolean>(false);
   const [sidebarAppliedRecently, setSidebarAppliedRecently] = useState<boolean>(false);
+
+  // System Master Permissions State
+  const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(null);
+
+  // Customer Credit Limits State
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [creditLimits, setCreditLimits] = useState<Record<string, number>>({});
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [creditSearch, setCreditSearch] = useState('');
+  const [creditFilter, setCreditFilter] = useState<'ALL' | 'SAFE' | 'NEAR_LIMIT' | 'EXCEEDED' | 'NO_LIMIT'>('ALL');
+  const [editingLimitMap, setEditingLimitMap] = useState<Record<string, string>>({});
+  const [savingLimitId, setSavingLimitId] = useState<string | null>(null);
+
+  // Audio Feedback State (Strictly Per-User)
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => isUserAudioEnabled(userEmail));
+
+  // Backup & Export State
+  const [exportingType, setExportingType] = useState<string | null>(null);
 
   // Sync colors from storage & external changes
   useEffect(() => {
@@ -108,6 +180,258 @@ const SettingsPage: React.FC = () => {
       window.removeEventListener('color-mode-changed', syncColors);
     };
   }, [colorMode]);
+
+  // Sync Master Permissions and Audio on mount / user change
+  useEffect(() => {
+    fetchSystemMasterConfig().then(cfg => setSystemConfig(cfg));
+    setSoundEnabled(isUserAudioEnabled(userEmail));
+
+    const handlePermUpdate = (e: any) => {
+      if (e.detail) setSystemConfig(e.detail);
+    };
+    window.addEventListener('erp_system_permissions_updated', handlePermUpdate);
+    return () => {
+      window.removeEventListener('erp_system_permissions_updated', handlePermUpdate);
+    };
+  }, [userEmail]);
+
+  // Load customer data when opening credit limits or backup tab
+  const loadCustomersAndLimits = async () => {
+    try {
+      setLoadingCustomers(true);
+      const [custRes, limitsRes, sysCfg] = await Promise.all([
+        supabase.from('customers').select('*').order('customerName', { ascending: true }),
+        fetchCustomerCreditLimits(),
+        fetchSystemMasterConfig(),
+      ]);
+
+      if (custRes.data) {
+        setCustomers(custRes.data);
+      }
+      setCreditLimits(limitsRes);
+      setSystemConfig(sysCfg);
+    } catch (err: any) {
+      console.error('Failed to load customers or credit limits:', err);
+    } finally {
+      setLoadingCustomers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'credit_limits' || activeTab === 'backup') {
+      loadCustomersAndLimits();
+    }
+  }, [activeTab]);
+
+  // Save single customer credit limit
+  const handleSaveCustomerLimit = async (customerId: string | number) => {
+    const stringId = String(customerId);
+    const entered = editingLimitMap[stringId] ?? creditLimits[stringId] ?? 0;
+    const numLimit = Math.max(0, Number(entered) || 0);
+
+    try {
+      setSavingLimitId(stringId);
+      const res = await saveCustomerCreditLimit(stringId, numLimit);
+      if (res.success) {
+        setCreditLimits(prev => ({ ...prev, [stringId]: numLimit }));
+        triggerFeedbackSound('success', userEmail);
+        toast.success('Customer credit limit updated successfully!');
+      } else {
+        toast.error('Failed to update limit: ' + (res.error || 'Unknown error'));
+      }
+    } catch (err: any) {
+      toast.error('Error saving limit: ' + err.message);
+    } finally {
+      setSavingLimitId(null);
+    }
+  };
+
+  // Toggle Sound Effects (Per-User)
+  const handleToggleSound = (enabled: boolean) => {
+    setSoundEnabled(enabled);
+    setUserAudioEnabled(enabled, userEmail);
+    if (enabled) {
+      triggerFeedbackSound('success', userEmail);
+      toast.success('POS sound effects enabled for your account!');
+    } else {
+      toast('Sound effects muted for your workstation.');
+    }
+  };
+
+  // Data Export Handlers
+  const handleExportCustomers = async () => {
+    try {
+      setExportingType('customers');
+      const { data, error } = await supabase.from('customers').select('*').order('customerName', { ascending: true });
+      if (error) throw error;
+
+      const limits = await fetchCustomerCreditLimits();
+      const rows = (data || []).map((c: any, index: number) => ({
+        'S.No': index + 1,
+        'Customer Name': c.customerName || c.customername || '—',
+        'Customer Code': c.customer_code || c.customerCode || '—',
+        'Phone': c.primaryPhone || c.phone || '—',
+        'City': c.city || c.province || '—',
+        'Balance (Receivable)': Number(c.balance || 0),
+        'Credit Limit': Number(limits[String(c.id)] || 0),
+        'Company / Branch': c.company || '—',
+        'Address': c.address || '—',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `Customers_Directory_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      triggerFeedbackSound('success', userEmail);
+      toast.success('Customer directory exported to Excel!');
+    } catch (err: any) {
+      toast.error('Export failed: ' + err.message);
+    } finally {
+      setExportingType(null);
+    }
+  };
+
+  const handleExportProducts = async () => {
+    try {
+      setExportingType('products');
+      const { data, error } = await supabase.from('products').select('*').order('name', { ascending: true });
+      if (error) throw error;
+
+      const rows = (data || []).map((p: any, index: number) => ({
+        'S.No': index + 1,
+        'Product Name': p.name || '—',
+        'Item Code / SKU': p.code || p.sku || '—',
+        'Category': p.category || '—',
+        'Tile Size': p.size || '—',
+        'Sales Price': Number(p.sale_price || p.price || 0),
+        'Purchase Price': Number(p.purchase_price || 0),
+        'Current Stock': Number(p.stock || p.quantity || 0),
+        'Unit': p.unit || 'Box',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Products');
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `Products_Catalog_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      triggerFeedbackSound('success', userEmail);
+      toast.success('Product catalog exported to Excel!');
+    } catch (err: any) {
+      toast.error('Export failed: ' + err.message);
+    } finally {
+      setExportingType(null);
+    }
+  };
+
+  const handleExportInvoices = async () => {
+    try {
+      setExportingType('invoices');
+      const { data, error } = await supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }).limit(2500);
+      if (error) throw error;
+
+      const rows = (data || []).map((inv: any, index: number) => ({
+        'S.No': index + 1,
+        'Invoice #': inv.invoice_number || `#${inv.id}`,
+        'Date': inv.invoice_date || (inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '—'),
+        'Customer Name': inv.customer_name || '—',
+        'Salesman': inv.salesman_name || '—',
+        'Gross Total': Number(inv.gross_amount || inv.total_amount || 0),
+        'Discount': Number(inv.discount_amount || 0),
+        'Net Total': Number(inv.net_amount || inv.total_amount || 0),
+        'Received Amount': Number(inv.received_amount || 0),
+        'Status': inv.payment_status || 'Completed',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sales Invoices');
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `Sales_Invoices_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      triggerFeedbackSound('success', userEmail);
+      toast.success('Sales invoices exported to Excel!');
+    } catch (err: any) {
+      toast.error('Export failed: ' + err.message);
+    } finally {
+      setExportingType(null);
+    }
+  };
+
+  const handleExportFullERP = async () => {
+    try {
+      setExportingType('full');
+      const [custRes, prodRes, invRes] = await Promise.all([
+        supabase.from('customers').select('*').order('customerName', { ascending: true }),
+        supabase.from('products').select('*').order('name', { ascending: true }),
+        supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }).limit(3000),
+      ]);
+
+      const limits = await fetchCustomerCreditLimits();
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Customers
+      const custRows = (custRes.data || []).map((c: any, index: number) => ({
+        'S.No': index + 1,
+        'Customer Name': c.customerName || c.customername || '—',
+        'Customer Code': c.customer_code || c.customerCode || '—',
+        'Phone': c.primaryPhone || c.phone || '—',
+        'City': c.city || c.province || '—',
+        'Balance (Receivable)': Number(c.balance || 0),
+        'Credit Limit': Number(limits[String(c.id)] || 0),
+        'Address': c.address || '—',
+      }));
+      const wsCust = XLSX.utils.json_to_sheet(custRows);
+      XLSX.utils.book_append_sheet(wb, wsCust, 'Customers');
+
+      // Sheet 2: Products
+      const prodRows = (prodRes.data || []).map((p: any, index: number) => ({
+        'S.No': index + 1,
+        'Product Name': p.name || '—',
+        'Item Code / SKU': p.code || p.sku || '—',
+        'Category': p.category || '—',
+        'Tile Size': p.size || '—',
+        'Price': Number(p.sale_price || p.price || 0),
+        'Current Stock': Number(p.stock || p.quantity || 0),
+        'Unit': p.unit || 'Box',
+      }));
+      const wsProd = XLSX.utils.json_to_sheet(prodRows);
+      XLSX.utils.book_append_sheet(wb, wsProd, 'Item Master');
+
+      // Sheet 3: Invoices
+      const invRows = (invRes.data || []).map((inv: any, index: number) => ({
+        'S.No': index + 1,
+        'Invoice #': inv.invoice_number || `#${inv.id}`,
+        'Date': inv.invoice_date || (inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '—'),
+        'Customer Name': inv.customer_name || '—',
+        'Net Total': Number(inv.net_amount || inv.total_amount || 0),
+        'Received': Number(inv.received_amount || 0),
+      }));
+      const wsInv = XLSX.utils.json_to_sheet(invRows);
+      XLSX.utils.book_append_sheet(wb, wsInv, 'Sales Invoices');
+
+      // Sheet 4: Backup Meta
+      const metaRows = [
+        { 'System Attribute': 'Company Name', 'Value': businessName || 'Zoaib Ali Company' },
+        { 'System Attribute': 'Exported By', 'Value': userEmail || 'Admin' },
+        { 'System Attribute': 'Role', 'Value': role || 'Super Admin' },
+        { 'System Attribute': 'Export Timestamp', 'Value': new Date().toLocaleString() },
+        { 'System Attribute': 'Total Customers', 'Value': custRows.length },
+        { 'System Attribute': 'Total Items', 'Value': prodRows.length },
+        { 'System Attribute': 'Total Invoices', 'Value': invRows.length },
+      ];
+      const wsMeta = XLSX.utils.json_to_sheet(metaRows);
+      XLSX.utils.book_append_sheet(wb, wsMeta, 'System Info');
+
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `Full_ERP_Backup_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      triggerFeedbackSound('success', userEmail);
+      toast.success('Complete multi-sheet ERP backup generated successfully!');
+    } catch (err: any) {
+      toast.error('Backup failed: ' + err.message);
+    } finally {
+      setExportingType(null);
+    }
+  };
 
   // Accent Selection (Only stages color in preview; does NOT apply globally until clicked)
   const handleAccentSelect = (hex: string) => {
@@ -958,6 +1282,592 @@ const SettingsPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* TAB 3: CUSTOMER CREDIT LIMITS */}
+          {activeTab === 'credit_limits' && (() => {
+            const canEdit = canUserEditCreditLimit(userEmail, role, systemConfig);
+
+            // Filtered customer list
+            const filteredCustomers = customers.filter(c => {
+              const name = (c.customerName || c.customername || '').toLowerCase();
+              const phone = (c.primaryPhone || c.phone || '').toLowerCase();
+              const code = (c.customer_code || c.customerCode || '').toLowerCase();
+              const q = creditSearch.toLowerCase().trim();
+
+              const matchesSearch = !q || name.includes(q) || phone.includes(q) || code.includes(q);
+              if (!matchesSearch) return false;
+
+              const limit = Number(creditLimits[String(c.id)] || 0);
+              const balance = Number(c.balance || 0);
+              const statusInfo = getCustomerCreditStatus(balance, limit);
+
+              if (creditFilter === 'SAFE') return statusInfo.status === 'SAFE';
+              if (creditFilter === 'NEAR_LIMIT') return statusInfo.status === 'NEAR_LIMIT';
+              if (creditFilter === 'EXCEEDED') return statusInfo.status === 'EXCEEDED';
+              if (creditFilter === 'NO_LIMIT') return statusInfo.status === 'NO_LIMIT';
+
+              return true;
+            });
+
+            // Summary metrics
+            let totalExceeded = 0;
+            let totalNear = 0;
+            let totalSafe = 0;
+            customers.forEach(c => {
+              const limit = Number(creditLimits[String(c.id)] || 0);
+              const balance = Number(c.balance || 0);
+              const info = getCustomerCreditStatus(balance, limit);
+              if (info.status === 'EXCEEDED') totalExceeded++;
+              else if (info.status === 'NEAR_LIMIT') totalNear++;
+              else if (info.status === 'SAFE') totalSafe++;
+            });
+
+            return (
+              <div className="space-y-6">
+                {/* Header card */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-2xl shrink-0">
+                        <LuCreditCard />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                            Customer Credit Limits Directory
+                          </h2>
+                          {canEdit ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                              Edit Authorized
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                              <LuLock className="text-xs" /> View Only
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {canEdit
+                            ? 'You have permission to edit and set customer credit limit ceilings.'
+                            : 'View customer credit boundaries and risk status. Edit rights are managed in /dev/master.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={loadCustomersAndLimits}
+                      disabled={loadingCustomers}
+                      className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <LuRefreshCw className={loadingCustomers ? 'animate-spin' : ''} />
+                      <span>Refresh Limits</span>
+                    </button>
+                  </div>
+
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
+                    <div className="bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Customers</span>
+                      <span className="text-xl font-black text-slate-800 dark:text-slate-100 mt-0.5 block">{customers.length}</span>
+                    </div>
+
+                    <div className="bg-red-50/70 dark:bg-red-950/20 p-3.5 rounded-xl border border-red-200 dark:border-red-900/40">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400 block">Limit Exceeded</span>
+                      <span className="text-xl font-black text-red-600 dark:text-red-400 mt-0.5 block">{totalExceeded}</span>
+                    </div>
+
+                    <div className="bg-amber-50/70 dark:bg-amber-950/20 p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/40">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">Near Limit (75%+)</span>
+                      <span className="text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5 block">{totalNear}</span>
+                    </div>
+
+                    <div className="bg-emerald-50/70 dark:bg-emerald-950/20 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-900/40">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">Safe Limits</span>
+                      <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">{totalSafe}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filters & Search Toolbar */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="relative flex-1">
+                    <LuSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={creditSearch}
+                      onChange={e => setCreditSearch(e.target.value)}
+                      placeholder="Search by customer name, phone, or code..."
+                      className="w-full pl-10 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:border-primary focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(['ALL', 'EXCEEDED', 'NEAR_LIMIT', 'SAFE', 'NO_LIMIT'] as const).map(tab => {
+                      const labels = {
+                        ALL: 'All Customers',
+                        EXCEEDED: 'Exceeded',
+                        NEAR_LIMIT: 'Near Limit',
+                        SAFE: 'Safe',
+                        NO_LIMIT: 'No Limit',
+                      };
+                      const isActive = creditFilter === tab;
+                      return (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => setCreditFilter(tab)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            isActive
+                              ? 'bg-primary text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          {labels[tab]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Customer Credit Limits Table */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          <th className="py-3.5 px-4">Customer Details</th>
+                          <th className="py-3.5 px-4 text-right">Current Balance</th>
+                          <th className="py-3.5 px-4">Status & Usage</th>
+                          <th className="py-3.5 px-4 text-right">Credit Limit (Rs.)</th>
+                          <th className="py-3.5 px-4 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                        {filteredCustomers.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-12 text-center text-slate-400">
+                              <LuUsers className="mx-auto text-3xl mb-2 opacity-50" />
+                              <p className="font-semibold">No matching customers found</p>
+                              <p className="text-[11px] mt-0.5">Try adjusting your search or filter</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredCustomers.map(cust => {
+                            const stringId = String(cust.id);
+                            const currentLimit = Number(creditLimits[stringId] || 0);
+                            const balance = Number(cust.balance || 0);
+                            const statusInfo = getCustomerCreditStatus(balance, currentLimit);
+                            const isEditing = editingLimitMap[stringId] !== undefined;
+                            const inputValue = isEditing ? editingLimitMap[stringId] : String(currentLimit || '');
+
+                            return (
+                              <tr key={cust.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
+                                <td className="py-3.5 px-4">
+                                  <div className="font-bold text-slate-800 dark:text-slate-100">
+                                    {cust.customerName || cust.customername || 'Unnamed Customer'}
+                                  </div>
+                                  <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                                    <span>Code: {cust.customer_code || cust.customerCode || '—'}</span>
+                                    <span>•</span>
+                                    <span>{cust.primaryPhone || cust.phone || 'No Phone'}</span>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4 text-right">
+                                  <span className={`font-mono font-bold ${balance > 0 ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
+                                    Rs. {balance.toLocaleString()}
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <div className="space-y-1.5 max-w-[160px]">
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${statusInfo.badgeClass}`}>
+                                      {statusInfo.label}
+                                    </span>
+                                    {currentLimit > 0 && (
+                                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full transition-all duration-300 ${
+                                            statusInfo.percentage > 100
+                                              ? 'bg-red-500'
+                                              : statusInfo.percentage >= 75
+                                              ? 'bg-amber-500'
+                                              : 'bg-emerald-500'
+                                          }`}
+                                          style={{ width: `${Math.min(100, statusInfo.percentage)}%` }}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4 text-right">
+                                  {canEdit ? (
+                                    <div className="inline-flex items-center gap-1.5 justify-end">
+                                      <span className="text-[11px] text-slate-400 font-mono">Rs.</span>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="1000"
+                                        value={inputValue}
+                                        onChange={e =>
+                                          setEditingLimitMap(prev => ({
+                                            ...prev,
+                                            [stringId]: e.target.value,
+                                          }))
+                                        }
+                                        placeholder="No limit (0)"
+                                        className="w-28 text-right px-2.5 py-1 text-xs font-mono font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:border-primary focus:outline-hidden"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                                      {currentLimit > 0 ? `Rs. ${currentLimit.toLocaleString()}` : 'No Limit'}
+                                    </span>
+                                  )}
+                                </td>
+
+                                <td className="py-3.5 px-4 text-center">
+                                  {canEdit ? (
+                                    <button
+                                      type="button"
+                                      disabled={savingLimitId === stringId}
+                                      onClick={() => handleSaveCustomerLimit(cust.id)}
+                                      className="px-3 py-1 text-xs font-bold rounded-lg bg-primary hover:opacity-90 text-white transition flex items-center gap-1 mx-auto shadow-xs cursor-pointer disabled:opacity-50"
+                                    >
+                                      {savingLimitId === stringId ? (
+                                        <LuRefreshCw className="animate-spin text-xs" />
+                                      ) : (
+                                        <LuSave className="text-xs" />
+                                      )}
+                                      <span>Save</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-semibold flex items-center justify-center gap-1">
+                                      <LuLock className="text-xs" /> Locked
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* TAB 4: AUDIO & SOUND EFFECTS */}
+          {activeTab === 'sound_effects' && (
+            <div className="space-y-6">
+              {/* Header card */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-2xl shrink-0">
+                      <LuVolume2 />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                        POS & System Audio Chimes
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Interactive sound feedback for cashiers during sales invoice creation, scanning, and alerts.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Per-User Master Sound Switch */}
+                  <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {soundEnabled ? 'Audio Active' : 'Audio Muted'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSound(!soundEnabled)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                        soundEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Per-User Station Info Banner */}
+                <div className="mt-5 p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-xs text-blue-800 dark:text-blue-300 flex items-center gap-2.5">
+                  <LuSparkles className="text-base shrink-0" />
+                  <div>
+                    <strong>User-Isolated Preference:</strong> Sound effects are saved strictly for your user profile (
+                    <code>{userEmail || 'current_user'}</code>) on this browser workstation. Turning sound off here will not mute sounds for any other cashier.
+                  </div>
+                </div>
+              </div>
+
+              {/* Sound Preview Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 1. Success Chime */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center text-xl">
+                    <LuCheckCircle2 />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Invoice Saved</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Harmonious ascending chord on invoice completion or successful receipt.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => soundEngine.playSuccessChime()}
+                    className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <LuPlay className="text-xs" /> Test Success Chime
+                  </button>
+                </div>
+
+                {/* 2. Barcode Scan Blip */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 flex items-center justify-center text-xl">
+                    <LuSparkles />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Barcode Scan Beep</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Crisp, high-tech single blip when an item or tile box is scanned.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => soundEngine.playScanBeep()}
+                    className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <LuPlay className="text-xs" /> Test Scan Beep
+                  </button>
+                </div>
+
+                {/* 3. Warning Alert Tone */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center text-xl">
+                    <LuAlertTriangle />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Limit Warning</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Gentle two-tone chime when a customer reaches 80%+ of credit limit.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => soundEngine.playWarningTone()}
+                    className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <LuPlay className="text-xs" /> Test Warning Chime
+                  </button>
+                </div>
+
+                {/* 4. Delete / Cancel Tone */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center text-xl">
+                    <LuXCircle />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Item Removed</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Soft descending tone when a row or draft item is cancelled.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => soundEngine.playDeleteTone()}
+                    className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <LuPlay className="text-xs" /> Test Delete Tone
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: DATA BACKUP & EXPORT */}
+          {activeTab === 'backup' && (() => {
+            const isBackupPermitted = canUserBackup(userEmail, role, systemConfig);
+
+            if (!isBackupPermitted) {
+              return (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-10 shadow-sm text-center max-w-2xl mx-auto space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-950/40 text-red-600 mx-auto flex items-center justify-center text-3xl">
+                    <LuShieldAlert />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                      Data Backup & Export Locked
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                      Exporting ERP records is restricted by the System Administrator. Permission controls for Super Admin and staff are governed in Master Dev Console (<code>/dev/master</code>).
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <span className="inline-block px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-400">
+                      Status: Export Disallowed for {role || 'User'} ({userEmail || 'Account'})
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-6">
+                {/* Header card */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-2xl shrink-0">
+                      <LuHardDrive />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                        ERP Data Backup & Excel Export
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Download comprehensive, clean Excel (.xlsx) snapshots of your customers, products, and sales history.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Export Options Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Export 1: Customers */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center text-xl shrink-0">
+                        <LuUsers />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                          Customers & Accounts Directory
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Names, codes, phone, ledger balances, and credit limits.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={exportingType !== null}
+                      onClick={handleExportCustomers}
+                      className="w-full py-2.5 px-4 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {exportingType === 'customers' ? (
+                        <LuRefreshCw className="animate-spin text-sm" />
+                      ) : (
+                        <LuDownload className="text-sm" />
+                      )}
+                      <span>Export Customers (.xlsx)</span>
+                    </button>
+                  </div>
+
+                  {/* Export 2: Products */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                        <LuPackage />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                          Item Master & Tile Catalog
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Full product registry, tile dimensions, prices, and inventory stock.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={exportingType !== null}
+                      onClick={handleExportProducts}
+                      className="w-full py-2.5 px-4 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {exportingType === 'products' ? (
+                        <LuRefreshCw className="animate-spin text-sm" />
+                      ) : (
+                        <LuDownload className="text-sm" />
+                      )}
+                      <span>Export Item Master (.xlsx)</span>
+                    </button>
+                  </div>
+
+                  {/* Export 3: Invoices */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center text-xl shrink-0">
+                        <LuReceipt />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                          Sales Invoices & Revenue Ledger
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Invoice history, customer orders, payment status, and totals.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={exportingType !== null}
+                      onClick={handleExportInvoices}
+                      className="w-full py-2.5 px-4 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white transition flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {exportingType === 'invoices' ? (
+                        <LuRefreshCw className="animate-spin text-sm" />
+                      ) : (
+                        <LuDownload className="text-sm" />
+                      )}
+                      <span>Export Invoices (.xlsx)</span>
+                    </button>
+                  </div>
+
+                  {/* Export 4: Complete ERP Snapshot */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4 border-dashed border-primary/40 bg-primary/5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center text-xl shrink-0">
+                        <LuFileSpreadsheet />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                          Complete ERP Snapshot (Multi-Sheet)
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Combines Customers, Products, and Invoices into one Excel workbook.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={exportingType !== null}
+                      onClick={handleExportFullERP}
+                      className="w-full py-2.5 px-4 text-xs font-bold rounded-xl bg-primary hover:opacity-90 text-white transition flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      {exportingType === 'full' ? (
+                        <LuRefreshCw className="animate-spin text-sm" />
+                      ) : (
+                        <LuDownload className="text-sm" />
+                      )}
+                      <span>Download Complete ERP Snapshot (.xlsx)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </main>
       </div>
     </div>
