@@ -41,9 +41,15 @@ const DropdownUser = () => {
     logout();
   };
 
-  const displayEmail = userEmail || profile?.email || 'admin@almuhammadi.com';
+  const displayEmail = userEmail || profile?.email || 'admin@zoaibalicompany.com';
   const displayRole = role || profile?.role || 'Super Admin';
-  const displayCompanyName = 'AL MUHAMMADI';
+  const isAlm =
+    typeof window !== 'undefined' &&
+    (window.location.hostname.toLowerCase().includes('muhammadi') ||
+      document.title.toLowerCase().includes('muhammadi') ||
+      window.location.href.toLowerCase().includes('muhammadi'));
+  const fallbackCompany = isAlm ? 'AL MUHAMMADI' : 'Zoaib Ali & Company';
+  const displayCompanyName = authBusinessName || fallbackCompany;
   const displayName = profile?.user_metadata?.full_name || profile?.user_metadata?.name || displayCompanyName;
 
   return (
