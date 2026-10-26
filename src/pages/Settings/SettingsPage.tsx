@@ -195,19 +195,55 @@ const SettingsPage: React.FC = () => {
     };
   }, [userEmail]);
 
-  // Load customer data when opening credit limits or backup tab
+  // Load customer data with live outstanding ledger balances
   const loadCustomersAndLimits = async () => {
     try {
       setLoadingCustomers(true);
-      const [custRes, limitsRes, sysCfg] = await Promise.all([
+      const [custRes, invRes, retRes, vchRes, limitsRes, sysCfg] = await Promise.all([
         supabase.from('customers').select('*').order('customerName', { ascending: true }),
+        supabase.from('sales_invoices').select('customer_name, total_amount, cash_amount_paid, bank_amount'),
+        supabase.from('sales_returns').select('customer_name, total_amount'),
+        supabase.from('financial_vouchers').select('customer_name, total_amount'),
         fetchCustomerCreditLimits(),
         fetchSystemMasterConfig(),
       ]);
 
-      if (custRes.data) {
-        setCustomers(custRes.data);
-      }
+      const invoiceMap: Record<string, number> = {};
+      (invRes.data || []).forEach((inv: any) => {
+        const cName = (inv.customer_name || '').trim().toLowerCase();
+        const gross = Number(inv.total_amount || 0);
+        const paid = Number(inv.cash_amount_paid || 0) + Number(inv.bank_amount || 0);
+        const due = Math.max(0, gross - paid);
+        invoiceMap[cName] = (invoiceMap[cName] || 0) + due;
+      });
+
+      const returnMap: Record<string, number> = {};
+      (retRes.data || []).forEach((r: any) => {
+        const cName = (r.customer_name || '').trim().toLowerCase();
+        returnMap[cName] = (returnMap[cName] || 0) + (Number(r.total_amount) || 0);
+      });
+
+      const voucherMap: Record<string, number> = {};
+      (vchRes.data || []).forEach((v: any) => {
+        const cName = (v.customer_name || '').trim().toLowerCase();
+        voucherMap[cName] = (voucherMap[cName] || 0) + (Number(v.total_amount) || 0);
+      });
+
+      const customersWithLiveBalances = (custRes.data || []).map((c: any) => {
+        const cName = (c.customerName || c.customername || '').trim().toLowerCase();
+        const initialBal = Number(c.balance || 0);
+        const invoiceDue = invoiceMap[cName] || 0;
+        const returns = returnMap[cName] || 0;
+        const payments = voucherMap[cName] || 0;
+
+        const liveBalance = Math.max(0, Math.round((initialBal + invoiceDue - returns - payments) * 100) / 100);
+        return {
+          ...c,
+          calculatedBalance: liveBalance,
+        };
+      });
+
+      setCustomers(customersWithLiveBalances);
       setCreditLimits(limitsRes);
       setSystemConfig(sysCfg);
     } catch (err: any) {
@@ -1298,7 +1334,7 @@ const SettingsPage: React.FC = () => {
               if (!matchesSearch) return false;
 
               const limit = Number(creditLimits[String(c.id)] || 0);
-              const balance = Number(c.balance || 0);
+              const balance = Number(c.calculatedBalance !== undefined ? c.calculatedBalance : (c.balance || 0));
               const statusInfo = getCustomerCreditStatus(balance, limit);
 
               if (creditFilter === 'SAFE') return statusInfo.status === 'SAFE';
@@ -1315,7 +1351,7 @@ const SettingsPage: React.FC = () => {
             let totalSafe = 0;
             customers.forEach(c => {
               const limit = Number(creditLimits[String(c.id)] || 0);
-              const balance = Number(c.balance || 0);
+              const balance = Number(c.calculatedBalance !== undefined ? c.calculatedBalance : (c.balance || 0));
               const info = getCustomerCreditStatus(balance, limit);
               if (info.status === 'EXCEEDED') totalExceeded++;
               else if (info.status === 'NEAR_LIMIT') totalNear++;
@@ -1456,7 +1492,7 @@ const SettingsPage: React.FC = () => {
                           filteredCustomers.map(cust => {
                             const stringId = String(cust.id);
                             const currentLimit = Number(creditLimits[stringId] || 0);
-                            const balance = Number(cust.balance || 0);
+                            const balance = Number(cust.calculatedBalance !== undefined ? cust.calculatedBalance : (cust.balance || 0));
                             const statusInfo = getCustomerCreditStatus(balance, currentLimit);
                             const isEditing = editingLimitMap[stringId] !== undefined;
                             const inputValue = isEditing ? editingLimitMap[stringId] : String(currentLimit || '');
@@ -1511,12 +1547,15 @@ const SettingsPage: React.FC = () => {
                                         min="0"
                                         step="1000"
                                         value={inputValue}
-                                        onChange={e =>
-                                          setEditingLimitMap(prev => ({
-                                            ...prev,
-                                            [stringId]: e.target.value,
-                                          }))
-                                        }
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          if (val === '' || Number(val) >= 0) {
+                                            setEditingLimitMap(prev => ({
+                                              ...prev,
+                                              [stringId]: val,
+                                            }));
+                                          }
+                                        }}
                                         placeholder="No limit (0)"
                                         className="w-28 text-right px-2.5 py-1 text-xs font-mono font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:border-primary focus:outline-hidden"
                                       />
