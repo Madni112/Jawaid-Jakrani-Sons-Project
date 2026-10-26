@@ -17,6 +17,7 @@ const ToastSoundHandler = () => {
     toasts.forEach((t) => {
       if (t.visible && !seenToasts.current.has(t.id)) {
         seenToasts.current.add(t.id);
+        if (t.id === 'silent-tone-toast') return;
         if (t.type === 'error') {
           triggerFeedbackSound('warning', userEmail);
         } else {

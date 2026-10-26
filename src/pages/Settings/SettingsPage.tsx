@@ -156,7 +156,10 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
     setSelectedToneId(toneId);
     setUserTone(category.id, toneId, userEmail);
     setIsOpen(false);
-    toast.success(`Active tone set to "${category.tones.find((t) => t.id === toneId)?.name}"`);
+    soundEngine.playToneById(toneId);
+    toast.success(`Active tone set to "${category.tones.find((t) => t.id === toneId)?.name}"`, {
+      id: 'silent-tone-toast',
+    });
   };
 
   const handlePreviewTone = (e: React.MouseEvent, toneId: string) => {
