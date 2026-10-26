@@ -57,6 +57,7 @@ const SETTINGS_TABS: TabItem[] = [
 const SettingsPage: React.FC = () => {
   const { userEmail, role, businessName } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('profile');
+  const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('navbar');
   const [colorMode, setColorMode] = useColorMode();
 
   // Primary Accent Color State
@@ -380,10 +381,63 @@ const SettingsPage: React.FC = () => {
           {/* TAB 2: THEME & APPEARANCE */}
           {activeTab === 'theme' && (
             <div className="space-y-6 animate-fadeIn">
+              {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Navbar & Brand Accent, Sidebar) */}
+              <div className="p-2 rounded-2xl bg-white/95 dark:bg-[#111827]/95 border border-slate-200/90 dark:border-slate-800 shadow-md backdrop-blur-md sticky top-18 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto">
+                  {/* SUB-TAB 1: NAVBAR & BRAND ACCENT */}
+                  <button
+                    type="button"
+                    onClick={() => setThemeSubTab('navbar')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
+                      themeSubTab === 'navbar'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
+                      style={{ backgroundColor: selectedAccentColor }}
+                    />
+                    <span>Navbar & Brand Accent</span>
+                    {isAccentChanged && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
+                    )}
+                  </button>
+
+                  {/* SUB-TAB 2: SIDEBAR */}
+                  <button
+                    type="button"
+                    onClick={() => setThemeSubTab('sidebar')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
+                      themeSubTab === 'sidebar'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
+                      style={{ backgroundColor: selectedSidebarColor }}
+                    />
+                    <span>Sidebar</span>
+                    {isSidebarChanged && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-500 dark:text-slate-400 self-end sm:self-auto">
+                  <span>Customizing:</span>
+                  <strong className="text-slate-800 dark:text-slate-200 font-bold">
+                    {themeSubTab === 'navbar' ? 'Navbar & Brand Accent' : 'Sidebar Colors'}
+                  </strong>
+                </div>
+              </div>
+
               {/* SECTION A: ACCENT COLOR THEME */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2.5">
+              {themeSubTab === 'navbar' && (
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm animate-fadeIn">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2.5">
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs transition-colors"
                       style={{ backgroundColor: selectedAccentColor }}
@@ -594,11 +648,13 @@ const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+            )}
 
               {/* SECTION B: SIDEBAR FONT & ICON COLOR */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2.5">
+              {themeSubTab === 'sidebar' && (
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm animate-fadeIn">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2.5">
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs transition-colors"
                       style={{ backgroundColor: selectedSidebarColor }}
@@ -817,6 +873,7 @@ const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+            )}
 
               {/* SECTION C: THEME MODE (LIGHT / DARK) */}
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
