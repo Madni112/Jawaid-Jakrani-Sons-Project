@@ -103,6 +103,57 @@ class SoundEngine {
   }
 
   /**
+   * Harmonious bell chime for notifications and real-time alerts
+   */
+  playNotificationChime(): void {
+    if (typeof window !== 'undefined' && typeof Audio !== 'undefined') {
+      try {
+        const audio = new Audio('/audio/notification.mp3');
+        audio.volume = 0.75;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            this.playSynthesizedNotification();
+          });
+          return;
+        }
+      } catch {
+        // Fall back to Web Audio API synthesis
+      }
+    }
+    this.playSynthesizedNotification();
+  }
+
+  /**
+   * Pure Web Audio API synthesized notification bell
+   */
+  playSynthesizedNotification(): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const notes = [587.33, 880.0]; // D5 -> A5 ascending bell tones
+
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+
+      gain.gain.setValueAtTime(0.001, now + idx * 0.1);
+      gain.gain.linearRampToValueAtTime(0.2, now + idx * 0.1 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.1 + 0.42);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + idx * 0.1);
+      osc.stop(now + idx * 0.1 + 0.43);
+    });
+  }
+
+  /**
    * Descending gentle tone for item deletion or cancellation
    */
   playDeleteTone(): void {
@@ -156,18 +207,32 @@ export const setUserAudioEnabled = (enabled: boolean, userIdOrEmail?: string | n
   window.dispatchEvent(new CustomEvent('erp_audio_preference_changed', { detail: { enabled, key } }));
 };
 
+let lastPlayedTime = 0;
+let lastPlayedType = '';
+
 /**
  * Universal sound trigger that respects the active user's audio preference
  */
 export const triggerFeedbackSound = (
-  type: 'success' | 'scan' | 'warning' | 'delete',
+  type: 'success' | 'scan' | 'warning' | 'delete' | 'notification',
   userIdOrEmail?: string | null
 ): void => {
   if (!isUserAudioEnabled(userIdOrEmail)) {
     return;
   }
+  const now = Date.now();
+  // Prevent duplicate sounds overlapping within 200ms
+  if (now - lastPlayedTime < 200 && lastPlayedType === type) {
+    return;
+  }
+  lastPlayedTime = now;
+  lastPlayedType = type;
+
   try {
     switch (type) {
+      case 'notification':
+        soundEngine.playNotificationChime();
+        break;
       case 'success':
         soundEngine.playSuccessChime();
         break;

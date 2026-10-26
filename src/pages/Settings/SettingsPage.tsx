@@ -21,6 +21,7 @@ import {
   LuCreditCard,
   LuVolume2,
   LuVolumeX,
+  LuBell,
   LuHardDrive,
   LuDownload,
   LuShieldAlert,
@@ -1652,7 +1653,7 @@ const SettingsPage: React.FC = () => {
               </div>
 
               {/* Sound Preview Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                 {/* 1. Success Chime */}
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
                   <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center text-xl">
@@ -1701,7 +1702,7 @@ const SettingsPage: React.FC = () => {
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Limit Warning</h3>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Gentle two-tone chime when a customer reaches 80%+ of credit limit.
+                      Gentle two-tone chime when a customer reaches credit limit boundaries.
                     </p>
                   </div>
                   <button
@@ -1730,6 +1731,26 @@ const SettingsPage: React.FC = () => {
                     className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <LuPlay className="text-xs" /> Test Delete Tone
+                  </button>
+                </div>
+
+                {/* 5. Notification Alert Sound */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center text-xl">
+                    <LuBell />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Notification Ping</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Crisp chime played on toasts, system status updates, and live alerts.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => soundEngine.playNotificationChime()}
+                    className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <LuPlay className="text-xs" /> Test Notification Sound
                   </button>
                 </div>
               </div>
