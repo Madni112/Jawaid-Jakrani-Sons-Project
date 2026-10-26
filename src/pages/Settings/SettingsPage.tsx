@@ -169,37 +169,37 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3.5 flex flex-col justify-between">
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${accentColorClass}`}>
-            {icon}
-          </div>
-          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-            {activeTone.duration}
-          </span>
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm transition hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Left: Icon, Category Name, Description */}
+      <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0 ${accentColorClass}`}>
+          {icon}
         </div>
-
-        <div>
-          <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">{category.label}</h3>
-          <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">{category.label}</h3>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+              Active: {activeTone.duration}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
             {category.description}
           </p>
         </div>
+      </div>
 
-        {/* Tone Selection Dropdown */}
-        <div className="relative w-full" ref={dropdownRef}>
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">
-            Selected Ringtone
-          </label>
+      {/* Right: Dropdown & Quick Test Button */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+        {/* Interactive Tone Dropdown */}
+        <div className="relative w-full sm:w-64 md:w-72" ref={dropdownRef}>
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className="w-full flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-xs font-semibold cursor-pointer text-left shadow-2xs"
+            className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-xs font-semibold cursor-pointer text-left shadow-2xs"
           >
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <span className="truncate">{activeTone.name}</span>
-              <span className="text-[10px] font-bold text-primary shrink-0">
+              <span className="text-[10px] font-bold text-primary shrink-0 bg-primary/10 px-1.5 py-0.5 rounded-md">
                 {activeTone.duration}
               </span>
             </div>
@@ -208,9 +208,10 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
 
           {/* Floating Dropdown Menu with Play Button Per Option */}
           {isOpen && (
-            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl p-1.5 space-y-1 animate-fadeIn max-h-60 overflow-y-auto">
-              <div className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                Choose Tone ({category.tones.length} Options)
+            <div className="absolute right-0 left-0 sm:left-auto sm:w-84 top-full mt-1.5 z-50 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl p-2 space-y-1 animate-fadeIn max-h-72 overflow-y-auto">
+              <div className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span>Select Ringtone</span>
+                <span>{category.tones.length} Options</span>
               </div>
               {category.tones.map((tone) => {
                 const isSelected = tone.id === selectedToneId;
@@ -220,21 +221,21 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
                   <div
                     key={tone.id}
                     onClick={() => handleSelectTone(tone.id)}
-                    className={`flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-xl text-xs transition cursor-pointer ${
+                    className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-xs transition cursor-pointer ${
                       isSelected
                         ? 'bg-primary/10 text-primary font-bold dark:bg-primary/20'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
                         isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300 dark:border-slate-600'
                       }`}>
-                        {isSelected && <LuCheck size={9} />}
+                        {isSelected && <LuCheck size={10} />}
                       </div>
-                      <span className="truncate text-[11px]">{tone.name}</span>
-                      <span className={`text-[10px] font-bold shrink-0 ${
-                        isSelected ? 'text-primary' : 'text-slate-400 dark:text-slate-500'
+                      <span className="truncate text-xs">{tone.name}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${
+                        isSelected ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                       }`}>
                         {tone.duration}
                       </span>
@@ -245,7 +246,7 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
                       type="button"
                       title={`Preview ${tone.name} ${tone.duration}`}
                       onClick={(e) => handlePreviewTone(e, tone.id)}
-                      className={`p-1 rounded-lg transition shrink-0 flex items-center justify-center cursor-pointer ${
+                      className={`p-1.5 rounded-lg transition shrink-0 flex items-center justify-center cursor-pointer ${
                         isPlaying
                           ? 'bg-primary text-white scale-110 shadow-sm'
                           : 'bg-slate-100 dark:bg-slate-800 hover:bg-primary hover:text-white text-slate-600 dark:text-slate-300'
@@ -259,16 +260,17 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
             </div>
           )}
         </div>
-      </div>
 
-      {/* Main card test button */}
-      <button
-        type="button"
-        onClick={() => soundEngine.playToneById(activeTone.id)}
-        className={`w-full py-2 px-3 text-xs font-bold rounded-xl ${btnBgClass} ${btnTextClass} hover:opacity-90 transition flex items-center justify-center gap-1.5 cursor-pointer mt-2`}
-      >
-        <LuPlay className="text-xs" /> Test {activeTone.name} {activeTone.duration}
-      </button>
+        {/* Quick Test Play Button */}
+        <button
+          type="button"
+          onClick={() => soundEngine.playToneById(activeTone.id)}
+          className={`px-4 py-2.5 text-xs font-bold rounded-xl ${btnBgClass} ${btnTextClass} hover:opacity-90 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-2xs`}
+        >
+          <LuPlay className="text-xs" />
+          <span>Test Sound</span>
+        </button>
+      </div>
     </div>
   );
 };
@@ -1816,8 +1818,8 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Sound Preview & Customization Cards with Dropdowns */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {/* Sound Preview & Customization Cards - Elegant Full-Width Rows */}
+              <div className="space-y-3.5">
                 {SOUND_CATEGORIES.map((cat) => {
                   const visualConfig = {
                     notification: {
