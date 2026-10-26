@@ -20,163 +20,208 @@ class SoundEngine {
 
   /**
    * Harmonious ascending chord for successful invoice creation / completion
+   * Duration: ~1.5 seconds with warm lingering major chord resonance
    */
   playSuccessChime(): void {
     const ctx = this.getContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+    // Triumphant ascending A-major progression: A4, C#5, E5, A5, C#6
+    const notes = [
+      { freq: 440.00, start: 0.00, decay: 0.8 },
+      { freq: 554.37, start: 0.14, decay: 0.9 },
+      { freq: 659.25, start: 0.28, decay: 1.0 },
+      { freq: 880.00, start: 0.42, decay: 1.1 },
+      { freq: 1108.73, start: 0.58, decay: 1.45 },
+    ];
 
-    notes.forEach((freq, idx) => {
+    notes.forEach(({ freq, start, decay }) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+      osc.frequency.setValueAtTime(freq, now + start);
 
-      gain.gain.setValueAtTime(0.001, now + idx * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.18, now + idx * 0.08 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.08 + 0.35);
+      gain.gain.setValueAtTime(0.001, now + start);
+      gain.gain.linearRampToValueAtTime(0.18, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + decay);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      osc.start(now + idx * 0.08);
-      osc.stop(now + idx * 0.08 + 0.36);
+      osc.start(now + start);
+      osc.stop(now + decay + 0.02);
     });
   }
 
   /**
-   * Crisp, high-tech single blip for barcode scanning or item addition
+   * High-tech 3-pulse futuristic scanner confirmation with crystal reverberation tail
+   * Duration: ~1.15 seconds
    */
   playScanBeep(): void {
     const ctx = this.getContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    // 3 pulses ascending with extended crystal ring tail: D6, F#6, A6
+    const pulses = [
+      { freq: 1174.66, start: 0.00, dur: 0.22 },
+      { freq: 1479.98, start: 0.18, dur: 0.25 },
+      { freq: 1760.00, start: 0.38, dur: 1.15 },
+    ];
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(1480, now); // Crisp F#6
-    osc.frequency.exponentialRampToValueAtTime(1760, now + 0.05);
+    pulses.forEach(({ freq, start, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.2, now + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + start);
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.001, now + start);
+      gain.gain.linearRampToValueAtTime(0.16, now + start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
 
-    osc.start(now);
-    osc.stop(now + 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + start);
+      osc.stop(now + dur + 0.02);
+    });
   }
 
   /**
-   * Gentle two-tone warning chime for credit limit alert or boundary check
+   * Distinct 3-beat caution alert for credit limits and critical boundaries
+   * Duration: ~1.35 seconds
    */
   playWarningTone(): void {
     const ctx = this.getContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const tones = [587.33, 440.0]; // D5 -> A4
+    // 3-step dual-tone caution pulses (dissonance to resolution)
+    const steps = [
+      { f1: 466.16, f2: 622.25, start: 0.00, dur: 0.38 },
+      { f1: 440.00, f2: 587.33, start: 0.40, dur: 0.40 },
+      { f1: 392.00, f2: 523.25, start: 0.82, dur: 1.35 },
+    ];
 
-    tones.forEach((freq, idx) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+    steps.forEach(({ f1, f2, start, dur }) => {
+      [f1, f2].forEach((freq) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
 
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + start);
 
-      gain.gain.setValueAtTime(0.001, now + idx * 0.12);
-      gain.gain.linearRampToValueAtTime(0.16, now + idx * 0.12 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.12 + 0.22);
+        gain.gain.setValueAtTime(0.001, now + start);
+        gain.gain.linearRampToValueAtTime(0.14, now + start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
 
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
 
-      osc.start(now + idx * 0.12);
-      osc.stop(now + idx * 0.12 + 0.23);
+        osc.start(now + start);
+        osc.stop(now + dur + 0.02);
+      });
     });
   }
 
   /**
-   * Harmonious bell chime for notifications and real-time alerts
+   * Harmonious multi-tone bell chime for notifications and real-time alerts
+   * Duration: ~1.45 seconds
    */
   playNotificationChime(): void {
-    if (typeof window !== 'undefined' && typeof Audio !== 'undefined') {
-      try {
-        const audio = new Audio('/audio/notification.mp3');
-        audio.volume = 0.75;
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(() => {
-            this.playSynthesizedNotification();
-          });
-          return;
-        }
-      } catch {
-        // Fall back to Web Audio API synthesis
-      }
-    }
     this.playSynthesizedNotification();
   }
 
   /**
-   * Pure Web Audio API synthesized notification bell
+   * Pure Web Audio API synthesized 4-note ascending bell chime
+   * Notes: C5 (523Hz) -> E5 (659Hz) -> G5 (784Hz) -> C6 (1046Hz) with rich decay
+   * Duration: ~1.45 seconds
    */
   playSynthesizedNotification(): void {
     const ctx = this.getContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const notes = [587.33, 880.0]; // D5 -> A5 ascending bell tones
+    const bellNotes = [
+      { freq: 523.25, start: 0.00, end: 0.95 },
+      { freq: 659.25, start: 0.16, end: 1.15 },
+      { freq: 783.99, start: 0.32, end: 1.30 },
+      { freq: 1046.50, start: 0.48, end: 1.45 },
+    ];
 
-    notes.forEach((freq, idx) => {
+    bellNotes.forEach(({ freq, start, end }) => {
+      // Fundamental oscillator
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+      osc.frequency.setValueAtTime(freq, now + start);
 
-      gain.gain.setValueAtTime(0.001, now + idx * 0.1);
-      gain.gain.linearRampToValueAtTime(0.2, now + idx * 0.1 + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.1 + 0.42);
+      gain.gain.setValueAtTime(0.001, now + start);
+      gain.gain.linearRampToValueAtTime(0.18, now + start + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + end);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      osc.start(now + idx * 0.1);
-      osc.stop(now + idx * 0.1 + 0.43);
+      osc.start(now + start);
+      osc.stop(now + end + 0.02);
+
+      // Subtle second harmonic for rich bell shimmer
+      const harmOsc = ctx.createOscillator();
+      const harmGain = ctx.createGain();
+
+      harmOsc.type = 'sine';
+      harmOsc.frequency.setValueAtTime(freq * 2, now + start);
+
+      harmGain.gain.setValueAtTime(0.0005, now + start);
+      harmGain.gain.linearRampToValueAtTime(0.04, now + start + 0.015);
+      harmGain.gain.exponentialRampToValueAtTime(0.0001, now + start + 0.35);
+
+      harmOsc.connect(harmGain);
+      harmGain.connect(ctx.destination);
+
+      harmOsc.start(now + start);
+      harmOsc.stop(now + start + 0.36);
     });
   }
 
   /**
-   * Descending gentle tone for item deletion or cancellation
+   * Warm 3-step descending marimba/gong tone for item removal or draft cancellation
+   * Duration: ~1.25 seconds
    */
   playDeleteTone(): void {
     const ctx = this.getContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    // 3 descending notes with acoustic resonance: A4 (440Hz), E4 (330Hz), A3 (220Hz)
+    const notes = [
+      { freq: 440.00, start: 0.00, end: 0.55 },
+      { freq: 329.63, start: 0.22, end: 0.85 },
+      { freq: 220.00, start: 0.46, end: 1.25 },
+    ];
 
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(440, now);
-    osc.frequency.exponentialRampToValueAtTime(220, now + 0.16);
+    notes.forEach(({ freq, start, end }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + start);
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.001, now + start);
+      gain.gain.linearRampToValueAtTime(0.16, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + end);
 
-    osc.start(now);
-    osc.stop(now + 0.19);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + start);
+      osc.stop(now + end + 0.02);
+    });
   }
 }
 
@@ -221,8 +266,8 @@ export const triggerFeedbackSound = (
     return;
   }
   const now = Date.now();
-  // Prevent duplicate sounds overlapping within 200ms
-  if (now - lastPlayedTime < 200 && lastPlayedType === type) {
+  // Prevent duplicate sounds overlapping within 350ms
+  if (now - lastPlayedTime < 350 && lastPlayedType === type) {
     return;
   }
   lastPlayedTime = now;

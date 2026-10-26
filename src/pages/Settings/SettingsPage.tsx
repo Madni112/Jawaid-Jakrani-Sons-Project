@@ -1662,7 +1662,7 @@ const SettingsPage: React.FC = () => {
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Invoice Saved</h3>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Harmonious ascending chord on invoice completion or successful receipt.
+                      Rich 1.5s ascending major chord fanfare with lingering acoustic resonance.
                     </p>
                   </div>
                   <button
@@ -1670,11 +1670,11 @@ const SettingsPage: React.FC = () => {
                     onClick={() => soundEngine.playSuccessChime()}
                     className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <LuPlay className="text-xs" /> Test Success Chime
+                    <LuPlay className="text-xs" /> Test Success Chime (1.5s)
                   </button>
                 </div>
 
-                {/* 2. Barcode Scan Blip */}
+                {/* 2. Barcode Scan Beep */}
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
                   <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 flex items-center justify-center text-xl">
                     <LuSparkles />
@@ -1682,7 +1682,7 @@ const SettingsPage: React.FC = () => {
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Barcode Scan Beep</h3>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Crisp, high-tech single blip when an item or tile box is scanned.
+                      Futuristic 1.2s 3-pulse laser confirmation with crystal reverberation tail.
                     </p>
                   </div>
                   <button
@@ -1690,7 +1690,7 @@ const SettingsPage: React.FC = () => {
                     onClick={() => soundEngine.playScanBeep()}
                     className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <LuPlay className="text-xs" /> Test Scan Beep
+                    <LuPlay className="text-xs" /> Test Scan Beep (1.2s)
                   </button>
                 </div>
 
@@ -1702,7 +1702,7 @@ const SettingsPage: React.FC = () => {
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Limit Warning</h3>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Gentle two-tone chime when a customer reaches credit limit boundaries.
+                      Distinct 1.4s 3-beat caution alert sequence for credit boundaries.
                     </p>
                   </div>
                   <button
@@ -1710,7 +1710,7 @@ const SettingsPage: React.FC = () => {
                     onClick={() => soundEngine.playWarningTone()}
                     className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <LuPlay className="text-xs" /> Test Warning Chime
+                    <LuPlay className="text-xs" /> Test Warning Chime (1.4s)
                   </button>
                 </div>
 
@@ -1722,7 +1722,7 @@ const SettingsPage: React.FC = () => {
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Item Removed</h3>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Soft descending tone when a row or draft item is cancelled.
+                      Warm 1.3s 3-step descending marimba chime with acoustic bass resonance.
                     </p>
                   </div>
                   <button
@@ -1730,7 +1730,7 @@ const SettingsPage: React.FC = () => {
                     onClick={() => soundEngine.playDeleteTone()}
                     className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <LuPlay className="text-xs" /> Test Delete Tone
+                    <LuPlay className="text-xs" /> Test Delete Tone (1.3s)
                   </button>
                 </div>
 
@@ -1742,7 +1742,7 @@ const SettingsPage: React.FC = () => {
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Notification Ping</h3>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Crisp chime played on toasts, system status updates, and live alerts.
+                      Harmonious 1.5s 4-note ascending bell chime for toasts and live alerts.
                     </p>
                   </div>
                   <button
@@ -1750,7 +1750,7 @@ const SettingsPage: React.FC = () => {
                     onClick={() => soundEngine.playNotificationChime()}
                     className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <LuPlay className="text-xs" /> Test Notification Sound
+                    <LuPlay className="text-xs" /> Test Notification (1.5s)
                   </button>
                 </div>
               </div>
