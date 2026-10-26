@@ -39,20 +39,20 @@ interface SearchItem {
 
 const SEARCH_REGISTRY: SearchItem[] = [
   // Sales & Billing
-  { id: 'new-invoice', title: 'New Sales Invoice', subtitle: 'Create POS sale or delivery challan', category: 'Sales', path: '/sales/invoice/new', icon: <LuPlus /> },
-  { id: 'invoices-list', title: 'Sales Invoices Directory', subtitle: 'View past invoices, DC history & receipts', category: 'Sales', path: '/sales/invoice', icon: <LuReceipt /> },
-  { id: 'sales-returns', title: 'Sales Return & Exchange', subtitle: 'Process return items and customer refunds', category: 'Sales', path: '/sales/return', icon: <LuFileText /> },
-  { id: 'quotations', title: 'Quotations & Estimates', subtitle: 'Draft and print pricing estimates', category: 'Sales', path: '/sales/quotation', icon: <LuFileText /> },
+  { id: 'new-invoice', title: 'New Sales Invoice', subtitle: 'Create POS sale or delivery challan', category: 'Sales', path: '/sales/invoice/add', icon: <LuPlus /> },
+  { id: 'invoices-list', title: 'Sales Invoices Directory', subtitle: 'View past invoices, DC history & receipts', category: 'Sales', path: '/Sales/Invoice/List', icon: <LuReceipt /> },
+  { id: 'sales-returns', title: 'Sales Return & Exchange', subtitle: 'Process return items and customer refunds', category: 'Sales', path: '/Sales/Sales-Return/List', icon: <LuFileText /> },
+  { id: 'quotations', title: 'Quotations & Estimates', subtitle: 'Draft and print pricing estimates', category: 'Sales', path: '/crm/quotations', icon: <LuFileText /> },
 
   // Inventory & Products
-  { id: 'products-list', title: 'Product Catalog & Inventory', subtitle: 'Stock balances, tile sizing & prices', category: 'Inventory', path: '/inventory/products', icon: <LuPackage /> },
-  { id: 'add-product', title: 'Add New Product', subtitle: 'Register a product or tile SKU', category: 'Inventory', path: '/inventory/products/new', icon: <LuPlus /> },
+  { id: 'products-list', title: 'Product Catalog & Inventory', subtitle: 'Stock balances, tile sizing & prices', category: 'Inventory', path: '/Administration/Products/List', icon: <LuPackage /> },
+  { id: 'bulk-upload', title: 'Bulk Products Upload', subtitle: 'Upload products via Excel spreadsheet', category: 'Inventory', path: '/Administration/Products/Bulk-Upload', icon: <LuPlus /> },
 
   // Contacts & Ledgers
-  { id: 'customers-dir', title: 'Customer Directory & Accounts', subtitle: 'Customer ledgers, phone & credit limits', category: 'Accounts', path: '/registration/customer', icon: <LuUsers /> },
-  { id: 'suppliers-dir', title: 'Supplier Accounts & Purchases', subtitle: 'Vendor ledgers and payable bills', category: 'Accounts', path: '/registration/supplier', icon: <LuUsers /> },
-  { id: 'cash-receipts', title: 'Receipt Vouchers (RV)', subtitle: 'Log payments received from customers', category: 'Accounts', path: '/account/receipt', icon: <LuReceipt /> },
-  { id: 'payment-vouchers', title: 'Payment Vouchers (PV)', subtitle: 'Log vendor and business expenditures', category: 'Accounts', path: '/account/payment', icon: <LuReceipt /> },
+  { id: 'customers-dir', title: 'Customer Directory & Accounts', subtitle: 'Customer ledgers, phone & credit limits', category: 'Accounts', path: '/Sales/Customers/List', icon: <LuUsers /> },
+  { id: 'suppliers-dir', title: 'Vendor & Supplier Accounts', subtitle: 'Vendor ledgers and payable bills', category: 'Accounts', path: '/Purchase/Vendor/List', icon: <LuUsers /> },
+  { id: 'purchases-list', title: 'Purchase Orders & GRN', subtitle: 'Purchases, stock intake & vendor bills', category: 'Purchases', path: '/Purchase/Purchases/List', icon: <LuPackage /> },
+  { id: 'vouchers-list', title: 'Cash & Bank Vouchers', subtitle: 'Receipts, payment vouchers & ledgers', category: 'Accounts', path: '/Registration/Vouchers/List', icon: <LuReceipt /> },
 
   // Preferences & System
   { id: 'settings-credit', title: 'Customer Credit Limits', subtitle: 'Set borrowing ceilings & check risk', category: 'Settings', path: '/settings', icon: <LuSlidersHorizontal /> },
@@ -196,7 +196,7 @@ const Header = (props: {
 
             {/* Quick Action: New Sale Button */}
             <Link
-              to="/sales/invoice/new"
+              to="/sales/invoice/add"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary hover:opacity-90 text-white text-xs font-bold shadow-2xs transition cursor-pointer"
               title="Create a New Sales Invoice"
             >

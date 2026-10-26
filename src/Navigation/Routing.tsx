@@ -149,6 +149,13 @@ function Navigation() {
       {/* 4. ALL DYNAMIC ROLE-BASED ERP MODULE ROUTES */}
       {renderRoutes(roleRoutes)}
 
+      {/* 4.5. SALES INVOICE UNIVERSAL SHORTCUTS & ALIASES */}
+      <Route path="/sales/invoice/new" element={<Navigate to="/sales/invoice/add" replace />} />
+      <Route path="/Sales/Invoice/New" element={<Navigate to="/sales/invoice/add" replace />} />
+      <Route path="/sales/invoice" element={<Navigate to="/Sales/Invoice/List" replace />} />
+      <Route path="/Sales/Invoice" element={<Navigate to="/Sales/Invoice/List" replace />} />
+      <Route path="/sales/invoices" element={<Navigate to="/Sales/Invoice/List" replace />} />
+
       {/* 5. LEGACY TENANT GATE REDIRECTS (Gracefully redirects any old links) */}
       <Route path="/:tenantPath/signin" element={<Navigate to="/signin" replace />} />
       <Route path="/:tenantPath/login" element={<Navigate to="/signin" replace />} />
@@ -169,10 +176,19 @@ function Navigation() {
       <Route
         path="*"
         element={
-          <NotFound
-            title="404 - Page Not Found"
-            message="The requested page could not be found."
-          />
+          isAuthenticated ? (
+            <DefaultLayout>
+              <NotFound
+                title="404 - Page Not Found"
+                message="The requested page could not be found."
+              />
+            </DefaultLayout>
+          ) : (
+            <NotFound
+              title="404 - Page Not Found"
+              message="The requested page could not be found."
+            />
+          )
         }
       />
     </Routes>
