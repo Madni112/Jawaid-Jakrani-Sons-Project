@@ -10,6 +10,8 @@ import { FiPrinter, FiSave, FiCheck, FiX, FiUserCheck, FiTrash2, FiUser, FiAlert
 import { SearchableDropdown } from '../../../components/SearchableDropdown';
 import { useAuth } from '../../../Context/Auth';
 import { logActivity } from '../../../service/auditLogger';
+import { triggerFeedbackSound } from '../../../utils/audioFeedback';
+import { fetchCustomerCreditLimits } from '../../../utils/creditLimitUtils';
 
 // Helper to identify Tile products strictly based on parent category
 const isTileProduct = (p: any) => {
@@ -46,11 +48,26 @@ const matchesProductSearch = (p: any, query: string): boolean => {
 const NewInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { tenantId, role, userName } = useAuth();
+  const { tenantId, role, userName, userEmail } = useAuth();
   const currentRole = (role || localStorage.getItem('zac_user_role') || '').toLowerCase();
   const currentSalesmanName = (userName || localStorage.getItem('zac_user_name') || '').trim();
   const isSalesman = currentRole.includes('salesman');
   const editData = location.state?.invoice || location.state?.record || null;
+
+  const [customerCreditLimitsMap, setCustomerCreditLimitsMap] = useState<Record<string, number>>({});
+
+  const checkAndAlertCreditLimit = (cust: any) => {
+    if (!cust) return;
+    const limit = Number(customerCreditLimitsMap[String(cust.id)] || 0);
+    const bal = Number(cust.currentBalance !== undefined ? cust.currentBalance : (cust.balance || 0));
+    if (limit > 0 && bal >= limit) {
+      triggerFeedbackSound('warning', userEmail);
+      toast.error(`⚠️ Credit Limit Warning: "${cust.customerName}" has an outstanding balance of Rs. ${bal.toLocaleString()} which exceeds their agreed credit limit of Rs. ${limit.toLocaleString()}!`, { duration: 6000 });
+    } else if (limit > 0 && bal >= 0.75 * limit) {
+      triggerFeedbackSound('warning', userEmail);
+      toast(`⚠️ Credit Limit Alert: "${cust.customerName}" has reached ${Math.round((bal / limit) * 100)}% of their credit limit (Rs. ${limit.toLocaleString()}).`, { icon: '⚠️', duration: 5000 });
+    }
+  };
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
@@ -397,6 +414,7 @@ const NewInvoice = () => {
         setWarehousesList(uniqueLocations);
 
         if (bnk) setBanksList(bnk);
+        fetchCustomerCreditLimits().then(setCustomerCreditLimitsMap).catch(() => {});
       } catch (err: any) {
         toast.error('Failed to aggregate core infrastructure registries: ' + err.message);
       } finally {
@@ -850,6 +868,7 @@ const NewInvoice = () => {
     setFieldValue(`items.${index}.rp`, newRp);
     setFieldValue(`items.${index}.itemServiceCharges`, isService ? serviceCharges : 0);
     setFieldValue(`items.${index}.hsCode`, selectedProduct.hs_code || '');
+    triggerFeedbackSound('scan', userEmail);
 
     if (currentItem && currentItem.discountPer) {
       const gross = newRp * (Number(currentItem.qty) || 1);
@@ -884,6 +903,7 @@ const NewInvoice = () => {
       setFieldValue(`tileItems.${tIdx}.totalSqm`, 0);
       return;
     }
+    triggerFeedbackSound('scan', userEmail);
 
     let pcsPerBox = Number(selectedProduct.pieces_per_box || selectedProduct.pcs_per_box || selectedProduct.pieces_per_packing || 0);
     if (pcsPerBox <= 1) {
@@ -1653,6 +1673,7 @@ const NewInvoice = () => {
         }
 
         toast.success('Sales Invoice changes compiled and DCs synced successfully!');
+        triggerFeedbackSound('success', userEmail);
       } else {
         // Concurrency guard: Ensure this invoice number wasn't already inserted in parallel
         const { data: duplicateCheck } = await supabase
@@ -1784,6 +1805,7 @@ const NewInvoice = () => {
           if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(item.qty) }).eq('id', prod.id);
         }
         toast.success('Sales Invoice & Delivery Challan(s) logged successfully!');
+        triggerFeedbackSound('success', userEmail);
       }
 
       // ── AUTO-SYNC SALES RETURN RECORD (FOR IN-INVOICE RETURN / EXCHANGE) ──
@@ -2756,6 +2778,7 @@ const NewInvoice = () => {
                                   setSelectedRecordedCustomer(item.customerName);
                                   setCustomerModalType('recorded');
                                   fetchCustomerPastSales(item.customerName);
+                                  checkAndAlertCreditLimit(item);
                                   if (item.address && !values.shippingAddress) {
                                     setFieldValue('shippingAddress', item.address);
                                   }
@@ -2849,6 +2872,7 @@ const NewInvoice = () => {
                                     setSelectedRecordedCustomer(c.customerName);
                                     setCustomerModalType('recorded');
                                     fetchCustomerPastSales(c.customerName);
+                                    checkAndAlertCreditLimit(c);
                                     if (c.address && !values.shippingAddress) {
                                       setFieldValue('shippingAddress', c.address);
                                     }
@@ -2899,6 +2923,40 @@ const NewInvoice = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* Credit Limit Status Banner for Selected Customer */}
+                    {(() => {
+                      const activeCustName = values.customerName || selectedRecordedCustomer;
+                      if (!activeCustName) return null;
+                      const custObj = customersList.find((c: any) => (c.customerName || '').toLowerCase() === activeCustName.toLowerCase());
+                      if (!custObj) return null;
+                      const limit = Number(customerCreditLimitsMap[String(custObj.id)] || 0);
+                      const bal = Number(custObj.currentBalance !== undefined ? custObj.currentBalance : (custObj.balance || 0));
+                      if (limit <= 0) return null;
+
+                      const isExceeded = bal > limit;
+                      const isNear = bal >= 0.75 * limit && !isExceeded;
+
+                      return (
+                        <div className={`mt-2 p-2.5 rounded-lg border text-xs flex items-center justify-between ${
+                          isExceeded
+                            ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 font-bold animate-pulse'
+                            : isNear
+                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold'
+                            : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                        }`}>
+                          <div className="flex items-center gap-1.5">
+                            <FiAlertTriangle className={isExceeded ? 'text-red-600' : isNear ? 'text-amber-600' : 'text-emerald-600'} />
+                            <span>
+                              {isExceeded ? '⚠️ CREDIT CEILING EXCEEDED' : isNear ? '⚠️ APPROACHING CREDIT LIMIT' : '✓ Credit Limit Active'}:
+                            </span>
+                          </div>
+                          <div className="font-mono text-[11px]">
+                            Ceiling: <strong>Rs. {limit.toLocaleString()}</strong> | Balance: <strong>Rs. {bal.toLocaleString()}</strong>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Shipping Address (Optional):</label>
@@ -3905,7 +3963,7 @@ const NewInvoice = () => {
                                       </>
                                     )}
                                     <td className="p-2 text-right pr-4 text-success font-black">Rs. {lineCalc.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                    <td className="p-1 w-8 text-center">{values.items.length > 1 && <button type="button" onClick={() => remove(idx)} className="text-gray-400 hover:text-danger cursor-pointer"><FiTrash2 size={14} /></button>}</td>
+                                    <td className="p-1 w-8 text-center">{values.items.length > 1 && <button type="button" onClick={() => { remove(idx); triggerFeedbackSound('delete', userEmail); }} className="text-gray-400 hover:text-danger cursor-pointer"><FiTrash2 size={14} /></button>}</td>
                                   </tr>
                                 );
                               })}
@@ -4344,7 +4402,7 @@ const NewInvoice = () => {
                                       <td className="p-2 w-8 text-center">
                                         <button
                                           type="button"
-                                          onClick={() => remove(tIdx)}
+                                          onClick={() => { remove(tIdx); triggerFeedbackSound('delete', userEmail); }}
                                           className="text-slate-400 hover:text-red-600 transition p-1"
                                           title="Remove tile item"
                                         >
