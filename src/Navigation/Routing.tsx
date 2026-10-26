@@ -6,6 +6,7 @@ import DeveloperDashboard from '../pages/Developer/DeveloperDashboard';
 import DefaultLayout from '../layout/DefaultLayout';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NotFound from '../pages/Error/NotFound';
+import SettingsPage from '../pages/Settings/SettingsPage';
 import { useAuth } from '../Context/Auth';
 
 /**
@@ -122,6 +123,28 @@ function Navigation() {
       <Route path="/dev/master" element={<DeveloperDashboard />} />
       <Route path="/Administration/Roles" element={<DeveloperDashboard />} />
       <Route path="/Administration/Users" element={<DeveloperDashboard />} />
+
+      {/* 4. SETTINGS & PREFERENCES */}
+      <Route
+        path="/settings"
+        element={
+          <AppRouteGuard>
+            <DefaultLayout>
+              <SettingsPage />
+            </DefaultLayout>
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/:tenantPath/settings"
+        element={
+          <AppRouteGuard>
+            <DefaultLayout>
+              <SettingsPage />
+            </DefaultLayout>
+          </AppRouteGuard>
+        }
+      />
 
       {/* 4. ALL DYNAMIC ROLE-BASED ERP MODULE ROUTES */}
       {renderRoutes(roleRoutes)}

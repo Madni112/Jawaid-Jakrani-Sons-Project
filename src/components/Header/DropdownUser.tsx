@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ClickOutside from '../ClickOutside';
-import { LuLogOut, LuBuilding2, LuMail, LuPenLine } from 'react-icons/lu';
+import { LuLogOut, LuBuilding2, LuMail, LuSettings } from 'react-icons/lu';
 import { MdPerson } from 'react-icons/md';
 import { useAuth, detectPortalTenant } from '../../Context/Auth';
 import { supabase } from '../../Context/supabaseClient';
 import {
-  SHOW_THEME_COLOR_PICKER,
-  PRESET_THEME_COLORS,
   applyAccentColor,
   getSavedAccentColor,
-  isThemeColorPickerEnabled,
 } from '../../constant/themeConfig';
 
 const DropdownUser = () => {
@@ -19,17 +16,6 @@ const DropdownUser = () => {
   const [profile, setProfile] = useState<any>();
   const [imageError, setImageError] = useState(false);
   const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
-  const [pickerEnabled, setPickerEnabled] = useState<boolean>(isThemeColorPickerEnabled());
-
-  useEffect(() => {
-    const handler = () => setPickerEnabled(isThemeColorPickerEnabled());
-    window.addEventListener('theme_color_picker_visibility_changed', handler);
-    window.addEventListener('storage', handler);
-    return () => {
-      window.removeEventListener('theme_color_picker_visibility_changed', handler);
-      window.removeEventListener('storage', handler);
-    };
-  }, []);
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -50,11 +36,6 @@ const DropdownUser = () => {
       window.removeEventListener('zoaib_ali_theme_color_changed', themeHandler);
     };
   }, []);
-
-  const handleColorSelect = (hex: string) => {
-    setAccentColor(hex);
-    applyAccentColor(hex);
-  };
 
   const Logout = () => {
     logout();
@@ -153,84 +134,22 @@ const DropdownUser = () => {
             </div>
           </div>
 
-          {/* ACCENT COLOR THEME PICKER (TOGGLEABLE) */}
-          {SHOW_THEME_COLOR_PICKER && pickerEnabled && (
-            <div className="px-4 py-3 bg-white dark:bg-boxdark border-b border-stroke dark:border-strokedark">
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Accent Color Theme
-                </span>
-                <span
-                  className="h-2.5 w-2.5 rounded-full shrink-0 shadow-xs border border-black/10 transition-colors"
-                  style={{ backgroundColor: accentColor }}
-                />
-              </div>
+          {/* Action List: Settings & Log Out */}
+          <div className="p-2 space-y-1">
+            <Link
+              to="/settings"
+              onClick={() => setDropdownOpen(false)}
+              className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-150 ease-in-out cursor-pointer group"
+            >
+              <LuSettings size={17} className="text-slate-500 group-hover:text-primary transition-colors" />
+              <span>Settings</span>
+            </Link>
 
-              {/* 8-col grid of color swatches */}
-              <div className="grid grid-cols-8 gap-1.5">
-                {PRESET_THEME_COLORS.map((c) => {
-                  const isSelected = accentColor.toLowerCase() === c.hex.toLowerCase();
-                  return (
-                    <button
-                      key={c.hex}
-                      type="button"
-                      onClick={() => handleColorSelect(c.hex)}
-                      className={`group relative h-6 w-full rounded transition-all duration-150 hover:scale-105 flex items-center justify-center shadow-xs cursor-pointer border ${
-                        isSelected
-                          ? 'ring-2 ring-offset-1 ring-slate-900 dark:ring-white border-transparent'
-                          : 'border-black/10 dark:border-white/10'
-                      }`}
-                      style={{ backgroundColor: c.hex }}
-                      title={c.name}
-                    >
-                      {isSelected && (
-                        <svg
-                          className="w-3.5 h-3.5 text-white drop-shadow"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={3}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
 
-              {/* Bottom Custom Color Picker */}
-              <div className="mt-2.5 pt-2 flex items-center justify-between border-t border-stroke/60 dark:border-strokedark/60 text-xs">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span
-                    className="h-3 w-3 rounded-full shrink-0 shadow-xs border border-black/15 transition-colors"
-                    style={{ backgroundColor: accentColor }}
-                  />
-                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate">
-                    {PRESET_THEME_COLORS.find((c) => c.hex.toLowerCase() === accentColor.toLowerCase())?.name ||
-                      'Custom Color'}
-                  </span>
-                </div>
-
-                <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer px-2 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-meta-4 transition">
-                  <LuPenLine size={12} />
-                  <span>Custom</span>
-                  <input
-                    type="color"
-                    value={accentColor}
-                    onChange={(e) => handleColorSelect(e.target.value)}
-                    className="sr-only"
-                  />
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* Action List / Log Out */}
-          <div className="p-2">
             <button
               onClick={Logout}
-              className="flex items-center gap-3 w-full px-3.5 py-2 rounded-md text-sm font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition duration-150 ease-in-out cursor-pointer"
+              className="flex items-center gap-3 w-full px-3.5 py-2 rounded-lg text-sm font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition duration-150 ease-in-out cursor-pointer"
             >
               <LuLogOut size={16} />
               <span>Log Out</span>
