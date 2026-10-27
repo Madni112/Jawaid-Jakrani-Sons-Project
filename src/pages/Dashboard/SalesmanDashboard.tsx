@@ -21,7 +21,8 @@ import {
   MdWarehouse,
   MdPerson,
   MdArrowForward,
-  MdPointOfSale
+  MdPointOfSale,
+  MdCalendarToday
 } from 'react-icons/md';
 
 interface SalesInvoiceItem {
@@ -56,22 +57,63 @@ const SalesmanDashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Dispatched'>('All');
   const [salesmanList, setSalesmanList] = useState<string[]>([]);
   const [selectedSalesman, setSelectedSalesman] = useState<string>('ALL');
+  const [partnerSalesmen, setPartnerSalesmen] = useState<string[]>([]);
+
+  const [effectiveSalesmanName, setEffectiveSalesmanName] = useState<string>(() => {
+    return userName || localStorage.getItem('zac_user_name') || '';
+  });
 
   const isAdminOrSuper = useMemo(() => {
-    const r = (role || '').toLowerCase();
+    const r = (role || localStorage.getItem('zac_user_role') || '').toLowerCase();
     return r.includes('admin') || r.includes('owner') || r.includes('developer');
   }, [role]);
+
+  const isMergedSalesman = !isAdminOrSuper && partnerSalesmen.length > 0;
 
   // Load Salesman Dashboard Data
   const loadDashboardData = async () => {
     setLoading(true);
     try {
+      // Resolve active salesman identity if not yet in state
+      let activeName = userName || effectiveSalesmanName;
+      if (!activeName) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userEmail = sessionData?.session?.user?.email;
+        if (userEmail) {
+          const { data: tRow } = await supabase
+            .from('tenants')
+            .select('name, business_activity')
+            .ilike('email', userEmail.trim())
+            .maybeSingle();
+          if (tRow?.name) {
+            activeName = tRow.name;
+            setEffectiveSalesmanName(tRow.name);
+          }
+        }
+      }
+
+      // Check if logged in user has linked partner salesmen
+      if (activeName) {
+        const { data: smRow } = await supabase
+          .from('salesmen')
+          .select('name, linked_salesmen')
+          .ilike('name', activeName.trim())
+          .maybeSingle();
+
+        if (smRow && Array.isArray(smRow.linked_salesmen) && smRow.linked_salesmen.length > 0) {
+          setPartnerSalesmen(smRow.linked_salesmen);
+          setSelectedSalesman('TEAM_ALL');
+        } else if (!isAdminOrSuper) {
+          setSelectedSalesman(activeName);
+        }
+      }
+
       // 1. Fetch Sales Invoices
       const { data: invoiceData, error: invError } = await supabase
         .from('sales_invoices')
         .select('*')
         .order('id', { ascending: false })
-        .limit(200);
+        .limit(300);
 
       if (invError) throw invError;
       const invList: SalesInvoiceItem[] = invoiceData || [];
@@ -82,11 +124,6 @@ const SalesmanDashboard: React.FC = () => {
         new Set(invList.map((i) => (i.salesman || '').trim()).filter(Boolean))
       );
       setSalesmanList(uniqueSalesmen);
-
-      // If logged in user is a salesman, set their default filter
-      if (!isAdminOrSuper && userName) {
-        setSelectedSalesman(userName);
-      }
 
       // 2. Fetch Live Stock Balances
       const { data: stockData, error: stockErr } = await supabase
@@ -125,16 +162,47 @@ const SalesmanDashboard: React.FC = () => {
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [userName, role]);
 
   // Filter invoices for current user or selected salesman
   const filteredInvoices = useMemo(() => {
+    const activeName = (userName || effectiveSalesmanName || '').toLowerCase().trim();
+
     return invoices.filter((inv) => {
-      // Salesman filter
-      if (selectedSalesman !== 'ALL') {
-        const invSalesman = (inv.salesman || '').toLowerCase();
-        if (!invSalesman.includes(selectedSalesman.toLowerCase())) {
-          return false;
+      const invSalesman = (inv.salesman || '').toLowerCase().trim();
+      const invNo = (inv.invoice_no || '').toLowerCase().trim();
+
+      // Non-admin logic: MUST ONLY show invoices of the current salesman or linked partners
+      if (!isAdminOrSuper) {
+        if (!activeName) return false; // Safety: Never leak all invoices if identity not resolved yet
+
+        if (!isMergedSalesman) {
+          // Normal unmerged salesman: only see their own
+          const matchMySales = invSalesman.includes(activeName) || (activeName && invNo.startsWith(activeName.split(' ')[0]));
+          if (!matchMySales) return false;
+        } else {
+          // Merged salesman (e.g. Ahmed Ali + Juned):
+          const myTeam = [activeName, ...partnerSalesmen.map(p => p.toLowerCase().trim())].filter(Boolean);
+
+          if (selectedSalesman === 'TEAM_ALL') {
+            const matchAny = myTeam.some(tm => invSalesman.includes(tm) || invNo.startsWith(tm.split(' ')[0]));
+            if (!matchAny) return false;
+          } else if (selectedSalesman === 'MY_SALES' || selectedSalesman.toLowerCase().trim() === activeName) {
+            const matchMySales = invSalesman.includes(activeName) || invNo.startsWith(activeName.split(' ')[0]);
+            if (!matchMySales) return false;
+          } else {
+            // Specific partner selected (e.g. Juned)
+            const targetPartner = selectedSalesman.toLowerCase().trim();
+            const matchPartner = invSalesman.includes(targetPartner) || invNo.startsWith(targetPartner.split(' ')[0]);
+            if (!matchPartner) return false;
+          }
+        }
+      } else {
+        // Admin filter
+        if (selectedSalesman !== 'ALL') {
+          if (!invSalesman.includes(selectedSalesman.toLowerCase().trim())) {
+            return false;
+          }
         }
       }
 
@@ -154,7 +222,7 @@ const SalesmanDashboard: React.FC = () => {
 
       return true;
     });
-  }, [invoices, selectedSalesman, statusFilter, searchInvoice]);
+  }, [invoices, selectedSalesman, statusFilter, searchInvoice, isAdminOrSuper, isMergedSalesman, userName, partnerSalesmen]);
 
   // Metrics calculations
   const metrics = useMemo(() => {
@@ -164,10 +232,29 @@ const SalesmanDashboard: React.FC = () => {
 
     // Relevant pool for metrics
     const pool = invoices.filter((inv) => {
-      if (selectedSalesman !== 'ALL') {
-        return (inv.salesman || '').toLowerCase().includes(selectedSalesman.toLowerCase());
+      const invSalesman = (inv.salesman || '').toLowerCase().trim();
+
+      if (!isAdminOrSuper) {
+        if (!isMergedSalesman) {
+          const myName = (userName || '').toLowerCase().trim();
+          return myName ? invSalesman.includes(myName) : true;
+        } else {
+          if (selectedSalesman === 'TEAM_ALL') {
+            const teamMembers = [userName, ...partnerSalesmen].map(n => n.toLowerCase().trim());
+            return teamMembers.some(tm => tm && invSalesman.includes(tm));
+          } else if (selectedSalesman === 'MY_SALES' || selectedSalesman === userName) {
+            const myName = (userName || '').toLowerCase().trim();
+            return myName ? invSalesman.includes(myName) : true;
+          } else {
+            return invSalesman.includes(selectedSalesman.toLowerCase().trim());
+          }
+        }
+      } else {
+        if (selectedSalesman !== 'ALL') {
+          return invSalesman.includes(selectedSalesman.toLowerCase().trim());
+        }
+        return true;
       }
-      return true;
     });
 
     let todaySales = 0;
@@ -233,59 +320,88 @@ const SalesmanDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. Header Banner */}
-      <GlassCard className="p-6 relative overflow-hidden bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-800 text-white rounded-3xl shadow-xl">
-        <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 relative">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 backdrop-blur-md text-sky-100 border border-white/20">
-                <MdPointOfSale className="mr-1 text-sm text-yellow-300" />
-                Sales Terminal & Performance Dashboard
-              </span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
-                Live Synced
-              </span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-xs">
-              Welcome back, {displayName}!
-            </h1>
-            <p className="text-sky-100 text-sm mt-1 max-w-xl">
-              Track your daily sales performance, monitor warehouse dispatches, and check instant stock availability across A-39 and Shop.
-            </p>
+      {/* 1. Header: Sleek Executive Linear Style */}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-800/60 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live Terminal
+            </span>
+            <span className="text-slate-300 dark:text-slate-700">•</span>
+            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              Personal POS & Dispatch Velocity
+            </span>
           </div>
-
-          <div className="flex items-center gap-3">
-            {/* Salesman Filter for Admins */}
-            {isAdminOrSuper && (
-              <div className="flex items-center bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 backdrop-blur-md">
-                <MdPerson className="text-sky-200 mr-2 text-base" />
-                <select
-                  value={selectedSalesman}
-                  onChange={(e) => setSelectedSalesman(e.target.value)}
-                  className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer"
-                >
-                  <option value="ALL" className="text-slate-800">All Salesmen</option>
-                  {salesmanList.map((s) => (
-                    <option key={s} value={s} className="text-slate-800">
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <button
-              onClick={loadDashboardData}
-              title="Refresh Data"
-              className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl border border-white/20 transition-all text-white backdrop-blur-md shadow-sm"
-            >
-              <MdRefresh className="text-lg" />
-            </button>
-          </div>
+          <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+            Sales Terminal & Performance Dashboard
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Welcome back, <span className="font-bold text-slate-800 dark:text-slate-200">{displayName}</span> — monitoring daily sales performance & stock availability
+          </p>
         </div>
-      </GlassCard>
+
+        {/* Right Controls: Salesman Selector, Date & Refresh */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Salesman Filter for Admins */}
+          {isAdminOrSuper && (
+            <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-2xs">
+              <MdPerson className="text-slate-400 mr-2 text-base shrink-0" />
+              <select
+                value={selectedSalesman}
+                onChange={(e) => setSelectedSalesman(e.target.value)}
+                className="bg-transparent text-slate-800 dark:text-slate-200 text-xs font-bold outline-none cursor-pointer"
+              >
+                <option value="ALL" className="text-slate-800 dark:bg-slate-800">All Salesmen</option>
+                {salesmanList.map((s) => (
+                  <option key={s} value={s} className="text-slate-800 dark:bg-slate-800">
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Salesman Filter for Merged Salesmen */}
+          {isMergedSalesman && (
+            <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-2xs">
+              <MdPerson className="text-slate-400 mr-2 text-base shrink-0" />
+              <select
+                value={selectedSalesman}
+                onChange={(e) => setSelectedSalesman(e.target.value)}
+                className="bg-transparent text-slate-800 dark:text-slate-200 text-xs font-bold outline-none cursor-pointer"
+              >
+                <option value="TEAM_ALL" className="text-slate-800 dark:bg-slate-800">
+                  👥 Combined Team ({1 + partnerSalesmen.length})
+                </option>
+                <option value="MY_SALES" className="text-slate-800 dark:bg-slate-800">
+                  👤 My Sales ({userName})
+                </option>
+                {partnerSalesmen.map((pName) => (
+                  <option key={pName} value={pName} className="text-slate-800 dark:bg-slate-800">
+                    🤝 Partner: {pName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Date Pill */}
+          <div className="bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 px-3 py-1.5 rounded-xl font-bold font-mono text-xs text-slate-600 dark:text-slate-300 shadow-2xs flex items-center gap-1.5">
+            <MdCalendarToday className="text-emerald-600 text-xs" />
+            <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          </div>
+
+          {/* Refresh Button */}
+          <button
+            onClick={loadDashboardData}
+            title="Refresh Data"
+            className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-xl border border-slate-200/90 dark:border-slate-700 transition-all text-slate-600 dark:text-slate-300 shadow-2xs cursor-pointer"
+          >
+            <MdRefresh className="text-base" />
+          </button>
+        </div>
+      </div>
 
       {/* 2. Key Performance Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -293,25 +409,25 @@ const SalesmanDashboard: React.FC = () => {
           title="Today's Sales"
           value={`Rs. ${metrics.todaySales.toLocaleString(undefined, { minimumFractionDigits: 0 })}`}
           Icon={MdShoppingCart}
-          bgColor="bg-gradient-to-br from-red-500 to-rose-600"
+          bgColor="bg-gradient-to-br from-teal-600 to-emerald-700"
         />
         <StatCard
           title="This Month Sales"
           value={`Rs. ${metrics.monthSales.toLocaleString(undefined, { minimumFractionDigits: 0 })}`}
           Icon={MdReceiptLong}
-          bgColor="bg-gradient-to-br from-rose-600 to-red-800"
+          bgColor="bg-gradient-to-br from-emerald-600 to-teal-700"
         />
         <StatCard
           title="Pending Warehouse Dispatch"
           value={metrics.pendingDispatchCount}
           Icon={MdHourglassEmpty}
-          bgColor="bg-gradient-to-br from-red-600 to-rose-700"
+          bgColor="bg-gradient-to-br from-amber-500 to-orange-600"
         />
         <StatCard
           title="Dispatched Invoices"
           value={metrics.dispatchedCount}
           Icon={MdLocalShipping}
-          bgColor="bg-gradient-to-br from-red-800 to-slate-900"
+          bgColor="bg-gradient-to-br from-teal-600 to-cyan-700"
         />
       </div>
 
@@ -321,21 +437,21 @@ const SalesmanDashboard: React.FC = () => {
           title="New Sales Invoice"
           subtitle="Generate instant customer invoice"
           Icon={MdAddShoppingCart}
-          bgGradient="bg-gradient-to-br from-red-600 to-rose-700"
+          bgGradient="bg-gradient-to-br from-blue-600 to-indigo-700"
           onClick={() => navigate('/Sales/Invoice/Add')}
         />
         <ActionCard
           title="Invoice Receipts"
           subtitle="Record customer payments"
           Icon={MdReceiptLong}
-          bgGradient="bg-gradient-to-br from-rose-600 to-red-800"
+          bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800"
           onClick={() => navigate('/Sales/InvoiceReceipt/List')}
         />
         <ActionCard
           title="Customers Directory"
           subtitle="Look up customer accounts & balances"
           Icon={MdPeople}
-          bgGradient="bg-gradient-to-br from-red-700 to-rose-900"
+          bgGradient="bg-gradient-to-br from-purple-600 to-indigo-800"
           onClick={() => navigate('/Sales/Customers/List')}
         />
         <ActionCard
@@ -356,7 +472,7 @@ const SalesmanDashboard: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200/60 dark:border-slate-800/60">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <MdReceiptLong className="text-red-600 text-xl" />
+                  <MdReceiptLong className="text-blue-600 text-xl" />
                   Recent Sales Invoices
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
