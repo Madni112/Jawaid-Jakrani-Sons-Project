@@ -23,7 +23,9 @@ import {
   MdLocationOn,
   MdInventory2,
   MdDescription,
-  MdSyncAlt
+  MdSyncAlt,
+  MdKeyboardArrowUp,
+  MdKeyboardArrowDown
 } from 'react-icons/md';
 
 interface DeliveryChallanItem {
@@ -118,6 +120,17 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
   const [searchChallan, setSearchChallan] = useState('');
   const [searchStock, setSearchStock] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Dispatched' | 'Partially Dispatched'>('ALL');
+  const [showWarehouseDetails, setShowWarehouseDetails] = useState<boolean>(() => {
+    return localStorage.getItem('zac_warehouse_dashboard_show_details') === 'true';
+  });
+
+  const toggleWarehouseDetails = () => {
+    setShowWarehouseDetails(prev => {
+      const next = !prev;
+      localStorage.setItem('zac_warehouse_dashboard_show_details', String(next));
+      return next;
+    });
+  };
 
   // Load Warehouse Data
   const loadWarehouseData = async () => {
@@ -459,8 +472,32 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
         )}
       </div>
 
+      {/* ========================================================================= */}
+      {/* EXPANDABLE OPERATIONAL DETAILS TOGGLE BAR                                */}
+      {/* ========================================================================= */}
+      <div className="flex items-center justify-center pt-2 pb-1">
+        <button
+          onClick={toggleWarehouseDetails}
+          className="group flex items-center gap-3 px-5 py-2 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+              {showWarehouseDetails ? 'Hide Delivery Challans & Stock Overview' : 'Show Delivery Challans & Stock Overview'}
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono font-bold border border-slate-200/70 dark:border-slate-700/60">
+              2 Live Modules
+            </span>
+          </div>
+          <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition-transform duration-200 group-hover:bg-slate-200/70 dark:group-hover:bg-slate-700">
+            {showWarehouseDetails ? <MdKeyboardArrowUp size={16} /> : <MdKeyboardArrowDown size={16} />}
+          </div>
+        </button>
+      </div>
+
       {/* 4. Active Delivery Challan Queue & Location Stock Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {showWarehouseDetails && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
         
         {/* Left 2 Cols: Delivery Challans Queue */}
         <div className="lg:col-span-2 space-y-4">
@@ -669,6 +706,7 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
           </GlassCard>
         </div>
       </div>
+      )}
     </div>
   );
 };
