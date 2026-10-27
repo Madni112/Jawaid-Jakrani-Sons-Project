@@ -939,7 +939,7 @@ const SettingsPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs text-xs font-semibold">
             <span
-              className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+              className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs border border-slate-300 dark:border-slate-600"
               style={{ backgroundColor: appliedAccentColor }}
             />
             <span className="text-slate-700 dark:text-slate-200">
@@ -1019,8 +1019,11 @@ const SettingsPage: React.FC = () => {
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                   <div
-                    className="w-18 h-18 rounded-2xl flex items-center justify-center text-white text-2xl font-black shadow-md border-2 border-white dark:border-slate-800 shrink-0"
-                    style={{ backgroundColor: appliedAccentColor }}
+                    className="w-18 h-18 rounded-2xl flex items-center justify-center text-2xl font-black shadow-md border-2 border-slate-200 dark:border-slate-700 shrink-0"
+                    style={{
+                      backgroundColor: appliedAccentColor,
+                      color: getContrastTextColor(appliedAccentColor),
+                    }}
                   >
                     {displayCompanyName.substring(0, 2).toUpperCase()}
                   </div>
@@ -1033,8 +1036,18 @@ const SettingsPage: React.FC = () => {
                       <span
                         className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider"
                         style={{
-                          backgroundColor: `${appliedAccentColor}1A`,
-                          color: appliedAccentColor,
+                          backgroundColor:
+                            getContrastTextColor(appliedAccentColor) === '#0F172A' && !isDarkModeActive()
+                              ? '#F1F5F9'
+                              : `${appliedAccentColor}1A`,
+                          color:
+                            getContrastTextColor(appliedAccentColor) === '#0F172A' && !isDarkModeActive()
+                              ? '#0F172A'
+                              : appliedAccentColor,
+                          border:
+                            getContrastTextColor(appliedAccentColor) === '#0F172A' && !isDarkModeActive()
+                              ? '1px solid #CBD5E1'
+                              : undefined,
                         }}
                       >
                         {displayRole}
@@ -1101,7 +1114,7 @@ const SettingsPage: React.FC = () => {
                       Portal Instance
                     </span>
                     <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-1 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-primary" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-primary border border-slate-300 dark:border-slate-600 shrink-0" />
                       <span>{portalName}</span>
                     </div>
                   </div>
@@ -1171,8 +1184,11 @@ const SettingsPage: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2.5">
                     <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs transition-colors"
-                      style={{ backgroundColor: selectedAccentColor }}
+                      className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs transition-colors border border-slate-200/80 dark:border-slate-700/80"
+                      style={{
+                        backgroundColor: selectedAccentColor,
+                        color: getContrastTextColor(selectedAccentColor),
+                      }}
                     >
                       <LuSparkles size={18} />
                     </div>
@@ -1356,16 +1372,30 @@ const SettingsPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-700/50">
                     <button
                       type="button"
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition-colors"
-                      style={{ backgroundColor: selectedAccentColor }}
+                      className="px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors"
+                      style={{
+                        backgroundColor: selectedAccentColor,
+                        color: getContrastTextColor(selectedAccentColor),
+                        border: getContrastTextColor(selectedAccentColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
+                      }}
                     >
                       Primary Button
                     </button>
                     <span
                       className="px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
                       style={{
-                        backgroundColor: `${selectedAccentColor}1A`,
-                        color: selectedAccentColor,
+                        backgroundColor:
+                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
+                            ? '#F1F5F9'
+                            : `${selectedAccentColor}1A`,
+                        color:
+                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
+                            ? '#0F172A'
+                            : selectedAccentColor,
+                        border:
+                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
+                            ? '1px solid #CBD5E1'
+                            : undefined,
                       }}
                     >
                       Badge Highlight
@@ -1373,8 +1403,14 @@ const SettingsPage: React.FC = () => {
                     <div
                       className="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-colors"
                       style={{
-                        borderColor: `${selectedAccentColor}60`,
-                        color: selectedAccentColor,
+                        borderColor:
+                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
+                            ? '#94A3B8'
+                            : `${selectedAccentColor}60`,
+                        color:
+                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
+                            ? '#0F172A'
+                            : selectedAccentColor,
                       }}
                     >
                       Outline Element

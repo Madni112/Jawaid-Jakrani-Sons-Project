@@ -447,7 +447,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           {(sidebarOpen || isMobile) ? (
             <div className="flex items-center justify-between w-full">
               <NavLink className="flex items-center gap-3.5 group" to="/">
-                <div className="w-13 h-13 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-105 transition-all duration-200 border border-primary/40 relative overflow-hidden select-none shrink-0">
+                <div className="w-13 h-13 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-105 transition-all duration-200 border border-slate-300/80 dark:border-slate-700/80 relative overflow-hidden select-none shrink-0">
                   <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20 pointer-events-none" />
                   <span className="relative z-10 font-cinzel font-black tracking-widest text-[16px] text-white dark:text-[#111827] leading-none pl-0.5">
                     ZAC
@@ -483,7 +483,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               }}
               title="Open Sidebar"
             >
-              <div className="w-13 h-13 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 hover:scale-105 transition-all duration-200 border border-primary/40 relative overflow-hidden select-none">
+              <div className="w-13 h-13 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 hover:scale-105 transition-all duration-200 border border-slate-300/80 dark:border-slate-700/80 relative overflow-hidden select-none">
                 <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20 pointer-events-none" />
                 <span className="relative z-10 font-cinzel font-black tracking-widest text-[16px] text-white dark:text-[#111827] leading-none pl-0.5">
                   ZAC

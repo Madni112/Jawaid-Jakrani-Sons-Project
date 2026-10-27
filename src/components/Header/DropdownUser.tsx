@@ -8,6 +8,8 @@ import { supabase } from '../../Context/supabaseClient';
 import {
   applyAccentColor,
   getSavedAccentColor,
+  getContrastTextColor,
+  isDarkModeActive,
 } from '../../constant/themeConfig';
 
 const DropdownUser = () => {
@@ -51,6 +53,8 @@ const DropdownUser = () => {
   const fallbackCompany = isAlm ? 'AL MUHAMMADI' : 'Zoaib Ali & Company';
   const displayCompanyName = authBusinessName || fallbackCompany;
   const displayName = profile?.user_metadata?.full_name || profile?.user_metadata?.name || displayCompanyName;
+  const isLightAccent = getContrastTextColor(accentColor) === '#0F172A';
+  const roleTextColor = isLightAccent && !isDarkModeActive() ? '#0F172A' : accentColor;
 
   return (
     <ClickOutside onClick={() => setDropdownOpen(false)} className="relative z-9999 shrink-0">
@@ -65,7 +69,7 @@ const DropdownUser = () => {
           </span>
           <span
             className="block text-[11px] font-semibold"
-            style={{ color: accentColor }}
+            style={{ color: roleTextColor }}
           >
             {displayRole}
           </span>
@@ -80,8 +84,11 @@ const DropdownUser = () => {
           />
         ) : (
           <div
-            className="w-8.5 h-8.5 rounded-full text-white flex items-center justify-center font-bold text-sm shadow-sm transition-colors duration-200 shrink-0"
-            style={{ backgroundColor: accentColor }}
+            className="w-8.5 h-8.5 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-colors duration-200 shrink-0 border border-slate-200/80 dark:border-slate-700/80"
+            style={{
+              backgroundColor: accentColor,
+              color: getContrastTextColor(accentColor),
+            }}
           >
             <MdPerson size={18} />
           </div>
@@ -112,7 +119,7 @@ const DropdownUser = () => {
         >
           {/* Client Company Name & Details */}
           <div className="px-5 py-3.5 bg-gray-50/90 dark:bg-meta-4/60 border-b border-stroke dark:border-strokedark">
-            <div className="flex items-center gap-1.5 mb-1" style={{ color: accentColor }}>
+            <div className="flex items-center gap-1.5 mb-1" style={{ color: roleTextColor }}>
               <LuBuilding2 size={15} />
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 Company / Organization
@@ -131,8 +138,9 @@ const DropdownUser = () => {
               <span
                 className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
                 style={{
-                  backgroundColor: `${accentColor}1A`,
-                  color: accentColor,
+                  backgroundColor: isLightAccent && !isDarkModeActive() ? '#F1F5F9' : `${accentColor}1A`,
+                  color: roleTextColor,
+                  border: isLightAccent && !isDarkModeActive() ? '1px solid #CBD5E1' : undefined,
                 }}
               >
                 {displayRole}

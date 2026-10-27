@@ -91,6 +91,31 @@ export function getContrastTextColor(hexColor?: string): '#FFFFFF' | '#0F172A' {
   }
 }
 
+/**
+ * Returns a contrast-safe accent color for text and icons.
+ * In Light Mode: bright/white accents resolve to #0F172A so they are never invisible.
+ * In Dark Mode: pitch-dark accents resolve to #F8FAFC so they are never invisible.
+ */
+export function getSafeAccentTextColor(hexColor?: string, isDarkMode?: boolean): string {
+  if (!hexColor) return '#059669';
+  const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
+  const contrast = getContrastTextColor(hexColor);
+  if (!inDark && contrast === '#0F172A') {
+    return '#0F172A';
+  }
+  if (inDark) {
+    const hex = hexColor.replace('#', '').trim();
+    if (hex.length >= 6) {
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      if (lum < 0.25) return '#F8FAFC';
+    }
+  }
+  return hexColor;
+}
+
 export function applyAccentColor(hexColor: string) {
   if (!hexColor) return;
   try {
@@ -115,6 +140,10 @@ export function applyAccentColor(hexColor: string) {
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     const isDark = luminance < 0.55;
     const isLightAccent = luminance > 0.65;
+    const isDarkAccent = luminance < 0.25;
+
+    const safeLightText = isLightAccent ? '#0F172A' : hexColor;
+    const safeDarkText = isDarkAccent ? '#F8FAFC' : hexColor;
 
     // Light version of the color (for dark colors): clean lighter tone of the same color
     const lightR = Math.min(255, Math.round(r + (255 - r) * 0.38));
@@ -161,16 +190,23 @@ export function applyAccentColor(hexColor: string) {
       .bg-teal-800,
       .bg-primary {
         background-color: ${hexColor} !important;
-        ${isLightAccent ? 'color: #0F172A !important;' : ''}
+        ${isLightAccent ? 'color: #0F172A !important;' : 'color: #FFFFFF !important;'}
       }
 
       ${isLightAccent ? `
       .bg-primary svg,
       .bg-primary span,
+      .bg-primary p,
+      .bg-primary div,
       .bg-primary .text-white,
       .text-white.bg-primary {
         color: #0F172A !important;
-        stroke: #0F172A;
+        stroke: #0F172A !important;
+      }
+
+      html:not(.dark) .bg-primary {
+        border-color: #CBD5E1 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
       }
       ` : ''}
 
@@ -221,26 +257,45 @@ export function applyAccentColor(hexColor: string) {
         opacity: 0.75 !important;
       }
 
-      /* Text Colors */
-      .text-emerald-600,
-      .text-emerald-500,
-      .text-emerald-700,
-      .dark .text-emerald-400,
-      .text-teal-600,
-      .text-teal-500,
-      .text-teal-700,
-      .dark .text-teal-400,
-      .text-primary {
-        color: ${hexColor} !important;
+      /* Text Colors: Light Mode Contrast-Guarded */
+      html:not(.dark) .text-emerald-600,
+      html:not(.dark) .text-emerald-500,
+      html:not(.dark) .text-emerald-700,
+      html:not(.dark) .text-teal-600,
+      html:not(.dark) .text-teal-500,
+      html:not(.dark) .text-teal-700,
+      html:not(.dark) .text-primary {
+        color: ${safeLightText} !important;
+      }
+
+      /* Text Colors: Dark Mode Contrast-Guarded */
+      html.dark .text-emerald-600,
+      html.dark .text-emerald-500,
+      html.dark .text-emerald-400,
+      html.dark .text-emerald-700,
+      html.dark .text-teal-600,
+      html.dark .text-teal-500,
+      html.dark .text-teal-400,
+      html.dark .text-teal-700,
+      html.dark .text-primary {
+        color: ${safeDarkText} !important;
       }
 
       /* Hover Text Colors */
-      .hover\\:text-emerald-600:hover,
-      .hover\\:text-emerald-700:hover,
-      .hover\\:text-teal-600:hover,
-      .hover\\:text-teal-700:hover,
-      .hover\\:text-primary:hover {
-        color: ${hexColor} !important;
+      html:not(.dark) .hover\\:text-emerald-600:hover,
+      html:not(.dark) .hover\\:text-emerald-700:hover,
+      html:not(.dark) .hover\\:text-teal-600:hover,
+      html:not(.dark) .hover\\:text-teal-700:hover,
+      html:not(.dark) .hover\\:text-primary:hover {
+        color: ${safeLightText} !important;
+      }
+
+      html.dark .hover\\:text-emerald-600:hover,
+      html.dark .hover\\:text-emerald-700:hover,
+      html.dark .hover\\:text-teal-600:hover,
+      html.dark .hover\\:text-teal-700:hover,
+      html.dark .hover\\:text-primary:hover {
+        color: ${safeDarkText} !important;
       }
 
       /* Borders */
