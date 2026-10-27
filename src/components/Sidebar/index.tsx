@@ -427,12 +427,14 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
       <aside
         ref={sidebar}
-        className={`fixed left-0 top-0 z-99999 flex flex-col bg-white duration-300 ease-in-out dark:bg-[#111827] shadow-xl ${
+        className={`flex flex-col bg-white duration-300 ease-in-out dark:bg-[#111827] shadow-xl ${
           isMobile
-            ? 'h-screen block'
-            : layoutMode === 'floating'
-            ? 'min-[751px]:sticky min-[751px]:top-3 min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl overflow-hidden'
-            : 'min-[751px]:sticky min-[751px]:top-0 min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'
+            ? 'fixed left-0 top-0 z-99999 h-screen block'
+            : `min-[751px]:relative min-[751px]:shrink-0 min-[751px]:z-30 ${
+                layoutMode === 'floating'
+                  ? 'min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl overflow-hidden'
+                  : 'min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'
+              }`
         } ${
           sidebarOpen
             ? `w-72.5 translate-x-0 visible ${layoutMode === 'floating' && !isMobile ? '' : 'border-r border-slate-200/80 dark:border-slate-800/80'}`

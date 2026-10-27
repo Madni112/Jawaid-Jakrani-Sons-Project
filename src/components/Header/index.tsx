@@ -363,7 +363,7 @@ const Header = (props: {
 
   return (
     <>
-      <header className={`${navbarMode === 'normal' ? 'relative' : 'sticky top-0'} z-999 flex w-full backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 border-b border-slate-200/80 dark:border-slate-800/80 shadow-2xs transition-all duration-200`}>
+      <header className="shrink-0 z-40 flex w-full backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 border-b border-slate-200/80 dark:border-slate-800/80 shadow-2xs transition-all duration-200">
         <div className="flex flex-grow items-center justify-between px-3.5 py-2.5 sm:px-6 2xl:px-8 gap-3">
           
           {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}

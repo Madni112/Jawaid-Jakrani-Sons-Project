@@ -42,8 +42,8 @@ export const DEFAULT_THEME_COLOR = '#059669';
 export type SidebarLayoutMode = 'floating' | 'classic';
 
 export function getSidebarLayoutMode(): SidebarLayoutMode {
-  if (typeof window === 'undefined') return 'classic';
-  return (localStorage.getItem('zoaib_ali_sidebar_layout_mode') as SidebarLayoutMode) || 'classic';
+  if (typeof window === 'undefined') return 'floating';
+  return (localStorage.getItem('zoaib_ali_sidebar_layout_mode') as SidebarLayoutMode) || 'floating';
 }
 
 export function setSidebarLayoutMode(mode: SidebarLayoutMode) {
