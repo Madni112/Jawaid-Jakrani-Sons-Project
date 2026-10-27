@@ -57,6 +57,46 @@ const CARD_THEMES: Record<string, CardTheme> = {
     indicatorBg: 'bg-rose-500',
     iconBgClass: 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/70 dark:border-rose-800/60',
   },
+  'new sales invoice': {
+    accentHex: '#059669',
+    indicatorBg: 'bg-emerald-500',
+    iconBgClass: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-800/60',
+  },
+  'invoice receipts': {
+    accentHex: '#2563EB',
+    indicatorBg: 'bg-blue-500',
+    iconBgClass: 'bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200/70 dark:border-blue-800/60',
+  },
+  'customers directory': {
+    accentHex: '#8B5CF6',
+    indicatorBg: 'bg-purple-500',
+    iconBgClass: 'bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400 border border-purple-200/70 dark:border-purple-800/60',
+  },
+  'live stock report': {
+    accentHex: '#D97706',
+    indicatorBg: 'bg-amber-500',
+    iconBgClass: 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/60',
+  },
+  'dispatch challans': {
+    accentHex: '#E11D48',
+    indicatorBg: 'bg-rose-500',
+    iconBgClass: 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/70 dark:border-rose-800/60',
+  },
+  'inward challan': {
+    accentHex: '#4F46E5',
+    indicatorBg: 'bg-indigo-500',
+    iconBgClass: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200/70 dark:border-indigo-800/60',
+  },
+  'shop receiving': {
+    accentHex: '#0891B2',
+    indicatorBg: 'bg-cyan-500',
+    iconBgClass: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/60 dark:text-cyan-400 border border-cyan-200/70 dark:border-cyan-800/60',
+  },
+  'warehouse inventory': {
+    accentHex: '#0D9488',
+    indicatorBg: 'bg-teal-500',
+    iconBgClass: 'bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400 border border-teal-200/70 dark:border-teal-800/60',
+  },
 };
 
 const ActionCard: React.FC<ActionCardProps> = ({ title, subtitle, Icon, onClick }) => {

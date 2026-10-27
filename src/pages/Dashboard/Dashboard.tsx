@@ -39,6 +39,7 @@ import StatCard from '../../ui/StatCard';
 import ActionCard from '../../ui/ActionCard';
 import { QtyBadge } from '../../utils/QtyBadge';
 import { useAuth } from '../../Context/Auth';
+import { getSavedSidebarColor, getContrastTextColor } from '../../constant/themeConfig';
 import SalesmanDashboard from './SalesmanDashboard';
 import WarehouseDashboard from './WarehouseDashboard';
 
@@ -46,6 +47,26 @@ const AdminRoleSwitcher: React.FC<{
   activeView: 'executive' | 'salesman' | 'warehouse';
   onChangeView: (v: 'executive' | 'salesman' | 'warehouse') => void;
 }> = ({ activeView, onChangeView }) => {
+  const [sidebarColor, setSidebarColor] = useState<string>(getSavedSidebarColor());
+
+  useEffect(() => {
+    const handleSidebarColorChange = () => {
+      setSidebarColor(getSavedSidebarColor());
+    };
+    window.addEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
+    return () => window.removeEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
+  }, []);
+
+  const getTabStyle = (tab: 'executive' | 'salesman' | 'warehouse') => {
+    if (activeView === tab) {
+      return {
+        backgroundColor: sidebarColor,
+        color: getContrastTextColor(sidebarColor),
+      };
+    }
+    return undefined;
+  };
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
       <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 px-2">
@@ -55,28 +76,31 @@ const AdminRoleSwitcher: React.FC<{
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           onClick={() => onChangeView('executive')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeView === 'executive'
-              ? 'bg-emerald-600 text-white shadow-sm scale-102'
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeView === 'executive'
+              ? 'shadow-2xs scale-102'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
             }`}
+          style={getTabStyle('executive')}
         >
           👑 Executive Overview
         </button>
         <button
           onClick={() => onChangeView('salesman')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeView === 'salesman'
-              ? 'bg-emerald-600 text-white shadow-sm scale-102'
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeView === 'salesman'
+              ? 'shadow-2xs scale-102'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
             }`}
+          style={getTabStyle('salesman')}
         >
           🛒 Salesman View
         </button>
         <button
           onClick={() => onChangeView('warehouse')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeView === 'warehouse'
-              ? 'bg-teal-700 text-white shadow-sm scale-102'
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeView === 'warehouse'
+              ? 'shadow-2xs scale-102'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
             }`}
+          style={getTabStyle('warehouse')}
         >
           📦 Warehouse
         </button>

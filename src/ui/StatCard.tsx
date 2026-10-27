@@ -51,6 +51,61 @@ const STAT_THEMES: Record<string, StatTheme> = {
     iconBgClass: 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/60',
     borderHover: 'hover:border-amber-300 dark:hover:border-amber-700/60',
   },
+  "today's sales": {
+    indicatorBg: 'bg-emerald-500',
+    iconBgClass: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-800/60',
+    borderHover: 'hover:border-emerald-300 dark:hover:border-emerald-700/60',
+  },
+  'this month sales': {
+    indicatorBg: 'bg-purple-500',
+    iconBgClass: 'bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400 border border-purple-200/70 dark:border-purple-800/60',
+    borderHover: 'hover:border-purple-300 dark:hover:border-purple-700/60',
+  },
+  'pending warehouse dispatch': {
+    indicatorBg: 'bg-amber-500',
+    iconBgClass: 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/60',
+    borderHover: 'hover:border-amber-300 dark:hover:border-amber-700/60',
+  },
+  'pending dispatches': {
+    indicatorBg: 'bg-rose-500',
+    iconBgClass: 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/70 dark:border-rose-800/60',
+    borderHover: 'hover:border-rose-300 dark:hover:border-rose-700/60',
+  },
+  'dispatched invoices': {
+    indicatorBg: 'bg-teal-500',
+    iconBgClass: 'bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400 border border-teal-200/70 dark:border-teal-800/60',
+    borderHover: 'hover:border-teal-300 dark:hover:border-teal-700/60',
+  },
+  'dispatched challans': {
+    indicatorBg: 'bg-teal-500',
+    iconBgClass: 'bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400 border border-teal-200/70 dark:border-teal-800/60',
+    borderHover: 'hover:border-teal-300 dark:hover:border-teal-700/60',
+  },
+  'counter dispatches': {
+    indicatorBg: 'bg-teal-500',
+    iconBgClass: 'bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400 border border-teal-200/70 dark:border-teal-800/60',
+    borderHover: 'hover:border-teal-300 dark:hover:border-teal-700/60',
+  },
+  'a-39 total storage stock': {
+    indicatorBg: 'bg-amber-500',
+    iconBgClass: 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/60',
+    borderHover: 'hover:border-amber-300 dark:hover:border-amber-700/60',
+  },
+  'shop floor stock units': {
+    indicatorBg: 'bg-blue-500',
+    iconBgClass: 'bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200/70 dark:border-blue-800/60',
+    borderHover: 'hover:border-blue-300 dark:hover:border-blue-700/60',
+  },
+  'transfers out to shop': {
+    indicatorBg: 'bg-indigo-500',
+    iconBgClass: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200/70 dark:border-indigo-800/60',
+    borderHover: 'hover:border-indigo-300 dark:hover:border-indigo-700/60',
+  },
+  'transfers in from a-39': {
+    indicatorBg: 'bg-indigo-500',
+    iconBgClass: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200/70 dark:border-indigo-800/60',
+    borderHover: 'hover:border-indigo-300 dark:hover:border-indigo-700/60',
+  },
 };
 
 const StatCard: React.FC<StatCardProps> = ({
