@@ -5,7 +5,7 @@ import { AiOutlineUp, AiOutlineDown, AiOutlineRight, AiOutlineArrowLeft } from '
 import { LuLogOut } from 'react-icons/lu';
 import { useModal } from '../../Context/Modal';
 import { useAuth } from '../../Context/Auth';
-import { PRESET_THEME_COLORS, applySidebarColor, getSavedSidebarColor, getSafeSidebarColor, SidebarLayoutMode, getSidebarLayoutMode } from '../../constant/themeConfig';
+import { PRESET_THEME_COLORS, applySidebarColor, getSavedSidebarColor, getSafeSidebarColor, SidebarLayoutMode, getSidebarLayoutMode, getSavedAccentColor, getContrastTextColor } from '../../constant/themeConfig';
 import LogoDark from '../../images/logo/logo-dark.png';
 import LogoLight from '../../images/logo/logo-light.png';
 import IconDark from '../../images/logo/icon-dark.png';
