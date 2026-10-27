@@ -125,6 +125,21 @@ const StatCard: React.FC<StatCardProps> = ({
         })
       : value;
 
+  const strVal = String(formattedValue || '0');
+  const prefixMatch = strVal.match(/^(Rs\.\s*|PKR\s*|\$\s*)(.*)$/i);
+  const currencyPrefix = prefixMatch ? prefixMatch[1].trim() : null;
+  const mainNumber = prefixMatch ? prefixMatch[2].trim() : strVal;
+
+  const getFontSize = (len: number) => {
+    if (len > 15) return 'text-sm sm:text-base';
+    if (len > 12) return 'text-base sm:text-lg';
+    if (len > 9) return 'text-lg sm:text-xl';
+    if (len > 7) return 'text-xl sm:text-2xl';
+    return 'text-2xl sm:text-[26px]';
+  };
+
+  const fontSizeClass = getFontSize(mainNumber.length);
+
   const isNegative = typeof thisMonthValue === 'number' && thisMonthValue < 0;
   const absThisMonth = typeof thisMonthValue === 'number' ? Math.abs(thisMonthValue) : thisMonthValue;
   const formattedThisMonth =
@@ -154,30 +169,40 @@ const StatCard: React.FC<StatCardProps> = ({
         className={`absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full ${theme.indicatorBg} shadow-xs transition-all duration-200 group-hover:w-2`}
       />
 
-      <div className="flex items-center justify-between gap-3 pl-2.5">
-        <div className="flex flex-col min-w-0">
+      <div className="flex items-start justify-between gap-2.5 pl-2.5">
+        <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 tracking-wide uppercase truncate">
               {title}
             </span>
             {onClick && (
               <LuArrowUpRight
                 size={13}
-                className="text-slate-400 opacity-0 -translate-x-1 translate-y-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0 transition-all duration-200"
+                className="text-slate-400 opacity-0 -translate-x-1 translate-y-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0 transition-all duration-200 shrink-0"
               />
             )}
           </div>
-          <span className="text-2xl sm:text-[26px] font-black text-slate-900 dark:text-white mt-1.5 tracking-tight truncate">
-            {formattedValue}
-          </span>
+          <div
+            className="flex items-baseline mt-1.5 flex-nowrap overflow-visible"
+            title={String(formattedValue)}
+          >
+            {currencyPrefix && (
+              <span className="text-xs sm:text-sm font-bold text-slate-400 dark:text-slate-500 mr-1 shrink-0 select-none">
+                {currencyPrefix}
+              </span>
+            )}
+            <span className={`${fontSizeClass} font-black text-slate-900 dark:text-white tracking-tight leading-none whitespace-nowrap`}>
+              {mainNumber}
+            </span>
+          </div>
         </div>
 
         {/* Translucent Jewel Icon Bubble */}
         <div
-          className={`flex items-center justify-center w-11 h-11 rounded-xl shadow-2xs ${theme.iconBgClass} group-hover:scale-110 transition-transform duration-200 shrink-0`}
+          className={`flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl shadow-2xs ${theme.iconBgClass} group-hover:scale-105 transition-transform duration-200 shrink-0 mt-0.5`}
           title={onClick ? 'Click to view full mathematical breakdown' : undefined}
         >
-          <Icon size={22} />
+          <Icon size={20} className="sm:text-[22px]" />
         </div>
       </div>
 

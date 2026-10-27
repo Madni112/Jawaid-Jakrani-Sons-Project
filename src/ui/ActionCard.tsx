@@ -128,7 +128,10 @@ const ActionCard: React.FC<ActionCardProps> = ({ title, subtitle, Icon, onClick 
             className="text-slate-400 opacity-0 -translate-x-1 translate-y-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0 transition-all duration-200"
           />
         </div>
-        <span className="text-[11.5px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[130px] sm:max-w-[170px]">
+        <span 
+          className="text-[11.5px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-full"
+          title={subtitle}
+        >
           {subtitle}
         </span>
       </div>
