@@ -330,18 +330,38 @@ const SettingsPage: React.FC = () => {
     setSidebarLayoutMode(mode);
     toast.success(
       mode === 'floating'
-        ? '🚀 Modern Floating Workspace (Sidebar & Navbar) activated!'
-        : '🏛️ Classic Edge-to-Edge Workspace (Sidebar & Navbar) activated!',
+        ? '🚀 Floating Modern Sidebar activated!'
+        : '🏛️ Classic Edge Sidebar activated!',
       { id: 'sidebar-layout-toast' }
     );
   };
 
+  const handleSetNavbarLayout = (mode: NavbarLayoutMode) => {
+    setNavbarLayout(mode);
+    setNavbarLayoutMode(mode);
+    toast.success(
+      mode === 'floating'
+        ? '🚀 Floating Modern Navbar activated!'
+        : '🏛️ Classic Full-Width Navbar activated!',
+      { id: 'navbar-layout-toast' }
+    );
+  };
+
+  const handleApplyPreset = (mode: 'floating' | 'classic') => {
+    setSidebarLayout(mode);
+    setSidebarLayoutMode(mode);
+    setNavbarLayout(mode);
+    setNavbarLayoutMode(mode);
+    toast.success(
+      mode === 'floating'
+        ? '🚀 Full Floating Workspace (Sidebar & Navbar) activated!'
+        : '🏛️ Full Classic Edge Workspace (Sidebar & Navbar) activated!',
+      { id: 'preset-layout-toast' }
+    );
+  };
+
   const handleResetLayoutToClassic = () => {
-    setSidebarLayout('classic');
-    setSidebarLayoutMode('classic');
-    toast.success('↩️ Restored original Classic Edge-to-Edge layout!', {
-      id: 'reset-layout-toast',
-    });
+    handleApplyPreset('classic');
   };
 
   // System Master Permissions State
@@ -1696,28 +1716,67 @@ const SettingsPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="max-w-2xl">
-                  {/* Switch 1: Sidebar Style */}
+                {/* Quick 1-Click Presets */}
+                <div className="mb-5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                      Quick Workspace Presets
+                    </span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-400">
+                      Switch both Sidebar & Navbar together with 1 click:
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('floating')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        sidebarLayout === 'floating' && navbarLayout === 'floating'
+                          ? 'bg-primary text-white shadow-xs'
+                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary'
+                      }`}
+                    >
+                      <span>🚀 Full Floating</span>
+                      {sidebarLayout === 'floating' && navbarLayout === 'floating' && <LuCheck size={12} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset('classic')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        sidebarLayout === 'classic' && navbarLayout === 'classic'
+                          ? 'bg-primary text-white shadow-xs'
+                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary'
+                      }`}
+                    >
+                      <span>🏛️ Full Classic</span>
+                      {sidebarLayout === 'classic' && navbarLayout === 'classic' && <LuCheck size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Granular Individual Controls */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Custom 1: Sidebar Style */}
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <span>Workspace Layout Style</span>
+                          <span>Left Sidebar Style</span>
                         </div>
                         <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
-                          Switch between modern floating cards and classic edge-to-edge layout.
+                          Customizes the left navigation bar independently.
                         </p>
                       </div>
                       <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                        {sidebarLayout === 'floating' ? 'Floating Modern' : 'Classic Edge'}
+                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => handleSetSidebarLayout('floating')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[92px] ${
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
                           sidebarLayout === 'floating'
                             ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
@@ -1725,21 +1784,21 @@ const SettingsPage: React.FC = () => {
                       >
                         <div className="flex items-center justify-between w-full">
                           <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🚀 Floating Modern
+                            🚀 Floating Card
                           </span>
                           {sidebarLayout === 'floating' && (
                             <LuCheck className="text-primary text-sm stroke-[3]" />
                           )}
                         </div>
                         <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Floating rounded sidebar & navbar cards with soft elevation.
+                          Rounded detached card with ambient elevation.
                         </p>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleSetSidebarLayout('classic')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[92px] ${
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
                           sidebarLayout === 'classic'
                             ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
@@ -1754,13 +1813,75 @@ const SettingsPage: React.FC = () => {
                           )}
                         </div>
                         <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Original edge-to-edge classic sidebar & full-width navbar.
+                          Original edge-to-edge flush sidebar.
                         </p>
                       </button>
                     </div>
                   </div>
 
+                  {/* Custom 2: Top Navbar Style */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                          <span>Top Navbar Style</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
+                          Customizes the top header bar independently.
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {navbarLayout === 'floating' ? 'Floating' : 'Classic'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSetNavbarLayout('floating')}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
+                          navbarLayout === 'floating'
+                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            🚀 Floating Card
+                          </span>
+                          {navbarLayout === 'floating' && (
+                            <LuCheck className="text-primary text-sm stroke-[3]" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
+                          Rounded floating pill card with elevation.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetNavbarLayout('classic')}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
+                          navbarLayout === 'classic'
+                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            🏛️ Classic Full
+                          </span>
+                          {navbarLayout === 'classic' && (
+                            <LuCheck className="text-primary text-sm stroke-[3]" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
+                          Original edge-to-edge full width navbar.
+                        </p>
+                      </button>
+                    </div>
                   </div>
+                </div>
               </div>
             </div>
           )}

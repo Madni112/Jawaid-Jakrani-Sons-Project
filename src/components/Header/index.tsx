@@ -31,7 +31,7 @@ import {
   setUserAudioEnabled,
   triggerFeedbackSound,
 } from '../../utils/audioFeedback';
-import { SidebarLayoutMode, getSidebarLayoutMode } from '../../constant/themeConfig';
+import { NavbarLayoutMode, getNavbarLayoutMode } from '../../constant/themeConfig';
 
 export interface GlobalSearchItem {
   id: string;
@@ -120,18 +120,18 @@ const Header = (props: {
     }
   };
 
-  // 3. Layout Mode (Floating Modern vs Classic Edge)
-  const [layoutMode, setLayoutMode] = useState<SidebarLayoutMode>(getSidebarLayoutMode());
+  // 3. Navbar Layout Mode (Floating Modern vs Classic Edge)
+  const [navbarMode, setNavbarMode] = useState<NavbarLayoutMode>(getNavbarLayoutMode());
 
   useEffect(() => {
-    const updateLayoutMode = () => {
-      setLayoutMode(getSidebarLayoutMode());
+    const updateNavbarMode = () => {
+      setNavbarMode(getNavbarLayoutMode());
     };
-    window.addEventListener('zoaib_ali_sidebar_layout_changed', updateLayoutMode);
-    window.addEventListener('storage', updateLayoutMode);
+    window.addEventListener('zoaib_ali_navbar_layout_changed', updateNavbarMode);
+    window.addEventListener('storage', updateNavbarMode);
     return () => {
-      window.removeEventListener('zoaib_ali_sidebar_layout_changed', updateLayoutMode);
-      window.removeEventListener('storage', updateLayoutMode);
+      window.removeEventListener('zoaib_ali_navbar_layout_changed', updateNavbarMode);
+      window.removeEventListener('storage', updateNavbarMode);
     };
   }, []);
 
@@ -365,7 +365,7 @@ const Header = (props: {
     <>
       <header
         className={`shrink-0 z-40 flex duration-200 ease-in-out transition-all ${
-          layoutMode === 'classic'
+          navbarMode === 'classic'
             ? 'w-full rounded-none border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 shadow-2xs'
             : 'w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#111827]/95 shadow-xs min-[751px]:shadow-md'
         }`}
