@@ -94,6 +94,7 @@ const SidebarItem = ({
   menuUniqueKey,
   getTenantPath,
   sidebarColor,
+  layoutMode,
 }: any) => {
   const itemRef = useRef<HTMLDivElement>(null);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -166,7 +167,9 @@ const SidebarItem = ({
   const handleMouseEnter = () => {
     if (!sidebarOpen && !isMobile && itemRef.current) {
       const rect = itemRef.current.getBoundingClientRect();
-      setFlyoutTop(rect.top);
+      const estimatedHeight = Math.min((item.children?.length || 4) * 36 + 50, 420);
+      const maxTop = Math.max(12, window.innerHeight - estimatedHeight - 16);
+      setFlyoutTop(Math.min(rect.top, maxTop));
       setFlyoutLeft(rect.right + 8);
       setShowFlyout(true);
     }
@@ -275,6 +278,7 @@ const SidebarItem = ({
               animation: 'sidebarFlyoutFadeIn 0.18s ease-out forwards'
             }}
           >
+            <div className="absolute top-0 -left-3 w-3 h-full bg-transparent" />
             <style>{`
               @keyframes sidebarFlyoutFadeIn {
                 from { opacity: 0; transform: translateX(-6px); }
@@ -308,8 +312,24 @@ const SidebarItem = ({
   const singleDestination = (item.path && getTenantPath ? getTenantPath(item.path) : item.path) || '#';
   const isDirectActive = item.path && (pathname === singleDestination || pathname === item.path);
 
+  const handleSingleMouseEnter = () => {
+    if (!sidebarOpen && !isMobile && itemRef.current) {
+      const rect = itemRef.current.getBoundingClientRect();
+      setFlyoutTop(rect.top + (rect.height / 2) - 15);
+      setFlyoutLeft(rect.right + 8);
+      setShowFlyout(true);
+    }
+  };
+
   return (
-    <li onClick={handleLinkClick} className="w-full" title={!shouldShowLabels ? item.label : undefined}>
+    <li
+      ref={itemRef}
+      onClick={handleLinkClick}
+      className="w-full relative"
+      title={!shouldShowLabels ? item.label : undefined}
+      onMouseEnter={handleSingleMouseEnter}
+      onMouseLeave={() => !sidebarOpen && !isMobile && setShowFlyout(false)}
+    >
       <NavLink
         to={singleDestination}
         className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out hover:bg-slate-100 dark:hover:bg-slate-800/60 ${
@@ -336,6 +356,20 @@ const SidebarItem = ({
           </span>
         )}
       </NavLink>
+
+      {!sidebarOpen && showFlyout && !isMobile && (
+        <div
+          className="fixed z-99999 px-3 py-1.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-[#1E293B]/95 text-xs font-bold shadow-2xl backdrop-blur-md pointer-events-none whitespace-nowrap"
+          style={{
+            top: `${flyoutTop}px`,
+            left: `${flyoutLeft}px`,
+            color: sidebarColor,
+            animation: 'sidebarFlyoutFadeIn 0.18s ease-out forwards'
+          }}
+        >
+          {item.label}
+        </div>
+      )}
     </li>
   );
 };
@@ -434,13 +468,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             ? 'fixed left-0 top-0 z-99999 h-screen block'
             : `min-[751px]:relative min-[751px]:shrink-0 min-[751px]:z-30 ${
                 layoutMode === 'floating'
-                  ? 'min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl overflow-hidden'
+                  ? `min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl ${sidebarOpen ? 'overflow-hidden' : 'min-[751px]:overflow-visible'}`
                   : 'min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'
               }`
         } ${
           sidebarOpen
             ? `w-72.5 translate-x-0 visible ${layoutMode === 'classic' ? 'border-r border-slate-200/80 dark:border-slate-800/80' : ''}`
-            : `w-0 -translate-x-full min-[751px]:w-18 min-[751px]:translate-x-0 max-[750px]:invisible ${layoutMode === 'classic' ? 'min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80' : ''}`
+            : `w-0 -translate-x-full min-[751px]:w-18 ${layoutMode === 'floating' ? 'min-[751px]:transform-none' : 'min-[751px]:translate-x-0'} max-[750px]:invisible ${layoutMode === 'classic' ? 'min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80' : ''}`
         }`}
       >
 
@@ -496,7 +530,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
         </div>
 
         {/* Navigation Section */}
-        <div className="no-scrollbar flex flex-col overflow-y-auto overflow-x-hidden flex-1">
+        <div className={`no-scrollbar flex flex-col flex-1 ${sidebarOpen || layoutMode === 'classic' ? 'overflow-y-auto overflow-x-hidden' : 'min-[751px]:overflow-visible'}`}>
           <nav className={`py-4 duration-300 ${sidebarOpen ? 'px-3' : 'px-0 min-[751px]:px-2'}`}>
             <ul className="mb-6 flex flex-col gap-1.5 w-full">
               {(Array.isArray(roleRoutes) ? roleRoutes : [])
@@ -514,6 +548,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                     menuUniqueKey={`root-${index}`}
                     getTenantPath={getTenantPath}
                     sidebarColor={currentSidebarColor}
+                    layoutMode={layoutMode}
                   />
                 ))
               }
