@@ -11,6 +11,7 @@ import LogoLight from '../../images/logo/logo-light.png';
 import IconDark from '../../images/logo/icon-dark.png';
 import IconLight from '../../images/logo/icon-light.png';
 import { Weight } from 'lucide-react';
+import { getBrandConfig } from '../../utils/brand';
 
 interface SidebarProps {
   sidebarOpen: boolean;
@@ -364,6 +365,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
   // Master tracking ID to determine which global branch header is clicked open
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const brand = getBrandConfig();
 
   // Dedicated sidebar font/icon color state with contrast protection
   const [currentSidebarColor, setCurrentSidebarColor] = useState(getSavedSidebarColor());
@@ -450,16 +452,16 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 <div className="w-13 h-13 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-105 transition-all duration-200 border border-slate-300/80 dark:border-slate-700/80 relative overflow-hidden select-none shrink-0">
                   <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20 pointer-events-none" />
                   <span className="relative z-10 font-cinzel font-black tracking-widest text-[16px] text-white dark:text-[#111827] leading-none pl-0.5">
-                    ZAC
+                    {brand.code}
                   </span>
                 </div>
                 <div className="text-left">
                   <div className="flex items-center gap-1.5 leading-tight">
-                    <span className="text-[20px] font-black text-primary tracking-tight">ZOAIB</span>
-                    <span className="text-[20px] font-black text-slate-800 dark:text-slate-100 tracking-tight">ALI</span>
+                    <span className="text-[20px] font-black text-primary tracking-tight">{brand.brandWord1}</span>
+                    <span className="text-[20px] font-black text-slate-800 dark:text-slate-100 tracking-tight">{brand.brandWord2}</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[12.5px] font-bold text-slate-500 dark:text-slate-400 tracking-wider">& COMPANY</span>
+                    <span className="text-[12px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">{brand.brandSuffix}</span>
                   </div>
                 </div>
               </NavLink>
@@ -486,7 +488,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               <div className="w-13 h-13 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 hover:scale-105 transition-all duration-200 border border-slate-300/80 dark:border-slate-700/80 relative overflow-hidden select-none">
                 <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20 pointer-events-none" />
                 <span className="relative z-10 font-cinzel font-black tracking-widest text-[16px] text-white dark:text-[#111827] leading-none pl-0.5">
-                  ZAC
+                  {brand.code}
                 </span>
               </div>
             </div>

@@ -24,6 +24,7 @@ import {
 } from 'react-icons/md';
 import { useAuth } from '../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../utils/excelExport';
+import { getBrandConfig } from '../../utils/brand';
 import { toast } from 'react-hot-toast';
 
 const defaultMetrics: FinancialSummary = {
@@ -177,7 +178,7 @@ const BalanceSheet: React.FC = () => {
         await exportToExcel({
           fileName: `Commercial_Executive_Summary_${asOfDate}.xlsx`,
           sheetName: 'Executive Summary',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: `Commercial Executive Performance Statement (As of ${asOfDate})`,
           filterSummary: {
             'As Of Date': asOfDate,
@@ -216,7 +217,7 @@ const BalanceSheet: React.FC = () => {
         await exportToExcel({
           fileName: `Corporate_Balance_Sheet_${asOfDate}.xlsx`,
           sheetName: 'Balance Sheet',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: `Corporate GAAP Balance Sheet Statement (As of ${asOfDate})`,
           filterSummary: { 'As Of Date': asOfDate, 'Accounting Standard': 'GAAP (Assets = Liabilities + Equity)' },
           columns,
@@ -259,22 +260,67 @@ const BalanceSheet: React.FC = () => {
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
+          @page { size: landscape; margin: 6mm 6mm; }
+          body, html { height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
-          .balance-sheet-print-container, .balance-sheet-print-container * { visibility: visible !important; }
+          .balance-sheet-print-container, .balance-sheet-print-container * {
+            visibility: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           .balance-sheet-print-container {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
+            position: static !important;
             width: 100% !important;
-            z-index: 999999 !important;
             background: white !important;
-            color: black !important;
-            padding: 16px !important;
+            color: #000000 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 15px !important;
           }
           aside, header, nav, button, input, .print-hidden-element {
             display: none !important;
             visibility: hidden !important;
           }
+          table {
+            width: 100% !important;
+            table-layout: fixed !important;
+            box-sizing: border-box !important;
+            border-collapse: collapse !important;
+            border: 1.5px solid black !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          th {
+            font-size: 13.5px !important;
+            font-weight: 800 !important;
+            padding: 5px 3px !important;
+            color: #000000 !important;
+            background-color: #f3f4f6 !important;
+            border: 1px solid #000000 !important;
+            white-space: normal !important;
+            word-break: normal !important;
+            line-height: 1.2 !important;
+            vertical-align: middle !important;
+          }
+          td {
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            padding: 6px 4px !important;
+            color: #000000 !important;
+            border: 1px solid #374151 !important;
+          }
+          tfoot td {
+            font-size: 14.5px !important;
+            font-weight: 900 !important;
+            padding: 6px 4px !important;
+            color: #000000 !important;
+            border: 1.5px solid #000000 !important;
+            white-space: nowrap !important;
+          }
+          tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+          thead { display: table-header-group !important; }
+          tfoot { display: table-footer-group !important; }
+          .break-inside-avoid { break-inside: avoid !important; page-break-inside: avoid !important; }
         }
       `}} />
 
@@ -341,14 +387,64 @@ const BalanceSheet: React.FC = () => {
       <div className="balance-sheet-print-container flex flex-col gap-6">
         
         {/* Printable Header for physical paper prints */}
-        <div className="hidden print:block text-center mb-4 border-b-2 border-black pb-3">
-          <h1 className="text-2xl font-black text-black uppercase tracking-wider font-serif">{businessName || 'AL MUHAMMADI'}</h1>
-          <h2 className="text-sm font-extrabold text-gray-800 uppercase tracking-widest font-mono">
+        <div className="hidden print:block relative text-center mb-4 border-b-2 border-black pb-3">
+          <div className="absolute left-2 top-0">
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                minWidth: '48px',
+                minHeight: '48px',
+                maxWidth: '48px',
+                maxHeight: '48px',
+                borderRadius: '13px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #115e59 100%)',
+                border: '1.5px solid rgba(52, 211, 153, 0.5)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                overflow: 'hidden',
+                WebkitPrintColorAdjust: 'exact',
+                printColorAdjust: 'exact',
+                flexShrink: 0
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'linear-gradient(to top, transparent, rgba(255, 255, 255, 0.15))',
+                  pointerEvents: 'none'
+                }}
+              />
+              <span
+                style={{
+                  position: 'relative',
+                  zIndex: 10,
+                  fontFamily: 'Cinzel, Georgia, serif',
+                  fontWeight: 900,
+                  letterSpacing: '0.12em',
+                  fontSize: '15px',
+                  color: '#ffffff',
+                  lineHeight: 1,
+                  paddingLeft: '2px',
+                  WebkitPrintColorAdjust: 'exact',
+                  printColorAdjust: 'exact'
+                }}
+              >
+                {getBrandConfig().code}
+              </span>
+            </div>
+          </div>
+          <h1 className="text-3xl font-black text-slate-950 uppercase tracking-widest font-serif">{businessName || getBrandConfig().fullName}</h1>
+          <h2 className="text-xs font-extrabold text-gray-800 uppercase tracking-widest font-mono mt-1">
             {activePerspective === 'summary'
               ? 'COMMERCIAL EXECUTIVE SUMMARY & FINANCIAL TRAJECTORY STATEMENT'
               : 'CORPORATE GAAP BALANCE SHEET FINANCIAL STATEMENT'}
           </h2>
-          <div className="flex justify-between items-center text-[10px] text-gray-600 font-mono mt-2 pt-1 border-t border-gray-300">
+          <div className="flex justify-between items-center text-xs text-gray-700 font-mono mt-2 pt-1 border-t border-gray-300">
             <span>Audit Perspective: <b>{activePerspective.toUpperCase().replace('_', ' ')}</b></span>
             <span>Accounting Standard: <b>GAAP (Assets = Liabilities + Equity)</b></span>
             <span>Cutoff As Of Date: <b>{asOfDate}</b></span>
@@ -1044,7 +1140,7 @@ const BalanceSheet: React.FC = () => {
         {/* 🏢 Software & Corporate Provider Footer */}
         <div className="mt-6 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400 break-inside-avoid">
           <div className="flex items-center gap-2 font-bold">
-            <span className="text-black font-black uppercase">{businessName || 'AL MUHAMMADI'}</span>
+            <span className="text-black font-black uppercase">{businessName || getBrandConfig().fullName}</span>
           </div>
           <div className="text-[9.5px] text-gray-600 font-mono font-medium text-right">
             Software Solution &amp; Cloud Infrastructure by <b className="text-black font-bold">NHT ENTERPRISES (Noor Horizon Technologies)</b>

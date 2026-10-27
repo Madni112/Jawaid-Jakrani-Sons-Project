@@ -6,6 +6,7 @@ import './css/style.css';
 import './css/satoshi.css';
 import 'jsvectormap/dist/css/jsvectormap.css';
 import 'flatpickr/dist/flatpickr.min.css';
+import { getBrandConfig } from './utils/brand';
 
 // Safely provide window.global in browser without Vite AST corruption
 if (typeof window !== 'undefined' && typeof (window as any).global === 'undefined') {
@@ -68,36 +69,78 @@ class RootErrorBoundary extends React.Component<
                 letterSpacing: '-0.02em',
               }}
             >
-              Notice
+              {getBrandConfig().fullName} ERP
             </h2>
             <p
               style={{
                 color: '#64748B',
                 fontSize: '13px',
                 lineHeight: '1.6',
-                marginBottom: '24px',
+                marginBottom: '16px',
               }}
             >
-              {this.state.error?.message || 'An unexpected error occurred. Please click OK to continue on this page.'}
+              A view rendering error was caught safely. Click below to return to the Executive Dashboard.
             </p>
+            {this.state.error && (
+              <div
+                style={{
+                  textAlign: 'left',
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #F87171',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  marginBottom: '20px',
+                  color: '#991B1B',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  maxHeight: '140px',
+                  overflowY: 'auto',
+                  wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                <b>Error:</b> {String(this.state.error?.message || this.state.error)}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               <button
                 onClick={() => {
                   this.setState({ hasError: false, error: null });
+                  window.location.href = '/';
                 }}
                 style={{
                   backgroundColor: '#059669',
                   color: '#ffffff',
                   border: 'none',
-                  padding: '10px 24px',
+                  padding: '10px 20px',
                   borderRadius: '8px',
                   fontWeight: 'bold',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   cursor: 'pointer',
-                  minWidth: '100px',
                 }}
               >
-                OK
+                Return to Dashboard
+              </button>
+              <button
+                onClick={() => {
+                  try {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                  } catch (_) {}
+                  window.location.href = '/signin';
+                }}
+                style={{
+                  backgroundColor: '#F1F5F9',
+                  color: '#475569',
+                  border: '1px solid #CBD5E1',
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Reset Session
               </button>
             </div>
           </div>

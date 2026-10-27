@@ -23,8 +23,7 @@ import {
   MdLocationOn,
   MdInventory2,
   MdDescription,
-  MdSyncAlt,
-  MdCalendarToday
+  MdSyncAlt
 } from 'react-icons/md';
 
 interface DeliveryChallanItem {
@@ -72,6 +71,7 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
       r.includes('admin') ||
       r.includes('owner') ||
       email === 'admin@zoaibalicompany.com' ||
+      email === 'admin@almuhammadi.com' ||
       email === 'developer@noorhorizontechnologies.com'
     );
   }, [role, userEmail]);
@@ -283,85 +283,93 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
 
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. Header: Sleek Executive Linear Style */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono border ${
-              isA39
-                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border-amber-200/70 dark:border-amber-800/60'
-                : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-200/70 dark:border-emerald-800/60'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isA39 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-              {isA39 ? 'Warehouse Hub (Central Storage)' : 'Showroom Hub (Sale & Retail Point)'}
-            </span>
-            <span className="text-slate-300 dark:text-slate-700">•</span>
-            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <MdLocationOn size={13} className="text-slate-400" />
-              {isA39 ? 'Plot A-39, Near Boulevard Mall' : 'Saddar, Bouri Bazar'}
-            </span>
-          </div>
-          <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-            {isA39 ? 'A-39 Storage Operations Terminal' : 'SHOP Floor & Dispatch Terminal'}
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {isA39
-              ? 'Bulk storage holding, supplier inward verification, delivery challans & outbound transfers'
-              : 'Retail counter fulfillment, incoming stock transfers from A-39 & floor stock balances'}
-          </p>
-        </div>
+      {/* 1. Header Banner & Location Switcher */}
+      <GlassCard
+        className={`p-6 relative overflow-hidden text-white rounded-3xl shadow-xl transition-all duration-300 ${
+          isA39
+            ? 'bg-gradient-to-r from-amber-600 via-orange-600 to-slate-900'
+            : 'bg-gradient-to-r from-teal-700 via-emerald-700 to-slate-900'
+        }`}
+      >
+        <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Right Controls: Location Switcher, Date & Refresh */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Quick Location Switcher Buttons */}
-          {canSwitchLocation ? (
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200/90 dark:border-slate-700 text-xs font-bold shadow-2xs">
-              <button
-                onClick={() => setActiveLocation('A-39')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  isA39
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                <MdWarehouse className="text-sm" />
-                A-39 Storage
-              </button>
-              <button
-                onClick={() => setActiveLocation('SHOP')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  !isA39
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                <MdStorefront className="text-sm" />
-                SHOP Floor
-              </button>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 z-10 relative">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 backdrop-blur-md text-white border border-white/20">
+                {isA39 ? <MdWarehouse className="mr-1 text-sm text-yellow-300" /> : <MdStorefront className="mr-1 text-sm text-emerald-300" />}
+                {isA39 ? 'Warehouse Hub (Central Storage Point)' : 'Showroom Hub (Sale & Retail Point)'}
+              </span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-black/25 text-white/90 border border-white/15">
+                <MdLocationOn className="mr-1 text-xs" />
+                {isA39 ? 'Plot A-39, Near Boulevard Mall' : 'Saddar, Bouri Bazar'}
+              </span>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3.5 py-1.5 rounded-xl border border-slate-200/90 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-2xs">
-              {isA39 ? <MdWarehouse className="text-amber-500 text-sm" /> : <MdStorefront className="text-emerald-500 text-sm" />}
-              <span>Assigned: {activeLocation}</span>
-            </div>
-          )}
 
-          {/* Date Pill */}
-          <div className="bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 px-3 py-1.5 rounded-xl font-bold font-mono text-xs text-slate-600 dark:text-slate-300 shadow-2xs flex items-center gap-1.5">
-            <MdCalendarToday className="text-emerald-600 text-xs" />
-            <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-xs">
+              {isA39 ? 'A-39 Storage Operations Terminal' : 'SHOP Floor & Dispatch Terminal'}
+            </h1>
+            <p className="text-white/85 text-xs sm:text-sm mt-1 max-w-xl">
+              {isA39
+                ? 'Primary bulk holding, supplier inward verification, outbound delivery challans & transfers to Saddar Shop.'
+                : 'Retail counter fulfillment, incoming stock transfers from A-39, customer sales returns & floor stock.'}
+            </p>
           </div>
 
-          {/* Refresh Button */}
-          <button
-            onClick={loadWarehouseData}
-            title="Refresh Warehouse Records"
-            className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-xl border border-slate-200/90 dark:border-slate-700 transition-all text-slate-600 dark:text-slate-300 shadow-2xs cursor-pointer"
-          >
-            <MdRefresh className="text-base" />
-          </button>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            {/* Quick Location Switcher Buttons - Visible ONLY to Super Admin / Admin */}
+            {canSwitchLocation ? (
+              <div className="flex items-center bg-black/30 p-1 rounded-2xl border border-white/20 backdrop-blur-md">
+                <button
+                  onClick={() => setActiveLocation('A-39')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isA39
+                      ? 'bg-white text-orange-800 shadow-md scale-102'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <MdWarehouse className="text-sm" />
+                  A-39 (Storage)
+                </button>
+                <button
+                  onClick={() => setActiveLocation('SHOP')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    !isA39
+                      ? 'bg-white text-emerald-800 shadow-md scale-102'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <MdStorefront className="text-sm" />
+                  SHOP (Sale Point)
+                </button>
+              </div>
+            ) : (
+              /* When locked, show a clean, non-clickable assigned location pill */
+              <div className="flex items-center gap-2 bg-black/30 px-3.5 py-2 rounded-2xl border border-white/20 backdrop-blur-md text-xs font-bold text-white shadow-inner">
+                {isA39 ? (
+                  <>
+                    <MdWarehouse className="text-yellow-300 text-sm" />
+                    <span>Assigned: A-39 Storage</span>
+                  </>
+                ) : (
+                  <>
+                    <MdStorefront className="text-emerald-300 text-sm" />
+                    <span>Assigned: Shop Floor</span>
+                  </>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={loadWarehouseData}
+              title="Refresh Warehouse Records"
+              className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl border border-white/20 transition-all text-white backdrop-blur-md shadow-sm cursor-pointer"
+            >
+              <MdRefresh className="text-lg" />
+            </button>
+          </div>
         </div>
-      </div>
+      </GlassCard>
 
       {/* 2. Key Metrics Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

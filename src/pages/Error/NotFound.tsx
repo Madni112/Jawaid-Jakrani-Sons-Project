@@ -4,6 +4,7 @@ import { MdErrorOutline, MdArrowBack, MdDashboard } from 'react-icons/md';
 import IconDark from '../../images/logo/icon-dark.png';
 import DarkModeSwitcher from '../../components/Header/DarkModeSwitcher';
 import { useAuth } from '../../Context/Auth';
+import { getBrandConfig } from '../../utils/brand';
 
 interface NotFoundProps {
   title?: string;
@@ -17,14 +18,9 @@ const NotFound: React.FC<NotFoundProps> = ({
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
-  const isAlm =
-    typeof window !== 'undefined' &&
-    (window.location.hostname.toLowerCase().includes('muhammadi') ||
-      document.title.toLowerCase().includes('muhammadi') ||
-      window.location.href.toLowerCase().includes('muhammadi'));
-
-  const companyTitle = isAlm ? 'AL MUHAMMADI' : 'ZOAIB ALI';
-  const companySubtitle = isAlm ? '' : '& COMPANY';
+  const brand = getBrandConfig();
+  const companyTitle = `${brand.brandWord1} ${brand.brandWord2}`;
+  const companySubtitle = brand.brandSuffix;
 
   const handleGoBack = () => {
     if (window.history.length > 1) {

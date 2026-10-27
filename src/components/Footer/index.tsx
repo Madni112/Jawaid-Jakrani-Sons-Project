@@ -1,9 +1,11 @@
 import React from 'react';
 import { MdPhone, MdWhatsapp, MdBusiness, MdShield, MdCloudDone } from 'react-icons/md';
 import { useAuth } from '../../Context/Auth';
+import { getBrandConfig } from '../../utils/brand';
 
 const Footer: React.FC = () => {
   const { businessName } = useAuth();
+  const brand = getBrandConfig();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -16,7 +18,7 @@ const Footer: React.FC = () => {
             <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
               <MdBusiness size={13} />
             </span>
-            <span className="font-extrabold tracking-wide uppercase text-xs">AL MUHAMMADI</span>
+            <span className="font-extrabold tracking-wide uppercase text-xs">{brand.fullName}</span>
           </div>
 
           {businessName && (
@@ -27,7 +29,7 @@ const Footer: React.FC = () => {
 
           <span className="hidden lg:inline text-slate-300 dark:text-slate-700">•</span>
           <span className="hidden lg:inline text-slate-500 dark:text-slate-400 text-[11px]">
-            AL MUHAMMADI
+            {brand.name}
           </span>
         </div>
 

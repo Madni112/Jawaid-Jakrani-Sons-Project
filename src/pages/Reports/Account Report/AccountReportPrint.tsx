@@ -7,6 +7,7 @@ import { MdPrint, MdArrowBack, MdFileDownload, MdChevronRight, MdExpandMore, MdU
 import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
+import { getBrandConfig } from '../../../utils/brand';
 import ReportPagination from '../../../components/ReportPagination';
 
 const AccountReportPrint = () => {
@@ -111,11 +112,12 @@ const AccountReportPrint = () => {
 
     useEffect(() => {
         const originalTitle = document.title;
+        const bName = businessName || getBrandConfig().fullName;
         document.title = activeTab === 13 
-            ? 'Customer Balance Detail Report - AL MUHAMMADI'
+            ? `Customer Balance Detail Report - ${bName}`
             : activeTab === 3
-            ? 'Vendor Balance Detail Report - AL MUHAMMADI'
-            : 'Corporate Account Ledger - AL MUHAMMADI';
+            ? `Vendor Balance Detail Report - ${bName}`
+            : `Corporate Account Ledger - ${bName}`;
 
         return () => {
             document.title = originalTitle;
@@ -486,6 +488,7 @@ const AccountReportPrint = () => {
                             id: cust.id,
                             customer_name: cust.customerName || 'Walking Customer',
                             customer_code: cust.customer_code || cust.customerCode || '-',
+                            page_no: cust.page_no || cust.pageNo || '-',
                             category: cust.registrationType || 'Retail / General',
                             phone: cust.mobileNo || cust.phoneNo || '-',
                             address: cust.businessAddress || cust.residentialAddress || '-',
@@ -1486,8 +1489,9 @@ const AccountReportPrint = () => {
                 filename = `Customer_Balance_Detail_Report_${new Date().toISOString().split('T')[0]}`;
                 columns = [
                     { header: 'S#', key: 'sno', width: 8, alignment: { horizontal: 'center' } },
+                    { header: 'Customer Name', key: 'customer_name', width: 30 },
                     { header: 'Customer Code', key: 'customer_code', width: 16, alignment: { horizontal: 'center' } },
-                    { header: 'Customer / Business Name', key: 'customer_name', width: 30 },
+                    { header: 'Page #', key: 'page_no', width: 12, alignment: { horizontal: 'center' } },
                     { header: 'Customer Category', key: 'category', width: 22 },
                     { header: 'Contact / Phone', key: 'phone', width: 18 },
                     { header: 'Opening Balance (PKR)', key: 'opening_balance', width: 22, numFmt: '#,##0.00', alignment: { horizontal: 'right' } },
@@ -1502,8 +1506,9 @@ const AccountReportPrint = () => {
                     else if (r.closing_balance < -0.01) status = 'Credit Advance (Payable)';
                     return {
                         sno: i + 1,
-                        customer_code: r.customer_code || '-',
                         customer_name: r.customer_name,
+                        customer_code: r.customer_code || '-',
+                        page_no: r.page_no || '-',
                         category: r.category,
                         phone: r.phone,
                         opening_balance: Number(r.opening_balance || 0),
@@ -1747,7 +1752,7 @@ const AccountReportPrint = () => {
             await exportToExcel({
                 filename,
                 sheetName: reportHeading.slice(0, 31),
-                title: businessName || 'AL MUHAMMADI',
+                title: businessName || getBrandConfig().fullName,
                 subtitle: reportHeading,
                 columns,
                 data: exportData
@@ -1764,7 +1769,7 @@ const AccountReportPrint = () => {
     const handleShareWhatsApp = () => {
         const periodText = filters.dateFrom && filters.dateTo ? `${filters.dateFrom} to ${filters.dateTo}` : 'Current Period';
         const lines = [
-            `📊 *${businessName || 'AL MUHAMMADI'}*`,
+            `📊 *${businessName || getBrandConfig().name}*`,
             `💼 *Financial Account Ledger Audit Summary*`,
             `━━━━━━━━━━━━━━━━━━━━━`,
             `📅 *Period:* ${periodText}`,
@@ -1781,16 +1786,67 @@ const AccountReportPrint = () => {
             <style dangerouslySetInnerHTML={{
                 __html: `
         @media print {
-          @page { size: auto; margin: 12mm 10mm 12mm 10mm; }
-          body, html { height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; }
+          @page { size: landscape; margin: 6mm 6mm; }
+          body, html { height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
-          .print-root-container, .print-root-container * { visibility: visible !important; }
-          .print-root-container { position: static !important; width: 100% !important; height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; padding: 0 !important; margin: 0 !important; }
+          .print-root-container, .print-root-container * {
+            visibility: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print-root-container {
+            position: static !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 15px !important;
+            color: #000000 !important;
+          }
           aside, header, nav, footer, .print-hidden-element, button { display: none !important; visibility: hidden !important; }
-          table { page-break-inside: auto !important; }
-          tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
+          table {
+            width: 100% !important;
+            table-layout: fixed !important;
+            box-sizing: border-box !important;
+            border-collapse: collapse !important;
+            border: 1.5px solid black !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          th {
+            font-size: 13.5px !important;
+            font-weight: 800 !important;
+            padding: 5px 3px !important;
+            color: #000000 !important;
+            background-color: #f3f4f6 !important;
+            border: 1px solid #000000 !important;
+            white-space: normal !important;
+            word-break: normal !important;
+            line-height: 1.2 !important;
+            vertical-align: middle !important;
+          }
+          td {
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            padding: 6px 4px !important;
+            color: #000000 !important;
+            border: 1px solid #374151 !important;
+          }
+          tfoot td {
+            font-size: 14.5px !important;
+            font-weight: 900 !important;
+            padding: 6px 4px !important;
+            color: #000000 !important;
+            border: 1.5px solid #000000 !important;
+            white-space: nowrap !important;
+          }
+          tr { page-break-inside: avoid !important; break-inside: avoid !important; }
           thead { display: table-header-group !important; }
           tfoot { display: table-footer-group !important; }
+          .break-inside-avoid { break-inside: avoid !important; page-break-inside: avoid !important; }
         }
       `}} />
 
@@ -1838,11 +1894,65 @@ const AccountReportPrint = () => {
                     </div>
                 </div>
 
-                <div className="text-center space-y-1 py-4 border-b border-double border-black">
-                    <h1 className="text-xl font-black uppercase tracking-widest font-serif">AL MUHAMMADI</h1>
-                    <p className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">Master Corporate Ledger Book & Financial Audit Statement Summary</p>
+                <div className="relative text-center space-y-1.5 py-4 border-b border-double border-black">
+                    {/* ZAC Brand Icon Badge (Sidebar Style Option A) */}
+                    <div className="absolute left-2 top-2">
+                        <div
+                            style={{
+                                width: '48px',
+                                height: '48px',
+                                minWidth: '48px',
+                                minHeight: '48px',
+                                maxWidth: '48px',
+                                maxHeight: '48px',
+                                borderRadius: '13px',
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #115e59 100%)',
+                                border: '1.5px solid rgba(52, 211, 153, 0.5)',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                WebkitPrintColorAdjust: 'exact',
+                                printColorAdjust: 'exact',
+                                flexShrink: 0
+                            }}
+                        >
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    background: 'linear-gradient(to top, transparent, rgba(255, 255, 255, 0.15))',
+                                    pointerEvents: 'none'
+                                }}
+                            />
+                            <span
+                                style={{
+                                    position: 'relative',
+                                    zIndex: 10,
+                                    fontFamily: 'Cinzel, Georgia, serif',
+                                    fontWeight: 900,
+                                    letterSpacing: '0.12em',
+                                    fontSize: '15px',
+                                    color: '#ffffff',
+                                    lineHeight: 1,
+                                    paddingLeft: '2px',
+                                    WebkitPrintColorAdjust: 'exact',
+                                    printColorAdjust: 'exact'
+                                }}
+                            >
+                                {getBrandConfig().code}
+                            </span>
+                        </div>
+                    </div>
 
-                    <div className="text-[10px] pt-1 font-mono flex justify-between px-2 text-gray-600">
+                    <h1 className="text-3xl font-black uppercase tracking-widest font-serif text-slate-950">
+                        {businessName || getBrandConfig().fullName}
+                    </h1>
+                    <p className="text-xs font-bold tracking-wider text-gray-600 uppercase">Master Corporate Ledger Book & Financial Audit Statement Summary</p>
+
+                    <div className="text-xs pt-1.5 font-mono flex justify-between px-2 text-gray-700">
                         <span>Audit Sub-Categorization: <b className="text-black uppercase underline">
                             {activeTab === 1 && 'General Ledger Audit Statement'}
                             {activeTab === 2 && 'Customer Account Balance Ledger'}
@@ -1905,8 +2015,13 @@ const AccountReportPrint = () => {
                                                                 {cust.customer_name}
                                                             </h3>
                                                             {cust.customer_code && cust.customer_code !== '-' && (
-                                                                <span className="text-xs font-mono bg-white border border-slate-300 text-slate-700 px-1.5 py-0.5 rounded font-bold">
+                                                                <span className="text-xs font-mono bg-white border border-slate-300 text-slate-700 px-1.5 py-0.5 rounded font-bold uppercase">
                                                                     {cust.customer_code}
+                                                                </span>
+                                                            )}
+                                                            {cust.page_no && cust.page_no !== '-' && (
+                                                                <span className="text-xs font-mono bg-white border border-slate-300 text-slate-600 px-1.5 py-0.5 rounded font-semibold">
+                                                                    {String(cust.page_no).toUpperCase().startsWith('P#') ? cust.page_no : `P# ${cust.page_no}`}
                                                                 </span>
                                                             )}
                                                             <span className="text-[10px] bg-slate-200 text-slate-800 px-2 py-0.5 rounded font-bold uppercase">
@@ -2211,7 +2326,7 @@ const AccountReportPrint = () => {
                                     <th className="p-1.5 border border-black text-center w-12">S#</th>
                                     <th className="p-1.5 border border-black text-center w-28">Date</th>
                                     <th className="p-1.5 border border-black w-36">Invoice / Ref No</th>
-                                    <th className="p-1.5 border border-black">Associated Ledger Entity Title Account Name</th>
+                                    <th className="p-1.5 border border-black min-w-[150px] max-w-[260px]">{activeTab === 2 ? 'Customer Name' : 'Supplier Name'}</th>
                                     <th className="p-1.5 border border-black text-center w-24">Payment Term</th>
                                     <th className="p-1.5 border border-black text-right pr-3 w-40">Gross Invoice Amount</th>
                                 </tr>
@@ -2262,7 +2377,7 @@ const AccountReportPrint = () => {
                                 <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
                                     <tr>
                                         <th className="p-1.5 border border-black text-center w-12">S#</th>
-                                        <th className="p-1.5 border border-black">Customer / Account Title</th>
+                                        <th className="p-1.5 border border-black min-w-[150px] max-w-[240px]">Customer Name</th>
                                         <th className="p-1.5 border border-black text-center w-24">Unpaid Invoices</th>
                                         <th className="p-1.5 border border-black text-right w-32">Total Outstanding Debt</th>
                                         <th className="p-1.5 border border-black text-right w-28">0 - 30 Days (Current)</th>
@@ -2648,7 +2763,7 @@ const AccountReportPrint = () => {
                                         <th className="p-2 border border-black text-center w-12">S#</th>
                                         <th className="p-2 border border-black text-center w-28">Voucher No</th>
                                         <th className="p-2 border border-black text-center w-24">Recovery Date</th>
-                                        <th className="p-2 border border-black">Customer Account Name</th>
+                                        <th className="p-2 border border-black min-w-[150px] max-w-[240px]">Customer Name</th>
                                         <th className="p-2 border border-black">Original Invoice Ref</th>
                                         <th className="p-2 border border-black">Narration / Notes</th>
                                         <th className="p-2 border border-black text-right w-36 pr-3">Recovered Amount</th>
@@ -2899,7 +3014,7 @@ const AccountReportPrint = () => {
                                     <th className="p-1.5 border border-black w-32">Invoice / Ref No</th>
                                     <th className="p-1.5 border border-black w-36">Entry Classification</th>
                                     <th className="p-1.5 border border-black w-32">Sales Officer</th>
-                                    <th className="p-1.5 border border-black">Customer / Account Title</th>
+                                    <th className="p-1.5 border border-black min-w-[140px] max-w-[220px]">Customer Name</th>
                                     <th className="p-1.5 border border-black text-right w-32">Sales Invoice (PKR)</th>
                                     <th className="p-1.5 border border-black text-right w-32 pr-3">Cash Collected (PKR)</th>
                                 </tr>
@@ -2971,8 +3086,7 @@ const AccountReportPrint = () => {
                                 <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
                                     <tr>
                                         <th className="p-1.5 border border-black text-center w-8">S#</th>
-                                        <th className="p-1.5 border border-black text-center w-24">Cust Code</th>
-                                        <th className="p-1.5 border border-black">Customer / Business Name</th>
+                                        <th className="p-1.5 border border-black w-[22%] min-w-[160px] max-w-[280px]">Customer Name</th>
                                         <th className="p-1.5 border border-black text-center w-32">Customer Category</th>
                                         <th className="p-1.5 border border-black text-center w-28">Contact / Phone</th>
                                         <th className="p-1.5 border border-black text-right w-32">Opening Balance (PKR)</th>
@@ -2995,20 +3109,31 @@ const AccountReportPrint = () => {
                                         return (
                                             <React.Fragment key={row.id || i}>
                                                 <tr className={`border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs ${isExpanded ? 'bg-slate-50/70' : ''}`}>
-                                                    <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
-                                                    <td className="p-1.5 border border-black text-center font-mono">
-                                                        {row.customer_code && row.customer_code !== '-' ? (
-                                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                                                                {row.customer_code}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-gray-400 text-[10px]">-</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-1.5 border border-black font-sans text-black font-bold">
+                                                    <td className="p-1.5 border border-black text-center text-gray-400 align-top">{startIndex + i + 1}</td>
+                                                    <td className="p-1.5 border border-black font-sans text-black font-bold align-top">
                                                         <div>{row.customer_name}</div>
+                                                        {(() => {
+                                                            const code = row.customer_code && row.customer_code !== '-' ? row.customer_code : '';
+                                                            const pageNo = row.page_no && row.page_no !== '-' ? row.page_no : '';
+                                                            if (!code && !pageNo) return null;
+                                                            return (
+                                                                <div className="text-[10px] font-mono text-slate-700 flex flex-wrap items-center gap-1 mt-0.5 font-normal">
+                                                                    {code && (
+                                                                        <span className="bg-slate-100 px-1 py-0.2 rounded border border-slate-300 font-bold uppercase text-slate-800 text-[9.5px]">
+                                                                            {code}
+                                                                        </span>
+                                                                    )}
+                                                                    {code && pageNo && <span className="text-slate-400 font-bold">|</span>}
+                                                                    {pageNo && (
+                                                                        <span className="text-slate-600 font-semibold text-[9.5px]">
+                                                                            {String(pageNo).toUpperCase().startsWith('P#') ? pageNo : `P# ${pageNo}`}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                         {row.address && row.address !== '-' && (
-                                                            <div className="text-[9px] text-gray-500 font-normal truncate max-w-xs">{row.address}</div>
+                                                            <div className="text-[9px] text-gray-500 font-normal truncate max-w-xs mt-0.5">{row.address}</div>
                                                         )}
                                                     </td>
                                                     <td className="p-1.5 border border-black text-center font-sans">
@@ -3069,7 +3194,7 @@ const AccountReportPrint = () => {
                                                 {/* Expanded Transaction Details Sub-Table */}
                                                 {isExpanded && (
                                                     <tr className="bg-slate-50/90 border-b-2 border-black">
-                                                        <td colSpan={11} className="p-3 pl-8 pr-4 border border-black bg-slate-50/70">
+                                                        <td colSpan={10} className="p-3 pl-8 pr-4 border border-black bg-slate-50/70">
                                                             <div className="bg-white rounded-lg border border-slate-300 p-3 shadow-2xs space-y-2">
                                                                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-800 pb-1.5 border-b border-slate-200 flex justify-between items-center">
                                                                     <span>Itemized Period Audit for {row.customer_name} {row.customer_code ? `(${row.customer_code})` : ''}</span>
@@ -3135,7 +3260,7 @@ const AccountReportPrint = () => {
                                 <tfoot>
                                     {!isPrinting && pageSize !== 'all' && (
                                         <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
-                                            <td colSpan={5} className="p-2 border border-black text-right uppercase tracking-wider">
+                                            <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider">
                                                 Page Subtotal (This Page):
                                             </td>
                                             <td className="p-2 border border-black text-right font-bold">
@@ -3156,7 +3281,7 @@ const AccountReportPrint = () => {
                                         </tr>
                                     )}
                                     <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
-                                        <td colSpan={5} className="p-2 border border-black text-right uppercase tracking-wider text-black">
+                                        <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider text-black">
                                             Grand Totals Summary (All {reportRows.length} Records):
                                         </td>
                                         <td className="p-2 border border-black text-right text-black font-black text-xs">
@@ -3228,7 +3353,7 @@ const AccountReportPrint = () => {
                 {/* 🏢 Software & Corporate Provider Footer */}
                 <div className="mt-8 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400 break-inside-avoid">
                     <div className="flex items-center gap-2 font-bold">
-                        <span className="text-black font-black uppercase">AL MUHAMMADI</span>
+                        <span className="text-black font-black uppercase">{businessName || getBrandConfig().fullName}</span>
                     </div>
                     <div className="text-[9.5px] text-gray-600 font-mono font-medium text-right">
                         Software Solution &amp; Cloud Infrastructure by <b className="text-black font-bold">NHT ENTERPRISES (Noor Horizon Technologies)</b>

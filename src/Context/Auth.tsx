@@ -6,6 +6,7 @@ import { UserRole } from '../constant/auth';
 import { getModulesForRole, ROLE_PRESETS } from '../constant/roles';
 import { toast } from 'react-hot-toast';
 import { getModulePermissions, ModulePermissionState, cleanBaseModuleId } from '../utils/permissionUtils';
+import { getBrandConfig } from '../utils/brand';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -51,7 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   });
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [businessName, setBusinessName] = useState<string | null>('AL MUHAMMADI');
+  const [businessName, setBusinessName] = useState<string | null>(() => getBrandConfig().name);
   const [userEmail, setUserEmail] = useState<string | null>(() => {
     try {
       return localStorage.getItem('zac_user_email') || null;
@@ -248,7 +249,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUserEmail(email || null);
       setRole(userRole);
       setTenantId(null);
-      setBusinessName('AL MUHAMMADI');
+      setBusinessName(getBrandConfig().name);
       setAllowedModules(userPermissions);
       setUserLocationId(locId);
       setUserLocationName(locName);
@@ -269,7 +270,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUserEmail(null);
       setRole('Super Admin');
       setTenantId(null);
-      setBusinessName('AL MUHAMMADI');
+      setBusinessName(getBrandConfig().name);
       setUserLocationId(null);
       setUserLocationName(null);
       setUserName(null);

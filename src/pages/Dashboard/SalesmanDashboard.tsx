@@ -21,8 +21,7 @@ import {
   MdWarehouse,
   MdPerson,
   MdArrowForward,
-  MdPointOfSale,
-  MdCalendarToday
+  MdPointOfSale
 } from 'react-icons/md';
 
 interface SalesInvoiceItem {
@@ -320,88 +319,83 @@ const SalesmanDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. Header: Sleek Executive Linear Style */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-800/60 font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live Terminal
-            </span>
-            <span className="text-slate-300 dark:text-slate-700">•</span>
-            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              Personal POS & Dispatch Velocity
-            </span>
-          </div>
-          <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-            Sales Terminal & Performance Dashboard
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Welcome back, <span className="font-bold text-slate-800 dark:text-slate-200">{displayName}</span> — monitoring daily sales performance & stock availability
-          </p>
-        </div>
-
-        {/* Right Controls: Salesman Selector, Date & Refresh */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Salesman Filter for Admins */}
-          {isAdminOrSuper && (
-            <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-2xs">
-              <MdPerson className="text-slate-400 mr-2 text-base shrink-0" />
-              <select
-                value={selectedSalesman}
-                onChange={(e) => setSelectedSalesman(e.target.value)}
-                className="bg-transparent text-slate-800 dark:text-slate-200 text-xs font-bold outline-none cursor-pointer"
-              >
-                <option value="ALL" className="text-slate-800 dark:bg-slate-800">All Salesmen</option>
-                {salesmanList.map((s) => (
-                  <option key={s} value={s} className="text-slate-800 dark:bg-slate-800">
-                    {s}
-                  </option>
-                ))}
-              </select>
+      {/* 1. Header Banner */}
+      <GlassCard className="p-6 relative overflow-hidden bg-gradient-to-r from-emerald-700 via-teal-700 to-slate-900 text-white rounded-3xl shadow-xl">
+        <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 relative">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 backdrop-blur-md text-sky-100 border border-white/20">
+                <MdPointOfSale className="mr-1 text-sm text-yellow-300" />
+                Sales Terminal & Performance Dashboard
+              </span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
+                Live Synced
+              </span>
             </div>
-          )}
-
-          {/* Salesman Filter for Merged Salesmen */}
-          {isMergedSalesman && (
-            <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-2xs">
-              <MdPerson className="text-slate-400 mr-2 text-base shrink-0" />
-              <select
-                value={selectedSalesman}
-                onChange={(e) => setSelectedSalesman(e.target.value)}
-                className="bg-transparent text-slate-800 dark:text-slate-200 text-xs font-bold outline-none cursor-pointer"
-              >
-                <option value="TEAM_ALL" className="text-slate-800 dark:bg-slate-800">
-                  👥 Combined Team ({1 + partnerSalesmen.length})
-                </option>
-                <option value="MY_SALES" className="text-slate-800 dark:bg-slate-800">
-                  👤 My Sales ({userName})
-                </option>
-                {partnerSalesmen.map((pName) => (
-                  <option key={pName} value={pName} className="text-slate-800 dark:bg-slate-800">
-                    🤝 Partner: {pName}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Date Pill */}
-          <div className="bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 px-3 py-1.5 rounded-xl font-bold font-mono text-xs text-slate-600 dark:text-slate-300 shadow-2xs flex items-center gap-1.5">
-            <MdCalendarToday className="text-emerald-600 text-xs" />
-            <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-xs">
+              Welcome back, {displayName}!
+            </h1>
+            <p className="text-sky-100 text-sm mt-1 max-w-xl">
+              Track your daily sales performance, monitor warehouse dispatches, and check instant stock availability across A-39 and Shop.
+            </p>
           </div>
 
-          {/* Refresh Button */}
-          <button
-            onClick={loadDashboardData}
-            title="Refresh Data"
-            className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-xl border border-slate-200/90 dark:border-slate-700 transition-all text-slate-600 dark:text-slate-300 shadow-2xs cursor-pointer"
-          >
-            <MdRefresh className="text-base" />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Salesman Filter for Admins */}
+            {isAdminOrSuper && (
+              <div className="flex items-center bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 backdrop-blur-md">
+                <MdPerson className="text-sky-200 mr-2 text-base" />
+                <select
+                  value={selectedSalesman}
+                  onChange={(e) => setSelectedSalesman(e.target.value)}
+                  className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL" className="text-slate-800">All Salesmen</option>
+                  {salesmanList.map((s) => (
+                    <option key={s} value={s} className="text-slate-800">
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Salesman Filter for Merged Salesmen */}
+            {isMergedSalesman && (
+              <div className="flex items-center bg-white/15 border border-white/30 rounded-xl px-3 py-1.5 backdrop-blur-md shadow-sm">
+                <MdPerson className="text-yellow-300 mr-2 text-base" />
+                <select
+                  value={selectedSalesman}
+                  onChange={(e) => setSelectedSalesman(e.target.value)}
+                  className="bg-transparent text-white text-xs font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value="TEAM_ALL" className="text-slate-900 font-bold">
+                    👥 Combined Team Sales ({1 + partnerSalesmen.length})
+                  </option>
+                  <option value="MY_SALES" className="text-slate-900">
+                    👤 My Sales ({userName})
+                  </option>
+                  {partnerSalesmen.map((pName) => (
+                    <option key={pName} value={pName} className="text-slate-900">
+                      🤝 Partner: {pName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <button
+              onClick={loadDashboardData}
+              title="Refresh Data"
+              className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl border border-white/20 transition-all text-white backdrop-blur-md shadow-sm"
+            >
+              <MdRefresh className="text-lg" />
+            </button>
+          </div>
         </div>
-      </div>
+      </GlassCard>
 
       {/* 2. Key Performance Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

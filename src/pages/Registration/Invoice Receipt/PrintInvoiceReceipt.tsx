@@ -4,6 +4,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
+import { getBrandConfig } from '../../../utils/brand';
 import { FiPrinter, FiArrowLeft, FiCheckCircle } from 'react-icons/fi';
 
 const PrintInvoiceReceipt: React.FC = () => {
@@ -33,18 +34,16 @@ const PrintInvoiceReceipt: React.FC = () => {
 
         // 2. Fetch linked invoice if available
         if (voucherData?.original_invoice_no) {
-          const rawInv = String(voucherData.original_invoice_no).trim();
-          const cleanInvId = rawInv.replace(/\D/g, '');
-          
-          let invQuery = supabase.from('sales_invoices').select('*');
-          if (cleanInvId && !isNaN(Number(cleanInvId))) {
-            invQuery = invQuery.or(`id.eq.${Number(cleanInvId)},invoice_no.ilike.${rawInv}`);
-          } else {
-            invQuery = invQuery.ilike('invoice_no', rawInv);
-          }
-          const { data: invData } = await invQuery.maybeSingle();
+          const cleanInvId = String(voucherData.original_invoice_no).replace(/\D/g, '');
+          if (cleanInvId) {
+            const { data: invData } = await supabase
+              .from('sales_invoices')
+              .select('*')
+              .eq('id', Number(cleanInvId))
+              .maybeSingle();
 
-          if (invData) setLinkedInvoice(invData);
+            if (invData) setLinkedInvoice(invData);
+          }
         }
       } catch (err: any) {
         toast.error('Error loading receipt print data: ' + err.message);
@@ -79,7 +78,9 @@ const PrintInvoiceReceipt: React.FC = () => {
     ? `Split Payment (Cash: Rs. ${Number(meta.cashAmount || 0).toLocaleString()} + Bank: Rs. ${Number(meta.bankAmount || 0).toLocaleString()})`
     : (receipt.voucher_type === 'Bank Receipt Voucher' ? 'Bank Account Wire / Deposit' : 'Cash Counter Register');
 
-  const cleanInvNo = linkedInvoice?.invoice_no || receipt.original_invoice_no || 'N/A';
+  const cleanInvNo = receipt.original_invoice_no 
+    ? (String(receipt.original_invoice_no).startsWith('INV-') ? receipt.original_invoice_no : `INV-${String(receipt.original_invoice_no).padStart(4, '0')}`) 
+    : 'N/A';
 
   const invoiceBilledTotal = Number(linkedInvoice?.total_amount || 0);
 
@@ -90,12 +91,13 @@ const PrintInvoiceReceipt: React.FC = () => {
         {`
         @page {
           size: A4 portrait;
-          margin: 15mm 15mm 15mm 15mm;
+          margin: 10mm 12mm;
         }
         @media print {
           body, html {
             background: #ffffff !important;
             color: #000000 !important;
+            font-size: 14px !important;
           }
           aside, nav, header, .no-print, button {
             display: none !important;
@@ -106,10 +108,19 @@ const PrintInvoiceReceipt: React.FC = () => {
             padding: 0 !important;
             margin: 0 !important;
             width: 100% !important;
-          }
-          * {
+            font-size: 14px !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+          }
+          table th {
+            font-size: 14px !important;
+            font-weight: 800 !important;
+            padding: 6px 8px !important;
+          }
+          table td {
+            font-size: 13.5px !important;
+            font-weight: 600 !important;
+            padding: 6px 8px !important;
           }
         }
       `}
@@ -127,7 +138,7 @@ const PrintInvoiceReceipt: React.FC = () => {
         <button
           type="button"
           onClick={() => window.print()}
-          className="flex items-center gap-2 text-xs font-bold bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-lg shadow-lg transition"
+          className="flex items-center gap-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-lg shadow-lg transition"
         >
           <FiPrinter size={16} /> Print Receipt Voucher
         </button>
@@ -136,11 +147,11 @@ const PrintInvoiceReceipt: React.FC = () => {
       {/* ── PRINTABLE RECEIPT VOUCHER ─────────────────────────────────────────────── */}
       <div className="print-container border border-slate-300 rounded-2xl p-8 bg-white shadow-sm">
         {/* HEADER */}
-        <div className="border-b-2 border-red-600 pb-6 mb-6">
+        <div className="border-b-2 border-slate-900 pb-6 mb-6">
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900">
-                {businessName || 'AL MUHAMMADI'}
+                {businessName || getBrandConfig().fullName}
               </h1>
               <p className="text-xs text-slate-500 font-semibold mt-0.5">
                 Authorized Commercial Building Materials & Ceramic Store
@@ -150,7 +161,7 @@ const PrintInvoiceReceipt: React.FC = () => {
               </div>
             </div>
             <div className="text-right">
-              <span className="inline-block bg-red-100 text-red-800 font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+              <span className="inline-block bg-emerald-100 text-emerald-800 font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider mb-2">
                 Official Payment Receipt
               </span>
               <p className="font-mono text-sm font-black text-slate-900">{voucherNo}</p>
@@ -176,7 +187,7 @@ const PrintInvoiceReceipt: React.FC = () => {
           </div>
           <div className="text-right">
             <span className="text-slate-400 font-bold block uppercase text-[10px]">Amount Received</span>
-            <strong className="text-red-700 text-base font-black font-mono">
+            <strong className="text-emerald-700 text-base font-black font-mono">
               Rs. {amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </strong>
           </div>
@@ -184,7 +195,7 @@ const PrintInvoiceReceipt: React.FC = () => {
 
         {/* PAYMENT ACKNOWLEDGEMENT STATEMENT */}
         <div className="border border-slate-200 rounded-xl p-6 mb-6 space-y-4">
-          <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
+          <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
             <FiCheckCircle size={18} />
             <span>Payment Acknowledgement & Ledger Credit</span>
           </div>
@@ -208,7 +219,7 @@ const PrintInvoiceReceipt: React.FC = () => {
               </div>
               <div>
                 <span className="text-slate-400 font-sans text-[11px] block">This Payment:</span>
-                <span className="font-bold text-red-700">
+                <span className="font-bold text-emerald-700">
                   Rs. {amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>

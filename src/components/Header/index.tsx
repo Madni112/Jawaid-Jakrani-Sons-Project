@@ -25,6 +25,7 @@ import {
   LuSparkles,
 } from 'react-icons/lu';
 import { useAuth } from '../../Context/Auth';
+import { getBrandConfig } from '../../utils/brand';
 import { supabase } from '../../Context/supabaseClient';
 import {
   isUserAudioEnabled,
@@ -369,12 +370,8 @@ const Header = (props: {
   };
 
   // Dynamic Portal Identifier
-  const isAlm =
-    typeof window !== 'undefined' &&
-    (window.location.hostname.toLowerCase().includes('muhammadi') ||
-      document.title.toLowerCase().includes('muhammadi') ||
-      window.location.href.toLowerCase().includes('muhammadi'));
-  const portalCode = isAlm ? 'ALM' : 'ZAC';
+  const brand = getBrandConfig();
+  const portalCode = brand.code;
   const branchLabel = userLocationName || 'Portal Active';
 
   return (
@@ -440,7 +437,7 @@ const Header = (props: {
               className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition text-xs cursor-pointer shadow-2xs"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <LuSearch className="text-sm shrink-0" style={{ color: sidebarColor }} />
+                <LuSearch className="text-sm text-slate-400 shrink-0" />
                 <span className="truncate">Search invoices, customers, products...</span>
               </div>
               <kbd className="hidden 2xl:inline-flex items-center gap-0.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 shadow-2xs shrink-0">
@@ -515,7 +512,7 @@ const Header = (props: {
           >
             {/* Modal Search Input Header */}
             <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 dark:border-slate-800 shrink-0">
-              <LuSearch className="text-lg shrink-0" style={{ color: sidebarColor }} />
+              <LuSearch className="text-lg text-primary shrink-0" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -526,10 +523,10 @@ const Header = (props: {
                   setSelectedIndex(0);
                 }}
                 placeholder="Search live invoices, customers, products, vendors, or tools..."
-                className="w-full bg-transparent text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:outline-none focus:ring-0 border-none shadow-none"
+                className="w-full bg-transparent text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden"
               />
               {isSearching ? (
-                <LuRefreshCw className="animate-spin text-sm shrink-0" style={{ color: sidebarColor }} />
+                <LuRefreshCw className="animate-spin text-primary text-sm shrink-0" />
               ) : searchQuery ? (
                 <button
                   type="button"
@@ -573,17 +570,9 @@ const Header = (props: {
                   }}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer ${
                     searchFilter === tab.id
-                      ? 'shadow-2xs'
+                      ? 'bg-primary text-white shadow-2xs'
                       : 'bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700/80'
                   }`}
-                  style={
-                    searchFilter === tab.id
-                      ? {
-                          backgroundColor: sidebarColor,
-                          color: getContrastTextColor(sidebarColor),
-                        }
-                      : undefined
-                  }
                 >
                   {tab.label}
                 </button>
@@ -626,33 +615,17 @@ const Header = (props: {
                       onMouseEnter={() => setSelectedIndex(idx)}
                       className={`group flex items-center justify-between px-3 py-2.5 rounded-xl transition cursor-pointer ${
                         isSelected
-                          ? 'border'
+                          ? 'bg-primary/10 dark:bg-primary/20 border border-primary/20'
                           : 'hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-transparent'
                       }`}
-                      style={
-                        isSelected
-                          ? {
-                              backgroundColor: `${sidebarColor}14`,
-                              borderColor: `${sidebarColor}30`,
-                            }
-                          : undefined
-                      }
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div
                           className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 transition ${
                             isSelected
-                              ? 'shadow-xs'
+                              ? 'bg-primary text-white shadow-xs'
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                           }`}
-                          style={
-                            isSelected
-                              ? {
-                                  backgroundColor: sidebarColor,
-                                  color: getContrastTextColor(sidebarColor),
-                                }
-                              : undefined
-                          }
                         >
                           {item.icon}
                         </div>
@@ -683,11 +656,11 @@ const Header = (props: {
                           {item.category}
                         </span>
                         <LuArrowRight
-                          className="transition shrink-0"
-                          style={{
-                            color: isSelected ? sidebarColor : undefined,
-                            transform: isSelected ? 'translateX(2px)' : 'none',
-                          }}
+                          className={`transition shrink-0 ${
+                            isSelected
+                              ? 'text-primary translate-x-0.5'
+                              : 'text-slate-300 dark:text-slate-600'
+                          }`}
                           size={14}
                         />
                       </div>

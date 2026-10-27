@@ -4,6 +4,7 @@ import { supabase } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { createClient } from '@supabase/supabase-js';
 import Spinner from '../../ui/Spinner';
+import { getBrandConfig } from '../../utils/brand';
 import DarkModeSwitcher from '../../components/Header/DarkModeSwitcher';
 import {
   MdDashboard,
@@ -237,7 +238,7 @@ export interface EmployeeAccount {
 }
 
 // Master Super Admin / Developer Credentials
-const DEV_EMAIL = 'admin@zoaibalicompany.com';
+const DEV_EMAIL = getBrandConfig().adminEmail;
 const DEV_PASSWORD = 'admin123';
 const BACKUP_DEV_EMAIL = 'developer@noorhorizontechnologies.com';
 const BACKUP_DEV_PASSWORD = 'NoorHorizon@5923';
@@ -1348,10 +1349,10 @@ const DeveloperDashboard: React.FC = () => {
       lower === BACKUP_DEV_EMAIL.toLowerCase()
     ) {
       return {
-        name: 'Zoaib Ali',
+        name: getBrandConfig().fullName,
         role: 'Super Admin',
         email: lower.includes('@') ? raw : DEV_EMAIL,
-        initials: 'ZA',
+        initials: getBrandConfig().code,
         avatarBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
         badgeColor: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
       };
@@ -2260,7 +2261,7 @@ const DeveloperDashboard: React.FC = () => {
                       <input
                         type="email"
                         required
-                        placeholder="e.g. warehouse@zoaibalicompany.com"
+                        placeholder={`e.g. warehouse@${getBrandConfig().isAlm ? 'almuhammadi.com' : 'zoaibalicompany.com'}`}
                         value={newEmployee.email}
                         onChange={e => setNewEmployee({ ...newEmployee, email: e.target.value })}
                         className="w-full bg-white dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-lg p-2.5 text-black dark:text-white text-xs outline-none focus:border-emerald-500"

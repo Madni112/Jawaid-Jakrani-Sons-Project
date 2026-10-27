@@ -4,6 +4,7 @@ import ClickOutside from '../ClickOutside';
 import { LuLogOut, LuBuilding2, LuMail, LuSettings } from 'react-icons/lu';
 import { MdPerson } from 'react-icons/md';
 import { useAuth, detectPortalTenant } from '../../Context/Auth';
+import { getBrandConfig } from '../../utils/brand';
 import { supabase } from '../../Context/supabaseClient';
 import {
   applyAccentColor,
@@ -43,15 +44,10 @@ const DropdownUser = () => {
     logout();
   };
 
-  const displayEmail = userEmail || profile?.email || 'admin@zoaibalicompany.com';
+  const brand = getBrandConfig();
+  const displayEmail = userEmail || profile?.email || brand.adminEmail;
   const displayRole = role || profile?.role || 'Super Admin';
-  const isAlm =
-    typeof window !== 'undefined' &&
-    (window.location.hostname.toLowerCase().includes('muhammadi') ||
-      document.title.toLowerCase().includes('muhammadi') ||
-      window.location.href.toLowerCase().includes('muhammadi'));
-  const fallbackCompany = isAlm ? 'AL MUHAMMADI' : 'Zoaib Ali & Company';
-  const displayCompanyName = authBusinessName || fallbackCompany;
+  const displayCompanyName = authBusinessName || brand.name;
   const displayName = profile?.user_metadata?.full_name || profile?.user_metadata?.name || displayCompanyName;
   const isLightAccent = getContrastTextColor(accentColor) === '#0F172A';
   const roleTextColor = isLightAccent && !isDarkModeActive() ? '#0F172A' : accentColor;

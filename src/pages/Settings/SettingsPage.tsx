@@ -50,6 +50,7 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { supabase } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
+import { getBrandConfig } from '../../utils/brand';
 import useColorMode from '../../hooks/useColorMode';
 import {
   PRESET_THEME_COLORS,
@@ -809,7 +810,7 @@ const SettingsPage: React.FC = () => {
 
       // Sheet 4: Backup Meta
       const metaRows = [
-        { 'System Attribute': 'Company Name', 'Value': businessName || 'Zoaib Ali Company' },
+        { 'System Attribute': 'Company Name', 'Value': businessName || getBrandConfig().fullName },
         { 'System Attribute': 'Exported By', 'Value': userEmail || 'Admin' },
         { 'System Attribute': 'Role', 'Value': role || 'Super Admin' },
         { 'System Attribute': 'Export Timestamp', 'Value': new Date().toLocaleString() },
@@ -898,17 +899,12 @@ const SettingsPage: React.FC = () => {
     setCustomSidebarHex(appliedSidebarColor.replace('#', ''));
   };
 
-  const isAlm =
-    typeof window !== 'undefined' &&
-    (window.location.hostname.toLowerCase().includes('muhammadi') ||
-      document.title.toLowerCase().includes('muhammadi') ||
-      window.location.href.toLowerCase().includes('muhammadi'));
-  const fallbackCompany = isAlm ? 'AL MUHAMMADI' : 'Zoaib Ali & Company';
-  const displayCompanyName = businessName || fallbackCompany;
-  const displayEmail = userEmail || (isAlm ? 'admin@almuhammadi.com' : 'test@noorhorizontechnologie.com');
+  const brand = getBrandConfig();
+  const displayCompanyName = businessName || brand.name;
+  const displayEmail = userEmail || brand.adminEmail;
   const displayRole = role || 'Super Admin';
-  const portalName = isAlm ? 'Al Muhammadi (AM)' : 'Zohaib Ali Company (ZAC)';
-  const portalCode = isAlm ? 'ALM' : 'ZAC';
+  const portalName = brand.portalName;
+  const portalCode = brand.code;
 
   const activeAppliedPreset = PRESET_THEME_COLORS.find(
     (c) => c.hex.toLowerCase() === appliedAccentColor.toLowerCase()

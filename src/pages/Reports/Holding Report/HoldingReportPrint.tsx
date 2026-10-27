@@ -5,6 +5,7 @@ import { MdPrint, MdArrowBack, MdFileDownload, MdViewList, MdOutlineTableRows } 
 import { QtyBadge } from '../../../utils/QtyBadge';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
+import { getBrandConfig } from '../../../utils/brand';
 import ReportPagination from '../../../components/ReportPagination';
 import { supabase } from '../../../Context/supabaseClient';
 import Spinner from '../../../ui/Spinner';
@@ -46,6 +47,56 @@ const HoldingReportPrint: React.FC = () => {
 
   const [activePerspective, setActivePerspective] = useState<string>(initialPerspective);
   const [fetchedRows, setFetchedRows] = useState<HoldingItemRow[]>(stateData.rows || []);
+  const [customerLookupMap, setCustomerLookupMap] = useState<Record<string, { code: string; pageNo: string }>>({});
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('customers')
+          .select('id, customerName, customer_code, customerCode, page_no, pageNo');
+        if (data && !error) {
+          const map: Record<string, { code: string; pageNo: string }> = {};
+          data.forEach((c: any) => {
+            const code = c.customer_code || c.customerCode || (c.id ? `CUST-${String(c.id).padStart(3, '0')}` : '');
+            const pageNo = c.page_no || c.pageNo || '';
+            if (c.customerName) map[c.customerName.trim().toLowerCase()] = { code, pageNo };
+          });
+          setCustomerLookupMap(map);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch customers for lookup in holding report:', e);
+      }
+    };
+    fetchCustomers();
+  }, []);
+
+  const getCustomerDetails = (name: string) => {
+    if (!name) return { code: '', pageNo: '' };
+    return customerLookupMap[name.trim().toLowerCase()] || { code: '', pageNo: '' };
+  };
+
+  const renderCustomerBadge = (name: string, light = false) => {
+    const details = getCustomerDetails(name);
+    if (!details.code && !details.pageNo) return null;
+    return (
+      <div className="flex items-center gap-1.5 mt-0.5 text-[9.5px] leading-tight font-sans">
+        {details.code && (
+          <span className={light ? "bg-slate-700 text-teal-300 px-1 py-0.2 rounded border border-slate-600 font-bold uppercase" : "bg-slate-100 px-1 py-0.2 rounded border border-slate-300 font-bold uppercase text-slate-800"}>
+            [{details.code}]
+          </span>
+        )}
+        {details.code && details.pageNo && (
+          <span className={light ? "text-slate-400 font-bold" : "text-slate-400 font-bold"}>|</span>
+        )}
+        {details.pageNo && (
+          <span className={light ? "text-slate-300 font-semibold" : "text-slate-600 font-semibold"}>
+            P# {details.pageNo}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   useEffect(() => {
     const originalTitle = document.title;
@@ -78,13 +129,21 @@ const HoldingReportPrint: React.FC = () => {
           supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
           supabase.from('sales_invoices').select('*'),
           supabase.from('salesmen').select('id, name'),
-          supabase.from('customers').select('*')
+          supabase.from('customers').select('id, customerName, customer_code, customerCode, page_no, pageNo')
         ]);
-
-        if (dcRes.error) throw dcRes.error;
 
         const dcs = dcRes.data || [];
         const invoices = invRes.data || [];
+
+        if (custRes.data) {
+          const map: Record<string, { code: string; pageNo: string }> = {};
+          custRes.data.forEach((c: any) => {
+            const code = c.customer_code || c.customerCode || (c.id ? `CUST-${String(c.id).padStart(3, '0')}` : '');
+            const pageNo = c.page_no || c.pageNo || '';
+            if (c.customerName) map[c.customerName.trim().toLowerCase()] = { code, pageNo };
+          });
+          setCustomerLookupMap(prev => ({ ...map, ...prev }));
+        }
 
         // Create lookup map for invoices
         const invMap: Record<string, any> = {};
@@ -554,6 +613,8 @@ const HoldingReportPrint: React.FC = () => {
           { header: 'Invoice #', key: 'invoiceNo', width: 15 },
           { header: 'Date', key: 'date', width: 14, type: 'date' },
           { header: 'Customer Name', key: 'customerName', width: 26 },
+          { header: 'Customer Code', key: 'customerCode', width: 15 },
+          { header: 'Page #', key: 'pageNo', width: 10, alignment: 'center' },
           { header: 'Salesman', key: 'salesman', width: 20 },
           { header: 'Product Description', key: 'productName', width: 32 },
           { header: 'Code', key: 'skuCode', width: 14 },
@@ -569,6 +630,7 @@ const HoldingReportPrint: React.FC = () => {
         let globalIdx = 1;
 
         (displayRows || []).forEach((doc: any) => {
+          const cDetails = getCustomerDetails(doc.customerName || '');
           (doc.items || []).forEach((item: any, itIdx: number) => {
             exportData.push({
               idx: itIdx === 0 ? globalIdx : '',
@@ -576,6 +638,8 @@ const HoldingReportPrint: React.FC = () => {
               invoiceNo: itIdx === 0 ? (doc.invoiceNo || '-') : '',
               date: itIdx === 0 ? (doc.date || '-') : '',
               customerName: itIdx === 0 ? (doc.customerName || '-') : '',
+              customerCode: itIdx === 0 ? (cDetails.code || '-') : '',
+              pageNo: itIdx === 0 ? (cDetails.pageNo || '-') : '',
               salesman: itIdx === 0 ? (doc.salesman || '-') : '',
               productName: item.productName || '-',
               skuCode: item.skuCode || '-',
@@ -593,7 +657,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Detailed_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Holding Items',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Holding Items & Pending Dispatch Audit Statement',
           filterSummary: filterMeta,
           columns,
@@ -607,6 +671,8 @@ const HoldingReportPrint: React.FC = () => {
           { header: 'Invoice #', key: 'invoiceNo', width: 15 },
           { header: 'Date', key: 'date', width: 14, type: 'date' },
           { header: 'Customer Name', key: 'customerName', width: 26 },
+          { header: 'Customer Code', key: 'customerCode', width: 15 },
+          { header: 'Page #', key: 'pageNo', width: 10, alignment: 'center' },
           { header: 'Salesman', key: 'salesman', width: 20 },
           { header: 'Product Description', key: 'productName', width: 32 },
           { header: 'Code', key: 'skuCode', width: 14 },
@@ -630,6 +696,7 @@ const HoldingReportPrint: React.FC = () => {
 
           // Itemized rows grouped by document
           (s.docs || []).forEach((doc: any) => {
+            const cDetails = getCustomerDetails(doc.customerName || '');
             (doc.items || []).forEach((item: any, itIdx: number) => {
               exportData.push({
                 idx: itIdx === 0 ? globalIdx : '',
@@ -637,6 +704,8 @@ const HoldingReportPrint: React.FC = () => {
                 invoiceNo: itIdx === 0 ? (doc.invoiceNo || '-') : '',
                 date: itIdx === 0 ? (doc.date || '-') : '',
                 customerName: itIdx === 0 ? (doc.customerName || '-') : '',
+                customerCode: itIdx === 0 ? (cDetails.code || '-') : '',
+                pageNo: itIdx === 0 ? (cDetails.pageNo || '-') : '',
                 salesman: s.salesman,
                 productName: item.productName || '-',
                 skuCode: item.skuCode || '-',
@@ -665,7 +734,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Salesman_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Salesman Holding',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Salesman-Wise Holding Inventory & DC/Invoice Audit Statement',
           filterSummary: filterMeta,
           columns,
@@ -679,6 +748,9 @@ const HoldingReportPrint: React.FC = () => {
           { header: 'Gatepass / DC #', key: 'gatepassNo', width: 16 },
           { header: 'Invoice #', key: 'invoiceNo', width: 15 },
           { header: 'Date', key: 'date', width: 14, type: 'date' },
+          { header: 'Customer Name', key: 'customerName', width: 26 },
+          { header: 'Customer Code', key: 'customerCode', width: 15 },
+          { header: 'Page #', key: 'pageNo', width: 10, alignment: 'center' },
           { header: 'Salesman', key: 'salesman', width: 20 },
           { header: 'Product Description', key: 'productName', width: 32 },
           { header: 'Code', key: 'skuCode', width: 14 },
@@ -700,6 +772,8 @@ const HoldingReportPrint: React.FC = () => {
             sectionTitle: `CUSTOMER: ${c.customer.toUpperCase()} (${c.itemsCount} Items | ${c.gatepasses || 0} Gatepasses | ${c.invoices || 0} Invoices | Held: ${Number(c.totalHeldQty || 0).toLocaleString()} Pcs | Rs. ${Number(c.totalHeldValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })})`
           });
 
+          const cDetails = getCustomerDetails(c.customer || '');
+
           // Itemized rows grouped by document
           (c.docs || []).forEach((doc: any) => {
             (doc.items || []).forEach((item: any, itIdx: number) => {
@@ -709,6 +783,8 @@ const HoldingReportPrint: React.FC = () => {
                 invoiceNo: itIdx === 0 ? (doc.invoiceNo || '-') : '',
                 date: itIdx === 0 ? (doc.date || '-') : '',
                 customerName: c.customer,
+                customerCode: cDetails.code || '-',
+                pageNo: cDetails.pageNo || '-',
                 salesman: itIdx === 0 ? (doc.salesman || '-') : '',
                 productName: item.productName || '-',
                 skuCode: item.skuCode || '-',
@@ -737,7 +813,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Customer_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Customer Holding',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Customer-Wise Holding Inventory & DC/Invoice Audit Statement',
           filterSummary: filterMeta,
           columns,
@@ -751,6 +827,8 @@ const HoldingReportPrint: React.FC = () => {
           { header: 'Invoice #', key: 'invoiceNo', width: 16 },
           { header: 'Date', key: 'date', width: 14, type: 'date' },
           { header: 'Customer Name', key: 'customerName', width: 26 },
+          { header: 'Customer Code', key: 'customerCode', width: 15 },
+          { header: 'Page #', key: 'pageNo', width: 10, alignment: 'center' },
           { header: 'Salesman', key: 'salesman', width: 20 },
           { header: 'Product Description', key: 'productName', width: 32 },
           { header: 'Code', key: 'skuCode', width: 14 },
@@ -774,12 +852,15 @@ const HoldingReportPrint: React.FC = () => {
 
           // Itemized rows grouped by document / invoice
           (g.docs || []).forEach((doc: any) => {
+            const cDetails = getCustomerDetails(doc.customerName || g.customer || '');
             (doc.items || []).forEach((item: any, itIdx: number) => {
               exportData.push({
                 idx: itIdx === 0 ? globalIdx : '',
                 invoiceNo: itIdx === 0 ? (doc.invoiceNo || '-') : '',
                 date: itIdx === 0 ? (doc.date || '-') : '',
                 customerName: itIdx === 0 ? (doc.customerName || g.customer || '-') : '',
+                customerCode: itIdx === 0 ? (cDetails.code || '-') : '',
+                pageNo: itIdx === 0 ? (cDetails.pageNo || '-') : '',
                 salesman: itIdx === 0 ? (doc.salesman || g.salesman || '-') : '',
                 productName: item.productName || '-',
                 skuCode: item.skuCode || '-',
@@ -808,7 +889,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Gatepass_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Gatepass Holding',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Gatepass-Wise Holding Inventory & DC/Item Audit Statement',
           filterSummary: filterMeta,
           columns,
@@ -822,6 +903,8 @@ const HoldingReportPrint: React.FC = () => {
           { header: 'Gatepass / DC #', key: 'gatepassNo', width: 16 },
           { header: 'Date', key: 'date', width: 14, type: 'date' },
           { header: 'Customer Name', key: 'customerName', width: 26 },
+          { header: 'Customer Code', key: 'customerCode', width: 15 },
+          { header: 'Page #', key: 'pageNo', width: 10, alignment: 'center' },
           { header: 'Salesman', key: 'salesman', width: 20 },
           { header: 'Product Description', key: 'productName', width: 32 },
           { header: 'Code', key: 'skuCode', width: 14 },
@@ -845,6 +928,7 @@ const HoldingReportPrint: React.FC = () => {
 
           // Itemized rows grouped by document / gatepass
           (inv.docs || []).forEach((doc: any) => {
+            const cDetails = getCustomerDetails(doc.customerName || inv.customer || '');
             (doc.items || []).forEach((item: any, itIdx: number) => {
               exportData.push({
                 idx: itIdx === 0 ? globalIdx : '',
@@ -852,6 +936,8 @@ const HoldingReportPrint: React.FC = () => {
                 invoiceNo: inv.invoiceNo,
                 date: itIdx === 0 ? (doc.date || '-') : '',
                 customerName: itIdx === 0 ? (doc.customerName || inv.customer || '-') : '',
+                customerCode: itIdx === 0 ? (cDetails.code || '-') : '',
+                pageNo: itIdx === 0 ? (cDetails.pageNo || '-') : '',
                 salesman: itIdx === 0 ? (doc.salesman || inv.salesman || '-') : '',
                 productName: item.productName || '-',
                 skuCode: item.skuCode || '-',
@@ -880,7 +966,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Invoice_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Invoice Holding',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Invoice-Wise Holding Inventory & DC/Item Audit Statement',
           filterSummary: filterMeta,
           columns,
@@ -912,16 +998,67 @@ const HoldingReportPrint: React.FC = () => {
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
-          @page { size: auto; margin: 12mm 10mm 12mm 10mm; }
-          body, html { height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; }
+          @page { size: landscape; margin: 6mm 6mm; }
+          body, html { height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
-          .print-root-container, .print-root-container * { visibility: visible !important; }
-          .print-root-container { position: static !important; width: 100% !important; height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; padding: 0 !important; margin: 0 !important; }
+          .print-root-container, .print-root-container * {
+            visibility: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print-root-container {
+            position: static !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 15px !important;
+            color: #000000 !important;
+          }
           aside, header, nav, footer, .print-hidden-element, button { display: none !important; visibility: hidden !important; }
-          table { page-break-inside: auto !important; }
-          tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
+          table {
+            width: 100% !important;
+            table-layout: fixed !important;
+            box-sizing: border-box !important;
+            border-collapse: collapse !important;
+            border: 1.5px solid black !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          th {
+            font-size: 13.5px !important;
+            font-weight: 800 !important;
+            padding: 5px 3px !important;
+            color: #000000 !important;
+            background-color: #f3f4f6 !important;
+            border: 1px solid #000000 !important;
+            white-space: normal !important;
+            word-break: normal !important;
+            line-height: 1.2 !important;
+            vertical-align: middle !important;
+          }
+          td {
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            padding: 6px 4px !important;
+            color: #000000 !important;
+            border: 1px solid #374151 !important;
+          }
+          tfoot td {
+            font-size: 14.5px !important;
+            font-weight: 900 !important;
+            padding: 6px 4px !important;
+            color: #000000 !important;
+            border: 1.5px solid #000000 !important;
+            white-space: nowrap !important;
+          }
+          tr { page-break-inside: avoid !important; break-inside: avoid !important; }
           thead { display: table-header-group !important; }
           tfoot { display: table-footer-group !important; }
+          .break-inside-avoid { break-inside: avoid !important; page-break-inside: avoid !important; }
         }
       `}} />
 
@@ -981,14 +1118,66 @@ const HoldingReportPrint: React.FC = () => {
         </div>
 
         {/* Printable Letterhead */}
-        <div className="text-center space-y-1 py-4 border-b border-double border-black">
-          <h1 className="text-xl font-black uppercase tracking-widest font-serif">
-            {businessName || 'AL MUHAMMADI'}
+        <div className="relative text-center space-y-1.5 py-4 border-b border-double border-slate-300">
+          {/* ZAC Brand Icon Badge (Sidebar Style Option A) */}
+          <div className="absolute left-2 top-2">
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                minWidth: '48px',
+                minHeight: '48px',
+                maxWidth: '48px',
+                maxHeight: '48px',
+                borderRadius: '13px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #115e59 100%)',
+                border: '1.5px solid rgba(52, 211, 153, 0.5)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                overflow: 'hidden',
+                WebkitPrintColorAdjust: 'exact',
+                printColorAdjust: 'exact',
+                flexShrink: 0
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'linear-gradient(to top, transparent, rgba(255, 255, 255, 0.15))',
+                  pointerEvents: 'none'
+                }}
+              />
+              <span
+                style={{
+                  position: 'relative',
+                  zIndex: 10,
+                  fontFamily: 'Cinzel, Georgia, serif',
+                  fontWeight: 900,
+                  letterSpacing: '0.12em',
+                  fontSize: '15px',
+                  color: '#ffffff',
+                  lineHeight: 1,
+                  paddingLeft: '2px',
+                  WebkitPrintColorAdjust: 'exact',
+                  printColorAdjust: 'exact'
+                }}
+              >
+                {getBrandConfig().code}
+              </span>
+            </div>
+          </div>
+
+          <h1 className="text-3xl font-black uppercase tracking-widest font-serif text-slate-950">
+            {businessName || getBrandConfig().fullName}
           </h1>
-          <p className="text-[10px] font-bold tracking-wider text-gray-600 uppercase">
+          <p className="text-xs font-bold tracking-wider text-gray-600 uppercase">
             COMMERCIAL HOLDING INVENTORY & PENDING DISPATCH AUDIT STATEMENT
           </p>
-          <div className="text-[10px] pt-1 font-mono flex justify-between px-2 text-gray-700">
+          <div className="text-xs pt-1.5 font-mono flex justify-between px-2 text-gray-700">
             <span>Audit Perspective: <b className="text-black uppercase underline">{(perspectiveLabels[activePerspective] || activePerspective).toUpperCase()} PERSPECTIVE</b></span>
             <span>Date Window: {rawFilters.dateFrom || 'Start'} up to {rawFilters.dateTo || 'Today'}</span>
           </div>
@@ -1035,7 +1224,7 @@ const HoldingReportPrint: React.FC = () => {
                   <th className="p-1.5 border border-black text-center w-24">Date</th>
                   <th className="p-1.5 border border-black">Gatepass #</th>
                   <th className="p-1.5 border border-black">Invoice #</th>
-                  <th className="p-1.5 border border-black">Customer Title</th>
+                  <th className="p-1.5 border border-black min-w-[140px] max-w-[220px]">Customer Name</th>
                   <th className="p-1.5 border border-black">Salesman</th>
                   <th className="p-1.5 border border-black">Product Description</th>
                   <th className="p-1.5 border border-black text-center w-16">Order</th>
@@ -1061,7 +1250,10 @@ const HoldingReportPrint: React.FC = () => {
                         <td className="p-1.5 border border-black text-center text-gray-700 font-sans text-[10px] align-middle">{doc.date || '-'}</td>
                         <td className="p-1.5 border border-black font-bold font-mono align-middle">{doc.gatepassNo || '-'}</td>
                         <td className="p-1.5 border border-black font-mono font-bold align-middle">{doc.invoiceNo || '-'}</td>
-                        <td className="p-1.5 border border-black font-sans font-bold align-middle">{doc.customerName || '-'}</td>
+                        <td className="p-1.5 border border-black font-sans font-bold align-middle min-w-[140px] max-w-[220px]">
+                          <div className="leading-tight">{doc.customerName || '-'}</div>
+                          {renderCustomerBadge(doc.customerName)}
+                        </td>
                         <td className="p-1.5 border border-black font-sans text-gray-700 align-middle">{doc.salesman || '-'}</td>
                         
                         {/* 📦 Product Description Sub-Rows */}
@@ -1190,7 +1382,7 @@ const HoldingReportPrint: React.FC = () => {
                     <th className="p-2 border border-black">Gatepass / DC #</th>
                     <th className="p-2 border border-black">Invoice #</th>
                     <th className="p-2 border border-black text-center">Date</th>
-                    <th className="p-2 border border-black">Customer Name</th>
+                    <th className="p-2 border border-black min-w-[140px] max-w-[220px]">Customer Name</th>
                     <th className="p-2 border border-black">Item Description</th>
                     <th className="p-2 border border-black text-center">Code</th>
                     <th className="p-2 border border-black">Warehouse</th>
@@ -1262,8 +1454,9 @@ const HoldingReportPrint: React.FC = () => {
                               </td>
 
                               {/* 🏢 Customer Name */}
-                              <td className="p-2 border border-black font-sans font-bold text-gray-900 align-middle">
-                                {doc.customerName || '-'}
+                              <td className="p-2 border border-black font-sans font-bold text-gray-900 align-middle min-w-[140px] max-w-[220px]">
+                                <div className="leading-tight">{doc.customerName || '-'}</div>
+                                {renderCustomerBadge(doc.customerName)}
                               </td>
 
                               {/* 📦 Product Description Sub-Rows */}
@@ -1443,6 +1636,7 @@ const HoldingReportPrint: React.FC = () => {
                                   Customer
                                 </span>
                                 <span className="text-sm font-bold tracking-wide">{c.customer}</span>
+                                {renderCustomerBadge(c.customer, true)}
                               </div>
                               <div className="flex items-center gap-4 text-[11px] font-mono font-normal">
                                 <span><b>{c.gatepasses || 0}</b> Gatepasses</span>
@@ -1672,7 +1866,7 @@ const HoldingReportPrint: React.FC = () => {
                                 <span className="text-gray-300 font-sans text-[11px] font-normal">({g.date || '-'})</span>
                               </div>
                               <div className="flex items-center gap-3 text-[11px] font-mono font-normal">
-                                <span>Cust: <b className="text-white font-bold">{g.customer || 'Counter'}</b></span>
+                                <span className="flex items-center gap-1">Cust: <b className="text-white font-bold">{g.customer || 'Counter'}</b>{renderCustomerBadge(g.customer, true)}</span>
                                 <span>•</span>
                                 <span>SM: <b className="text-white font-bold">{g.salesman || 'Direct'}</b></span>
                                 <span>•</span>
@@ -1889,7 +2083,7 @@ const HoldingReportPrint: React.FC = () => {
                                 <span className="text-gray-300 font-sans text-[11px] font-normal">({inv.date || '-'})</span>
                               </div>
                               <div className="flex items-center gap-3 text-[11px] font-mono font-normal">
-                                <span>Cust: <b className="text-white font-bold">{inv.customer || 'Counter'}</b></span>
+                                <span className="flex items-center gap-1">Cust: <b className="text-white font-bold">{inv.customer || 'Counter'}</b>{renderCustomerBadge(inv.customer, true)}</span>
                                 <span>•</span>
                                 <span>SM: <b className="text-white font-bold">{inv.salesman || 'Direct'}</b></span>
                                 <span>•</span>
@@ -2089,7 +2283,7 @@ const HoldingReportPrint: React.FC = () => {
         {/* 🏢 Software & Corporate Provider Footer */}
         <div className="mt-8 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400 break-inside-avoid">
           <div className="flex items-center gap-2 font-bold">
-            <span className="text-black font-black uppercase">AL MUHAMMADI</span>
+            <span className="text-black font-black uppercase">{businessName || getBrandConfig().fullName}</span>
           </div>
           <div className="text-[9.5px] text-gray-600 font-mono font-medium text-right">
             Software Solution &amp; Cloud Infrastructure by <b className="text-black font-bold">NHT ENTERPRISES (Noor Horizon Technologies)</b>

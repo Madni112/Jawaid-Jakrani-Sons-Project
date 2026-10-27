@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
+import { getBrandConfig } from '../../../utils/brand';
 import {
   MdPauseCircleFilled,
   MdPrint,
@@ -166,7 +167,7 @@ const HoldingReport: React.FC = () => {
         supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
         supabase.from('sales_invoices').select('*'),
         supabase.from('salesmen').select('id, name'),
-        supabase.from('customers').select('*')
+        supabase.from('customers').select('id, customerName, customer_code, customerCode')
       ]);
 
       if (dcRes.error) throw dcRes.error;
@@ -175,9 +176,8 @@ const HoldingReport: React.FC = () => {
       const invoices = invRes.data || [];
       const salesmen = (smRes.data || []).map((s: any) => s.name).filter(Boolean);
       const customers = (custRes.data || []).map((c: any) => {
-        const code = c.customer_code || c.customerCode || c.customercode;
-        const name = c.customerName || c.customername || c.name || '';
-        return code ? `[${code}] ${name}` : name;
+        const code = c.customer_code || c.customerCode;
+        return code ? `[${code}] ${c.customerName}` : c.customerName;
       }).filter(Boolean);
 
       // Create lookup map for invoices
@@ -562,7 +562,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Detailed_Report_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Holding Items Audit',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Holding Items & Pending Dispatch Audit Statement',
           filterSummary: filterMeta,
           columns,
@@ -593,7 +593,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Salesman_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Salesman Holding',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Salesman-Wise Holding Inventory Portfolio Statement',
           filterSummary: filterMeta,
           columns,
@@ -603,7 +603,7 @@ const HoldingReport: React.FC = () => {
       } else if (activePerspective === 'customer') {
         const columns: ExcelColumn[] = [
           { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
-          { header: 'Customer / Client Title', key: 'customer', width: 32 },
+          { header: 'Customer Name', key: 'customer', width: 30 },
           { header: 'Gatepasses Involved', key: 'gpCount', width: 18, type: 'number' },
           { header: 'Invoices Count', key: 'invCount', width: 16, type: 'number' },
           { header: 'Held Items Count', key: 'itemsCount', width: 18, type: 'number' },
@@ -624,7 +624,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Customer_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Customer Holding',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Customer-Wise Holding Stock Allocation Report',
           filterSummary: filterMeta,
           columns,
@@ -653,7 +653,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Gatepass_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Gatepass Holding',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Gatepass / Delivery Challan Holding Stock Audit',
           filterSummary: filterMeta,
           columns,
@@ -680,7 +680,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Invoice_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Invoice Holding',
-          companyName: businessName || 'AL MUHAMMADI',
+          companyName: businessName || getBrandConfig().fullName,
           reportTitle: 'Invoice-Wise Holding Inventory Statement',
           filterSummary: filterMeta,
           columns,
