@@ -286,7 +286,9 @@ export function applyAccentColor(hexColor: string) {
       html:not(.dark) .hover\\:text-emerald-700:hover,
       html:not(.dark) .hover\\:text-teal-600:hover,
       html:not(.dark) .hover\\:text-teal-700:hover,
-      html:not(.dark) .hover\\:text-primary:hover {
+      html:not(.dark) .hover\\:text-primary:hover,
+      html:not(.dark) .group:hover .group-hover\\:text-primary,
+      html:not(.dark) .group:hover .group-hover\\:text-emerald-600 {
         color: ${safeLightText} !important;
       }
 
@@ -294,7 +296,9 @@ export function applyAccentColor(hexColor: string) {
       html.dark .hover\\:text-emerald-700:hover,
       html.dark .hover\\:text-teal-600:hover,
       html.dark .hover\\:text-teal-700:hover,
-      html.dark .hover\\:text-primary:hover {
+      html.dark .hover\\:text-primary:hover,
+      html.dark .group:hover .group-hover\\:text-primary,
+      html.dark .group:hover .group-hover\\:text-emerald-600 {
         color: ${safeDarkText} !important;
       }
 

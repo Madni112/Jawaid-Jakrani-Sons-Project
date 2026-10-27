@@ -1123,8 +1123,10 @@ const SettingsPage: React.FC = () => {
           {/* TAB 2: THEME & APPEARANCE */}
           {activeTab === 'theme' && (
             <div className="space-y-6 animate-fadeIn">
-              {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Navbar & Brand Accent, Sidebar) */}
-              <div className="p-2 rounded-2xl bg-white/95 dark:bg-[#111827]/95 border border-slate-200/90 dark:border-slate-800 shadow-md backdrop-blur-md sticky top-18 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* BRAND COLOR PALETTES (STICKY SUB-NAVBAR SCOPE CONTAINER) */}
+              <div className="relative space-y-4">
+                {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Navbar & Brand Accent, Sidebar) */}
+                <div className="p-2 rounded-2xl bg-white/95 dark:bg-[#111827]/95 border border-slate-200/90 dark:border-slate-800 shadow-md backdrop-blur-md sticky top-2 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto">
                   {/* SUB-TAB 1: NAVBAR & BRAND ACCENT */}
                   <button
@@ -1643,6 +1645,7 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             )}
+              </div>
 
               {/* SECTION C: THEME MODE (LIGHT / DARK) */}
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">

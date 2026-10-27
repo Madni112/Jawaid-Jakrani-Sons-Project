@@ -19,6 +19,7 @@ const DropdownUser = () => {
   const [profile, setProfile] = useState<any>();
   const [imageError, setImageError] = useState(false);
   const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
+  const [isSettingsHovered, setIsSettingsHovered] = useState(false);
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -149,9 +150,21 @@ const DropdownUser = () => {
             <Link
               to="/settings"
               onClick={() => setDropdownOpen(false)}
-              className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-150 ease-in-out cursor-pointer group"
+              onMouseEnter={() => setIsSettingsHovered(true)}
+              onMouseLeave={() => setIsSettingsHovered(false)}
+              className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 transition duration-150 ease-in-out cursor-pointer group"
+              style={{
+                backgroundColor: isSettingsHovered ? `${accentColor}18` : undefined,
+                color: isSettingsHovered ? roleTextColor : undefined,
+              }}
             >
-              <LuSettings size={17} className="text-slate-500 group-hover:text-primary transition-colors" />
+              <LuSettings
+                size={17}
+                className="transition-colors"
+                style={{
+                  color: isSettingsHovered ? roleTextColor : undefined,
+                }}
+              />
               <span>Settings</span>
             </Link>
 
