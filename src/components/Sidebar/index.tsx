@@ -432,7 +432,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             ? 'fixed left-0 top-0 z-99999 h-screen block'
             : `min-[751px]:relative min-[751px]:shrink-0 min-[751px]:z-30 ${
                 layoutMode === 'floating'
-                  ? 'min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl overflow-hidden'
+                  ? 'min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl overflow-hidden'
                   : 'min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'
               }`
         } ${

@@ -326,7 +326,8 @@ export function applyAccentColor(hexColor: string) {
         box-shadow: 0 10px 15px -3px rgba(${r}, ${g}, ${b}, 0.28) !important;
       }
 
-      /* Gradients: Start at active accent color */
+      ${!isLightAccent ? `
+      /* Gradients: Start at active accent color (only for visible, non-white hues) */
       .from-emerald-400,
       .from-emerald-500,
       .from-emerald-600,
@@ -341,7 +342,7 @@ export function applyAccentColor(hexColor: string) {
         --tw-gradient-from: ${hexColor} var(--tw-gradient-from-position) !important;
       }
 
-      /* Gradients: End at companion shade (light version for dark colors, dark version for light colors) */
+      /* Gradients: End at companion shade */
       .to-emerald-500,
       .to-emerald-600,
       .to-emerald-700,
@@ -357,6 +358,14 @@ export function applyAccentColor(hexColor: string) {
       .to-primary {
         --tw-gradient-to: ${companionShade} var(--tw-gradient-to-position) !important;
       }
+      ` : `
+      .from-primary {
+        --tw-gradient-from: ${hexColor} var(--tw-gradient-from-position) !important;
+      }
+      .to-primary {
+        --tw-gradient-to: ${companionShade} var(--tw-gradient-to-position) !important;
+      }
+      `}
 
       .fill-primary {
         fill: ${hexColor} !important;
