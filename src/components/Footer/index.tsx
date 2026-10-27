@@ -81,7 +81,7 @@ const Footer: React.FC = () => {
           <span className="font-bold text-slate-700 dark:text-slate-200">Abdul Sattar</span>
           <span>• All rights reserved.</span>
         </div>
-        <span className="font-mono">v1.3.8 • Secure Business Management Infrastructure</span>
+        <span className="font-mono">v1.3.9 • Secure Business Management Infrastructure</span>
       </div>
     </footer>
   );
