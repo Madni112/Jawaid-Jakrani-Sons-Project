@@ -31,6 +31,7 @@ import {
   setUserAudioEnabled,
   triggerFeedbackSound,
 } from '../../utils/audioFeedback';
+import { NavbarLayoutMode, getNavbarLayoutMode } from '../../constant/themeConfig';
 
 export interface GlobalSearchItem {
   id: string;
@@ -119,7 +120,22 @@ const Header = (props: {
     }
   };
 
-  // 3. Command Palette / Live Global Search State
+  // 3. Navbar Layout Positioning (Sticky vs Normal Scroll)
+  const [navbarMode, setNavbarMode] = useState<NavbarLayoutMode>(getNavbarLayoutMode());
+
+  useEffect(() => {
+    const updateNavbarMode = () => {
+      setNavbarMode(getNavbarLayoutMode());
+    };
+    window.addEventListener('zoaib_ali_navbar_layout_changed', updateNavbarMode);
+    window.addEventListener('storage', updateNavbarMode);
+    return () => {
+      window.removeEventListener('zoaib_ali_navbar_layout_changed', updateNavbarMode);
+      window.removeEventListener('storage', updateNavbarMode);
+    };
+  }, []);
+
+  // 4. Command Palette / Live Global Search State
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFilter, setSearchFilter] = useState<CategoryFilter>('ALL');
@@ -347,7 +363,7 @@ const Header = (props: {
 
   return (
     <>
-      <header className="sticky top-0 z-999 flex w-full backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 border-b border-slate-200/80 dark:border-slate-800/80 shadow-2xs transition-all duration-200">
+      <header className={`${navbarMode === 'normal' ? 'relative' : 'sticky top-0'} z-999 flex w-full backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 border-b border-slate-200/80 dark:border-slate-800/80 shadow-2xs transition-all duration-200`}>
         <div className="flex flex-grow items-center justify-between px-3.5 py-2.5 sm:px-6 2xl:px-8 gap-3">
           
           {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}
@@ -382,7 +398,7 @@ const Header = (props: {
             {/* Quick Action: New Sale Button */}
             <Link
               to="/sales/invoice/add"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-linear-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
               title="Create a New Sales Invoice"
             >
               <LuPlus className="text-sm stroke-[3]" />

@@ -59,6 +59,12 @@ import {
   getSavedSidebarColor,
   getSafeSidebarColor,
   isDarkModeActive,
+  SidebarLayoutMode,
+  getSidebarLayoutMode,
+  setSidebarLayoutMode,
+  NavbarLayoutMode,
+  getNavbarLayoutMode,
+  setNavbarLayoutMode,
 } from '../../constant/themeConfig';
 import {
   fetchSystemMasterConfig,
@@ -314,6 +320,42 @@ const SettingsPage: React.FC = () => {
   );
   const [wasSidebarAdjusted, setWasSidebarAdjusted] = useState<boolean>(false);
   const [sidebarAppliedRecently, setSidebarAppliedRecently] = useState<boolean>(false);
+
+  // Layout Styles: Sidebar (Floating vs Classic) & Navbar (Sticky vs Normal)
+  const [sidebarLayout, setSidebarLayout] = useState<SidebarLayoutMode>(() => getSidebarLayoutMode());
+  const [navbarLayout, setNavbarLayout] = useState<NavbarLayoutMode>(() => getNavbarLayoutMode());
+
+  const handleSetSidebarLayout = (mode: SidebarLayoutMode) => {
+    setSidebarLayout(mode);
+    setSidebarLayoutMode(mode);
+    toast.success(
+      mode === 'floating'
+        ? '🚀 Modern Floating Sidebar activated!'
+        : '🏛️ Classic Edge-to-Edge Sidebar activated!',
+      { id: 'sidebar-layout-toast' }
+    );
+  };
+
+  const handleSetNavbarLayout = (mode: NavbarLayoutMode) => {
+    setNavbarLayout(mode);
+    setNavbarLayoutMode(mode);
+    toast.success(
+      mode === 'sticky'
+        ? '📌 Sticky Navbar activated (stays at top)!'
+        : '📜 Normal Scrolling Navbar activated!',
+      { id: 'navbar-layout-toast' }
+    );
+  };
+
+  const handleResetLayoutToClassic = () => {
+    setSidebarLayout('classic');
+    setSidebarLayoutMode('classic');
+    setNavbarLayout('sticky');
+    setNavbarLayoutMode('sticky');
+    toast.success('↩️ Layout options reset to Classic Original!', {
+      id: 'reset-layout-toast',
+    });
+  };
 
   // System Master Permissions State
   const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(null);
@@ -1636,6 +1678,163 @@ const SettingsPage: React.FC = () => {
                       <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
                     )}
                   </button>
+                </div>
+              </div>
+
+              {/* SECTION D: WORKSPACE LAYOUT & NAVIGATION STYLE */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary text-white shadow-xs">
+                      <LuLayers size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                        Workspace Navigation & Layout
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Choose between a modern floating card layout or the classic edge-to-edge ERP interface.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleResetLayoutToClassic}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                    title="Undo customizations and restore original Classic layout"
+                  >
+                    <LuRotateCcw size={13} />
+                    <span>Reset to Classic (Undo)</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Switch 1: Sidebar Style */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                          <span>Left Sidebar Style</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
+                          Controls whether the sidebar floats as a card or connects flush to edges.
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSetSidebarLayout('floating')}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[92px] ${
+                          sidebarLayout === 'floating'
+                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            🚀 Floating Modern
+                          </span>
+                          {sidebarLayout === 'floating' && (
+                            <LuCheck className="text-primary text-sm stroke-[3]" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
+                          Rounded card, 12px margin & soft elevation shadow.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetSidebarLayout('classic')}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[92px] ${
+                          sidebarLayout === 'classic'
+                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            🏛️ Classic Edge
+                          </span>
+                          {sidebarLayout === 'classic' && (
+                            <LuCheck className="text-primary text-sm stroke-[3]" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
+                          Original flush edge-to-edge enterprise layout.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Switch 2: Top Navbar Position */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                          <span>Top Navbar Positioning</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
+                          Choose if the header stays pinned or scrolls away with content.
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {navbarLayout === 'sticky' ? 'Sticky Fixed' : 'Normal Scroll'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSetNavbarLayout('sticky')}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[92px] ${
+                          navbarLayout === 'sticky'
+                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            📌 Sticky Fixed
+                          </span>
+                          {navbarLayout === 'sticky' && (
+                            <LuCheck className="text-primary text-sm stroke-[3]" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
+                          Pinned at top with glass-blur effect while scrolling.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetNavbarLayout('normal')}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[92px] ${
+                          navbarLayout === 'normal'
+                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            📜 Normal Scroll
+                          </span>
+                          {navbarLayout === 'normal' && (
+                            <LuCheck className="text-primary text-sm stroke-[3]" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
+                          Flows naturally with the page content as you scroll.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

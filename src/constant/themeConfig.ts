@@ -39,6 +39,34 @@ export const PRESET_THEME_COLORS: ThemeColor[] = [
 
 export const DEFAULT_THEME_COLOR = '#059669';
 
+export type SidebarLayoutMode = 'floating' | 'classic';
+
+export function getSidebarLayoutMode(): SidebarLayoutMode {
+  if (typeof window === 'undefined') return 'classic';
+  return (localStorage.getItem('zoaib_ali_sidebar_layout_mode') as SidebarLayoutMode) || 'classic';
+}
+
+export function setSidebarLayoutMode(mode: SidebarLayoutMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('zoaib_ali_sidebar_layout_mode', mode);
+    window.dispatchEvent(new Event('zoaib_ali_sidebar_layout_changed'));
+  }
+}
+
+export type NavbarLayoutMode = 'sticky' | 'normal';
+
+export function getNavbarLayoutMode(): NavbarLayoutMode {
+  if (typeof window === 'undefined') return 'sticky';
+  return (localStorage.getItem('zoaib_ali_navbar_layout_mode') as NavbarLayoutMode) || 'sticky';
+}
+
+export function setNavbarLayoutMode(mode: NavbarLayoutMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('zoaib_ali_navbar_layout_mode', mode);
+    window.dispatchEvent(new Event('zoaib_ali_navbar_layout_changed'));
+  }
+}
+
 export function applyAccentColor(hexColor: string) {
   if (!hexColor) return;
   try {

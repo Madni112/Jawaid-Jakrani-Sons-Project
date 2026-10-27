@@ -5,7 +5,7 @@ import { AiOutlineUp, AiOutlineDown, AiOutlineRight, AiOutlineArrowLeft } from '
 import { LuLogOut } from 'react-icons/lu';
 import { useModal } from '../../Context/Modal';
 import { useAuth } from '../../Context/Auth';
-import { PRESET_THEME_COLORS, applySidebarColor, getSavedSidebarColor, getSafeSidebarColor } from '../../constant/themeConfig';
+import { PRESET_THEME_COLORS, applySidebarColor, getSavedSidebarColor, getSafeSidebarColor, SidebarLayoutMode, getSidebarLayoutMode } from '../../constant/themeConfig';
 import LogoDark from '../../images/logo/logo-dark.png';
 import LogoLight from '../../images/logo/logo-light.png';
 import IconDark from '../../images/logo/icon-dark.png';
@@ -98,6 +98,7 @@ const SidebarItem = ({
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [showFlyout, setShowFlyout] = useState(false);
   const [flyoutTop, setFlyoutTop] = useState<number>(0);
+  const [flyoutLeft, setFlyoutLeft] = useState<number>(56);
 
   // Helper check: Recursively verifies if any nested children match the active route URL
   const checkHasActiveChild = (routeItem: any): boolean => {
@@ -165,6 +166,7 @@ const SidebarItem = ({
     if (!sidebarOpen && !isMobile && itemRef.current) {
       const rect = itemRef.current.getBoundingClientRect();
       setFlyoutTop(rect.top);
+      setFlyoutLeft(rect.right + 8);
       setShowFlyout(true);
     }
   };
@@ -265,9 +267,10 @@ const SidebarItem = ({
 
         {!sidebarOpen && showFlyout && !isMobile && (
           <div
-            className="fixed left-[56px] z-99999 w-56 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#1E293B]/95 p-2.5 shadow-2xl backdrop-blur-md"
+            className="fixed z-99999 w-56 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#1E293B]/95 p-2.5 shadow-2xl backdrop-blur-md"
             style={{
               top: `${flyoutTop}px`,
+              left: `${flyoutLeft}px`,
               animation: 'sidebarFlyoutFadeIn 0.18s ease-out forwards'
             }}
           >
@@ -365,6 +368,21 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   // Dedicated sidebar font/icon color state with contrast protection
   const [currentSidebarColor, setCurrentSidebarColor] = useState(getSavedSidebarColor());
 
+  // Sidebar Layout Mode (Floating Modern vs Classic Edge)
+  const [layoutMode, setLayoutMode] = useState<SidebarLayoutMode>(getSidebarLayoutMode());
+
+  useEffect(() => {
+    const updateLayoutMode = () => {
+      setLayoutMode(getSidebarLayoutMode());
+    };
+    window.addEventListener('zoaib_ali_sidebar_layout_changed', updateLayoutMode);
+    window.addEventListener('storage', updateLayoutMode);
+    return () => {
+      window.removeEventListener('zoaib_ali_sidebar_layout_changed', updateLayoutMode);
+      window.removeEventListener('storage', updateLayoutMode);
+    };
+  }, []);
+
   useEffect(() => {
     const updateColors = () => {
       const raw = localStorage.getItem('zoaib_ali_sidebar_raw_color') || getSavedSidebarColor();
@@ -407,7 +425,20 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
         <div className="fixed inset-0 bg-slate-900/60 z-9999 backdrop-blur-xs transition-opacity duration-300" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <aside ref={sidebar} className={`fixed left-0 top-0 z-99999 flex h-screen flex-col bg-white duration-300 ease-in-out dark:bg-[#111827] shadow-xl ${isMobile ? 'block' : 'min-[751px]:sticky min-[751px]:top-0'} ${sidebarOpen ? 'w-72.5 translate-x-0 border-r border-slate-200/80 dark:border-slate-800/80 visible' : 'w-0 -translate-x-full min-[751px]:w-18 min-[751px]:translate-x-0 min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 max-[750px]:invisible'}`} >
+      <aside
+        ref={sidebar}
+        className={`fixed left-0 top-0 z-99999 flex flex-col bg-white duration-300 ease-in-out dark:bg-[#111827] shadow-xl ${
+          isMobile
+            ? 'h-screen block'
+            : layoutMode === 'floating'
+            ? 'min-[751px]:sticky min-[751px]:top-3 min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl overflow-hidden'
+            : 'min-[751px]:sticky min-[751px]:top-0 min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'
+        } ${
+          sidebarOpen
+            ? `w-72.5 translate-x-0 visible ${layoutMode === 'floating' && !isMobile ? '' : 'border-r border-slate-200/80 dark:border-slate-800/80'}`
+            : `w-0 -translate-x-full min-[751px]:w-18 min-[751px]:translate-x-0 max-[750px]:invisible ${layoutMode === 'floating' && !isMobile ? '' : 'min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'}`
+        }`}
+      >
 
         {/* Brand Header */}
         <div className={`flex items-center justify-between gap-2 py-5 border-b border-slate-200/80 dark:border-slate-800/80 min-h-[76px] duration-300 ${sidebarOpen ? 'px-6' : 'px-0 min-[751px]:px-2 justify-center'}`} >
