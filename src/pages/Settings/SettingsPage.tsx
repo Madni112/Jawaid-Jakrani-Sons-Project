@@ -908,6 +908,7 @@ const SettingsPage: React.FC = () => {
   const displayEmail = userEmail || (isAlm ? 'admin@almuhammadi.com' : 'test@noorhorizontechnologie.com');
   const displayRole = role || 'Super Admin';
   const portalName = isAlm ? 'Al Muhammadi (AM)' : 'Zohaib Ali Company (ZAC)';
+  const portalCode = isAlm ? 'ALM' : 'ZAC';
 
   const activeAppliedPreset = PRESET_THEME_COLORS.find(
     (c) => c.hex.toLowerCase() === appliedAccentColor.toLowerCase()
@@ -1025,7 +1026,7 @@ const SettingsPage: React.FC = () => {
                       color: getContrastTextColor(appliedAccentColor),
                     }}
                   >
-                    {displayCompanyName.substring(0, 2).toUpperCase()}
+                    {portalCode}
                   </div>
 
                   <div className="min-w-0 flex-1">
