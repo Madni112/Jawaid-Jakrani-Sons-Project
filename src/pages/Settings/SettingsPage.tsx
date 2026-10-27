@@ -58,6 +58,7 @@ import {
   applySidebarColor,
   getSavedSidebarColor,
   getSafeSidebarColor,
+  getContrastTextColor,
   isDarkModeActive,
   SidebarLayoutMode,
   getSidebarLayoutMode,
@@ -1322,6 +1323,8 @@ const SettingsPage: React.FC = () => {
                       }`}
                       style={{
                         backgroundColor: selectedAccentColor,
+                        color: getContrastTextColor(selectedAccentColor),
+                        border: getContrastTextColor(selectedAccentColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
                       }}
                     >
                       {accentAppliedRecently ? (
@@ -1548,6 +1551,8 @@ const SettingsPage: React.FC = () => {
                       }`}
                       style={{
                         backgroundColor: selectedSidebarColor,
+                        color: getContrastTextColor(selectedSidebarColor),
+                        border: getContrastTextColor(selectedSidebarColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
                       }}
                     >
                       {sidebarAppliedRecently ? (
