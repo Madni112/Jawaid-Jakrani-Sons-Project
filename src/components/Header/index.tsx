@@ -31,7 +31,7 @@ import {
   setUserAudioEnabled,
   triggerFeedbackSound,
 } from '../../utils/audioFeedback';
-import { NavbarLayoutMode, getNavbarLayoutMode } from '../../constant/themeConfig';
+import { SidebarLayoutMode, getSidebarLayoutMode } from '../../constant/themeConfig';
 
 export interface GlobalSearchItem {
   id: string;
@@ -120,18 +120,18 @@ const Header = (props: {
     }
   };
 
-  // 3. Navbar Layout Positioning (Sticky vs Normal Scroll)
-  const [navbarMode, setNavbarMode] = useState<NavbarLayoutMode>(getNavbarLayoutMode());
+  // 3. Layout Mode (Floating Modern vs Classic Edge)
+  const [layoutMode, setLayoutMode] = useState<SidebarLayoutMode>(getSidebarLayoutMode());
 
   useEffect(() => {
-    const updateNavbarMode = () => {
-      setNavbarMode(getNavbarLayoutMode());
+    const updateLayoutMode = () => {
+      setLayoutMode(getSidebarLayoutMode());
     };
-    window.addEventListener('zoaib_ali_navbar_layout_changed', updateNavbarMode);
-    window.addEventListener('storage', updateNavbarMode);
+    window.addEventListener('zoaib_ali_sidebar_layout_changed', updateLayoutMode);
+    window.addEventListener('storage', updateLayoutMode);
     return () => {
-      window.removeEventListener('zoaib_ali_navbar_layout_changed', updateNavbarMode);
-      window.removeEventListener('storage', updateNavbarMode);
+      window.removeEventListener('zoaib_ali_sidebar_layout_changed', updateLayoutMode);
+      window.removeEventListener('storage', updateLayoutMode);
     };
   }, []);
 
@@ -363,7 +363,13 @@ const Header = (props: {
 
   return (
     <>
-      <header className="shrink-0 z-40 flex w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#111827]/95 shadow-xs min-[751px]:shadow-md transition-all duration-200">
+      <header
+        className={`shrink-0 z-40 flex duration-200 ease-in-out transition-all ${
+          layoutMode === 'classic'
+            ? 'w-full rounded-none border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 shadow-2xs'
+            : 'w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#111827]/95 shadow-xs min-[751px]:shadow-md'
+        }`}
+      >
         <div className="flex flex-grow items-center justify-between px-3 py-2 sm:px-4 2xl:px-6 gap-2 sm:gap-3 w-full min-w-0">
           
           {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}

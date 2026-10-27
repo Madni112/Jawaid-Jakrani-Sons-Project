@@ -330,29 +330,16 @@ const SettingsPage: React.FC = () => {
     setSidebarLayoutMode(mode);
     toast.success(
       mode === 'floating'
-        ? '🚀 Modern Floating Sidebar activated!'
-        : '🏛️ Classic Edge-to-Edge Sidebar activated!',
+        ? '🚀 Modern Floating Workspace (Sidebar & Navbar) activated!'
+        : '🏛️ Classic Edge-to-Edge Workspace (Sidebar & Navbar) activated!',
       { id: 'sidebar-layout-toast' }
-    );
-  };
-
-  const handleSetNavbarLayout = (mode: NavbarLayoutMode) => {
-    setNavbarLayout(mode);
-    setNavbarLayoutMode(mode);
-    toast.success(
-      mode === 'sticky'
-        ? '📌 Sticky Navbar activated (stays at top)!'
-        : '📜 Normal Scrolling Navbar activated!',
-      { id: 'navbar-layout-toast' }
     );
   };
 
   const handleResetLayoutToClassic = () => {
     setSidebarLayout('classic');
     setSidebarLayoutMode('classic');
-    setNavbarLayout('sticky');
-    setNavbarLayoutMode('sticky');
-    toast.success('↩️ Layout options reset to Classic Original!', {
+    toast.success('↩️ Restored original Classic Edge-to-Edge layout!', {
       id: 'reset-layout-toast',
     });
   };
@@ -1715,14 +1702,14 @@ const SettingsPage: React.FC = () => {
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <span>Left Sidebar Style</span>
+                          <span>Workspace Layout Style</span>
                         </div>
                         <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
-                          Controls whether the sidebar floats as a card or connects flush to edges.
+                          Switch between modern floating cards and classic edge-to-edge layout.
                         </p>
                       </div>
                       <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'}
+                        {sidebarLayout === 'floating' ? 'Floating Modern' : 'Classic Edge'}
                       </span>
                     </div>
 
@@ -1745,7 +1732,7 @@ const SettingsPage: React.FC = () => {
                           )}
                         </div>
                         <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Rounded card, 12px margin & soft elevation shadow.
+                          Floating rounded sidebar & navbar cards with soft elevation.
                         </p>
                       </button>
 
@@ -1767,7 +1754,7 @@ const SettingsPage: React.FC = () => {
                           )}
                         </div>
                         <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Original flush edge-to-edge enterprise layout.
+                          Original edge-to-edge classic sidebar & full-width navbar.
                         </p>
                       </button>
                     </div>
