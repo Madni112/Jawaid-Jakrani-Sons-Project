@@ -382,7 +382,7 @@ const Header = (props: {
             {/* Quick Action: New Sale Button */}
             <Link
               to="/sales/invoice/add"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary hover:opacity-90 text-white text-xs font-bold shadow-2xs transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-linear-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer shrink-0"
               title="Create a New Sales Invoice"
             >
               <LuPlus className="text-sm stroke-[3]" />

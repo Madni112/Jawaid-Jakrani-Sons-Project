@@ -62,6 +62,7 @@ export function applyAccentColor(hexColor: string) {
     // Calculate relative luminance to determine if the color is light or dark
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     const isDark = luminance < 0.55;
+    const isLightAccent = luminance > 0.65;
 
     // Light version of the color (for dark colors): clean lighter tone of the same color
     const lightR = Math.min(255, Math.round(r + (255 - r) * 0.38));
@@ -108,7 +109,18 @@ export function applyAccentColor(hexColor: string) {
       .bg-teal-800,
       .bg-primary {
         background-color: ${hexColor} !important;
+        ${isLightAccent ? 'color: #0F172A !important;' : ''}
       }
+
+      ${isLightAccent ? `
+      .bg-primary svg,
+      .bg-primary span,
+      .bg-primary .text-white,
+      .text-white.bg-primary {
+        color: #0F172A !important;
+        stroke: #0F172A;
+      }
+      ` : ''}
 
       /* Hover Backgrounds */
       .hover\\:bg-emerald-700:hover,

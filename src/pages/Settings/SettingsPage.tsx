@@ -930,6 +930,11 @@ const SettingsPage: React.FC = () => {
                           ? 'bg-primary text-white shadow-xs'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-500 group-hover:text-slate-800 dark:group-hover:text-white'
                       }`}
+                      style={
+                        isActive && appliedAccentColor && (appliedAccentColor.toLowerCase() === '#ffffff' || appliedAccentColor.toLowerCase() === '#fff')
+                          ? { color: '#0F172A', border: '1px solid #CBD5E1' }
+                          : undefined
+                      }
                     >
                       <Icon size={18} />
                     </div>
