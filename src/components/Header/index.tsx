@@ -31,7 +31,12 @@ import {
   setUserAudioEnabled,
   triggerFeedbackSound,
 } from '../../utils/audioFeedback';
-import { NavbarLayoutMode, getNavbarLayoutMode } from '../../constant/themeConfig';
+import {
+  NavbarLayoutMode,
+  getNavbarLayoutMode,
+  getSavedSidebarColor,
+  getContrastTextColor,
+} from '../../constant/themeConfig';
 
 export interface GlobalSearchItem {
   id: string;
@@ -120,7 +125,18 @@ const Header = (props: {
     }
   };
 
-  // 3. Navbar Layout Mode (Floating Modern vs Classic Edge)
+  // 3. Dynamic Sidebar Color (for cohesive New Sale button styling)
+  const [sidebarColor, setSidebarColor] = useState<string>(getSavedSidebarColor());
+
+  useEffect(() => {
+    const handleSidebarColorChange = () => {
+      setSidebarColor(getSavedSidebarColor());
+    };
+    window.addEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
+    return () => window.removeEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
+  }, []);
+
+  // 4. Navbar Layout Mode (Floating Modern vs Classic Edge)
   const [navbarMode, setNavbarMode] = useState<NavbarLayoutMode>(getNavbarLayoutMode());
 
   useEffect(() => {
@@ -401,10 +417,14 @@ const Header = (props: {
               </span>
             </div>
 
-            {/* Quick Action: New Sale Button */}
+            {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
             <Link
               to="/sales/invoice/add"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
+              style={{
+                backgroundColor: sidebarColor,
+                color: getContrastTextColor(sidebarColor),
+              }}
               title="Create a New Sales Invoice"
             >
               <LuPlus className="text-sm stroke-[3]" />

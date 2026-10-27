@@ -326,46 +326,13 @@ export function applyAccentColor(hexColor: string) {
         box-shadow: 0 10px 15px -3px rgba(${r}, ${g}, ${b}, 0.28) !important;
       }
 
-      ${!isLightAccent ? `
-      /* Gradients: Start at active accent color (only for visible, non-white hues) */
-      .from-emerald-400,
-      .from-emerald-500,
-      .from-emerald-600,
-      .from-emerald-700,
-      .from-emerald-800,
-      .from-teal-400,
-      .from-teal-500,
-      .from-teal-600,
-      .from-teal-700,
-      .from-teal-800,
-      .from-primary {
-        --tw-gradient-from: ${hexColor} var(--tw-gradient-from-position) !important;
-      }
-
-      /* Gradients: End at companion shade */
-      .to-emerald-500,
-      .to-emerald-600,
-      .to-emerald-700,
-      .to-emerald-800,
-      .to-emerald-900,
-      .to-teal-500,
-      .to-teal-600,
-      .to-teal-700,
-      .to-teal-800,
-      .to-teal-900,
-      .to-cyan-700,
-      .to-cyan-800,
-      .to-primary {
-        --tw-gradient-to: ${companionShade} var(--tw-gradient-to-position) !important;
-      }
-      ` : `
+      /* Gradients: only override explicit primary gradient tokens */
       .from-primary {
         --tw-gradient-from: ${hexColor} var(--tw-gradient-from-position) !important;
       }
       .to-primary {
         --tw-gradient-to: ${companionShade} var(--tw-gradient-to-position) !important;
       }
-      `}
 
       .fill-primary {
         fill: ${hexColor} !important;
