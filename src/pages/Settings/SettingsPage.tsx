@@ -1709,7 +1709,7 @@ const SettingsPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="max-w-2xl">
                   {/* Switch 1: Sidebar Style */}
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
                     <div className="flex items-center justify-between mb-3">
@@ -1773,69 +1773,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Switch 2: Top Navbar Position */}
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <span>Top Navbar Positioning</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
-                          Choose if the header stays pinned or scrolls away with content.
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                        {navbarLayout === 'sticky' ? 'Sticky Fixed' : 'Normal Scroll'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => handleSetNavbarLayout('sticky')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[92px] ${
-                          navbarLayout === 'sticky'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            📌 Sticky Fixed
-                          </span>
-                          {navbarLayout === 'sticky' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Pinned at top with glass-blur effect while scrolling.
-                        </p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSetNavbarLayout('normal')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[92px] ${
-                          navbarLayout === 'normal'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            📜 Normal Scroll
-                          </span>
-                          {navbarLayout === 'normal' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Flows naturally with the page content as you scroll.
-                        </p>
-                      </button>
-                    </div>
                   </div>
-                </div>
               </div>
             </div>
           )}

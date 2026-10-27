@@ -437,8 +437,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               }`
         } ${
           sidebarOpen
-            ? `w-72.5 translate-x-0 visible ${layoutMode === 'floating' && !isMobile ? '' : 'border-r border-slate-200/80 dark:border-slate-800/80'}`
-            : `w-0 -translate-x-full min-[751px]:w-18 min-[751px]:translate-x-0 max-[750px]:invisible ${layoutMode === 'floating' && !isMobile ? '' : 'min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'}`
+            ? `w-72.5 translate-x-0 visible ${layoutMode === 'classic' ? 'border-r border-slate-200/80 dark:border-slate-800/80' : ''}`
+            : `w-0 -translate-x-full min-[751px]:w-18 min-[751px]:translate-x-0 max-[750px]:invisible ${layoutMode === 'classic' ? 'min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80' : ''}`
         }`}
       >
 

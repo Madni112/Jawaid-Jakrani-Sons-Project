@@ -53,18 +53,18 @@ const DropdownUser = () => {
   const displayName = profile?.user_metadata?.full_name || profile?.user_metadata?.name || displayCompanyName;
 
   return (
-    <ClickOutside onClick={() => setDropdownOpen(false)} className="relative z-9999">
+    <ClickOutside onClick={() => setDropdownOpen(false)} className="relative z-9999 shrink-0">
       <Link
         onClick={() => setDropdownOpen(!dropdownOpen)}
-        className="flex items-center gap-3.5 cursor-pointer select-none"
+        className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none shrink-0"
         to="#"
       >
-        <span className="hidden text-right lg:block">
-          <span className="block text-sm font-bold text-black dark:text-white truncate max-w-[200px]">
+        <span className="hidden text-right lg:block shrink-0">
+          <span className="block text-xs sm:text-sm font-bold text-black dark:text-white truncate max-w-[110px] xl:max-w-[150px]">
             {displayCompanyName}
           </span>
           <span
-            className="block text-xs font-semibold"
+            className="block text-[11px] font-semibold"
             style={{ color: accentColor }}
           >
             {displayRole}
@@ -73,22 +73,22 @@ const DropdownUser = () => {
 
         {profile?.image && !imageError ? (
           <img
-            className="w-9 h-9 border object-cover rounded-full"
+            className="w-8.5 h-8.5 border object-cover rounded-full shrink-0"
             src={profile.image}
             onError={() => setImageError(true)}
             alt="User"
           />
         ) : (
           <div
-            className="w-9 h-9 rounded-full text-white flex items-center justify-center font-bold text-sm shadow-sm transition-colors duration-200"
+            className="w-8.5 h-8.5 rounded-full text-white flex items-center justify-center font-bold text-sm shadow-sm transition-colors duration-200 shrink-0"
             style={{ backgroundColor: accentColor }}
           >
-            <MdPerson size={20} />
+            <MdPerson size={18} />
           </div>
         )}
 
         <svg
-          className="hidden fill-current sm:block"
+          className="hidden fill-current sm:block shrink-0"
           width="12"
           height="8"
           viewBox="0 0 12 8"
