@@ -29,7 +29,11 @@ import {
   MdOutlineReceipt,
   MdClose,
   MdInventory,
-  MdInfoOutline
+  MdInfoOutline,
+  MdKeyboardArrowDown,
+  MdKeyboardArrowUp,
+  MdShowChart,
+  MdBarChart
 } from 'react-icons/md';
 import StatCard from '../../ui/StatCard';
 import ActionCard from '../../ui/ActionCard';
@@ -186,6 +190,17 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
   const [liquidityTab, setLiquidityTab] = useState<'bank' | 'cash'>('bank');
   const [stockModalView, setStockModalView] = useState<'allTime' | 'thisMonth'>('allTime');
   const [activeBreakdownModal, setActiveBreakdownModal] = useState<'cash' | 'bank' | 'receivables' | 'stock' | null>(null);
+  const [showOperationalDetails, setShowOperationalDetails] = useState<boolean>(() => {
+    return localStorage.getItem('zac_dashboard_show_details') === 'true';
+  });
+
+  const toggleOperationalDetails = () => {
+    setShowOperationalDetails(prev => {
+      const next = !prev;
+      localStorage.setItem('zac_dashboard_show_details', String(next));
+      return next;
+    });
+  };
 
   // Customer Sales Graph Data
   const [customerSalesDaily, setCustomerSalesDaily] = useState<{ dates: string[]; sales: number[] }>({ dates: [], sales: [] });
@@ -797,8 +812,33 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
           onClick={() => setActiveBreakdownModal('stock')}
         />
       </div>
-
       {/* ========================================================================= */}
+      {/* EXPANDABLE OPERATIONAL DETAILS TOGGLE BAR                                */}
+      {/* ========================================================================= */}
+      <div className="flex items-center justify-center pt-2 pb-1">
+        <button
+          onClick={toggleOperationalDetails}
+          className="group flex items-center gap-3 px-5 py-2 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+              {showOperationalDetails ? 'Hide Operational Ledgers & Analytics' : 'Show Operational Ledgers & Analytics'}
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono font-bold border border-slate-200/70 dark:border-slate-700/60">
+              8 Live Modules
+            </span>
+          </div>
+          <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition-transform duration-200 group-hover:bg-slate-200/70 dark:group-hover:bg-slate-700">
+            {showOperationalDetails ? <MdKeyboardArrowUp size={16} /> : <MdKeyboardArrowDown size={16} />}
+          </div>
+        </button>
+      </div>
+
+      {/* COLLAPSIBLE OPERATIONAL SECTIONS */}
+      {showOperationalDetails && (
+        <div className="space-y-6">
+          {/* ========================================================================= */}
       {/* SECTION 1: CUSTOMER RECEIVABLES (AGING) & LOW STOCK LIMIT ALERTS           */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1212,37 +1252,61 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Bank Allocation Donut Chart (4 cols) */}
-        <div className="lg:col-span-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6 flex flex-col justify-between">
+        <div className="lg:col-span-4 relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 sm:p-6 flex flex-col justify-between overflow-hidden transition-all duration-200 group">
+          {/* Linear Cyan Accent Notch */}
+          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-cyan-500 shadow-xs transition-all duration-200 group-hover:w-2" />
+
           <div>
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 pb-3 mb-4 flex items-center gap-2">
-              <MdAccountBalance className="text-emerald-600" />
-              Bank Balance
-            </h3>
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-950/60 dark:text-cyan-400 border border-cyan-200/70 dark:border-cyan-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                  <MdAccountBalance size={18} />
+                </div>
+                <div>
+                  <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                    Bank Balance
+                  </h3>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
+                    Distribution across corporate liquid accounts
+                  </p>
+                </div>
+              </div>
+            </div>
             <ReactApexChart options={bankDonutOptions} series={bankDonutSeries} type="donut" height={260} />
           </div>
-          <div className="text-[11px] text-slate-400 text-center pt-2">
-            Net Liquid Reserves: <span className="font-bold text-slate-900 dark:text-white font-mono">Rs. {(metrics.totalBankBalance + metrics.cashBalance).toLocaleString()}</span>
+          <div className="text-[11px] text-slate-400 dark:text-slate-500 text-center pt-3 border-t border-slate-100 dark:border-slate-800/80 mt-2 font-medium">
+            Net Liquid Reserves: <span className="font-bold text-slate-800 dark:text-slate-100 font-mono">Rs. {(metrics.totalBankBalance + metrics.cashBalance).toLocaleString()}</span>
           </div>
         </div>
 
         {/* Liquid Ledgers (Bank Accounts & Cash Drawer Tabs) (8 cols) */}
-        <div className="lg:col-span-8 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6 flex flex-col justify-between">
+        <div className="lg:col-span-8 relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 sm:p-6 flex flex-col justify-between overflow-hidden transition-all duration-200 group">
+          {/* Linear Emerald Accent Notch */}
+          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-emerald-500 shadow-xs transition-all duration-200 group-hover:w-2" />
+
           <div>
-            <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                  Cash & Bank Ledgers
-                </h3>
-                <p className="text-[11px] text-slate-400">Reconciled corporate bank accounts & cash drawer transactions</p>
+            <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                  <MdAccountBalanceWallet size={18} />
+                </div>
+                <div>
+                  <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                    Cash & Bank Ledgers
+                  </h3>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
+                    Reconciled corporate bank accounts & cash drawer transactions
+                  </p>
+                </div>
               </div>
 
               {/* Dual Tab: Bank Accounts vs Cash Drawer */}
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl font-bold text-xs">
+              <div className="flex bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 font-bold text-xs">
                 <button
                   onClick={() => setLiquidityTab('bank')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${liquidityTab === 'bank'
-                    ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                  className={`px-3 py-1 rounded-md text-[11px] transition-all flex items-center gap-1.5 cursor-pointer ${liquidityTab === 'bank'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
                     }`}
                 >
                   <MdAccountBalance size={14} />
@@ -1250,9 +1314,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                 </button>
                 <button
                   onClick={() => setLiquidityTab('cash')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${liquidityTab === 'cash'
-                    ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                  className={`px-3 py-1 rounded-md text-[11px] transition-all flex items-center gap-1.5 cursor-pointer ${liquidityTab === 'cash'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
                     }`}
                 >
                   <MdAccountBalanceWallet size={14} />
@@ -1263,10 +1327,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
 
             {/* TAB 1: BANK ACCOUNTS LEDGER TABLE */}
             {liquidityTab === 'bank' && (
-              <div className="max-w-full overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800 max-h-[260px] overflow-y-auto">
+              <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200/70 dark:border-slate-800 max-h-[260px] overflow-y-auto">
                 <table className="w-full table-auto border-collapse font-mono text-xs">
-                  <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10">
-                    <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-slate-100 dark:border-slate-800 text-left text-[11px] uppercase tracking-wider">
+                  <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-800/90 backdrop-blur-xs z-10 shadow-2xs">
+                    <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200/80 dark:border-slate-700/80 text-left text-[10.5px] uppercase tracking-wider">
                       <th className="py-2.5 px-3">Bank Title</th>
                       <th className="py-2.5 px-3">Account Number</th>
                       <th className="py-2.5 px-3 text-right">Debit (+In)</th>
@@ -1279,22 +1343,22 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                       metrics.bankAccounts.map((b) => (
                         <tr
                           key={b.id}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150"
+                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150 transition-colors"
                         >
-                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white font-sans flex items-center gap-2">
-                            <span className="p-1 rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+                          <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-100 font-sans flex items-center gap-2">
+                            <span className="p-1 rounded-md bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-400 border border-cyan-200/60 dark:border-cyan-800/50">
                               <MdAccountBalance size={14} />
                             </span>
                             {b.bankName} - {b.accountTitle}
                           </td>
-                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{b.accountNumber || '-'}</td>
-                          <td className="py-2.5 px-3 text-right text-emerald-600 font-semibold">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-mono">{b.accountNumber || '-'}</td>
+                          <td className="py-2.5 px-3 text-right text-emerald-600 dark:text-emerald-400 font-semibold font-mono">
                             {b.totalInflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="py-2.5 px-3 text-right text-rose-500 font-semibold">
+                          <td className="py-2.5 px-3 text-right text-rose-500 dark:text-rose-400 font-semibold font-mono">
                             {b.totalOutflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-black text-slate-900 dark:text-white">
+                          <td className="py-2.5 px-3 text-right font-black text-slate-900 dark:text-white font-mono">
                             Rs. {b.netBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
@@ -1313,10 +1377,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
 
             {/* TAB 2: CASH DRAWER SETTLEMENT TABLE */}
             {liquidityTab === 'cash' && (
-              <div className="max-w-full overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800 max-h-[260px] overflow-y-auto">
+              <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200/70 dark:border-slate-800 max-h-[260px] overflow-y-auto">
                 <table className="w-full table-auto border-collapse font-mono text-xs">
-                  <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10">
-                    <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-slate-100 dark:border-slate-800 text-left text-[11px] uppercase tracking-wider">
+                  <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-800/90 backdrop-blur-xs z-10 shadow-2xs">
+                    <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200/80 dark:border-slate-700/80 text-left text-[10.5px] uppercase tracking-wider">
                       <th className="py-2.5 px-3">Date</th>
                       <th className="py-2.5 px-3">Source / Voucher</th>
                       <th className="py-2.5 px-3">Party / Particulars</th>
@@ -1329,10 +1393,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                       cashTransactions.map((c) => (
                         <tr
                           key={c.id}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150"
+                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150 transition-colors"
                         >
-                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{c.date}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white font-sans">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-mono">{c.date}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-100 font-sans">
                             {(() => {
                               const s = String(c.source || '');
                               if (s.toLowerCase().includes('sale bill')) {
@@ -1357,14 +1421,14 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                             {c.party}
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.type === 'Inflow'
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
-                              : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${c.type === 'Inflow'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/50'
+                              : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/50'
                               }`}>
                               {c.type === 'Inflow' ? '+ Received' : '- Paid'}
                             </span>
                           </td>
-                          <td className={`py-2.5 px-3 text-right font-black ${c.type === 'Inflow' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                          <td className={`py-2.5 px-3 text-right font-black font-mono ${c.type === 'Inflow' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                             }`}>
                             Rs. {c.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
@@ -1383,13 +1447,13 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
             )}
           </div>
 
-          <div className="pt-3 flex justify-between items-center text-xs">
-            <span className="text-[11px] text-slate-400">
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex justify-between items-center text-xs mt-2">
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
               {liquidityTab === 'bank' ? 'Real-time verified bank reconciliation' : `Current Cash In Hand: Rs. ${metrics.cashBalance.toLocaleString()}`}
             </span>
             <button
               onClick={() => navigate('/Reports/Account-Report')}
-              className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline text-xs flex items-center gap-1"
+              className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline text-xs flex items-center gap-1 cursor-pointer"
             >
               <span>View Full General Ledger</span>
               <span>→</span>
@@ -1397,46 +1461,65 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
           </div>
         </div>
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* CHART 1: SALES VS PROCUREMENT */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
-          <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                Sales vs Purchases
-              </h3>
-              <p className="text-[11px] text-slate-400">Monthly comparative velocity & margins</p>
+        <div className="relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 sm:p-6 overflow-hidden transition-all duration-200 group">
+          {/* Linear Blue Accent Notch */}
+          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-blue-500 shadow-xs transition-all duration-200 group-hover:w-2" />
+
+          <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200/70 dark:border-blue-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                <MdShowChart size={18} />
+              </div>
+              <div>
+                <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                  Sales vs Purchases
+                </h3>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">Monthly comparative velocity & margins</p>
+              </div>
             </div>
-            <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Live Sync</span>
+            <span className="text-[10.5px] px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-bold font-mono border border-blue-200/70 dark:border-blue-800/60 shrink-0">
+              Live Sync
+            </span>
           </div>
           <ReactApexChart options={salesVsPurchasesOptions} series={salesVsPurchasesSeries} type="area" height={300} />
         </div>
 
         {/* CHART 2: CUSTOMER SALES VOLUME GRAPH (TABS: DAILY / MONTHLY) */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
-          <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                Customer Sales Trend
-              </h3>
-              <p className="text-[11px] text-slate-400">Interactive timeframe aggregation</p>
+        <div className="relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 sm:p-6 overflow-hidden transition-all duration-200 group">
+          {/* Linear Purple Accent Notch */}
+          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-purple-500 shadow-xs transition-all duration-200 group-hover:w-2" />
+
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400 border border-purple-200/70 dark:border-purple-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                <MdBarChart size={18} />
+              </div>
+              <div>
+                <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                  Customer Sales Trend
+                </h3>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">Interactive timeframe aggregation</p>
+              </div>
             </div>
             {/* Tab Switcher: Daily vs Monthly */}
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl font-bold text-xs">
+            <div className="flex bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 font-bold text-xs">
               <button
                 onClick={() => setChartViewTab('daily')}
-                className={`px-3 py-1 rounded-lg transition-all ${chartViewTab === 'daily'
-                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                className={`px-3 py-1 rounded-md text-[11px] transition-all cursor-pointer ${chartViewTab === 'daily'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
                   }`}
               >
                 📅 Daily (Last 14d)
               </button>
               <button
                 onClick={() => setChartViewTab('monthly')}
-                className={`px-3 py-1 rounded-lg transition-all ${chartViewTab === 'monthly'
-                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                className={`px-3 py-1 rounded-md text-[11px] transition-all cursor-pointer ${chartViewTab === 'monthly'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
                   }`}
               >
                 📆 Monthly
@@ -1446,7 +1529,8 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
           <ReactApexChart options={customerSalesChartOptions} series={customerSalesChartSeries} type="bar" height={300} />
         </div>
       </div>
-
+        </div>
+      )}
       {/* ========================================================================= */}
       {/* ASSET & FINANCIAL METRIC BREAKDOWN POPUP MODAL                            */}
       {/* ========================================================================= */}
