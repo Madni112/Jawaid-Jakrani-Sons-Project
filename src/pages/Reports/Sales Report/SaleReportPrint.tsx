@@ -1212,8 +1212,25 @@ const SaleReportPrint = () => {
             else query = query.neq('dc_no', '');
           }
 
-          const { data: invData, error: invError } = await query;
-          if (invError) throw invError;
+          if (filters.dateFrom) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            query = query.gte('sale_date', startStr);
+          }
+          if (filters.dateTo) {
+            const endStr = String(filters.dateTo).split('T')[0];
+            query = query.lte('sale_date', endStr);
+          }
+
+          let invData: any[] = [];
+          let page = 0;
+          const pageSize = 1000;
+          while (true) {
+            const { data: pageData, error: pageErr } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
+            if (pageErr) throw pageErr;
+            invData = invData.concat(pageData || []);
+            if (!pageData || pageData.length < pageSize) break;
+            page++;
+          }
 
           const { data: returnsData, error: retError } = await supabase
             .from('sales_returns')
