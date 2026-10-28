@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdSearch, MdAdd, MdWarning, MdClose, MdInfoOutline } from 'react-icons/md';
@@ -92,15 +92,15 @@ const ProductList = () => {
       if (error) throw error;
 
       if (baseProducts && baseProducts.length > 0) {
-        const { data: openStocks } = await supabase.from('opening_stocks').select('*');
-        const { data: purchases } = await supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse');
-        const { data: sales } = await supabase.from('sales_invoices').select('items, sale_status, receipt_status, dispatch_warehouse');
-        const { data: sReturns } = await supabase.from('sales_returns').select('*');
-        const { data: pReturns } = await supabase.from('purchase_returns').select('*');
-        const { data: deliveryChallans } = await supabase.from('delivery_challans').select('*').order('created_at', { ascending: false });
+        const { data: openStocks } = await fetchAllPages(supabase.from('opening_stocks').select('*'));
+        const { data: purchases } = await fetchAllPages(supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse'));
+        const { data: sales } = await fetchAllPages(supabase.from('sales_invoices').select('items, sale_status, receipt_status, dispatch_warehouse'));
+        const { data: sReturns } = await fetchAllPages(supabase.from('sales_returns').select('*'));
+        const { data: pReturns } = await fetchAllPages(supabase.from('purchase_returns').select('*'));
+        const { data: deliveryChallans } = await fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }));
         const [ { data: rData }, { data: iData } ] = await Promise.all([
-          supabase.from('grn_receipts').select('*'),
-          supabase.from('grn_items').select('*')
+          fetchAllPages(supabase.from('grn_receipts').select('*')),
+          fetchAllPages(supabase.from('grn_items').select('*'))
         ]);
         const itemsByGrn: Record<string, any[]> = {};
         (iData || []).forEach((it: any) => {
@@ -112,7 +112,7 @@ const ProductList = () => {
           ...g,
           grn_items: itemsByGrn[String(g.id)] || []
         }));
-        const { data: stockTransfers } = await supabase.from('stock_transfers').select('items, from_location, to_location, status');
+        const { data: stockTransfers } = await fetchAllPages(supabase.from('stock_transfers').select('items, from_location, to_location, status'));
         const { data: locationsMaster } = await supabase.from('inventory_locations').select('name');
 
         if (locationsMaster) {

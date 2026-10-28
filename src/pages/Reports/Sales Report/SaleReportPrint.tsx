@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdPrint, MdArrowBack, MdFileDownload, MdViewList, MdTableChart } from 'react-icons/md';
@@ -141,8 +141,8 @@ const SaleReportPrint = () => {
         // ── 📂 REPORT TYPE: CATEGORY-WISE SALES & VOLUME REPORT ──
         if (rType === 'category-sales') {
           const [invRes, retRes, catRes, locRes] = await Promise.all([
-            supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
-            supabase.from('sales_returns').select('*').order('id', { ascending: true }),
+            fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
+            fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: true })),
             supabase.from('inventory_categories').select('id, name, parent_id'),
             supabase.from('inventory_locations').select('id, name, location_type').order('id', { ascending: true })
           ]);
@@ -767,8 +767,8 @@ const SaleReportPrint = () => {
         // ── 📦 REPORT TYPE: PRODUCT SALES HISTORY REPORT ──
         else if (rType === 'product-sales-history') {
           const [invRes, retRes] = await Promise.all([
-            supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
-            supabase.from('sales_returns').select('*').order('id', { ascending: true })
+            fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
+            fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: true }))
           ]);
 
           if (invRes.error) throw invRes.error;
@@ -1031,13 +1031,32 @@ const SaleReportPrint = () => {
             else invQuery = invQuery.neq('dc_no', '');
           }
 
+          if (filters.dateFrom) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            invQuery = invQuery.gte('sale_date', startStr);
+          }
+          if (filters.dateTo) {
+            const endStr = String(filters.dateTo).split('T')[0];
+            invQuery = invQuery.lte('sale_date', endStr);
+          }
+
           let retQuery = supabase.from('sales_returns').select('*');
           if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) retQuery = retQuery.in('customer_name', filters.customer);
-          if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) retQuery = retQuery.in('salesman', filters.salesman);
           if (filters.transport && filters.transport.length > 0 && !filters.transport.includes('All')) retQuery = retQuery.in('transport_name', filters.transport);
           if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) retQuery = retQuery.in('dispatch_warehouse', filters.location);
+          if (filters.dateFrom) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            retQuery = retQuery.gte('return_date', startStr);
+          }
+          if (filters.dateTo) {
+            const endStr = String(filters.dateTo).split('T')[0];
+            retQuery = retQuery.lte('return_date', endStr);
+          }
 
-          const [invRes, retRes] = await Promise.all([invQuery, retQuery]);
+          const [invRes, retRes] = await Promise.all([
+            fetchAllPages(invQuery),
+            fetchAllPages(retQuery)
+          ]);
           if (invRes.error) throw invRes.error;
           if (retRes.error) throw retRes.error;
 
@@ -1323,13 +1342,32 @@ const SaleReportPrint = () => {
             else invQuery = invQuery.neq('dc_no', '');
           }
 
+          if (filters.dateFrom) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            invQuery = invQuery.gte('sale_date', startStr);
+          }
+          if (filters.dateTo) {
+            const endStr = String(filters.dateTo).split('T')[0];
+            invQuery = invQuery.lte('sale_date', endStr);
+          }
+
           let retQuery = supabase.from('sales_returns').select('*');
           if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) retQuery = retQuery.in('customer_name', filters.customer);
-          if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) retQuery = retQuery.in('salesman', filters.salesman);
           if (filters.transport && filters.transport.length > 0 && !filters.transport.includes('All')) retQuery = retQuery.in('transport_name', filters.transport);
           if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) retQuery = retQuery.in('dispatch_warehouse', filters.location);
+          if (filters.dateFrom) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            retQuery = retQuery.gte('return_date', startStr);
+          }
+          if (filters.dateTo) {
+            const endStr = String(filters.dateTo).split('T')[0];
+            retQuery = retQuery.lte('return_date', endStr);
+          }
 
-          const [invRes, retRes] = await Promise.all([invQuery, retQuery]);
+          const [invRes, retRes] = await Promise.all([
+            fetchAllPages(invQuery),
+            fetchAllPages(retQuery)
+          ]);
           if (invRes.error) throw invRes.error;
           if (retRes.error) throw retRes.error;
 
@@ -1632,7 +1670,7 @@ const SaleReportPrint = () => {
           if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) query = query.in('customer_name', filters.customer);
           if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) query = query.in('salesman', filters.salesman);
 
-          const { data: invData, error: invError } = await query;
+          const { data: invData, error: invError } = await fetchAllPages(query);
           if (invError) throw invError;
 
           let filteredInvs = invData || [];

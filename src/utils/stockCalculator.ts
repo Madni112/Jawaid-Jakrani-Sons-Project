@@ -8,7 +8,7 @@
  *             - sold - purchaseReturned - rejected - transferredOut
  */
 
-import { supabase } from '../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../Context/supabaseClient';
 
 export interface WarehouseBreakdown {
   opening: number;
@@ -94,15 +94,15 @@ async function fetchAllStockData() {
     { data: stockTransfers },
     { data: deliveryChallans },
   ] = await Promise.all([
-    supabase.from('opening_stocks').select('product_name, itemname, quantity, qty, location, item_code, skucode'),
-    supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse'),
-    supabase.from('grn_receipts').select('*'),
-    supabase.from('grn_items').select('*'),
-    supabase.from('sales_invoices').select('items, sale_status, dispatch_warehouse'),
-    supabase.from('sales_returns').select('items, status, inward_status, received_items, warehouse_name'),
-    supabase.from('purchase_returns').select('items, status'),
-    supabase.from('stock_transfers').select('items, from_location, to_location, status'),
-    supabase.from('delivery_challans').select('items, status, dispatch_warehouse'),
+    fetchAllPages(supabase.from('opening_stocks').select('product_name, itemname, quantity, qty, location, item_code, skucode')),
+    fetchAllPages(supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse')),
+    fetchAllPages(supabase.from('grn_receipts').select('*')),
+    fetchAllPages(supabase.from('grn_items').select('*')),
+    fetchAllPages(supabase.from('sales_invoices').select('items, sale_status, dispatch_warehouse')),
+    fetchAllPages(supabase.from('sales_returns').select('items, status, inward_status, received_items, warehouse_name')),
+    fetchAllPages(supabase.from('purchase_returns').select('items, status')),
+    fetchAllPages(supabase.from('stock_transfers').select('items, from_location, to_location, status')),
+    fetchAllPages(supabase.from('delivery_challans').select('items, status, dispatch_warehouse')),
   ]);
 
   const itemsByGrn: Record<string, any[]> = {};

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactApexChart from 'react-apexcharts';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { fetchFinancialMetrics, FinancialSummary } from '../../service/financialCalculations';
 import Spinner from '../../ui/Spinner';
 import {
@@ -230,15 +230,15 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
         custRecoveriesRes
       ] = await Promise.all([
         fetchFinancialMetrics(),
-        supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }),
-        supabase.from('products').select('*'),
-        supabase.from('opening_stocks').select('*'),
-        supabase.from('supplier_purchases').select('*'),
-        supabase.from('sales_returns').select('*'),
-        supabase.from('purchase_returns').select('*'),
-        supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false }),
-        supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
-        supabase.from('customer_recoveries').select('*')
+        fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })),
+        fetchAllPages(supabase.from('products').select('*')),
+        fetchAllPages(supabase.from('opening_stocks').select('*')),
+        fetchAllPages(supabase.from('supplier_purchases').select('*')),
+        fetchAllPages(supabase.from('sales_returns').select('*')),
+        fetchAllPages(supabase.from('purchase_returns').select('*')),
+        fetchAllPages(supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false })),
+        fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
+        fetchAllPages(supabase.from('customer_recoveries').select('*'))
       ]);
 
       setMetrics(metricsData);

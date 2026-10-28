@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdPrint, MdArrowBack, MdFileDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdTableChart, MdViewList } from 'react-icons/md';
@@ -132,10 +132,10 @@ const AccountReportPrint = () => {
                 // --- 📊 TAB 1 & TAB 13: CUSTOMER ACCOUNT LEDGER & BALANCE DETAIL AUDIT REPORT ---
                 if (activeTab === 1 || activeTab === 13) {
                     const [custRes, invRes, retRes, vchRes] = await Promise.all([
-                        supabase.from('customers').select('*'),
-                        supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
-                        supabase.from('sales_returns').select('*'),
-                        supabase.from('financial_vouchers').select('*')
+                        fetchAllPages(supabase.from('customers').select('*')),
+                        fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
+                        fetchAllPages(supabase.from('sales_returns').select('*')),
+                        fetchAllPages(supabase.from('financial_vouchers').select('*'))
                     ]);
 
                     if (custRes.error) throw custRes.error;
@@ -638,10 +638,10 @@ const AccountReportPrint = () => {
                 // --- 📊 TAB 3: VENDOR BALANCE DETAIL REPORT ---
                 else if (activeTab === 3) {
                     const [vendRes, purRes, vchRes, pretRes] = await Promise.all([
-                        supabase.from('vendors').select('*'),
-                        supabase.from('supplier_purchases').select('*').order('id', { ascending: true }),
-                        supabase.from('financial_vouchers').select('*'),
-                        supabase.from('purchase_returns').select('*')
+                        fetchAllPages(supabase.from('vendors').select('*')),
+                        fetchAllPages(supabase.from('supplier_purchases').select('*').order('id', { ascending: true })),
+                        fetchAllPages(supabase.from('financial_vouchers').select('*')),
+                        fetchAllPages(supabase.from('purchase_returns').select('*'))
                     ]);
 
                     let allVendors = vendRes.data || [];
@@ -985,13 +985,13 @@ const AccountReportPrint = () => {
 
                 // --- 📊 TAB 11: GENERAL TRIAL BALANCE AUDIT WORKBOOK ---
                 else if (activeTab === 11) {
-                    const { data: sales } = await supabase.from('sales_invoices').select('*');
-                    const { data: purchases } = await supabase.from('supplier_purchases').select('*');
-                    const { data: sReturns } = await supabase.from('sales_returns').select('*');
-                    const { data: pReturns } = await supabase.from('purchase_returns').select('*');
-                    const { data: vouchers } = await supabase.from('financial_vouchers').select('*');
-                    const { data: banks } = await supabase.from('banks').select('*');
-                    const { data: products } = await supabase.from('products').select('*');
+                    const { data: sales } = await fetchAllPages(supabase.from('sales_invoices').select('*'));
+                    const { data: purchases } = await fetchAllPages(supabase.from('supplier_purchases').select('*'));
+                    const { data: sReturns } = await fetchAllPages(supabase.from('sales_returns').select('*'));
+                    const { data: pReturns } = await fetchAllPages(supabase.from('purchase_returns').select('*'));
+                    const { data: vouchers } = await fetchAllPages(supabase.from('financial_vouchers').select('*'));
+                    const { data: banks } = await fetchAllPages(supabase.from('banks').select('*'));
+                    const { data: products } = await fetchAllPages(supabase.from('products').select('*'));
 
                     const grossSalesSum = (sales || []).reduce((acc, s) => acc + Number(s.total_amount || 0), 0);
                     const salesReturnsSum = (sReturns || []).reduce((acc, r) => acc + Number(r.payout_amount_paid || r.total_amount || 0), 0);

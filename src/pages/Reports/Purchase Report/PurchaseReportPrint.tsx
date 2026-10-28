@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import {
@@ -272,9 +272,9 @@ const PurchaseReportPrint = () => {
         setLoading(true);
 
         const [prodRes, purRes, retRes, catRes, venRes] = await Promise.all([
-          supabase.from('products').select('*'),
-          supabase.from('supplier_purchases').select('*').order('id', { ascending: true }),
-          supabase.from('purchase_returns').select('*').order('id', { ascending: true }),
+          fetchAllPages(supabase.from('products').select('*')),
+          fetchAllPages(supabase.from('supplier_purchases').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('purchase_returns').select('*').order('id', { ascending: true })),
           supabase.from('inventory_categories').select('id, name, parent_id'),
           supabase.from('vendors').select('id, vendor_name, name, vendor_code, vendorCode, page_no, pageNo')
         ]);

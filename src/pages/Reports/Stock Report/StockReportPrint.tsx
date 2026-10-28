@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdPrint, MdArrowBack, MdFileDownload, MdTableChart, MdViewList, MdWarning, MdCheckCircle, MdErrorOutline, MdFormatListBulleted } from 'react-icons/md';
@@ -378,13 +378,13 @@ const StockReportPrint = () => {
                 let dbLocsData: any[] = [], transfersData: any[] = [];
                 if (activeTab === 8 || activeTab === 3) {
                     const [os, p, s, pr, sr, dbLocsRes, transRes] = await Promise.all([
-                        supabase.from('opening_stocks').select('*'),
-                        supabase.from('supplier_purchases').select('*'),
-                        supabase.from('sales_invoices').select('*'),
-                        supabase.from('purchase_returns').select('*'),
-                        supabase.from('sales_returns').select('*'),
+                        fetchAllPages(supabase.from('opening_stocks').select('*')),
+                        fetchAllPages(supabase.from('supplier_purchases').select('*')),
+                        fetchAllPages(supabase.from('sales_invoices').select('*')),
+                        fetchAllPages(supabase.from('purchase_returns').select('*')),
+                        fetchAllPages(supabase.from('sales_returns').select('*')),
                         supabase.from('inventory_locations').select('id, name, location_type'),
-                        supabase.from('stock_transfers').select('*')
+                        fetchAllPages(supabase.from('stock_transfers').select('*'))
                     ]);
                     openStocks = os.data || [];
                     purchases = p.data || [];

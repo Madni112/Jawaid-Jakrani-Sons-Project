@@ -1,4 +1,4 @@
-import { supabase } from '../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../Context/supabaseClient';
 
 export interface BankBalanceItem {
   id: string | number;
@@ -87,17 +87,17 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       openStocksRes,
       dynamicStockRes
     ] = await Promise.allSettled([
-      supabase.from('sales_invoices').select('*'),
-      supabase.from('supplier_purchases').select('*'),
-      supabase.from('sales_returns').select('*'),
-      supabase.from('sales_return_receipts').select('*'),
-      supabase.from('purchase_returns').select('*'),
-      supabase.from('purchase_return_receipts').select('*'),
-      supabase.from('financial_vouchers').select('*'),
-      supabase.from('banks').select('*'),
-      supabase.from('products').select('*'),
-      supabase.from('customer_recoveries').select('*'),
-      supabase.from('opening_stocks').select('*'),
+      fetchAllPages(supabase.from('sales_invoices').select('*')),
+      fetchAllPages(supabase.from('supplier_purchases').select('*')),
+      fetchAllPages(supabase.from('sales_returns').select('*')),
+      fetchAllPages(supabase.from('sales_return_receipts').select('*')),
+      fetchAllPages(supabase.from('purchase_returns').select('*')),
+      fetchAllPages(supabase.from('purchase_return_receipts').select('*')),
+      fetchAllPages(supabase.from('financial_vouchers').select('*')),
+      fetchAllPages(supabase.from('banks').select('*')),
+      fetchAllPages(supabase.from('products').select('*')),
+      fetchAllPages(supabase.from('customer_recoveries').select('*')),
+      fetchAllPages(supabase.from('opening_stocks').select('*')),
       supabase.rpc('calculate_dynamic_stock_by_location', { p_location: 'All', p_start_date: startOfCurrentMonthStr, p_end_date: null })
     ]);
 

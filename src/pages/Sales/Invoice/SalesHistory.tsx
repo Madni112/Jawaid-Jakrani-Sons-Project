@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate } from 'react-router-dom';
@@ -196,20 +196,19 @@ const SalesHistory = () => {
     try {
       setLoading(true);
 
-      const { data: invoicesData, error: invError } = await supabase
-        .from('sales_invoices')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data: invoicesData, error: invError } = await fetchAllPages(
+        supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })
+      );
 
       if (invError) throw invError;
 
-      const { data: vouchersData } = await supabase
-        .from('financial_vouchers')
-        .select('*');
+      const { data: vouchersData } = await fetchAllPages(
+        supabase.from('financial_vouchers').select('*')
+      );
 
-      const { data: returnsData, error: retError } = await supabase
-        .from('sales_returns')
-        .select('*');
+      const { data: returnsData, error: retError } = await fetchAllPages(
+        supabase.from('sales_returns').select('*')
+      );
 
       if (!retError && returnsData) {
         const cleanList = returnsData

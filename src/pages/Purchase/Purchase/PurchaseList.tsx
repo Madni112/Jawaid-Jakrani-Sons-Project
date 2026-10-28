@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -26,21 +26,19 @@ const PurchaseList = () => {
   const fetchProcurementLogs = async () => {
     try {
       setLoading(true);
-      const { data: purData, error: purError } = await supabase
-        .from('supplier_purchases')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data: purData, error: purError } = await fetchAllPages(
+        supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false })
+      );
 
       if (purError) throw purError;
 
-      const { data: vouchersData } = await supabase
-        .from('financial_vouchers')
-        .select('*')
-        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher');
+      const { data: vouchersData } = await fetchAllPages(
+        supabase.from('financial_vouchers').select('*').or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher')
+      );
 
-      const { data: pReturnsData } = await supabase
-        .from('purchase_returns')
-        .select('*');
+      const { data: pReturnsData } = await fetchAllPages(
+        supabase.from('purchase_returns').select('*')
+      );
 
       // Group purchases by vendor
       const purchasesByVendor: Record<string, any[]> = {};
