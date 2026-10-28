@@ -11,7 +11,7 @@ const Footer: React.FC = () => {
   return (
     <footer className="print:hidden w-full border-t border-slate-200/80 backdrop-blur-md bg-white/90 px-4 py-3.5 dark:border-slate-800 dark:bg-[#1E293B]/90 md:px-6 2xl:px-8 duration-200 transition-all">
       <div className="mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
-        
+
         {/* Left: Company & Tenant Branding */}
         <div className="flex flex-wrap items-center gap-2.5 text-center md:text-left">
           <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">

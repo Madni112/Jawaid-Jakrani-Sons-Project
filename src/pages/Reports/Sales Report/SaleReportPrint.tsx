@@ -19,6 +19,7 @@ const SaleReportPrint = () => {
   const [reportRows, setReportRows] = useState<any[]>([]);
   const [categoryHierarchyTree, setCategoryHierarchyTree] = useState<any[]>([]);
   const [productUomMap, setProductUomMap] = useState<Record<string, string>>({});
+  const [productList, setProductList] = useState<any[]>([]);
   const [customerLookup, setCustomerLookup] = useState<Record<string, { code: string; pageNo: string }>>({});
 
   const resolveCustomerMeta = (custName?: string) => {
@@ -120,6 +121,7 @@ const SaleReportPrint = () => {
             }
           });
           setProductUomMap(uomMapObj);
+          setProductList(prodData || []);
         }
 
         const custLookupMap: Record<string, { code: string; pageNo: string }> = {};
@@ -282,8 +284,8 @@ const SaleReportPrint = () => {
 
             const sku = matched?.sku || matched?.item_sr_no || '-';
             const isTile = Boolean(
-              String(pCat).toLowerCase().includes('tile') || 
-              String(sCat).toLowerCase().includes('tile') || 
+              String(pCat).toLowerCase().includes('tile') ||
+              String(sCat).toLowerCase().includes('tile') ||
               String(lCat).toLowerCase().includes('tile') ||
               Number(matched?.pieces_per_box || matched?.pcs_per_box || 0) > 1
             );
@@ -906,7 +908,7 @@ const SaleReportPrint = () => {
 
               const matchingProd = allProducts.find(
                 (p: any) => (p.product_name || '').trim().toLowerCase() === key ||
-                            (it.sku && (p.item_sr_no || '').toLowerCase() === String(it.sku).toLowerCase())
+                  (it.sku && (p.item_sr_no || '').toLowerCase() === String(it.sku).toLowerCase())
               );
 
               const prodParentCat = matchingProd?.sub_sub_category || matchingProd?.parent_category || matchingProd?.category || '';
@@ -1025,8 +1027,8 @@ const SaleReportPrint = () => {
             else invQuery = invQuery.neq('payment_term', 'Cash');
           }
           if (filters.saleMethod && filters.saleMethod !== 'All') {
-             if (filters.saleMethod === 'Direct') invQuery = invQuery.or('dc_no.is.null,dc_no.eq.""');
-             else invQuery = invQuery.neq('dc_no', '');
+            if (filters.saleMethod === 'Direct') invQuery = invQuery.or('dc_no.is.null,dc_no.eq.""');
+            else invQuery = invQuery.neq('dc_no', '');
           }
 
           let retQuery = supabase.from('sales_returns').select('*');
@@ -1057,8 +1059,8 @@ const SaleReportPrint = () => {
 
           // Filter by product / brand / category if specified in filters
           if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
-              (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-              (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
+            (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
             const filterItemMatch = (record: any) => {
               const items = extractItemDetails(record);
               return items.some(it => {
@@ -1129,7 +1131,7 @@ const SaleReportPrint = () => {
           retPool.forEach((ret: any) => {
             let smName = ret.salesman ? String(ret.salesman).trim() : '';
             if (!smName && ret.original_invoice_no) {
-              const orig = invPool.find((i: any) => 
+              const orig = invPool.find((i: any) =>
                 String(i.invoice_no || '').toLowerCase() === String(ret.original_invoice_no).toLowerCase() ||
                 String(i.id) === String(ret.original_invoice_no).replace(/\D/g, '')
               );
@@ -1206,8 +1208,8 @@ const SaleReportPrint = () => {
             else query = query.neq('payment_term', 'Cash');
           }
           if (filters.saleMethod && filters.saleMethod !== 'All') {
-             if (filters.saleMethod === 'Direct') query = query.or('dc_no.is.null,dc_no.eq.""');
-             else query = query.neq('dc_no', '');
+            if (filters.saleMethod === 'Direct') query = query.or('dc_no.is.null,dc_no.eq.""');
+            else query = query.neq('dc_no', '');
           }
 
           const { data: invData, error: invError } = await query;
@@ -1246,8 +1248,8 @@ const SaleReportPrint = () => {
 
           // Filter by product / brand / category if specified in filters
           if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
-              (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-              (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
+            (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
             pool = pool.filter((inv: any) => {
               const items = extractItemDetails(inv);
               return items.some(it => {
@@ -1332,8 +1334,8 @@ const SaleReportPrint = () => {
 
           // Filter by product / brand / category if specified in filters
           if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
-              (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-              (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
+            (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
             const filterItemMatch = (record: any) => {
               const items = extractItemDetails(record);
               return items.some(it => {
@@ -1487,8 +1489,8 @@ const SaleReportPrint = () => {
 
           // Filter by product / brand / category if specified in filters
           if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
-              (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-              (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
+            (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
             pool = pool.filter((ret: any) => {
               const items = extractItemDetails(ret);
               return items.some(it => {
@@ -1644,8 +1646,8 @@ const SaleReportPrint = () => {
             }
 
             const billed = Number(inv.net_amount || inv.total_amount || 0);
-            const paid = inv.amount_paid !== undefined && inv.amount_paid !== null 
-              ? Number(inv.amount_paid) 
+            const paid = inv.amount_paid !== undefined && inv.amount_paid !== null
+              ? Number(inv.amount_paid)
               : (inv.receipt_status === 'Paid' || inv.sale_status === 'Completed' ? billed : 0);
             const currentRunning = customerMap[cName].net_balance + (billed - paid);
 
@@ -1796,6 +1798,54 @@ const SaleReportPrint = () => {
     };
   };
 
+  // ── 🎯 FILTER-TARGETED ITEM LOGIC (SALES FILTER & PARAMETER REGISTER ONLY) ──
+  const isItemFilterActive = Boolean(
+    rType === 'sales-query' && (
+      (filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
+      (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
+      (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))
+    )
+  );
+
+  const isMatchingItem = (it: { name: string }) => {
+    if (!isItemFilterActive) return true;
+    const pName = String(it.name || '').trim().toLowerCase();
+    const matchingProd = (productList || []).find((p: any) => (p.product_name || '').trim().toLowerCase() === pName);
+
+    if (filters.product && filters.product.length > 0 && !filters.product.includes('All')) {
+      const matchP = filters.product.some((fp: string) => fp.trim().toLowerCase() === pName);
+      if (!matchP) return false;
+    }
+    if (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) {
+      const prodCat = String(matchingProd?.category || matchingProd?.parent_category || '').trim().toLowerCase();
+      const matchC = filters.parentCategory.some((fc: string) => fc.trim().toLowerCase() === prodCat);
+      if (!matchC) return false;
+    }
+    if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
+      const prodBrand = String(matchingProd?.brand || '').trim().toLowerCase();
+      const matchB = filters.bin.some((fb: string) => fb.trim().toLowerCase() === prodBrand);
+      if (!matchB) return false;
+    }
+    return true;
+  };
+
+  const getRowItemDetails = (row: any) => {
+    const allItems = extractItemDetails(row);
+    if (!isItemFilterActive) return allItems;
+    const filtered = allItems.filter(isMatchingItem);
+    return filtered.length > 0 ? filtered : allItems;
+  };
+
+  const getRowAmount = (row: any) => {
+    if (!isItemFilterActive) return Number(row.total_amount || 0);
+    const matching = getRowItemDetails(row);
+    return matching.reduce((sum, it) => {
+      const gross = Number(it.qty || 0) * Number(it.price || 0);
+      const discount = Number(it.discountAmt || 0);
+      return sum + (gross - discount);
+    }, 0);
+  };
+
   // ── 📥 EXCEL WORKBOOK EXPORT ──
   const handleExportExcel = async () => {
     try {
@@ -1874,7 +1924,7 @@ const SaleReportPrint = () => {
           exportData = [];
           reportRows.forEach((cat: any, cIdx: number) => {
             const bannerText = `🏢 PARENT: ${cat.parent_name || 'General'}  |  📂 SUB: ${cat.sub_name || '-'}  |  🏷️ CATEGORY: ${cat.category_name}  |  Sold: ${Number(cat.gross_units || 0).toLocaleString()}  |  Ret: ${Number(cat.returned_units || 0).toLocaleString()}  |  Net: ${Number(cat.net_units || 0).toLocaleString()} Units  |  Net Revenue: Rs. ${Number(cat.net_revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-            
+
             exportData.push({
               _isHeader: true,
               _bannerText: bannerText
@@ -2056,7 +2106,8 @@ const SaleReportPrint = () => {
         ];
 
         exportData = reportRows.map((row, i) => {
-          const itemDetails = extractItemDetails(row);
+          const itemDetails = getRowItemDetails(row);
+          const rowAmount = getRowAmount(row);
           const productsFormatted = itemDetails.length > 0
             ? itemDetails.map(it => `${it.name} (${it.qty} ${it.uom} @ Rs. ${Number(it.price).toLocaleString()})`).join(' | ')
             : extractItemNames(row).join(' | ');
@@ -2070,7 +2121,7 @@ const SaleReportPrint = () => {
             products: productsFormatted,
             warehouse: row.dispatch_warehouse || 'Main Warehouse',
             paymentTerm: row.payment_term || 'Credit',
-            totalAmount: Number(row.total_amount || 0)
+            totalAmount: rowAmount
           };
         });
       } else if (rType === 'customer-sales') {
@@ -2517,9 +2568,9 @@ const SaleReportPrint = () => {
 
           const productsFormatted = rType === 'invoice'
             ? itemDetails.map(it => {
-                const lineTotal = Number(it.qty || 0) * Number(it.price || 0);
-                return `${it.name} | ${it.qty} ${it.uom} | Rs. ${Number(it.price).toLocaleString()} = Rs. ${lineTotal.toLocaleString()}${it.discountAmt > 0 ? ` (Disc: Rs. ${it.discountAmt} [${it.discountPer}%])` : ''}`;
-              }).join('\r\n')
+              const lineTotal = Number(it.qty || 0) * Number(it.price || 0);
+              return `${it.name} | ${it.qty} ${it.uom} | Rs. ${Number(it.price).toLocaleString()} = Rs. ${lineTotal.toLocaleString()}${it.discountAmt > 0 ? ` (Disc: Rs. ${it.discountAmt} [${it.discountPer}%])` : ''}`;
+            }).join('\r\n')
             : itemNames.join(' | ');
 
           return {
@@ -2536,16 +2587,16 @@ const SaleReportPrint = () => {
       const reportTitle = rType === 'product-sales-history'
         ? `Product Sales History & Market Trends Audit Report (${activeViewMode.toUpperCase()} VIEW)`
         : rType === 'sales-query'
-        ? 'Sales Parameter Multi-Criteria Transaction Register'
-        : rType === 'customer-sales'
-        ? `Customer Sales & Volume Analysis Statement (${activeViewMode.toUpperCase()} VIEW)`
-        : rType === 'sale'
-        ? `Commercial Sales Audit Ledger Statement (${activeViewMode.toUpperCase()} VIEW)`
-        : rType === 'return'
-        ? `Sales Return & Credit Adjustment Ledger Statement (${activeViewMode.toUpperCase()} VIEW)`
-        : rType === 'loyalty'
-        ? 'Customer Financial Statement & Invoice Ledger'
-        : 'Sales Invoice Detail Audit Report';
+          ? 'Sales Parameter Multi-Criteria Transaction Register'
+          : rType === 'customer-sales'
+            ? `Customer Sales & Volume Analysis Statement (${activeViewMode.toUpperCase()} VIEW)`
+            : rType === 'sale'
+              ? `Commercial Sales Audit Ledger Statement (${activeViewMode.toUpperCase()} VIEW)`
+              : rType === 'return'
+                ? `Sales Return & Credit Adjustment Ledger Statement (${activeViewMode.toUpperCase()} VIEW)`
+                : rType === 'loyalty'
+                  ? 'Customer Financial Statement & Invoice Ledger'
+                  : 'Sales Invoice Detail Audit Report';
 
       await exportToExcel({
         fileName: `${rType === 'sale' ? 'Commercial_Sales_Ledger' : rType === 'product-sales-history' ? 'Product_Sales_History' : rType === 'customer-sales' ? 'Customer_Sales_Analysis' : rType === 'return' ? 'Sales_Return_Credit_Ledger' : rType === 'sales-query' ? 'Sales_Parameter_Register' : rType}_${new Date().toISOString().split('T')[0]}.xlsx`,
@@ -2585,8 +2636,11 @@ const SaleReportPrint = () => {
     if (rType === 'return') {
       return reportRows.reduce((acc, r) => acc + Number(r.total_return_amount || 0), 0);
     }
+    if (rType === 'sales-query') {
+      return reportRows.reduce((acc, row) => acc + getRowAmount(row), 0);
+    }
     return reportRows.reduce((acc, row) => acc + Number(row.total_amount || 0), 0);
-  }, [reportRows, rType]);
+  }, [reportRows, rType, isItemFilterActive, productList]);
 
   const totalSoldUnits = useMemo(() => {
     if (rType === 'category-sales') {
@@ -2667,8 +2721,11 @@ const SaleReportPrint = () => {
     if (rType === 'sale' || rType === 'customer-sales') {
       return reportRows.reduce((acc, s) => acc + Number(s.cash_sales || 0), 0);
     }
+    if (rType === 'sales-query') {
+      return reportRows.filter(r => String(r.payment_term || '').toLowerCase() === 'cash').reduce((acc, r) => acc + getRowAmount(r), 0);
+    }
     return reportRows.filter(r => String(r.payment_term || '').toLowerCase() === 'cash').reduce((acc, r) => acc + Number(r.total_amount || 0), 0);
-  }, [reportRows, rType]);
+  }, [reportRows, rType, isItemFilterActive, productList]);
 
   const creditAmount = useMemo(() => {
     if (rType === 'sale' || rType === 'customer-sales') {
@@ -2883,32 +2940,30 @@ const SaleReportPrint = () => {
       <div className="print-root-container w-full bg-white p-4 space-y-6 print:p-0 print:space-y-4">
         {/* ── TOP ACTION BUTTON BAR ── */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
-          <button 
-            type="button" 
-            onClick={() => navigate(-1)} 
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
             className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"
           >
             <MdArrowBack size={16} /> Back to Report Filter
           </button>
-          
+
           <div className="flex items-center gap-2 flex-wrap">
             {(rType === 'category-sales' || rType === 'product-sales-history' || rType === 'sale' || rType === 'customer-sales' || rType === 'return') && (
               <div className="flex items-center bg-white p-0.5 rounded border border-gray-300 shadow-2xs mr-2">
                 <button
                   type="button"
                   onClick={() => setActiveViewMode('summary')}
-                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
-                    activeViewMode === 'summary' ? 'bg-primary text-white' : 'text-gray-600 hover:text-black'
-                  }`}
+                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition cursor-pointer ${activeViewMode === 'summary' ? 'bg-primary text-white' : 'text-gray-600 hover:text-black'
+                    }`}
                 >
                   <MdTableChart size={14} /> Summary View
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveViewMode('detailed')}
-                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
-                    activeViewMode === 'detailed' ? 'bg-primary text-white' : 'text-gray-600 hover:text-black'
-                  }`}
+                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition cursor-pointer ${activeViewMode === 'detailed' ? 'bg-primary text-white' : 'text-gray-600 hover:text-black'
+                    }`}
                 >
                   <MdViewList size={14} /> Detailed View
                 </button>
@@ -2932,9 +2987,9 @@ const SaleReportPrint = () => {
             >
               <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export Excel'}
             </button>
-            <button 
-              type="button" 
-              onClick={() => window.print()} 
+            <button
+              type="button"
+              onClick={() => window.print()}
               className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-4 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"
             >
               <MdPrint size={16} /> Print Report
@@ -2991,7 +3046,7 @@ const SaleReportPrint = () => {
                   printColorAdjust: 'exact'
                 }}
               >
-                {getBrandConfig().code}
+                ZAC
               </span>
             </div>
           </div>
@@ -3002,38 +3057,38 @@ const SaleReportPrint = () => {
           <p className="text-xs font-bold tracking-wider text-gray-600 uppercase">
             {rType === 'category-sales'
               ? 'Category-Wise Product Sales, Net Volume Realization & Revenue Contribution Statement'
-              : rType === 'product-sales-history' 
-              ? 'Product Sales History, Velocity Trends & Realized Revenue Statement'
-              : rType === 'sales-query'
-              ? 'Sales Filter, Multi-Criteria Parameters & Chronological Audit Register'
-              : rType === 'customer-sales'
-              ? 'Customer Sales Volume, Purchasing Cycle & Revenue Contribution Statement'
-              : rType === 'sale'
-              ? 'Commercial Sales Audit Statement & Sales Executive Ledger'
-              : rType === 'loyalty'
-              ? 'Customer Financial Statement & Chronological Invoicing Ledger'
-              : rType === 'return'
-              ? 'Sales Return, Defect Restock & Credit Ledger Statement'
-              : 'Sales Invoice Detail Audit Report'}
+              : rType === 'product-sales-history'
+                ? 'Product Sales History, Velocity Trends & Realized Revenue Statement'
+                : rType === 'sales-query'
+                  ? 'Sales Filter, Multi-Criteria Parameters & Chronological Audit Register'
+                  : rType === 'customer-sales'
+                    ? 'Customer Sales Volume, Purchasing Cycle & Revenue Contribution Statement'
+                    : rType === 'sale'
+                      ? 'Commercial Sales Audit Statement & Sales Executive Ledger'
+                      : rType === 'loyalty'
+                        ? 'Customer Financial Statement & Chronological Invoicing Ledger'
+                        : rType === 'return'
+                          ? 'Sales Return, Defect Restock & Credit Ledger Statement'
+                          : 'Sales Invoice Detail Audit Report'}
           </p>
           <div className="text-xs pt-1.5 font-mono flex flex-wrap justify-between px-2 text-gray-700">
             <span>
               Report Categorization: <b className="text-black uppercase underline">
                 {rType === 'category-sales'
                   ? `Category-Wise Sales Audit (${activeViewMode.toUpperCase()} VIEW)`
-                  : rType === 'product-sales-history' 
-                  ? `Product Sales History (${activeViewMode.toUpperCase()} VIEW)` 
-                  : rType === 'sales-query'
-                  ? 'Sales Parameter Transaction Register (CHRONOLOGICAL AUDIT)'
-                  : rType === 'customer-sales'
-                  ? `Customer Sales & Volume Analysis (${activeViewMode.toUpperCase()} VIEW)`
-                  : rType === 'sale'
-                  ? `Commercial Sales Audit Ledger (${activeViewMode.toUpperCase()} VIEW)`
-                  : rType === 'return'
-                  ? `Sales Return & Credit Ledger (${activeViewMode.toUpperCase()} VIEW)`
-                  : rType === 'loyalty'
-                  ? 'CUSTOMER FINANCIAL STATEMENT & INVOICE LEDGER'
-                  : `${rType} Ledger Book`}
+                  : rType === 'product-sales-history'
+                    ? `Product Sales History (${activeViewMode.toUpperCase()} VIEW)`
+                    : rType === 'sales-query'
+                      ? 'Sales Parameter Transaction Register (CHRONOLOGICAL AUDIT)'
+                      : rType === 'customer-sales'
+                        ? `Customer Sales & Volume Analysis (${activeViewMode.toUpperCase()} VIEW)`
+                        : rType === 'sale'
+                          ? `Commercial Sales Audit Ledger (${activeViewMode.toUpperCase()} VIEW)`
+                          : rType === 'return'
+                            ? `Sales Return & Credit Ledger (${activeViewMode.toUpperCase()} VIEW)`
+                            : rType === 'loyalty'
+                              ? 'CUSTOMER FINANCIAL STATEMENT & INVOICE LEDGER'
+                              : `${rType} Ledger Book`}
               </b>
             </span>
             <span>Duration Window Block: {filters.dateFrom || 'All Time'} up to {filters.dateTo || 'All Time'}</span>
@@ -3919,10 +3974,9 @@ const SaleReportPrint = () => {
                                 Rs. {Number(tx.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </td>
                               <td className="p-1.5 border border-black text-center font-sans">
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  tx.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' :
-                                  tx.status === 'Partial' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-                                }`}>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${tx.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' :
+                                    tx.status === 'Partial' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                                  }`}>
                                   {tx.status}
                                 </span>
                               </td>
@@ -4277,9 +4331,8 @@ const SaleReportPrint = () => {
                                         Return Credit
                                       </span>
                                     ) : (
-                                      <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase ${
-                                        isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
-                                      }`}>
+                                      <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase ${isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
+                                        }`}>
                                         {row.payment_term || 'Credit'}
                                       </span>
                                     )}
@@ -4676,9 +4729,8 @@ const SaleReportPrint = () => {
                                       )}
                                     </td>
                                     <td className="p-1.5 border border-black text-center align-top">
-                                      <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase ${
-                                        isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
-                                      }`}>
+                                      <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase ${isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
+                                        }`}>
                                         {row.payment_term || 'Credit'}
                                       </span>
                                     </td>
@@ -5200,7 +5252,7 @@ const SaleReportPrint = () => {
                   <th className="p-1.5 border border-black w-24">Warehouse</th>
                   <th className="p-1.5 border border-black text-center w-16">Term</th>
                   <th className="p-1.5 border border-black text-right w-24 pr-2 text-amber-900">Discount</th>
-                  <th className="p-1.5 border border-black text-right pr-3 w-28">Matrix Gross</th>
+                  <th className="p-1.5 border border-black text-right pr-3 w-28">{isItemFilterActive ? "Filtered Gross" : "Matrix Gross"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -5216,7 +5268,8 @@ const SaleReportPrint = () => {
                     const displayDocPrefixId = row.invoice_no || `INV-${String(row.id).padStart(4, '0')}`;
                     const processingDateDisplay = row.sale_date || String(row.created_at || '').split('T')[0];
                     const itemNames = extractItemNames(row);
-                    const itemDetails = extractItemDetails(row);
+                    const itemDetails = getRowItemDetails(row);
+                    const rowAmount = getRowAmount(row);
                     const rowDiscounts = extractRowDiscounts(row);
                     const isCash = String(row.payment_term || '').toLowerCase() === 'cash';
                     const freight = Number(row.transport_charges || row.freight_charges || row.freight || 0) + Number(row.additional_charges || 0);
@@ -5287,9 +5340,8 @@ const SaleReportPrint = () => {
                         </td>
                         <td className="p-1.5 border border-black font-sans text-gray-600 align-top">{row.dispatch_warehouse || 'Main Warehouse'}</td>
                         <td className="p-1.5 border border-black text-center align-top">
-                          <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase ${
-                            isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
-                          }`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase ${isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
+                            }`}>
                             {row.payment_term || 'Credit'}
                           </span>
                         </td>
@@ -5323,12 +5375,16 @@ const SaleReportPrint = () => {
                           )}
                         </td>
                         <td className="p-1.5 border border-black text-right pr-3 font-black text-emerald-700 align-top font-mono text-xs">
-                          <div>Rs. {Number(row.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                          {freight > 0 && (
+                          <div>Rs. {rowAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                          {isItemFilterActive ? (
+                            <div className="text-[9px] font-sans font-bold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200 mt-0.5 inline-block">
+                              Filtered Gross
+                            </div>
+                          ) : freight > 0 ? (
                             <div className="text-[9.5px] font-sans font-medium text-slate-500 mt-0.5 leading-tight">
                               (Inc. Freight Ch. {freight.toLocaleString()})
                             </div>
-                          )}
+                          ) : null}
                         </td>
                       </tr>
                     );
@@ -5343,7 +5399,7 @@ const SaleReportPrint = () => {
                       Page {currentPage} Subtotal ({displayedRows.length} transactions):
                     </td>
                     <td className="p-2 border border-black text-right pr-3 text-emerald-800 font-bold whitespace-nowrap">
-                      <div>Rs. {displayedRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                      <div>Rs. {displayedRows.reduce((sum, r) => sum + getRowAmount(r), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                       {pageAllFreight > 0 && (
                         <div className="text-[9px] font-sans font-medium text-slate-500 mt-0.5 leading-tight">
                           (Inc. Total Freight: {pageAllFreight.toLocaleString()})
