@@ -35,7 +35,11 @@ import {
   MdHistory,
   MdCompareArrows,
   MdPriceCheck,
-  MdFormatListBulleted
+  MdFormatListBulleted,
+  MdStar,
+  MdStarBorder,
+  MdGridView,
+  MdViewHeadline
 } from 'react-icons/md';
 import { exportMultiSheetExcel, ExcelColumn } from '../../utils/excelExport';
 import { toast } from 'react-hot-toast';
@@ -486,6 +490,38 @@ const CATEGORY_META = [
 
 const STORAGE_KEY = 'erp_reports_custom_order';
 const STORAGE_CAT_KEY = 'erp_reports_category_order';
+const STORAGE_PINNED_KEY = 'erp_reports_pinned_ids';
+const STORAGE_RECENT_KEY = 'erp_reports_recent_ids';
+const STORAGE_LAYOUT_KEY = 'erp_reports_view_mode';
+
+const DEFAULT_PINNED_IDS = [
+  'as-of-date-stock-status',
+  'commercial-sale-ledger',
+  'daily-cash-daybook',
+  'category-wise-stock'
+];
+
+const getInitialPinnedIds = (): string[] => {
+  try {
+    const saved = localStorage.getItem(STORAGE_PINNED_KEY);
+    if (!saved) return DEFAULT_PINNED_IDS;
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed : DEFAULT_PINNED_IDS;
+  } catch {
+    return DEFAULT_PINNED_IDS;
+  }
+};
+
+const getInitialRecentIds = (): string[] => {
+  try {
+    const saved = localStorage.getItem(STORAGE_RECENT_KEY);
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 const getInitialReports = (): ReportItem[] => {
   try {
@@ -547,6 +583,50 @@ const ReportDashboard: React.FC = () => {
   const [justDroppedReportId, setJustDroppedReportId] = useState<string | null>(null);
   const [justDroppedCatKey, setJustDroppedCatKey] = useState<string | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
+  const [pinnedIds, setPinnedIds] = useState<string[]>(getInitialPinnedIds);
+  const [recentIds, setRecentIds] = useState<string[]>(getInitialRecentIds);
+  const [viewLayout, setViewLayout] = useState<'grid' | 'compact'>(() => {
+    try {
+      return (localStorage.getItem(STORAGE_LAYOUT_KEY) as 'grid' | 'compact') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const togglePin = (reportId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setPinnedIds((prev) => {
+      const isPinned = prev.includes(reportId);
+      const updated = isPinned ? prev.filter((id) => id !== reportId) : [reportId, ...prev];
+      try {
+        localStorage.setItem(STORAGE_PINNED_KEY, JSON.stringify(updated));
+        toast.success(isPinned ? 'Removed from Quick Access' : 'Pinned to Quick Access ⭐', {
+          id: 'pin-toggle',
+          duration: 1200
+        });
+      } catch {}
+      return updated;
+    });
+  };
+
+  const handleLayoutChange = (mode: 'grid' | 'compact') => {
+    setViewLayout(mode);
+    try {
+      localStorage.setItem(STORAGE_LAYOUT_KEY, mode);
+    } catch {}
+  };
+
+  const pinnedReports = useMemo(() => {
+    return pinnedIds
+      .map((id) => ALL_REPORTS.find((r) => r.id === id))
+      .filter((r): r is ReportItem => Boolean(r));
+  }, [pinnedIds]);
+
+  const recentReports = useMemo(() => {
+    return recentIds
+      .map((id) => ALL_REPORTS.find((r) => r.id === id))
+      .filter((r): r is ReportItem => Boolean(r));
+  }, [recentIds]);
 
   // Auto-scroll window when dragging near top or bottom screen edges
   useEffect(() => {
@@ -741,6 +821,13 @@ const ReportDashboard: React.FC = () => {
   };
 
   const handleNavigate = (report: ReportItem) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_RECENT_KEY) || '[]');
+      const updated = [report.id, ...saved.filter((id: string) => id !== report.id)].slice(0, 5);
+      localStorage.setItem(STORAGE_RECENT_KEY, JSON.stringify(updated));
+      setRecentIds(updated);
+    } catch {}
+
     const dest = `${tenantId ? `/${tenantId}` : ''}/Reports/view/${report.id}`;
     navigate(dest, { state: report.state || {} });
   };
@@ -831,8 +918,38 @@ const ReportDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Global Search & Reset Order Controls */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto">
+        {/* Global Search, View Switcher & Reset Order Controls */}
+        <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
+          {/* View Mode Switcher: Grid vs Compact Table */}
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleLayoutChange('grid')}
+              title="Card Grid View"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                viewLayout === 'grid'
+                  ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <MdGridView size={16} />
+              <span className="hidden sm:inline">Grid</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLayoutChange('compact')}
+              title="Compact Directory Table View"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                viewLayout === 'compact'
+                  ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <MdViewHeadline size={16} />
+              <span className="hidden sm:inline">Compact</span>
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={handleResetOrder}
@@ -863,6 +980,72 @@ const ReportDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── QUICK ACCESS & PINNED REPORTS RIBBON ── */}
+      {(pinnedReports.length > 0 || recentReports.length > 0) && !searchQuery.trim() && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
+          {pinnedReports.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black text-xs uppercase tracking-wider shrink-0 min-w-[130px]">
+                <MdStar size={16} className="text-amber-500" />
+                <span>Quick Access:</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {pinnedReports.map((report) => {
+                  const Icon = report.icon || MdAssessment;
+                  return (
+                    <button
+                      key={report.id}
+                      type="button"
+                      onClick={() => handleNavigate(report)}
+                      className="group flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-emerald-50 dark:bg-slate-800/80 dark:hover:bg-emerald-950/40 border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700/60 rounded-xl transition cursor-pointer shadow-xs"
+                    >
+                      <div className="p-1 rounded bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 group-hover:text-emerald-600 transition">
+                        <Icon size={14} />
+                      </div>
+                      <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                        {report.title}
+                      </span>
+                      <span
+                        onClick={(e) => togglePin(report.id, e)}
+                        title="Unpin"
+                        className="text-amber-400 hover:text-rose-500 p-0.5 rounded opacity-60 group-hover:opacity-100 transition"
+                      >
+                        <MdStar size={13} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {recentReports.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-1.5 text-slate-400 font-bold text-xs uppercase tracking-wider shrink-0 min-w-[130px]">
+                <MdHistory size={16} />
+                <span>Recently Run:</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {recentReports.map((report) => {
+                  const Icon = report.icon || MdAssessment;
+                  return (
+                    <button
+                      key={report.id}
+                      type="button"
+                      onClick={() => handleNavigate(report)}
+                      className="group flex items-center gap-2 px-2.5 py-1 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                    >
+                      <Icon size={13} className="text-slate-400 group-hover:text-emerald-600" />
+                      <span className="truncate max-w-[200px]">{report.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── CATEGORY FILTER TABS ── */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -1057,6 +1240,18 @@ const ReportDashboard: React.FC = () => {
                             >
                               <MdDragIndicator size={18} />
                             </div>
+                            <button
+                              type="button"
+                              onClick={(e) => togglePin(report.id, e)}
+                              title={pinnedIds.includes(report.id) ? "Unpin report" : "Pin to Quick Access"}
+                              className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                                pinnedIds.includes(report.id)
+                                  ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/40'
+                                  : 'text-slate-300 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              {pinnedIds.includes(report.id) ? <MdStar size={16} /> : <MdStarBorder size={16} />}
+                            </button>
                           </div>
 
                           {shouldShowBadge(report) && (
@@ -1098,6 +1293,97 @@ const ReportDashboard: React.FC = () => {
           );
         })()
       ) : (
+        /* Compact Directory View OR Card Grid Overview */
+        viewLayout === 'compact' ? (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-expand-container">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-slate-400 font-mono">
+                    <th className="p-3 text-center w-10">⭐</th>
+                    <th className="p-3 text-center w-12">S#</th>
+                    <th className="p-3">Report Title & Description</th>
+                    <th className="p-3 w-48">Category Module</th>
+                    <th className="p-3 text-center w-28">Status / Badge</th>
+                    <th className="p-3 text-right pr-4 w-32">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredReports.map((report, idx) => {
+                    const Icon = report.icon || MdAssessment;
+                    const catMeta = CATEGORY_META.find((c) => c.key === report.category);
+                    const isPinned = pinnedIds.includes(report.id);
+
+                    return (
+                      <tr
+                        key={report.id}
+                        onClick={() => handleNavigate(report)}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition group"
+                      >
+                        <td className="p-3 text-center align-middle" onClick={(e) => togglePin(report.id, e)}>
+                          <button
+                            type="button"
+                            className={`p-1 rounded cursor-pointer ${
+                              isPinned
+                                ? 'text-amber-500'
+                                : 'text-slate-300 hover:text-amber-500 opacity-60 group-hover:opacity-100 transition'
+                            }`}
+                          >
+                            {isPinned ? <MdStar size={16} /> : <MdStarBorder size={16} />}
+                          </button>
+                        </td>
+                        <td className="p-3 text-center text-slate-400 font-mono font-bold align-middle">
+                          {idx + 1}
+                        </td>
+                        <td className="p-3 align-middle">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:text-emerald-600 transition shrink-0">
+                              <Icon size={16} />
+                            </div>
+                            <div>
+                              <div className="font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                                {report.title}
+                              </div>
+                              <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                                {report.description}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3 align-middle">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {catMeta?.title || report.category}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center align-middle">
+                          {shouldShowBadge(report) && (
+                            <span
+                              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wide border ${
+                                report.badgeType === 'new'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                  : report.badgeType === 'audited'
+                                  ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                                  : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800'
+                              }`}
+                            >
+                              {report.badge}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right pr-4 align-middle">
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 group-hover:translate-x-1 transition-transform">
+                            <span>Open</span>
+                            <MdArrowForward size={14} />
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
         /* All Categories Overview Grid with Responsive CSS Columns (Zero vertical gaps) */
         <div className="columns-1 md:columns-2 lg:columns-3 gap-6 animate-expand-container">
           {categoriesList.map((category, catIdx) => {
@@ -1244,7 +1530,8 @@ const ReportDashboard: React.FC = () => {
             );
           })}
         </div>
-      )}
+      )
+    )}
 
       {/* Empty State */}
       {filteredReports.length === 0 && (
