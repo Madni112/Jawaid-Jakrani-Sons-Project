@@ -54,7 +54,7 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
           <Header sidebarOpen={sidebarOpen} setSidebarOpen={handleSetSidebarOpen} />
 
           <div className="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden w-full">
-            <main className="flex-1 bg-[#F8FAFC] dark:bg-[#0B0F17] w-full relative">
+            <main className="flex-1 bg-[#F8FAFC] dark:bg-[#0B0F17] w-full relative pb-4">
               {/* Subtle top ambient emerald glow */}
               <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-emerald-500/5 via-teal-500/5 to-transparent dark:from-emerald-950/20 dark:via-teal-950/10 dark:to-transparent" />
               
