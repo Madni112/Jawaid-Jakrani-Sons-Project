@@ -1123,11 +1123,11 @@ const SettingsPage: React.FC = () => {
           {/* TAB 2: THEME & APPEARANCE */}
           {activeTab === 'theme' && (
             <div className="space-y-6 animate-fadeIn">
-              {/* BRAND COLOR PALETTES (STICKY SUB-NAVBAR SCOPE CONTAINER) */}
-              <div className="relative space-y-4">
-                {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Navbar & Brand Accent, Sidebar) */}
-                <div className="p-2 rounded-2xl bg-white/95 dark:bg-[#111827]/95 border border-slate-200/90 dark:border-slate-800 shadow-md backdrop-blur-md sticky top-2 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto">
+              {/* UNIFIED BRAND & SIDEBAR COLOR CONTAINER */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-sm overflow-hidden animate-fadeIn">
+                {/* INTEGRATED TABS HEADER (INSIDE CONTAINER, NO GAP) */}
+                <div className="p-3 sm:px-6 sm:py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto">
                   {/* SUB-TAB 1: NAVBAR & BRAND ACCENT */}
                   <button
                     type="button"
@@ -1175,12 +1175,14 @@ const SettingsPage: React.FC = () => {
                     {themeSubTab === 'navbar' ? 'Navbar & Brand Accent' : 'Sidebar Colors'}
                   </strong>
                 </div>
-              </div>
+                </div>
 
-              {/* SECTION A: ACCENT COLOR THEME */}
-              {themeSubTab === 'navbar' && (
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm animate-fadeIn">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
+                {/* CONTAINER BODY: ACTIVE COLOR SETTINGS */}
+                <div className="p-6">
+                  {/* SECTION A: ACCENT COLOR THEME */}
+                  {themeSubTab === 'navbar' && (
+                    <div className="animate-fadeIn">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2.5">
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs transition-colors border border-slate-200/80 dark:border-slate-700/80"
@@ -1416,13 +1418,13 @@ const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+                    </div>
+                  )}
 
-              {/* SECTION B: SIDEBAR FONT & ICON COLOR */}
-              {themeSubTab === 'sidebar' && (
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm animate-fadeIn">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
+                  {/* SECTION B: SIDEBAR FONT & ICON COLOR */}
+                  {themeSubTab === 'sidebar' && (
+                    <div className="animate-fadeIn">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2.5">
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs transition-colors"
@@ -1643,8 +1645,9 @@ const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* SECTION C: THEME MODE (LIGHT / DARK) */}
