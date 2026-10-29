@@ -1487,6 +1487,87 @@ const DedicatedReportFilter: React.FC = () => {
             </div>
           )}
 
+          {reportId === 'as-of-date-stock-status' && (
+            <div className="md:col-span-2 flex flex-col gap-3 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800/80">
+              <div className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                Stock Snapshot Display & Valuation Selectors:
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Pill: Show Zero Stock Products */}
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('showZeroStock', !Boolean(criteria.showZeroStock))}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border shadow-xs ${
+                    Boolean(criteria.showZeroStock)
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 font-black ring-2 ring-emerald-400/20'
+                      : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 hover:border-slate-400'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${Boolean(criteria.showZeroStock) ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  <span>Show Zero Stock Products</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${Boolean(criteria.showZeroStock) ? 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+                    {Boolean(criteria.showZeroStock) ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+
+                {/* Pill: Show Amount and Total Amount */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !Boolean(criteria.showAmount);
+                    handleInputChange('showAmount', next);
+                    if (next && !criteria.showPurchasePrice && !criteria.showSalePrice) {
+                      handleInputChange('showPurchasePrice', true);
+                      handleInputChange('showSalePrice', true);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border shadow-xs ${
+                    Boolean(criteria.showAmount)
+                      ? 'bg-purple-50 text-purple-800 border-purple-400 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-700 font-black ring-2 ring-purple-400/20'
+                      : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 hover:border-slate-400'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${Boolean(criteria.showAmount) ? 'bg-purple-500 animate-pulse' : 'bg-slate-400'}`} />
+                  <span>Show Amount & Total Amount</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${Boolean(criteria.showAmount) ? 'bg-purple-200 text-purple-900 dark:bg-purple-900 dark:text-purple-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+                    {Boolean(criteria.showAmount) ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+
+                {/* Sub-Pills when Show Amount is ON */}
+                {Boolean(criteria.showAmount) && (
+                  <div className="flex items-center gap-1.5 bg-purple-50/60 dark:bg-purple-950/20 p-1 rounded-full border border-purple-200 dark:border-purple-800/60 transition-all">
+                    <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider px-2">Valuation:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange('showPurchasePrice', !Boolean(criteria.showPurchasePrice ?? true))}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
+                        Boolean(criteria.showPurchasePrice ?? true)
+                          ? 'bg-blue-600 text-white border-blue-600 font-black shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>Purchase Price</span>
+                      {Boolean(criteria.showPurchasePrice ?? true) && <span>✓</span>}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange('showSalePrice', !Boolean(criteria.showSalePrice ?? true))}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
+                        Boolean(criteria.showSalePrice ?? true)
+                          ? 'bg-emerald-600 text-white border-emerald-600 font-black shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>Sale Price</span>
+                      {Boolean(criteria.showSalePrice ?? true) && <span>✓</span>}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {(reportId === 'customer-ledger' || reportId === 'customer-vendor-ledger' || reportId === 'customer-balance-detail' || reportId === 'vendor-balance-detail' || reportId === 'trial-balance-statement' || f.includes('customerCategory') || (reportId === 'vendor-balance-detail' || (f.includes('supplier') && activeConfig.printType === 'account'))) && (
             <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800/80">
               <label className="flex items-center gap-2 cursor-pointer select-none">
