@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import SidebarLinkGroup from './SidebarLinkGroup';
 import { AiOutlineUp, AiOutlineDown, AiOutlineRight, AiOutlineArrowLeft } from 'react-icons/ai';
-import { LuLogOut } from 'react-icons/lu';
+import { LuLogOut, LuChevronLeft, LuChevronRight } from 'react-icons/lu';
 import { useModal } from '../../Context/Modal';
 import { useAuth } from '../../Context/Auth';
 import { PRESET_THEME_COLORS, applySidebarColor, getSavedSidebarColor, getSafeSidebarColor, SidebarLayoutMode, getSidebarLayoutMode, getSavedAccentColor, getContrastTextColor } from '../../constant/themeConfig';
@@ -468,7 +468,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             ? 'fixed left-0 top-0 z-99999 h-screen block'
             : `min-[751px]:relative min-[751px]:shrink-0 min-[751px]:z-30 ${
                 layoutMode === 'floating'
-                  ? `min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl ${sidebarOpen ? 'overflow-hidden' : 'min-[751px]:overflow-visible'}`
+                  ? `min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl min-[751px]:overflow-visible`
                   : 'min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'
               }`
         } ${
@@ -504,7 +504,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   e.stopPropagation();
                   setSidebarOpen(false);
                 }}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                className="max-[750px]:block min-[751px]:hidden p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
                 title="Collapse Sidebar"
               >
                 <AiOutlineArrowLeft size={18} />
@@ -573,6 +573,23 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             </ul>
           </nav>
         </div>
+        {/* Modern Protruding Toggle Button (Right Border, Vertically Centered) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSidebarOpen(!sidebarOpen);
+          }}
+          className="hidden min-[751px]:flex absolute -right-3 top-1/2 -translate-y-1/2 z-50 w-6 h-6 rounded-full bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-700/80 shadow-md items-center justify-center text-slate-500 hover:text-primary dark:text-slate-400 dark:hover:text-primary hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+        >
+          {sidebarOpen ? (
+            <LuChevronLeft size={13} className="stroke-[2.5]" />
+          ) : (
+            <LuChevronRight size={13} className="stroke-[2.5]" />
+          )}
+        </button>
       </aside>
     </>
   );
