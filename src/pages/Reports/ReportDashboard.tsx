@@ -43,6 +43,13 @@ import {
 } from 'react-icons/md';
 import { exportMultiSheetExcel, ExcelColumn } from '../../utils/excelExport';
 import { toast } from 'react-hot-toast';
+import {
+  getSavedAccentColor,
+  getSavedSidebarColor,
+  getContrastTextColor,
+  getSafeAccentTextColor,
+  isDarkModeActive,
+} from '../../constant/themeConfig';
 
 interface ReportItem {
   id: string;
@@ -450,6 +457,50 @@ const ALL_REPORTS: ReportItem[] = [
   }
 ];
 
+
+const CATEGORY_PALETTES: Record<string, { bg: string; text: string; border: string; darkBg: string; darkText: string; darkBorder: string }> = {
+  sales: {
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-700',
+    border: 'border-emerald-200/80',
+    darkBg: 'dark:bg-emerald-950/60',
+    darkText: 'dark:text-emerald-300',
+    darkBorder: 'dark:border-emerald-800/60',
+  },
+  purchases: {
+    bg: 'bg-blue-50',
+    text: 'text-blue-700',
+    border: 'border-blue-200/80',
+    darkBg: 'dark:bg-blue-950/60',
+    darkText: 'dark:text-blue-300',
+    darkBorder: 'dark:border-blue-800/60',
+  },
+  inventory: {
+    bg: 'bg-amber-50',
+    text: 'text-amber-700',
+    border: 'border-amber-200/80',
+    darkBg: 'dark:bg-amber-950/60',
+    darkText: 'dark:text-amber-300',
+    darkBorder: 'dark:border-amber-800/60',
+  },
+  accounts: {
+    bg: 'bg-purple-50',
+    text: 'text-purple-700',
+    border: 'border-purple-200/80',
+    darkBg: 'dark:bg-purple-950/60',
+    darkText: 'dark:text-purple-300',
+    darkBorder: 'dark:border-purple-800/60',
+  },
+  business: {
+    bg: 'bg-teal-50',
+    text: 'text-teal-700',
+    border: 'border-teal-200/80',
+    darkBg: 'dark:bg-teal-950/60',
+    darkText: 'dark:text-teal-300',
+    darkBorder: 'dark:border-teal-800/60',
+  },
+};
+
 const CATEGORY_META = [
   {
     key: 'sales',
@@ -585,6 +636,25 @@ const ReportDashboard: React.FC = () => {
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
   const [pinnedIds, setPinnedIds] = useState<string[]>(getInitialPinnedIds);
   const [recentIds, setRecentIds] = useState<string[]>(getInitialRecentIds);
+  
+  const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
+  const [sidebarColor, setSidebarColor] = useState<string>(getSavedSidebarColor());
+
+  useEffect(() => {
+    const onThemeChange = () => setAccentColor(getSavedAccentColor());
+    const onSidebarChange = () => setSidebarColor(getSavedSidebarColor());
+    window.addEventListener('zoaib_ali_theme_color_changed', onThemeChange);
+    window.addEventListener('zoaib_ali_sidebar_color_changed', onSidebarChange);
+    return () => {
+      window.removeEventListener('zoaib_ali_theme_color_changed', onThemeChange);
+      window.removeEventListener('zoaib_ali_sidebar_color_changed', onSidebarChange);
+    };
+  }, []);
+
+  const isDark = isDarkModeActive();
+  const safeAccentText = getSafeAccentTextColor(accentColor, isDark);
+  const isLightAccent = getContrastTextColor(accentColor) === '#0F172A';
+
   const [viewLayout, setViewLayout] = useState<'grid' | 'compact'>(() => {
     try {
       return (localStorage.getItem(STORAGE_LAYOUT_KEY) as 'grid' | 'compact') || 'grid';
@@ -883,11 +953,11 @@ const ReportDashboard: React.FC = () => {
           <span>&gt;</span>
           <span>Operational Ledger</span>
           <span>&gt;</span>
-          <span className="text-emerald-700 dark:text-emerald-400 font-bold">Standard Reports Hub</span>
+          <span style={{ color: safeAccentText }} className="font-bold">Standard Reports Hub</span>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800/60 font-semibold text-[10px]">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div style={{ backgroundColor: `${accentColor}14`, borderColor: `${accentColor}30`, color: safeAccentText }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-semibold text-[10px]">
+            <span style={{ backgroundColor: accentColor }} className="h-1.5 w-1.5 rounded-full animate-pulse" />
             <span>Ledger Synced Active</span>
           </div>
           <div className="flex items-center gap-1 text-slate-400">
@@ -900,7 +970,7 @@ const ReportDashboard: React.FC = () => {
       {/* ── HEADER BANNER ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
         <div className="flex items-center gap-3.5">
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner">
+          <div style={{ backgroundColor: `${accentColor}12`, borderColor: `${accentColor}28`, color: safeAccentText }} className="p-3 rounded-xl border shadow-inner shrink-0">
             <MdAssessment size={28} />
           </div>
           <div>
@@ -908,7 +978,7 @@ const ReportDashboard: React.FC = () => {
               <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white font-sans">
                 Reports Directory
               </h1>
-              <span className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-md text-[11px] border border-emerald-200 dark:border-emerald-800/40">
+              <span style={{ backgroundColor: `${accentColor}15`, borderColor: `${accentColor}35`, color: safeAccentText }} className="font-bold px-2 py-0.5 rounded-md text-[11px] border">
                 {reportsList.length} Available
               </span>
             </div>
@@ -926,9 +996,10 @@ const ReportDashboard: React.FC = () => {
               type="button"
               onClick={() => handleLayoutChange('grid')}
               title="Card Grid View"
+              style={viewLayout === 'grid' ? { color: safeAccentText } : undefined}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 viewLayout === 'grid'
-                  ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-black'
+                  ? 'bg-white dark:bg-slate-900 shadow-xs font-black'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
@@ -939,9 +1010,10 @@ const ReportDashboard: React.FC = () => {
               type="button"
               onClick={() => handleLayoutChange('compact')}
               title="Compact Directory Table View"
+              style={viewLayout === 'compact' ? { color: safeAccentText } : undefined}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 viewLayout === 'compact'
-                  ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-black'
+                  ? 'bg-white dark:bg-slate-900 shadow-xs font-black'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
@@ -1052,9 +1124,10 @@ const ReportDashboard: React.FC = () => {
         <button
           type="button"
           onClick={() => handleTabClick('all')}
+          style={selectedCategory === 'all' ? { backgroundColor: accentColor, color: getContrastTextColor(accentColor) } : undefined}
           className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap cursor-pointer transition ${
             selectedCategory === 'all'
-              ? 'bg-emerald-700 text-white shadow-sm'
+              ? 'shadow-sm'
               : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
         >
@@ -1062,7 +1135,7 @@ const ReportDashboard: React.FC = () => {
           <span>All Reports</span>
           <span
             className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-              selectedCategory === 'all' ? 'bg-emerald-800/80 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              selectedCategory === 'all' ? 'bg-black/15 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
             }`}
           >
             {categoryCounts.all}
@@ -1076,9 +1149,10 @@ const ReportDashboard: React.FC = () => {
               key={cat.key}
               type="button"
               onClick={() => handleTabClick(cat.key)}
+              style={selectedCategory === cat.key ? { backgroundColor: accentColor, color: getContrastTextColor(accentColor), boxShadow: `0 0 0 2px ${accentColor}40` } : undefined}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap cursor-pointer transition ${
                 selectedCategory === cat.key
-                  ? 'bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/50'
+                  ? 'shadow-sm'
                   : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
@@ -1086,7 +1160,7 @@ const ReportDashboard: React.FC = () => {
               <span>{cat.title}</span>
               <span
                 className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-                  selectedCategory === cat.key ? 'bg-emerald-800/80 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                  selectedCategory === cat.key ? 'bg-black/15 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                 }`}
               >
                 {categoryCounts[cat.key] || 0}
@@ -1170,12 +1244,12 @@ const ReportDashboard: React.FC = () => {
           return (
             <div
               key={category.key}
-              className="w-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-emerald-500/80 dark:border-emerald-500/60 shadow-xl shadow-emerald-500/10 dark:shadow-emerald-950/40 overflow-hidden animate-expand-container"
+              style={{ borderColor: `${accentColor}70`, boxShadow: `0 20px 25px -5px ${accentColor}18` }} className="w-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl border overflow-hidden animate-expand-container"
             >
               {/* Category Full-Width Banner Header */}
-              <div className="p-5 border-b border-emerald-100 dark:border-emerald-950 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div style={{ backgroundColor: `${accentColor}10`, borderBottomColor: `${accentColor}25` }} className="p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-emerald-600 text-white shadow-sm">
+                  <div style={{ backgroundColor: accentColor, color: getContrastTextColor(accentColor) }} className="p-3 rounded-xl shadow-sm">
                     <CatBannerIcon size={24} />
                   </div>
                   <div>
@@ -1183,7 +1257,7 @@ const ReportDashboard: React.FC = () => {
                       <h2 className="font-black text-lg text-slate-900 dark:text-white">
                         {category.title}
                       </h2>
-                      <span className="font-mono text-xs font-black text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                      <span style={{ backgroundColor: `${accentColor}18`, borderColor: `${accentColor}35`, color: safeAccentText }} className="font-mono text-xs font-black px-2.5 py-0.5 rounded-full border">
                         {categoryReports.length} {categoryReports.length === 1 ? 'Report' : 'Reports'}
                       </span>
                     </div>
@@ -1371,7 +1445,7 @@ const ReportDashboard: React.FC = () => {
                           )}
                         </td>
                         <td className="p-3 text-right pr-4 align-middle">
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 group-hover:translate-x-1 transition-transform">
+                          <span style={{ color: safeAccentText }} className="inline-flex items-center gap-1 text-xs font-bold group-hover:translate-x-1 transition-transform">
                             <span>Open</span>
                             <MdArrowForward size={14} />
                           </span>
@@ -1424,9 +1498,14 @@ const ReportDashboard: React.FC = () => {
                     >
                       <MdDragIndicator size={18} />
                     </div>
-                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shrink-0">
-                      {category.icon ? <category.icon size={18} /> : <MdAssessment size={18} />}
-                    </div>
+                    {(() => {
+                      const pal = CATEGORY_PALETTES[category.key] || CATEGORY_PALETTES.sales;
+                      return (
+                        <div className={`p-2 rounded-lg ${pal.bg} ${pal.text} ${pal.border} ${pal.darkBg} ${pal.darkText} ${pal.darkBorder} border shrink-0`}>
+                          {category.icon ? <category.icon size={18} /> : <MdAssessment size={18} />}
+                        </div>
+                      );
+                    })()}
                     <div>
                       <h2 className="font-extrabold text-sm text-slate-900 dark:text-white">
                         {category.title}
@@ -1546,7 +1625,7 @@ const ReportDashboard: React.FC = () => {
               setSearchQuery('');
               setSelectedCategory('all');
             }}
-            className="mt-4 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs cursor-pointer transition"
+            style={{ backgroundColor: accentColor, color: getContrastTextColor(accentColor) }} className="mt-4 px-4 py-1.5 rounded-lg font-bold text-xs cursor-pointer transition hover:opacity-90"
           >
             Clear Search
           </button>
@@ -1573,7 +1652,7 @@ const ReportDashboard: React.FC = () => {
           type="button"
           disabled={exporting}
           onClick={handleBatchExport}
-          className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl font-bold cursor-pointer transition shadow-sm disabled:opacity-50 whitespace-nowrap text-xs"
+          style={{ backgroundColor: accentColor, color: getContrastTextColor(accentColor) }} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold cursor-pointer transition shadow-sm hover:opacity-90 disabled:opacity-50 whitespace-nowrap text-xs"
         >
           <MdFileDownload size={16} />
           <span>{exporting ? 'Exporting...' : 'Export Directory (.xlsx)'}</span>

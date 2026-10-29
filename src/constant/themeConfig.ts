@@ -223,6 +223,12 @@ export function applyAccentColor(hexColor: string) {
 
       /* Light / Translucent Background Tints */
       .bg-emerald-50,
+      .bg-emerald-100,
+      .bg-emerald-200,
+      .bg-emerald-50\/70,
+      .bg-emerald-50\/50,
+      .bg-emerald-50\/30,
+      .bg-emerald-100\/60,
       .bg-emerald-50\\/80,
       .bg-emerald-600\\/10,
       .bg-emerald-500\\/10,
@@ -258,6 +264,8 @@ export function applyAccentColor(hexColor: string) {
       }
 
       /* Text Colors: Light Mode Contrast-Guarded */
+      html:not(.dark) .text-emerald-900,
+      html:not(.dark) .text-emerald-800,
       html:not(.dark) .text-emerald-600,
       html:not(.dark) .text-emerald-500,
       html:not(.dark) .text-emerald-700,
@@ -269,6 +277,10 @@ export function applyAccentColor(hexColor: string) {
       }
 
       /* Text Colors: Dark Mode Contrast-Guarded */
+      html.dark .text-emerald-900,
+      html.dark .text-emerald-800,
+      html.dark .text-emerald-300,
+      html.dark .text-emerald-200,
       html.dark .text-emerald-600,
       html.dark .text-emerald-500,
       html.dark .text-emerald-400,
@@ -304,6 +316,12 @@ export function applyAccentColor(hexColor: string) {
 
       /* Borders */
       .border-emerald-600,
+      .border-emerald-500\/80,
+      .border-emerald-500\/60,
+      .border-emerald-400,
+      .border-emerald-300,
+      .border-emerald-200,
+      .border-emerald-100,
       .border-emerald-500,
       .border-emerald-500\\/20,
       .border-teal-600,
