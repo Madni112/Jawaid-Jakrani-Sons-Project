@@ -573,21 +573,21 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             </ul>
           </nav>
         </div>
-        {/* Modern Protruding Toggle Button (Right Border, Vertically Centered) */}
+        {/* Modern D-Shaped Protruding Tab (> or < with rounded right arch) */}
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             setSidebarOpen(!sidebarOpen);
           }}
-          className="hidden min-[751px]:flex absolute -right-3 top-1/2 -translate-y-1/2 z-50 w-6 h-6 rounded-full bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-700/80 shadow-md items-center justify-center text-slate-500 hover:text-primary dark:text-slate-400 dark:hover:text-primary hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
-          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          className="hidden min-[751px]:flex absolute left-full -ml-[1px] top-1/2 -translate-y-1/2 z-50 w-4.5 h-9 rounded-r-full rounded-l-none bg-white dark:bg-[#111827] border border-l-0 border-slate-200/90 dark:border-slate-700/80 shadow-[3px_0_6px_rgba(0,0,0,0.06)] dark:shadow-[3px_0_6px_rgba(0,0,0,0.3)] items-center justify-center text-slate-400 hover:text-primary dark:text-slate-400 dark:hover:text-primary hover:w-5.5 transition-all duration-150 cursor-pointer group select-none"
+          title={sidebarOpen ? "Collapse sidebar (<)" : "Expand sidebar (>)"}
           aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
           {sidebarOpen ? (
-            <LuChevronLeft size={13} className="stroke-[2.5]" />
+            <LuChevronLeft size={13} className="stroke-[2.5] -ml-0.5 group-hover:-translate-x-0.5 transition-transform" />
           ) : (
-            <LuChevronRight size={13} className="stroke-[2.5]" />
+            <LuChevronRight size={13} className="stroke-[2.5] -ml-0.5 group-hover:translate-x-0.5 transition-transform" />
           )}
         </button>
       </aside>
