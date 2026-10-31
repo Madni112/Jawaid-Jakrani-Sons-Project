@@ -106,6 +106,7 @@ export interface PosProductItem {
   barcode_locked?: boolean;
   category: string;
   sub_category?: string;
+  parent_category?: string;
   retail_price: number;
   purchase_price?: number;
   uom: string;
@@ -116,6 +117,9 @@ export interface PosProductItem {
 export interface PosCategoryItem {
   id: string;
   name: string;
+  parent_name?: string;
+  sub_name?: string;
+  full_path?: string;
   image_url?: string;
   icon_name?: string;
   show_in_pos: boolean;
@@ -565,19 +569,66 @@ export const posService = {
   async getCategories(): Promise<PosCategoryItem[]> {
     // 1. Try reading from inventory_categories in Supabase
     try {
-      const { data, error } = await supabase
+      const { data: dbCats, error } = await supabase
         .from('inventory_categories')
         .select('*')
         .order('name');
 
-      if (!error && data && data.length > 0) {
-        return data.map((c: any) => ({
-          id: String(c.id),
-          name: c.name || c.category_name || 'Category',
-          image_url: c.image_url,
-          icon_name: c.icon_name,
-          show_in_pos: c.show_in_pos !== false
-        }));
+      if (!error && dbCats && dbCats.length > 0) {
+        const catMap = new Map<number | string, any>();
+        dbCats.forEach((c: any) => catMap.set(c.id, c));
+
+        // Find parent IDs: categories that have children pointing to them
+        const parentIds = new Set(dbCats.map((c: any) => c.parent_id).filter(Boolean));
+
+        // Leaf categories are categories that do NOT have child categories
+        // (if a category has children, it is a parent/folder category)
+        const leafCats = dbCats.filter((c: any) => !parentIds.has(c.id));
+
+        // Resolve each leaf category with its parent and sub category hierarchy
+        const resolvedCats: PosCategoryItem[] = leafCats.map((c: any) => {
+          const parent = c.parent_id ? catMap.get(c.parent_id) : null;
+          const grandparent = parent && parent.parent_id ? catMap.get(parent.parent_id) : null;
+
+          let parentName = '';
+          let subName = '';
+
+          if (grandparent && parent) {
+            // 3-tier hierarchy: grandparent (Parent Category) -> parent (Sub Category) -> c (Category)
+            parentName = grandparent.name || '';
+            subName = parent.name || '';
+          } else if (parent) {
+            // 2-tier hierarchy: parent (Parent Category) -> c (Category)
+            parentName = parent.name || '';
+            subName = '';
+          }
+
+          return {
+            id: String(c.id),
+            name: c.name || c.category_name || 'Category',
+            parent_name: parentName,
+            sub_name: subName,
+            full_path: [parentName, subName, c.name].filter(Boolean).join(' › '),
+            image_url: c.image_url,
+            icon_name: c.icon_name,
+            show_in_pos: c.show_in_pos !== false
+          };
+        });
+
+        // Deduplicate in case multiple leaf nodes have identical names & hierarchy
+        const uniqueResolved: PosCategoryItem[] = [];
+        const seenKeys = new Set<string>();
+        for (const cat of resolvedCats) {
+          const key = `${cat.name.toLowerCase()}__${(cat.parent_name || '').toLowerCase()}__${(cat.sub_name || '').toLowerCase()}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            uniqueResolved.push(cat);
+          }
+        }
+
+        if (uniqueResolved.length > 0) {
+          return uniqueResolved;
+        }
       }
     } catch (e) {
       console.warn('Could not read categories from DB:', e);
@@ -585,20 +636,29 @@ export const posService = {
 
     // 2. Fallback: extract distinct categories from products
     const products = await this.getProducts();
-    const uniqueCats = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
-    if (uniqueCats.length > 0) {
-      return uniqueCats.map((name, i) => ({
-        id: `cat-${i + 1}`,
-        name,
-        show_in_pos: true
-      }));
+    const seenCat = new Map<string, PosCategoryItem>();
+    products.forEach((p, idx) => {
+      const catName = p.category || 'General';
+      const key = catName.toLowerCase();
+      if (!seenCat.has(key)) {
+        seenCat.set(key, {
+          id: `cat-${idx + 1}`,
+          name: catName,
+          parent_name: p.parent_category,
+          sub_name: p.sub_category,
+          full_path: [p.parent_category, p.sub_category, catName].filter(Boolean).join(' › '),
+          show_in_pos: true
+        });
+      }
+    });
+
+    if (seenCat.size > 0) {
+      return Array.from(seenCat.values());
     }
 
     return [
-      { id: 'cat-1', name: 'Audio & Tech', show_in_pos: true },
-      { id: 'cat-2', name: 'Apparel', show_in_pos: true },
-      { id: 'cat-3', name: 'Home', show_in_pos: true },
-      { id: 'cat-4', name: 'Accessories', show_in_pos: true }
+      { id: 'cat-1', name: 'Cloth & Fabrics', show_in_pos: true },
+      { id: 'cat-2', name: 'Suits', show_in_pos: true }
     ];
   },
 
@@ -625,7 +685,7 @@ export const posService = {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, product_name, item_sr_no, category, sub_category, uom, retail_price, sales_price, price, current_stock')
+        .select('id, product_name, item_sr_no, category, sub_category, sub_sub_category, uom, retail_price, sales_price, price, current_stock')
         .order('category', { ascending: true })
         .order('product_name', { ascending: true });
 
@@ -642,7 +702,8 @@ export const posService = {
             barcode: autoBarcode,
             barcode_locked: meta.barcode_locked ?? false,
             category: p.category || 'General',
-            sub_category: p.sub_category,
+            sub_category: p.sub_category || '',
+            parent_category: p.sub_sub_category || '',
             retail_price: Number(p.retail_price ?? p.sales_price ?? p.price ?? 0),
             uom: p.uom || 'PCS',
             image_url: meta.image_url,
@@ -665,7 +726,7 @@ export const posService = {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, product_name, item_sr_no, category, sub_category, uom, retail_price, sales_price, price, current_stock')
+        .select('id, product_name, item_sr_no, category, sub_category, sub_sub_category, uom, retail_price, sales_price, price, current_stock')
         .order('category', { ascending: true })
         .order('product_name', { ascending: true });
 
@@ -682,7 +743,8 @@ export const posService = {
             barcode: autoBarcode,
             barcode_locked: meta.barcode_locked ?? false,
             category: p.category || 'General',
-            sub_category: p.sub_category,
+            sub_category: p.sub_category || '',
+            parent_category: p.sub_sub_category || '',
             retail_price: Number(p.retail_price ?? p.sales_price ?? p.price ?? 0),
             uom: p.uom || 'PCS',
             image_url: meta.image_url,

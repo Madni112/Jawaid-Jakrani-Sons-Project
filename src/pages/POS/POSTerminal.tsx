@@ -134,7 +134,11 @@ export const POSTerminal: React.FC = () => {
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       if (p.show_in_pos === false) return false;
-      const matchCat = selectedCategory === 'All' || p.category.toLowerCase() === selectedCategory.toLowerCase();
+      const matchCat =
+        selectedCategory === 'All' ||
+        p.category.toLowerCase() === selectedCategory.toLowerCase() ||
+        (p.sub_category && p.sub_category.toLowerCase() === selectedCategory.toLowerCase()) ||
+        (p.parent_category && p.parent_category.toLowerCase() === selectedCategory.toLowerCase());
       const query = searchQuery.trim().toLowerCase();
       const matchSearch =
         !query ||
@@ -844,15 +848,15 @@ export const POSTerminal: React.FC = () => {
              ───────────────────────────────────────────────────────────── */}
           <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-[#0B0F17] min-w-0">
             
-            {/* Category Filter Pills */}
-            <div className="p-3 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+            {/* Category Filter Pills (Category in Big, Sub & Parent in Small) */}
+            <div className="p-3 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 flex items-center gap-2.5 overflow-x-auto no-scrollbar shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedCategory('All')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex flex-col justify-center min-w-[110px] border ${
                   selectedCategory === 'All'
-                    ? 'shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                    ? 'shadow-xs border-transparent scale-[1.02]'
+                    : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
                 }`}
                 style={
                   selectedCategory === 'All'
@@ -860,38 +864,75 @@ export const POSTerminal: React.FC = () => {
                     : undefined
                 }
               >
-                All Items ({products.filter((p) => p.show_in_pos !== false).length})
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black tracking-tight">All Items</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
+                      selectedCategory === 'All'
+                        ? 'bg-black/20 text-white'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {products.filter((p) => p.show_in_pos !== false).length}
+                  </span>
+                </div>
+                <span className="text-[10px] opacity-75 font-medium mt-0.5 block leading-tight">
+                  All Categories
+                </span>
               </button>
 
               {categories
                 .filter((c) => c.show_in_pos !== false)
                 .map((cat) => {
                   const count = products.filter(
-                    (p) => p.show_in_pos !== false && p.category.toLowerCase() === cat.name.toLowerCase()
+                    (p) =>
+                      p.show_in_pos !== false &&
+                      (p.category.toLowerCase() === cat.name.toLowerCase() ||
+                        (cat.sub_name && p.sub_category?.toLowerCase() === cat.sub_name.toLowerCase()))
                   ).length;
                   const isSelected = selectedCategory.toLowerCase() === cat.name.toLowerCase();
+
+                  // Subtitle formatting: "Parent: [P] • Sub: [S]"
+                  const hasHierarchy = Boolean(cat.parent_name || cat.sub_name);
+                  const subtitleText = hasHierarchy
+                    ? [cat.parent_name && `Parent: ${cat.parent_name}`, cat.sub_name && `Sub: ${cat.sub_name}`]
+                        .filter(Boolean)
+                        .join(' • ')
+                    : 'Cloth Category';
 
                   return (
                     <button
                       key={cat.id}
                       type="button"
                       onClick={() => setSelectedCategory(cat.name)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3.5 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex flex-col justify-center min-w-[130px] max-w-[240px] border ${
                         isSelected
-                          ? 'shadow-xs'
-                          : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                          ? 'shadow-xs border-transparent scale-[1.02]'
+                          : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
                       }`}
                       style={
                         isSelected
                           ? { backgroundColor: accentColor, color: contrastText }
                           : undefined
                       }
+                      title={cat.full_path || cat.name}
                     >
-                      <span>{cat.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
-                        isSelected ? 'bg-black/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-300'
-                      }`}>
-                        {count}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-black tracking-tight truncate">
+                          {cat.name}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
+                            isSelected
+                              ? 'bg-black/20 text-white'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </div>
+                      <span className="text-[10px] opacity-75 font-medium mt-0.5 truncate block leading-tight">
+                        {subtitleText}
                       </span>
                     </button>
                   );
@@ -984,6 +1025,11 @@ export const POSTerminal: React.FC = () => {
                           <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1 group-hover:text-primary transition-colors" title={prod.product_name}>
                             {prod.product_name}
                           </h4>
+                          {(prod.parent_category || prod.sub_category) && (
+                            <p className="text-[10px] text-slate-400 font-medium truncate" title={`Parent: ${prod.parent_category || ''} • Sub: ${prod.sub_category || ''}`}>
+                              {[prod.parent_category && `Parent: ${prod.parent_category}`, prod.sub_category && `Sub: ${prod.sub_category}`].filter(Boolean).join(' • ')}
+                            </p>
+                          )}
                           <div className="flex items-center justify-between text-[10px] text-slate-400">
                             <span className="font-mono">{prod.item_sr_no || 'SKU'}</span>
                             <span className="text-emerald-500 font-semibold">In Stock</span>
