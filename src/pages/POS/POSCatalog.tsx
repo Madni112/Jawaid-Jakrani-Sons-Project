@@ -61,6 +61,41 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const [categories, setCategories] = useState<PosCategoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Filters
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [visibilityFilter, setVisibilityFilter] = useState<'All' | 'Visible' | 'Hidden'>('All');
+
+  // ERP Product List Import Modal State
+  const [isErpImportModalOpen, setIsErpImportModalOpen] = useState<boolean>(false);
+  const [erpProducts, setErpProducts] = useState<PosProductItem[]>([]);
+  const [loadingErp, setLoadingErp] = useState<boolean>(false);
+  const [erpSearchQuery, setErpSearchQuery] = useState<string>('');
+  const [selectedErpIds, setSelectedErpIds] = useState<Set<string>>(new Set());
+
+  // Add Product Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [newProductName, setNewProductName] = useState<string>('');
+  const [newItemCode, setNewItemCode] = useState<string>('');
+  const [newCategory, setNewCategory] = useState<string>('Pure Cotton & Latha');
+  const [newCustomCategory, setNewCustomCategory] = useState<string>('');
+  const [newRetailPrice, setNewRetailPrice] = useState<number>(0);
+  const [newUom, setNewUom] = useState<string>('PCS');
+  const [newBarcode, setNewBarcode] = useState<string>('');
+  const [newLockBarcode, setNewLockBarcode] = useState<boolean>(true);
+  const [newImageUrl, setNewImageUrl] = useState<string>('');
+  const [newShowInPos, setNewShowInPos] = useState<boolean>(true);
+  const [isSavingProduct, setIsSavingProduct] = useState<boolean>(false);
+  const addFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Barcode Print Modal
+  const [printingProduct, setPrintingProduct] = useState<PosProductItem | null>(null);
+
+  // Image Upload Preview Modal
+  const [editingImageItem, setEditingImageItem] = useState<{ id: string; type: 'product' | 'category'; currentUrl?: string; name: string } | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Drag & Drop and Ctrl + V Paste States
   const [isDraggingEdit, setIsDraggingEdit] = useState<boolean>(false);
   const [isDraggingAdd, setIsDraggingAdd] = useState<boolean>(false);
@@ -171,17 +206,6 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     }
   };
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [visibilityFilter, setVisibilityFilter] = useState<'All' | 'Visible' | 'Hidden'>('All');
-
-  // ── ERP Product List Import Modal State ──
-  const [isErpImportModalOpen, setIsErpImportModalOpen] = useState<boolean>(false);
-  const [erpProducts, setErpProducts] = useState<PosProductItem[]>([]);
-  const [loadingErp, setLoadingErp] = useState<boolean>(false);
-  const [erpSearchQuery, setErpSearchQuery] = useState<string>('');
-  const [selectedErpIds, setSelectedErpIds] = useState<Set<string>>(new Set());
 
   const handleOpenErpImport = async () => {
     setIsErpImportModalOpen(true);
@@ -273,20 +297,6 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     }
   };
 
-  // Add Product Modal State
-  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
-  const [newProductName, setNewProductName] = useState<string>('');
-  const [newItemCode, setNewItemCode] = useState<string>('');
-  const [newCategory, setNewCategory] = useState<string>('Pure Cotton & Latha');
-  const [newCustomCategory, setNewCustomCategory] = useState<string>('');
-  const [newRetailPrice, setNewRetailPrice] = useState<number>(0);
-  const [newUom, setNewUom] = useState<string>('PCS');
-  const [newBarcode, setNewBarcode] = useState<string>('');
-  const [newLockBarcode, setNewLockBarcode] = useState<boolean>(true);
-  const [newImageUrl, setNewImageUrl] = useState<string>('');
-  const [newShowInPos, setNewShowInPos] = useState<boolean>(true);
-  const [isSavingProduct, setIsSavingProduct] = useState<boolean>(false);
-  const addFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCreateProduct = async () => {
     if (!newProductName.trim()) {
@@ -349,13 +359,6 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     reader.readAsDataURL(file);
   };
 
-  // Barcode Print Modal
-  const [printingProduct, setPrintingProduct] = useState<PosProductItem | null>(null);
-
-  // Image Upload Preview Modal
-  const [editingImageItem, setEditingImageItem] = useState<{ id: string; type: 'product' | 'category'; currentUrl?: string; name: string } | null>(null);
-  const [imageUrlInput, setImageUrlInput] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load Data
   const loadData = async () => {
