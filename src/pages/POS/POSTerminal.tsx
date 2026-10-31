@@ -888,10 +888,14 @@ export const POSTerminal: React.FC = () => {
                     (p) =>
                       p.show_in_pos !== false &&
                       (p.category.toLowerCase() === cat.name.toLowerCase() ||
-                        (cat.sub_name && p.sub_category?.toLowerCase() === cat.sub_name.toLowerCase()))
+                        (cat.sub_name && p.sub_category?.toLowerCase() === cat.sub_name.toLowerCase()) ||
+                        (p.parent_category && p.parent_category.toLowerCase() === cat.name.toLowerCase()))
                   ).length;
                   const isSelected = selectedCategory.toLowerCase() === cat.name.toLowerCase();
-
+                  return { cat, count, isSelected };
+                })
+                .filter(({ count, isSelected }) => count > 0 || isSelected)
+                .map(({ cat, count, isSelected }) => {
                   // Hierarchy subtitle formatting without mentioning "Parent:" or "Sub:"
                   const hierarchyParts = [cat.parent_name, cat.sub_name]
                     .filter(Boolean)
