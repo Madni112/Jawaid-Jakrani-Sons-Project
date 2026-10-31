@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import {
   LuShoppingBag,
+  LuPlus,
   LuStore,
   LuLayers,
   LuSearch,
@@ -62,6 +63,82 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [visibilityFilter, setVisibilityFilter] = useState<'All' | 'Visible' | 'Hidden'>('All');
+
+  // Add Product Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [newProductName, setNewProductName] = useState<string>('');
+  const [newItemCode, setNewItemCode] = useState<string>('');
+  const [newCategory, setNewCategory] = useState<string>('Pure Cotton & Latha');
+  const [newCustomCategory, setNewCustomCategory] = useState<string>('');
+  const [newRetailPrice, setNewRetailPrice] = useState<number>(0);
+  const [newUom, setNewUom] = useState<string>('PCS');
+  const [newBarcode, setNewBarcode] = useState<string>('');
+  const [newLockBarcode, setNewLockBarcode] = useState<boolean>(true);
+  const [newImageUrl, setNewImageUrl] = useState<string>('');
+  const [newShowInPos, setNewShowInPos] = useState<boolean>(true);
+  const [isSavingProduct, setIsSavingProduct] = useState<boolean>(false);
+  const addFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCreateProduct = async () => {
+    if (!newProductName.trim()) {
+      toast.error('Please enter product name');
+      return;
+    }
+    if (newRetailPrice < 0) {
+      toast.error('Price cannot be negative');
+      return;
+    }
+
+    try {
+      setIsSavingProduct(true);
+      const cat = newCategory === '__CUSTOM__' ? (newCustomCategory.trim() || 'General') : newCategory;
+      const sku = newItemCode.trim() || `SKU-${Date.now().toString().slice(-6)}`;
+      const barcodeToSave = newBarcode.trim() || posService.generateUniqueBarcode({ id: sku, category: cat });
+
+      const created = await posService.createProduct({
+        product_name: newProductName.trim(),
+        item_sr_no: sku,
+        category: cat,
+        retail_price: newRetailPrice,
+        uom: newUom,
+        image_url: newImageUrl.trim() || undefined,
+        barcode: barcodeToSave,
+        barcode_locked: newLockBarcode,
+        show_in_pos: newShowInPos
+      });
+
+      toast.success(`Product "${created.product_name}" added to POS & product list!`);
+      setIsAddModalOpen(false);
+      setNewProductName('');
+      setNewItemCode('');
+      setNewRetailPrice(0);
+      setNewBarcode('');
+      setNewImageUrl('');
+      setNewCustomCategory('');
+      await loadData();
+    } catch (err) {
+      console.error('Error creating product:', err);
+      toast.error('Failed to create product');
+    } finally {
+      setIsSavingProduct(false);
+    }
+  };
+
+  const handleAddModalFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image size must be under 2MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setNewImageUrl(event.target.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Barcode Print Modal
   const [printingProduct, setPrintingProduct] = useState<PosProductItem | null>(null);
@@ -230,6 +307,22 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              setNewProductName('');
+              setNewItemCode(`SKU-${Date.now().toString().slice(-5)}`);
+              setNewBarcode(posService.generateUniqueBarcode({ id: String(Date.now()) }));
+              setNewRetailPrice(0);
+              setNewImageUrl('');
+              setIsAddModalOpen(true);
+            }}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
+          >
+            <LuPlus size={16} />
+            <span>+ Add Product to POS</span>
+          </button>
+
           <button
             type="button"
             onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
@@ -711,6 +804,272 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
           </div>
         </div>
       )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL: ADD NEW PRODUCT TO POS & DATABASE
+         ───────────────────────────────────────────────────────────── */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                  <LuPlus size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Add Product to POS & Master List
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Saves to the central database and immediately displays on the POS terminal.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5">
+              {/* Product Name */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Product Name <span className="text-rose-500">*</span>:
+                </label>
+                <input
+                  type="text"
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  placeholder="e.g. Pure Cotton Latha - Premium White"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* SKU Code & Category */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Item Code / SKU:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setNewItemCode(`SKU-${Date.now().toString().slice(-6)}`)}
+                      className="text-[10px] text-primary font-bold hover:underline cursor-pointer"
+                    >
+                      Auto
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={newItemCode}
+                    onChange={(e) => setNewItemCode(e.target.value)}
+                    placeholder="e.g. LTH-01"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Category:
+                  </label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                    <option value="Pure Cotton & Latha">Pure Cotton & Latha</option>
+                    <option value="Pure Silk & Boski">Pure Silk & Boski</option>
+                    <option value="Suit">Suit</option>
+                    <option value="Apparel">Apparel</option>
+                    <option value="Accessories">Accessories</option>
+                    <option value="Audio & Tech">Audio & Tech</option>
+                    <option value="Home">Home</option>
+                    <option value="__CUSTOM__">+ New Custom Category</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* If Custom Category Selected */}
+              {newCategory === '__CUSTOM__' && (
+                <div className="space-y-1 animate-fadeIn">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    New Category Name:
+                  </label>
+                  <input
+                    type="text"
+                    value={newCustomCategory}
+                    onChange={(e) => setNewCustomCategory(e.target.value)}
+                    placeholder="e.g. Unstitched Fabric"
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              )}
+
+              {/* Retail Price & UOM */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Retail Price (Rs.) <span className="text-rose-500">*</span>:
+                  </label>
+                  <input
+                    type="number"
+                    value={newRetailPrice || ''}
+                    onChange={(e) => setNewRetailPrice(Number(e.target.value) || 0)}
+                    placeholder="e.g. 4500"
+                    className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Unit of Measure (UOM):
+                  </label>
+                  <select
+                    value={newUom}
+                    onChange={(e) => setNewUom(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="PCS">PCS (Pieces)</option>
+                    <option value="Meter">Meter</option>
+                    <option value="Suit">Suit</option>
+                    <option value="Pack">Pack</option>
+                    <option value="Yard">Yard</option>
+                    <option value="Roll">Roll</option>
+                    <option value="Box">Box</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Barcode Generation with Lock */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <IoBarcodeOutline className="text-primary text-sm" />
+                    <span>Barcode:</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setNewBarcode(posService.generateUniqueBarcode({ id: String(Date.now()) }))}
+                    className="text-[10px] text-primary font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <LuSparkles size={11} />
+                    <span>Generate Unique Barcode</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={newBarcode}
+                  onChange={(e) => setNewBarcode(e.target.value)}
+                  placeholder="e.g. 890123456789"
+                  className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+
+                <label className="flex items-center gap-2 pt-1 text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newLockBarcode}
+                    onChange={(e) => setNewLockBarcode(e.target.checked)}
+                    className="rounded text-primary focus:ring-primary"
+                  />
+                  <span>Permanently lock this barcode (cannot be reverted)</span>
+                </label>
+              </div>
+
+              {/* Image Preview & Upload */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Product Photo (For POS Grid):
+                </label>
+
+                {newImageUrl ? (
+                  <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    <img src={newImageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setNewImageUrl('')}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black transition cursor-pointer"
+                      title="Remove image"
+                    >
+                      <LuX size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={newImageUrl}
+                      onChange={(e) => setNewImageUrl(e.target.value)}
+                      placeholder="Paste image web URL..."
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+
+                    <div>
+                      <input
+                        ref={addFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAddModalFileUpload}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addFileInputRef.current?.click()}
+                        className="w-full py-2 px-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <LuUpload size={13} />
+                        <span>Upload File</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Show in POS Terminal Toggle */}
+              <label className="flex items-center gap-2 pt-1 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newShowInPos}
+                  onChange={(e) => setNewShowInPos(e.target.checked)}
+                  className="rounded text-primary focus:ring-primary w-4 h-4"
+                />
+                <span>Show immediately on POS Register Terminal</span>
+              </label>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingProduct}
+                onClick={handleCreateProduct}
+                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold text-white transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                style={{ backgroundColor: accentColor }}
+              >
+                <LuCheck size={16} />
+                <span>{isSavingProduct ? 'Saving...' : 'Save & Add to POS'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

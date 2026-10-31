@@ -593,15 +593,15 @@ export const posService = {
   },
 
   async getPosProducts(): Promise<PosProductItem[]> {
-    // 1. Try reading live products from database
+    let dbProducts: PosProductItem[] = [];
     try {
       const { data, error } = await supabase
         .from('products')
         .select('id, product_name, item_sr_no, retail_price, sales_price, uom, category, sub_category, image_url, show_in_pos, barcode, barcode_locked')
-        .limit(500);
+        .limit(1000);
 
       if (!error && data && data.length > 0) {
-        return data.map((p: any) => ({
+        dbProducts = data.map((p: any) => ({
           id: String(p.id),
           product_name: p.product_name,
           item_sr_no: p.item_sr_no,
@@ -619,16 +619,79 @@ export const posService = {
       console.warn('Reading products from database failed, using local pos products:', e);
     }
 
-    // 2. Fallback to sample boutique products
+    // Read custom local products
+    let localCustom: PosProductItem[] = [];
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('uj_custom_pos_products');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          localCustom = JSON.parse(saved);
         } catch (_) {}
       }
     }
+
+    if (dbProducts.length > 0) {
+      const existingIds = new Set(dbProducts.map(p => p.id));
+      const existingCodes = new Set(dbProducts.map(p => p.item_sr_no?.toLowerCase()).filter(Boolean));
+      const unmerged = localCustom.filter(p => !existingIds.has(p.id) && (!p.item_sr_no || !existingCodes.has(p.item_sr_no.toLowerCase())));
+      return [...unmerged, ...dbProducts];
+    }
+
+    if (localCustom.length > 0) {
+      return localCustom;
+    }
+
     return SAMPLE_POS_PRODUCTS;
+  },
+
+  async createProduct(productData: Omit<PosProductItem, 'id'>): Promise<PosProductItem> {
+    const id = `prod-${Date.now()}`;
+    const newProduct: PosProductItem = {
+      id,
+      product_name: productData.product_name,
+      item_sr_no: productData.item_sr_no || `SKU-${Date.now().toString().slice(-6)}`,
+      category: productData.category || 'Apparel',
+      retail_price: Number(productData.retail_price) || 0,
+      uom: productData.uom || 'PCS',
+      image_url: productData.image_url,
+      barcode: productData.barcode || this.generateUniqueBarcode({ id }),
+      barcode_locked: productData.barcode_locked ?? true,
+      show_in_pos: productData.show_in_pos ?? true
+    };
+
+    // 1. Try insert into Supabase products table
+    try {
+      const { data, error } = await supabase.from('products').insert([{
+        product_name: newProduct.product_name,
+        item_sr_no: newProduct.item_sr_no,
+        category: newProduct.category,
+        retail_price: newProduct.retail_price,
+        sales_price: newProduct.retail_price,
+        uom: newProduct.uom,
+        image_url: newProduct.image_url,
+        barcode: newProduct.barcode,
+        barcode_locked: newProduct.barcode_locked,
+        show_in_pos: newProduct.show_in_pos
+      }]).select().single();
+
+      if (!error && data) {
+        newProduct.id = String(data.id);
+      }
+    } catch (e) {
+      console.warn('Could not insert product into Supabase:', e);
+    }
+
+    // 2. Save into local products cache
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('uj_custom_pos_products');
+        const list = raw ? JSON.parse(raw) : [...SAMPLE_POS_PRODUCTS];
+        const updated = [newProduct, ...list.filter((p: any) => p.id !== newProduct.id)];
+        localStorage.setItem('uj_custom_pos_products', JSON.stringify(updated));
+      } catch (_) {}
+    }
+
+    return newProduct;
   },
 
   async toggleProductPosVisibility(productId: string, show: boolean) {
