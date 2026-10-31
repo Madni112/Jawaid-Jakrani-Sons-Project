@@ -61,6 +61,116 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const [categories, setCategories] = useState<PosCategoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Drag & Drop and Ctrl + V Paste States
+  const [isDraggingEdit, setIsDraggingEdit] = useState<boolean>(false);
+  const [isDraggingAdd, setIsDraggingAdd] = useState<boolean>(false);
+
+  // Global Ctrl + V listener when either modal is active
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      // Only handle if editingImageItem or isAddModalOpen is active
+      if (!editingImageItem && !isAddModalOpen) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            if (file.size > 5 * 1024 * 1024) {
+              toast.error('Image size must be under 5MB');
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              if (typeof event.target?.result === 'string') {
+                if (editingImageItem) {
+                  setImageUrlInput(event.target.result);
+                  toast.success('Image pasted from clipboard (Ctrl + V)!');
+                } else if (isAddModalOpen) {
+                  setNewImageUrl(event.target.result);
+                  toast.success('Image pasted from clipboard (Ctrl + V)!');
+                }
+              }
+            };
+            reader.readAsDataURL(file);
+            return;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [editingImageItem, isAddModalOpen]);
+
+  // Drag & drop handlers for Edit Image Modal
+  const handleEditDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingEdit(true);
+  };
+  const handleEditDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingEdit(false);
+  };
+  const handleEditDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingEdit(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be under 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (typeof event.target?.result === 'string') {
+          setImageUrlInput(event.target.result);
+          toast.success('Image dropped successfully!');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Drag & drop handlers for Add Product Modal
+  const handleAddDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingAdd(true);
+  };
+  const handleAddDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingAdd(false);
+  };
+  const handleAddDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingAdd(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be under 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (typeof event.target?.result === 'string') {
+          setNewImageUrl(event.target.result);
+          toast.success('Image dropped successfully!');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -852,14 +962,70 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               Target: <span className="text-primary">{editingImageItem.name}</span>
             </p>
 
-            {/* Preview Box */}
-            <div className="aspect-video w-full rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+            {/* Interactive Drag & Drop + Ctrl + V Dropzone */}
+            <div
+              onDragOver={handleEditDragOver}
+              onDragEnter={handleEditDragOver}
+              onDragLeave={handleEditDragLeave}
+              onDrop={handleEditDrop}
+              onClick={() => { if (!imageUrlInput) fileInputRef.current?.click(); }}
+              className={`relative aspect-video w-full rounded-2xl overflow-hidden border-2 border-dashed transition-all duration-200 flex flex-col items-center justify-center p-4 cursor-pointer group ${
+                isDraggingEdit
+                  ? 'border-primary bg-primary/10 scale-[1.02] shadow-lg ring-4 ring-primary/20'
+                  : imageUrlInput
+                  ? 'border-slate-200 dark:border-slate-700 bg-slate-900/5'
+                  : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#161D2B] hover:border-primary/60 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+            >
               {imageUrlInput ? (
-                <img src={imageUrlInput} alt="Preview" className="w-full h-full object-cover" />
+                <>
+                  <img src={imageUrlInput} alt="Preview" className="w-full h-full object-cover rounded-xl" />
+                  
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 text-white p-3 text-center">
+                    <LuUpload size={24} className="animate-bounce" />
+                    <span className="text-xs font-bold">Drag & drop or paste (Ctrl + V) to replace</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                      className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[11px] font-semibold backdrop-blur-xs transition"
+                    >
+                      Browse Device File
+                    </button>
+                  </div>
+
+                  {/* Remove Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setImageUrlInput('');
+                    }}
+                    className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-black/70 hover:bg-rose-600 text-white transition shadow-md cursor-pointer"
+                    title="Clear image"
+                  >
+                    <LuX size={14} />
+                  </button>
+                </>
               ) : (
-                <div className="text-center text-slate-400 space-y-1">
-                  <LuImage size={32} className="mx-auto" />
-                  <span className="text-xs">No image provided</span>
+                <div className="text-center space-y-2 select-none">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto transition-transform group-hover:scale-110">
+                    <LuUpload size={22} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                      Drag & Drop image here
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      or press <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[10px] font-bold text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600">Ctrl + V</kbd> to paste
+                    </p>
+                  </div>
+                  <span className="inline-block text-[10px] font-bold text-primary underline">
+                    or click to browse files
+                  </span>
                 </div>
               )}
             </div>
@@ -1298,53 +1464,88 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                 </label>
               </div>
 
-              {/* Image Preview & Upload */}
+              {/* Image Preview & Upload with Drag-and-Drop and Ctrl + V */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Product Photo (For POS Grid):
+                  Product Photo (Drag & Drop or Ctrl + V):
                 </label>
 
-                {newImageUrl ? (
-                  <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                    <img src={newImageUrl} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setNewImageUrl('')}
-                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black transition cursor-pointer"
-                      title="Remove image"
-                    >
-                      <LuX size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={newImageUrl}
-                      onChange={(e) => setNewImageUrl(e.target.value)}
-                      placeholder="Paste image web URL..."
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                    />
-
-                    <div>
-                      <input
-                        ref={addFileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleAddModalFileUpload}
-                        className="hidden"
-                      />
+                <div
+                  onDragOver={handleAddDragOver}
+                  onDragEnter={handleAddDragOver}
+                  onDragLeave={handleAddDragLeave}
+                  onDrop={handleAddDrop}
+                  onClick={() => { if (!newImageUrl) addFileInputRef.current?.click(); }}
+                  className={`relative aspect-video w-full rounded-2xl overflow-hidden border-2 border-dashed transition-all duration-200 flex flex-col items-center justify-center p-3 cursor-pointer group ${
+                    isDraggingAdd
+                      ? 'border-primary bg-primary/10 scale-[1.02] shadow-lg ring-4 ring-primary/20'
+                      : newImageUrl
+                      ? 'border-slate-200 dark:border-slate-700 bg-slate-900/5'
+                      : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#161D2B] hover:border-primary/60 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                  }`}
+                >
+                  {newImageUrl ? (
+                    <>
+                      <img src={newImageUrl} alt="Preview" className="w-full h-full object-cover rounded-xl" />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white p-3 text-center">
+                        <LuUpload size={20} className="animate-bounce" />
+                        <span className="text-xs font-bold">Drag & drop or paste (Ctrl + V) to replace</span>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => addFileInputRef.current?.click()}
-                        className="w-full py-2 px-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewImageUrl('');
+                        }}
+                        className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-black/70 hover:bg-rose-600 text-white transition shadow-md cursor-pointer"
+                        title="Clear image"
                       >
-                        <LuUpload size={13} />
-                        <span>Upload File</span>
+                        <LuX size={14} />
                       </button>
+                    </>
+                  ) : (
+                    <div className="text-center space-y-1.5 select-none">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mx-auto transition-transform group-hover:scale-110">
+                        <LuUpload size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                          Drag & Drop product photo here
+                        </h4>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          or press <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[9px] font-bold text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600">Ctrl + V</kbd> to paste from clipboard
+                        </p>
+                      </div>
+                      <span className="inline-block text-[10px] font-bold text-primary underline">
+                        or click to browse
+                      </span>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={newImageUrl}
+                    onChange={(e) => setNewImageUrl(e.target.value)}
+                    placeholder="Or paste web image URL..."
+                    className="flex-1 px-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                  <input
+                    ref={addFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAddModalFileUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addFileInputRef.current?.click()}
+                    className="py-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    Browse
+                  </button>
+                </div>
               </div>
 
               {/* Show in POS Terminal Toggle */}
