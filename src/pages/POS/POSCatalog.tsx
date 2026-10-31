@@ -715,11 +715,19 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                               <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200 block">
                                 {p.category}
                               </span>
-                              {(p.parent_category || p.sub_category) && (
-                                <span className="text-[10px] text-slate-400 font-medium block truncate max-w-[170px]" title={`Parent: ${p.parent_category || ''} • Sub: ${p.sub_category || ''}`}>
-                                  {[p.parent_category && `Parent: ${p.parent_category}`, p.sub_category && `Sub: ${p.sub_category}`].filter(Boolean).join(' • ')}
-                                </span>
-                              )}
+                              {(() => {
+                                const hierarchyParts = [p.parent_category, p.sub_category]
+                                  .filter(Boolean)
+                                  .map((s: any) => String(s).trim())
+                                  .filter((v, i, a) => a.indexOf(v) === i);
+                                if (hierarchyParts.length === 0) return null;
+                                const line = hierarchyParts.join(' • ');
+                                return (
+                                  <span className="text-[10px] text-slate-400 font-medium block truncate max-w-[170px]" title={line}>
+                                    {line}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </td>
 
@@ -853,11 +861,19 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                     <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
                       {cat.name}
                     </h3>
-                    {(cat.parent_name || cat.sub_name) && (
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[180px]" title={`Parent: ${cat.parent_name || ''} • Sub: ${cat.sub_name || ''}`}>
-                        {[cat.parent_name && `Parent: ${cat.parent_name}`, cat.sub_name && `Sub: ${cat.sub_name}`].filter(Boolean).join(' • ')}
-                      </p>
-                    )}
+                    {(() => {
+                      const hierarchyParts = [cat.parent_name, cat.sub_name]
+                        .filter(Boolean)
+                        .map((s: any) => String(s).trim())
+                        .filter((v, i, a) => a.indexOf(v) === i && v.toLowerCase() !== cat.name.toLowerCase());
+                      if (hierarchyParts.length === 0) return null;
+                      const line = hierarchyParts.join(' • ');
+                      return (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[180px]" title={line}>
+                          {line}
+                        </p>
+                      );
+                    })()}
                     <span className="text-xs text-slate-400">
                       {itemCount} catalog items
                     </span>
@@ -1196,11 +1212,18 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                             <span className="font-extrabold text-xs text-slate-900 dark:text-white uppercase tracking-tight block">
                               {categoryName}
                             </span>
-                            {items[0] && (items[0].parent_category || items[0].sub_category) && (
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
-                                {[items[0].parent_category && `Parent: ${items[0].parent_category}`, items[0].sub_category && `Sub: ${items[0].sub_category}`].filter(Boolean).join(' • ')}
-                              </span>
-                            )}
+                            {items[0] && (() => {
+                              const hierarchyParts = [items[0].parent_category, items[0].sub_category]
+                                .filter(Boolean)
+                                .map((s: any) => String(s).trim())
+                                .filter((v, i, a) => a.indexOf(v) === i);
+                              if (hierarchyParts.length === 0) return null;
+                              return (
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
+                                  {hierarchyParts.join(' • ')}
+                                </span>
+                              );
+                            })()}
                           </div>
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
                             {items.length} products

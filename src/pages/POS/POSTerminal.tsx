@@ -892,13 +892,12 @@ export const POSTerminal: React.FC = () => {
                   ).length;
                   const isSelected = selectedCategory.toLowerCase() === cat.name.toLowerCase();
 
-                  // Subtitle formatting: "Parent: [P] • Sub: [S]"
-                  const hasHierarchy = Boolean(cat.parent_name || cat.sub_name);
-                  const subtitleText = hasHierarchy
-                    ? [cat.parent_name && `Parent: ${cat.parent_name}`, cat.sub_name && `Sub: ${cat.sub_name}`]
-                        .filter(Boolean)
-                        .join(' • ')
-                    : 'Cloth Category';
+                  // Hierarchy subtitle formatting without mentioning "Parent:" or "Sub:"
+                  const hierarchyParts = [cat.parent_name, cat.sub_name]
+                    .filter(Boolean)
+                    .map((s) => String(s).trim())
+                    .filter((v, i, a) => a.indexOf(v) === i && v.toLowerCase() !== cat.name.toLowerCase());
+                  const subtitleText = hierarchyParts.length > 0 ? hierarchyParts.join(' • ') : 'Cloth Category';
 
                   return (
                     <button
@@ -1025,11 +1024,19 @@ export const POSTerminal: React.FC = () => {
                           <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1 group-hover:text-primary transition-colors" title={prod.product_name}>
                             {prod.product_name}
                           </h4>
-                          {(prod.parent_category || prod.sub_category) && (
-                            <p className="text-[10px] text-slate-400 font-medium truncate" title={`Parent: ${prod.parent_category || ''} • Sub: ${prod.sub_category || ''}`}>
-                              {[prod.parent_category && `Parent: ${prod.parent_category}`, prod.sub_category && `Sub: ${prod.sub_category}`].filter(Boolean).join(' • ')}
-                            </p>
-                          )}
+                          {(() => {
+                            const hierarchyParts = [prod.parent_category, prod.sub_category]
+                              .filter(Boolean)
+                              .map((s: any) => String(s).trim())
+                              .filter((v, i, a) => a.indexOf(v) === i);
+                            if (hierarchyParts.length === 0) return null;
+                            const catLine = hierarchyParts.join(' • ');
+                            return (
+                              <p className="text-[10px] text-slate-400 font-medium truncate" title={catLine}>
+                                {catLine}
+                              </p>
+                            );
+                          })()}
                           <div className="flex items-center justify-between text-[10px] text-slate-400">
                             <span className="font-mono">{prod.item_sr_no || 'SKU'}</span>
                             <span className="text-emerald-500 font-semibold">In Stock</span>
