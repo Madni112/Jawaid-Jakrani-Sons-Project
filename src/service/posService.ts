@@ -123,6 +123,32 @@ export interface PosCategoryItem {
 }
 
 // Local storage storage keys
+
+const STORAGE_PRODUCT_META = 'uj_pos_product_meta_v2';
+
+interface PosProductMeta {
+  show_in_pos: boolean;
+  image_url?: string;
+  barcode?: string;
+  barcode_locked?: boolean;
+}
+
+const getStoredProductMeta = (): Record<string, PosProductMeta> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(STORAGE_PRODUCT_META);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveStoredProductMeta = (metaMap: Record<string, PosProductMeta>) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_PRODUCT_META, JSON.stringify(metaMap));
+  }
+};
+
 const STORAGE_ORDERS = 'uj_pos_orders_v1';
 const STORAGE_SHIFTS = 'uj_pos_shifts_v1';
 const STORAGE_HELD = 'uj_pos_held_v1';
@@ -592,34 +618,83 @@ export const posService = {
     }
   },
 
-  async getPosProducts(): Promise<PosProductItem[]> {
-    let dbProducts: PosProductItem[] = [];
+  // ── Fetch Master ERP Products ──
+  async getErpProducts(): Promise<PosProductItem[]> {
+    const metaMap = getStoredProductMeta();
+
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, product_name, item_sr_no, retail_price, sales_price, uom, category, sub_category, image_url, show_in_pos, barcode, barcode_locked')
-        .limit(1000);
+        .select('id, product_name, item_sr_no, category, sub_category, uom, retail_price, sales_price, price, current_stock')
+        .order('category', { ascending: true })
+        .order('product_name', { ascending: true });
 
       if (!error && data && data.length > 0) {
-        dbProducts = data.map((p: any) => ({
-          id: String(p.id),
-          product_name: p.product_name,
-          item_sr_no: p.item_sr_no,
-          barcode: p.barcode || (p.item_sr_no ? `890${String(p.id).padStart(9, '0')}` : undefined),
-          barcode_locked: Boolean(p.barcode_locked),
-          category: p.category || 'Apparel',
-          sub_category: p.sub_category,
-          retail_price: Number(p.retail_price ?? p.sales_price ?? 0),
-          uom: p.uom || 'PCS',
-          image_url: p.image_url,
-          show_in_pos: p.show_in_pos !== false
-        }));
+        return data.map((p: any) => {
+          const strId = String(p.id);
+          const meta = metaMap[strId] || {};
+          const autoBarcode = meta.barcode || (p.item_sr_no ? `890${strId.padStart(9, '0')}` : this.generateUniqueBarcode({ id: strId }));
+
+          return {
+            id: strId,
+            product_name: p.product_name || 'Unnamed Product',
+            item_sr_no: p.item_sr_no || `SKU-${strId}`,
+            barcode: autoBarcode,
+            barcode_locked: meta.barcode_locked ?? false,
+            category: p.category || 'General',
+            sub_category: p.sub_category,
+            retail_price: Number(p.retail_price ?? p.sales_price ?? p.price ?? 0),
+            uom: p.uom || 'PCS',
+            image_url: meta.image_url,
+            show_in_pos: meta.show_in_pos ?? true
+          };
+        });
       }
     } catch (e) {
-      console.warn('Reading products from database failed, using local pos products:', e);
+      console.warn('Could not read ERP products from Supabase:', e);
     }
 
-    // Read custom local products
+    return SAMPLE_POS_PRODUCTS;
+  },
+
+  async getPosProducts(): Promise<PosProductItem[]> {
+    const metaMap = getStoredProductMeta();
+
+    // 1. Fetch ERP Products
+    let erpList: PosProductItem[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, product_name, item_sr_no, category, sub_category, uom, retail_price, sales_price, price, current_stock')
+        .order('category', { ascending: true })
+        .order('product_name', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        erpList = data.map((p: any) => {
+          const strId = String(p.id);
+          const meta = metaMap[strId] || {};
+          const autoBarcode = meta.barcode || (p.item_sr_no ? `890${strId.padStart(9, '0')}` : this.generateUniqueBarcode({ id: strId }));
+
+          return {
+            id: strId,
+            product_name: p.product_name || 'Unnamed Product',
+            item_sr_no: p.item_sr_no || `SKU-${strId}`,
+            barcode: autoBarcode,
+            barcode_locked: meta.barcode_locked ?? false,
+            category: p.category || 'General',
+            sub_category: p.sub_category,
+            retail_price: Number(p.retail_price ?? p.sales_price ?? p.price ?? 0),
+            uom: p.uom || 'PCS',
+            image_url: meta.image_url,
+            show_in_pos: meta.show_in_pos ?? true
+          };
+        });
+      }
+    } catch (e) {
+      console.warn('Reading products from database failed:', e);
+    }
+
+    // 2. Read custom local products (created directly in POS)
     let localCustom: PosProductItem[] = [];
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('uj_custom_pos_products');
@@ -630,11 +705,11 @@ export const posService = {
       }
     }
 
-    if (dbProducts.length > 0) {
-      const existingIds = new Set(dbProducts.map(p => p.id));
-      const existingCodes = new Set(dbProducts.map(p => p.item_sr_no?.toLowerCase()).filter(Boolean));
+    if (erpList.length > 0) {
+      const existingIds = new Set(erpList.map(p => p.id));
+      const existingCodes = new Set(erpList.map(p => p.item_sr_no?.toLowerCase()).filter(Boolean));
       const unmerged = localCustom.filter(p => !existingIds.has(p.id) && (!p.item_sr_no || !existingCodes.has(p.item_sr_no.toLowerCase())));
-      return [...unmerged, ...dbProducts];
+      return [...unmerged, ...erpList];
     }
 
     if (localCustom.length > 0) {
@@ -642,6 +717,32 @@ export const posService = {
     }
 
     return SAMPLE_POS_PRODUCTS;
+  },
+
+  async setProductsPosVisibility(enabledIds: string[], allTargetIds: string[]) {
+    const metaMap = getStoredProductMeta();
+    const enabledSet = new Set(enabledIds);
+
+    for (const id of allTargetIds) {
+      const current = metaMap[id] || { show_in_pos: true };
+      metaMap[id] = {
+        ...current,
+        show_in_pos: enabledSet.has(id)
+      };
+    }
+
+    saveStoredProductMeta(metaMap);
+
+    // Try updating DB
+    try {
+      if (enabledIds.length > 0) {
+        await supabase.from('products').update({ show_in_pos: true }).in('id', enabledIds);
+      }
+      const disabledIds = allTargetIds.filter(id => !enabledSet.has(id));
+      if (disabledIds.length > 0) {
+        await supabase.from('products').update({ show_in_pos: false }).in('id', disabledIds);
+      }
+    } catch (_) {}
   },
 
   async createProduct(productData: Omit<PosProductItem, 'id'>): Promise<PosProductItem> {
@@ -695,6 +796,13 @@ export const posService = {
   },
 
   async toggleProductPosVisibility(productId: string, show: boolean) {
+    const metaMap = getStoredProductMeta();
+    metaMap[productId] = {
+      ...(metaMap[productId] || { show_in_pos: true }),
+      show_in_pos: show
+    };
+    saveStoredProductMeta(metaMap);
+
     try {
       await supabase.from('products').update({ show_in_pos: show }).eq('id', productId);
     } catch (e) {
@@ -703,6 +811,13 @@ export const posService = {
   },
 
   async updateProductImage(productId: string, imageUrl: string) {
+    const metaMap = getStoredProductMeta();
+    metaMap[productId] = {
+      ...(metaMap[productId] || { show_in_pos: true }),
+      image_url: imageUrl
+    };
+    saveStoredProductMeta(metaMap);
+
     try {
       await supabase.from('products').update({ image_url: imageUrl }).eq('id', productId);
     } catch (e) {
@@ -728,6 +843,14 @@ export const posService = {
   },
 
   async lockProductBarcode(productId: string, barcode: string) {
+    const metaMap = getStoredProductMeta();
+    metaMap[productId] = {
+      ...(metaMap[productId] || { show_in_pos: true }),
+      barcode,
+      barcode_locked: true
+    };
+    saveStoredProductMeta(metaMap);
+
     try {
       await supabase
         .from('products')
