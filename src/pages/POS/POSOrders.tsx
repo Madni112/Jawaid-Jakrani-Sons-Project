@@ -28,7 +28,14 @@ import { useLanguage } from '../../Context/LanguageContext';
 import { getSavedAccentColor, getContrastTextColor } from '../../constant/themeConfig';
 import { posService, PosOrder, PosSettings } from '../../service/posService';
 
-export const POSOrders: React.FC = () => {
+interface POSOrdersProps {
+  embedded?: boolean;
+  defaultStatus?: string;
+  isReturnsOnly?: boolean;
+  onBack?: () => void;
+}
+
+export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, isReturnsOnly, onBack }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { userEmail } = useAuth();
@@ -47,7 +54,7 @@ export const POSOrders: React.FC = () => {
   const [orders, setOrders] = useState<PosOrder[]>(() => posService.getAllOrders());
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [methodFilter, setMethodFilter] = useState<string>('All');
-  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>(isReturnsOnly ? 'Completed' : (defaultStatus || 'All'));
 
   // Modal for thermal receipt reprint
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
@@ -143,7 +150,7 @@ export const POSOrders: React.FC = () => {
         <div className="flex items-center gap-3.5">
           <button
             type="button"
-            onClick={() => navigate('/pos/terminal')}
+            onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
             className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
             title="Return to POS Terminal"
           >
@@ -152,7 +159,7 @@ export const POSOrders: React.FC = () => {
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
               <LuReceipt className="text-sky-500" />
-              <span>POS Transactions & Thermal Receipts</span>
+              <span>{isReturnsOnly ? 'Returns & Refunds Processing' : 'POS Transactions & Thermal Receipts'}</span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Review transaction logs, reprint thermal receipts, and process customer returns.
@@ -172,12 +179,12 @@ export const POSOrders: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => navigate('/pos/terminal')}
+            onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
             style={{ backgroundColor: accentColor }}
           >
             <MdPointOfSale size={16} />
-            <span>Launch POS Terminal</span>
+            <span>{embedded ? 'Back to Cashier Register' : 'Launch POS Terminal'}</span>
           </button>
         </div>
       </div>

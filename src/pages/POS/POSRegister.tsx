@@ -27,7 +27,12 @@ import { useLanguage } from '../../Context/LanguageContext';
 import { getSavedAccentColor, getContrastTextColor } from '../../constant/themeConfig';
 import { posService, PosShift, PosSettings } from '../../service/posService';
 
-export const POSRegister: React.FC = () => {
+interface POSRegisterProps {
+  embedded?: boolean;
+  onBack?: () => void;
+}
+
+export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) => {
   const navigate = useNavigate();
   const { userEmail, businessName } = useAuth();
   const { isRTL } = useLanguage();
@@ -140,7 +145,7 @@ export const POSRegister: React.FC = () => {
         <div className="flex items-center gap-3.5">
           <button
             type="button"
-            onClick={() => navigate('/pos/terminal')}
+            onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
             className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
             title="Return to POS Terminal"
           >
@@ -169,12 +174,12 @@ export const POSRegister: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => navigate('/pos/terminal')}
+            onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
             style={{ backgroundColor: accentColor }}
           >
             <MdPointOfSale size={16} />
-            <span>Launch POS Terminal</span>
+            <span>{embedded ? 'Back to Cashier Register' : 'Launch POS Terminal'}</span>
           </button>
         </div>
       </div>

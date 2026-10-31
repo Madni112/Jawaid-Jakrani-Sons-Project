@@ -50,6 +50,9 @@ import {
   isDarkModeActive
 } from '../../constant/themeConfig';
 import { triggerFeedbackSound } from '../../utils/audioFeedback';
+import POSCatalog from './POSCatalog';
+import POSOrders from './POSOrders';
+import POSRegister from './POSRegister';
 import {
   posService,
   PosOrder,
@@ -95,6 +98,10 @@ export const POSTerminal: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Sub-view within POS Terminal (keeps user inside POS without redirecting back to ERP)
+  type PosView = 'register' | 'transactions' | 'catalog' | 'returns' | 'summary';
+  const [activeView, setActiveView] = useState<PosView>('register');
+
   // Products & Categories
   const [products, setProducts] = useState<PosProductItem[]>([]);
   const [categories, setCategories] = useState<PosCategoryItem[]>([]);
@@ -103,22 +110,23 @@ export const POSTerminal: React.FC = () => {
   const [loadingCatalog, setLoadingCatalog] = useState<boolean>(true);
 
   // Load Catalog Data
+  const loadCatalog = async () => {
+    setLoadingCatalog(true);
+    try {
+      const [prods, cats] = await Promise.all([
+        posService.getProducts(),
+        posService.getCategories()
+      ]);
+      setProducts(prods);
+      setCategories(cats);
+    } catch (err) {
+      console.error('Failed to load POS catalog:', err);
+    } finally {
+      setLoadingCatalog(false);
+    }
+  };
+
   useEffect(() => {
-    const loadCatalog = async () => {
-      setLoadingCatalog(true);
-      try {
-        const [prods, cats] = await Promise.all([
-          posService.getProducts(),
-          posService.getCategories()
-        ]);
-        setProducts(prods);
-        setCategories(cats);
-      } catch (err) {
-        console.error('Failed to load POS catalog:', err);
-      } finally {
-        setLoadingCatalog(false);
-      }
-    };
     loadCatalog();
   }, []);
 
@@ -477,30 +485,38 @@ export const POSTerminal: React.FC = () => {
             </div>
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links (Loads views in-place without redirecting to ERP) */}
           <nav className="p-3 space-y-1">
             <button
               type="button"
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 shadow-xs"
-              style={{
-                backgroundColor: `${accentColor}18`,
-                color: accentColor
-              }}
+              onClick={() => setActiveView('register')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 cursor-pointer ${
+                activeView === 'register'
+                  ? 'shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+              style={
+                activeView === 'register'
+                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  : undefined
+              }
             >
               <div className="flex items-center gap-3">
                 <MdPointOfSale size={17} />
                 <span>Register Terminal</span>
               </div>
-              <span
-                className="w-2 h-2 rounded-full animate-ping"
-                style={{ backgroundColor: accentColor }}
-              />
+              {activeView === 'register' && (
+                <span
+                  className="w-2 h-2 rounded-full animate-ping"
+                  style={{ backgroundColor: accentColor }}
+                />
+              )}
             </button>
 
             <button
               type="button"
               onClick={() => setIsHeldModalOpen(true)}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <LuPauseCircle size={17} className="text-amber-500" />
@@ -515,17 +531,34 @@ export const POSTerminal: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => navigate('/pos/orders')}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
+              onClick={() => setActiveView('transactions')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 cursor-pointer ${
+                activeView === 'transactions'
+                  ? 'shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+              style={
+                activeView === 'transactions'
+                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  : undefined
+              }
             >
-              <LuReceipt size={17} className="text-sky-500" />
-              <span>Transactions</span>
+              <div className="flex items-center gap-3">
+                <LuReceipt size={17} className="text-sky-500" />
+                <span>Transactions</span>
+              </div>
+              {activeView === 'transactions' && (
+                <span
+                  className="w-2 h-2 rounded-full animate-ping"
+                  style={{ backgroundColor: accentColor }}
+                />
+              )}
             </button>
 
             <button
               type="button"
               onClick={() => setIsDrawerModalOpen(true)}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <LuBanknote size={17} className="text-emerald-500" />
@@ -538,29 +571,80 @@ export const POSTerminal: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => navigate('/pos/catalog')}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
+              onClick={() => setActiveView('catalog')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 cursor-pointer ${
+                activeView === 'catalog'
+                  ? 'shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+              style={
+                activeView === 'catalog'
+                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  : undefined
+              }
             >
-              <LuShoppingBag size={17} className="text-purple-500" />
-              <span>POS Store Catalog</span>
+              <div className="flex items-center gap-3">
+                <LuShoppingBag size={17} className="text-purple-500" />
+                <span>POS Store Catalog</span>
+              </div>
+              {activeView === 'catalog' && (
+                <span
+                  className="w-2 h-2 rounded-full animate-ping"
+                  style={{ backgroundColor: accentColor }}
+                />
+              )}
             </button>
 
             <button
               type="button"
-              onClick={() => navigate('/pos/orders?action=returns')}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
+              onClick={() => setActiveView('returns')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 cursor-pointer ${
+                activeView === 'returns'
+                  ? 'shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+              style={
+                activeView === 'returns'
+                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  : undefined
+              }
             >
-              <LuRotateCcw size={17} className="text-rose-500" />
-              <span>Returns & Refunds</span>
+              <div className="flex items-center gap-3">
+                <LuRotateCcw size={17} className="text-rose-500" />
+                <span>Returns & Refunds</span>
+              </div>
+              {activeView === 'returns' && (
+                <span
+                  className="w-2 h-2 rounded-full animate-ping"
+                  style={{ backgroundColor: accentColor }}
+                />
+              )}
             </button>
 
             <button
               type="button"
-              onClick={() => navigate('/pos/shifts')}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
+              onClick={() => setActiveView('summary')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 cursor-pointer ${
+                activeView === 'summary'
+                  ? 'shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+              style={
+                activeView === 'summary'
+                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  : undefined
+              }
             >
-              <LuFileText size={17} className="text-indigo-500" />
-              <span>Daily Summary (Z-Report)</span>
+              <div className="flex items-center gap-3">
+                <LuFileText size={17} className="text-indigo-500" />
+                <span>Daily Summary (Z-Report)</span>
+              </div>
+              {activeView === 'summary' && (
+                <span
+                  className="w-2 h-2 rounded-full animate-ping"
+                  style={{ backgroundColor: accentColor }}
+                />
+              )}
             </button>
           </nav>
         </div>
@@ -620,6 +704,22 @@ export const POSTerminal: React.FC = () => {
                 {currentTime}
               </span>
             </div>
+
+            {/* Back to Register Terminal if in Sub-view */}
+            {activeView !== 'register' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveView('register');
+                  loadCatalog();
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs text-white transition shadow-sm cursor-pointer hover:opacity-90"
+                style={{ backgroundColor: accentColor }}
+              >
+                <LuArrowLeft size={14} />
+                <span>Back to Register</span>
+              </button>
+            )}
 
             {/* Quick Action: New Ticket */}
             <button
@@ -735,9 +835,10 @@ export const POSTerminal: React.FC = () => {
           </div>
         </header>
 
-        {/* ── WORKSPACE BODY: (Center Catalog + Right Cart) ── */}
+        {/* ── WORKSPACE BODY: (Center Catalog + Right Cart OR Embedded POS Sub-Pages) ── */}
         <div className="flex-1 flex overflow-hidden min-h-0">
-          
+          {activeView === 'register' && (
+            <>
           {/* ─────────────────────────────────────────────────────────────
               CENTER: PRODUCT CATALOG & CATEGORY SELECTOR
              ───────────────────────────────────────────────────────────── */}
@@ -1177,6 +1278,32 @@ export const POSTerminal: React.FC = () => {
               </div>
             </div>
           </aside>
+            </>
+          )}
+
+          {activeView === 'transactions' && (
+            <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0B0F17] min-w-0 p-3 sm:p-5">
+              <POSOrders embedded onBack={() => setActiveView('register')} />
+            </div>
+          )}
+
+          {activeView === 'catalog' && (
+            <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0B0F17] min-w-0 p-3 sm:p-5">
+              <POSCatalog embedded onBack={() => { setActiveView('register'); loadCatalog(); }} />
+            </div>
+          )}
+
+          {activeView === 'returns' && (
+            <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0B0F17] min-w-0 p-3 sm:p-5">
+              <POSOrders embedded isReturnsOnly onBack={() => setActiveView('register')} />
+            </div>
+          )}
+
+          {activeView === 'summary' && (
+            <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0B0F17] min-w-0 p-3 sm:p-5">
+              <POSRegister embedded onBack={() => { setActiveView('register'); setActiveShift(posService.getActiveShift()); }} />
+            </div>
+          )}
         </div>
       </div>
 
