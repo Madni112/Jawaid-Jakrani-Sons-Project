@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLanguage } from '../../../Context/LanguageContext';
 import { supabase } from '../../../Context/supabaseClient';
 import { bomService, BomHeader, BomItem } from '../../../service/bomService';
+import { recipeService, DedicatedRecipe } from '../../../service/recipeService';
 import Breadcrumb from '../../../components/Breadcrumbs/Breadcrumb';
 import SearchableProductSelect from '../../../components/SearchableProductSelect';
 import { SearchableDropdown } from '../../../components/SearchableDropdown';
@@ -23,7 +24,12 @@ import {
   MdInfoOutline,
   MdCheckCircle,
   MdEngineering,
-  MdFormatListBulleted
+  MdFormatListBulleted,
+  MdAutoStories,
+  MdBookmarkAdded,
+  MdClose,
+  MdSearch,
+  MdRestartAlt
 } from 'react-icons/md';
 
 const AddBOM: React.FC = () => {
@@ -82,11 +88,24 @@ const AddBOM: React.FC = () => {
   const [syncCatalogPrice, setSyncCatalogPrice] = useState<boolean>(false);
   const [notes, setNotes] = useState('');
 
-  // Load catalog products, 3-level categories, and active UOMs
+  // Dedicated Database Recipe Management & Dirty Tracking State
+  const [savedRecipes, setSavedRecipes] = useState<DedicatedRecipe[]>([]);
+  const [loadingRecipes, setLoadingRecipes] = useState<boolean>(false);
+  const [selectedRecipe, setSelectedRecipe] = useState<DedicatedRecipe | null>(null);
+  const [initialRecipeSnapshot, setInitialRecipeSnapshot] = useState<string | null>(null);
+  const [isRecipePickerOpen, setIsRecipePickerOpen] = useState<boolean>(false);
+  const [recipeSearchQuery, setRecipeSearchQuery] = useState<string>('');
+
+  // Save Recipe Popup Modal State
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState<boolean>(false);
+  const [recipeNameInput, setRecipeNameInput] = useState<string>('');
+  const [savingRecipe, setSavingRecipe] = useState<boolean>(false);
+
+  // Load catalog products, 3-level categories, active UOMs, and saved recipes
   useEffect(() => {
     const fetchMasterData = async () => {
       try {
-        const [prodRes, catRes, uomsList] = await Promise.all([
+        const [prodRes, catRes, uomsList, recList] = await Promise.all([
           supabase
             .from('products')
             .select('id, product_name, item_sr_no, purchase_price, sales_price, retail_price, uom, category, sub_category, sub_sub_category')
@@ -95,12 +114,14 @@ const AddBOM: React.FC = () => {
             .from('inventory_categories')
             .select('id, name, parent_id')
             .order('name', { ascending: true }),
-          fetchAllUomsSafe()
+          fetchAllUomsSafe(),
+          recipeService.getAll()
         ]);
 
         if (prodRes.data) setCatalogProducts(prodRes.data);
         if (catRes.data) setAllCategories(catRes.data);
         if (uomsList) setAllUomsList(uomsList.filter(u => u.is_active));
+        if (recList) setSavedRecipes(recList);
 
         const activeUomCodes = uomsList
           .filter(u => u.is_active)
@@ -249,6 +270,155 @@ const AddBOM: React.FC = () => {
       marginPercentage
     };
   }, [items, laborCost, overheadCost, packagingCost, batchQuantity, targetSellingPrice]);
+
+  // Real-time Dirty / Change Detection vs Loaded Recipe
+  const isRecipeModified = useMemo(() => {
+    const currentSnap = recipeService.generateSnapshot({
+      batchQuantity,
+      uom,
+      laborCost,
+      overheadCost,
+      packagingCost,
+      targetSellingPrice,
+      items,
+      notes
+    });
+
+    if (!selectedRecipe || !initialRecipeSnapshot) {
+      return items.some(i => i.item_name && i.item_name.trim().length > 0);
+    }
+
+    return currentSnap !== initialRecipeSnapshot;
+  }, [
+    selectedRecipe,
+    initialRecipeSnapshot,
+    batchQuantity,
+    uom,
+    laborCost,
+    overheadCost,
+    packagingCost,
+    targetSellingPrice,
+    items,
+    notes
+  ]);
+
+  // Load a recipe into the form
+  const handleLoadRecipe = (rec: DedicatedRecipe) => {
+    setSelectedRecipe(rec);
+    if (rec.finished_product_name) setFinishedProductName(rec.finished_product_name);
+    if (rec.finished_product_code) setFinishedProductCode(rec.finished_product_code);
+    if (rec.finished_product_id) setFinishedProductId(rec.finished_product_id);
+    if (rec.category) setCategory(rec.category);
+    if (rec.sub_category) setSubCategory(rec.sub_category);
+    if (rec.sub_sub_category) setSubSubCategory(rec.sub_sub_category);
+    if (rec.batch_quantity) setBatchQuantity(Number(rec.batch_quantity) || 1);
+    if (rec.uom) setUom(rec.uom || 'PCS');
+    if (rec.status) setStatus(rec.status === 'Trial' ? 'Trial' : rec.status === 'Draft' ? 'Draft' : 'Active');
+    if (rec.labor_cost !== undefined) setLaborCost(Number(rec.labor_cost) || 0);
+    if (rec.overhead_cost !== undefined) setOverheadCost(Number(rec.overhead_cost) || 0);
+    if (rec.packaging_cost !== undefined) setPackagingCost(Number(rec.packaging_cost) || 0);
+    if (rec.target_selling_price !== undefined) setTargetSellingPrice(Number(rec.target_selling_price) || 0);
+    if (rec.notes !== undefined) setNotes(rec.notes || '');
+
+    if (rec.raw_materials && rec.raw_materials.length > 0) {
+      setItems(rec.raw_materials);
+    }
+
+    const snap = recipeService.generateSnapshot({
+      batchQuantity: rec.batch_quantity || 1,
+      uom: rec.uom || 'PCS',
+      laborCost: rec.labor_cost || 0,
+      overheadCost: rec.overhead_cost || 0,
+      packagingCost: rec.packaging_cost || 0,
+      targetSellingPrice: rec.target_selling_price || 0,
+      items: rec.raw_materials || [],
+      notes: rec.notes || ''
+    });
+    setInitialRecipeSnapshot(snap);
+    setIsRecipePickerOpen(false);
+
+    toast.success(
+      isRTL ? `نسخہ "${rec.recipe_name}" کامیابی سے لوڈ ہو گیا` : `Recipe "${rec.recipe_name}" loaded successfully!`
+    );
+  };
+
+  const handleResetRecipe = () => {
+    setSelectedRecipe(null);
+    setInitialRecipeSnapshot(null);
+    toast.success(isRTL ? 'نسخہ ہٹا دیا گیا' : 'Cleared active recipe');
+  };
+
+  const handleOpenSaveModal = () => {
+    const defaultName = selectedRecipe
+      ? `${selectedRecipe.recipe_name} (Updated)`
+      : finishedProductName
+      ? `${finishedProductName} Recipe`
+      : 'New Fabric Recipe';
+    setRecipeNameInput(defaultName);
+    setIsSaveModalOpen(true);
+  };
+
+  const handleConfirmSaveRecipe = async () => {
+    if (!recipeNameInput.trim()) {
+      toast.error(isRTL ? 'نسخے کا نام درج کریں' : 'Please enter a recipe name');
+      return;
+    }
+
+    try {
+      setSavingRecipe(true);
+      const saved = await recipeService.save({
+        recipe_name: recipeNameInput.trim(),
+        finished_product_name: finishedProductName || recipeNameInput.trim(),
+        finished_product_code: finishedProductCode || '',
+        finished_product_id: finishedProductId || '',
+        category,
+        sub_category: subCategory,
+        sub_sub_category: subSubCategory,
+        batch_quantity: batchQuantity,
+        uom,
+        raw_material_cost: calculations.rawMaterialCost,
+        labor_cost: laborCost,
+        overhead_cost: overheadCost,
+        packaging_cost: packagingCost,
+        total_cost: calculations.totalBatchCost,
+        unit_cost: calculations.unitCost,
+        target_selling_price: targetSellingPrice,
+        margin_percentage: calculations.marginPercentage,
+        status,
+        notes,
+        raw_materials: items
+      });
+
+      // Refresh recipe list
+      const freshRecipes = await recipeService.getAll();
+      setSavedRecipes(freshRecipes);
+
+      // Set active recipe to the saved one & snapshot
+      setSelectedRecipe(saved);
+      const snap = recipeService.generateSnapshot({
+        batchQuantity,
+        uom,
+        laborCost,
+        overheadCost,
+        packagingCost,
+        targetSellingPrice,
+        items,
+        notes
+      });
+      setInitialRecipeSnapshot(snap);
+      setIsSaveModalOpen(false);
+
+      toast.success(
+        isRTL
+          ? `نیا نسخہ "${saved.recipe_name}" کامیابی سے ڈیٹا بیس میں محفوظ ہو گیا`
+          : `Recipe "${saved.recipe_name}" saved to database successfully!`
+      );
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save recipe');
+    } finally {
+      setSavingRecipe(false);
+    }
+  };
 
   // Tab Navigation Validation
   const handleNextTab = () => {
@@ -516,6 +686,132 @@ const AddBOM: React.FC = () => {
             <span>{isRTL ? '← لسٹ دیکھیں (See List)' : '← See List'}</span>
           </button>
         </div>
+      </div>
+
+      {/* GET RECIPES ACTION BAR (Searchable Dropdown & Loaded Recipe Status) */}
+      <div className="mb-6 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-transparent p-4 dark:border-primary/30 dark:bg-boxdark/60 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3 flex-1 flex-wrap">
+          <div className="flex items-center gap-2 text-primary dark:text-primary font-bold text-xs uppercase tracking-wider shrink-0">
+            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+              <MdAutoStories size={18} />
+            </div>
+            <span>{isRTL ? 'نسخہ منتخب کریں:' : 'Get Recipe:'}</span>
+          </div>
+
+          <div className="relative flex-1 min-w-[260px] max-w-md">
+            <button
+              type="button"
+              onClick={() => setIsRecipePickerOpen(prev => !prev)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-meta-4 border border-stroke dark:border-strokedark rounded-xl text-xs font-semibold text-left shadow-2xs hover:border-primary transition cursor-pointer"
+            >
+              <span className="truncate text-black dark:text-white">
+                {selectedRecipe ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <strong>{selectedRecipe.recipe_name}</strong>
+                    <span className="text-gray-400 font-normal">({selectedRecipe.batch_quantity} {selectedRecipe.uom})</span>
+                  </span>
+                ) : (
+                  <span className="text-gray-400 font-normal">
+                    {isRTL ? 'محفوظ شدہ نسخہ منتخب کریں...' : 'Select or search a saved recipe...'}
+                  </span>
+                )}
+              </span>
+              <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full uppercase shrink-0">
+                {savedRecipes.length} {isRTL ? 'نسخے' : 'Recipes'}
+              </span>
+            </button>
+
+            {/* Dropdown Menu */}
+            {isRecipePickerOpen && (
+              <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-boxdark rounded-xl border border-stroke dark:border-strokedark shadow-xl p-2 max-h-72 overflow-y-auto">
+                <div className="p-1 mb-2 border-b border-stroke dark:border-strokedark flex items-center gap-2">
+                  <MdSearch className="text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    value={recipeSearchQuery}
+                    onChange={e => setRecipeSearchQuery(e.target.value)}
+                    placeholder={isRTL ? 'نسخہ تلاش کریں...' : 'Search recipes by name or product...'}
+                    className="w-full bg-transparent text-xs outline-none text-black dark:text-white"
+                    autoFocus
+                  />
+                  {recipeSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setRecipeSearchQuery('')}
+                      className="text-gray-400 hover:text-black dark:hover:text-white"
+                    >
+                      <MdClose size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  {savedRecipes
+                    .filter(r =>
+                      !recipeSearchQuery.trim() ||
+                      r.recipe_name.toLowerCase().includes(recipeSearchQuery.toLowerCase()) ||
+                      r.finished_product_name.toLowerCase().includes(recipeSearchQuery.toLowerCase())
+                    )
+                    .map(r => {
+                      const isCurrent = selectedRecipe?.id === r.id;
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => handleLoadRecipe(r)}
+                          className={`w-full text-left p-2.5 rounded-lg text-xs transition flex items-center justify-between gap-2 cursor-pointer ${
+                            isCurrent
+                              ? 'bg-primary/15 text-primary font-bold'
+                              : 'hover:bg-slate-50 dark:hover:bg-meta-4/40 text-black dark:text-white'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="font-bold truncate">{r.recipe_name}</p>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                              {r.finished_product_name} • {r.batch_quantity} {r.uom} • {r.raw_materials?.length || 0} items
+                            </p>
+                          </div>
+                          <span className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                            PKR {Number(r.unit_cost || 0).toLocaleString()}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {selectedRecipe && (
+            <button
+              type="button"
+              onClick={handleResetRecipe}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-stroke dark:border-strokedark text-gray-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-xs font-semibold transition cursor-pointer"
+              title="Clear loaded recipe"
+            >
+              <MdRestartAlt size={14} />
+              <span>{isRTL ? 'ری سیٹ' : 'Clear'}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Recipe Active Status Badge */}
+        {selectedRecipe && (
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            {isRecipeModified ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span>{isRTL ? 'نسخے میں تبدیلیاں موجود ہیں' : 'Formula Modified'}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700">
+                <MdCheckCircle size={14} />
+                <span>{isRTL ? 'نسخہ ہم آہنگ ہے' : 'Recipe In Sync'}</span>
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 3 TABS STEPPER HEADER */}
@@ -1086,23 +1382,56 @@ const AddBOM: React.FC = () => {
                   <MdArrowForward className={`text-base ${isRTL ? 'rotate-180' : ''}`} />
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-opacity-90 disabled:opacity-50 transition"
-                >
-                  <MdSave className="text-base" />
-                  <span>
-                    {saving
-                      ? isRTL
-                        ? 'محفوظ ہو رہا ہے...'
-                        : 'Saving Recipe...'
-                      : isRTL
-                      ? 'نسخہ محفوظ کریں'
-                      : 'Save Recipe'}
-                  </span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* If using old recipe and UNCHANGED: Show nothing / subtle sync pill */}
+                  {selectedRecipe && !isRecipeModified ? (
+                    <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 px-3.5 py-2 rounded-xl text-xs font-semibold">
+                      <MdCheckCircle size={15} />
+                      <span>
+                        {isRTL
+                          ? `نسخہ "${selectedRecipe.recipe_name}" غیر تبدیل شدہ ہے`
+                          : `Recipe "${selectedRecipe.recipe_name}" is unmodified`}
+                      </span>
+                    </div>
+                  ) : (
+                    /* If modified OR starting from scratch: Show Save as Recipe button with Popup prompt */
+                    <button
+                      type="button"
+                      onClick={handleOpenSaveModal}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:shadow transition cursor-pointer"
+                    >
+                      <MdBookmarkAdded className="text-base" />
+                      <span>
+                        {selectedRecipe
+                          ? isRTL
+                            ? 'نیا نسخہ محفوظ کریں'
+                            : 'Save as New Recipe'
+                          : isRTL
+                          ? 'نسخہ محفوظ کریں'
+                          : 'Save Recipe'}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Register BOM in Manufacturing Pipeline */}
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-opacity-90 disabled:opacity-50 transition cursor-pointer"
+                  >
+                    <MdSave className="text-base" />
+                    <span>
+                      {saving
+                        ? isRTL
+                          ? 'محفوظ ہو رہا ہے...'
+                          : 'Saving...'
+                        : isRTL
+                        ? 'پروڈکشن کیلئے رجسٹر کریں'
+                        : 'Register BOM'}
+                    </span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1247,6 +1576,98 @@ const AddBOM: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* POPUP MODAL ASKING RECIPE NAME */}
+      {isSaveModalOpen && (
+        <div className="fixed inset-0 z-999999 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl border border-stroke bg-white p-6 shadow-2xl dark:border-strokedark dark:bg-boxdark">
+            <div className="flex items-center justify-between pb-3 border-b border-stroke dark:border-strokedark">
+              <div className="flex items-center gap-2 text-primary font-black text-base">
+                <MdAutoStories size={20} />
+                <h3>{isRTL ? 'نسخہ ڈیٹا بیس میں محفوظ کریں' : 'Save Recipe to Database'}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSaveModalOpen(false)}
+                className="text-gray-400 hover:text-black dark:hover:text-white p-1 rounded-lg"
+              >
+                <MdClose size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {isRTL
+                  ? 'اس پیداواری فارمولے کو مستقل نسخہ لائبریری میں محفوظ کرنے کے لیے ایک منفرد نام درج کریں:'
+                  : 'Assign a unique recipe name to save this formula into your dedicated database table:'}
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                  {isRTL ? 'نسخے کا نام (Recipe Name):' : 'Recipe Name:'}
+                </label>
+                <input
+                  type="text"
+                  value={recipeNameInput}
+                  onChange={e => setRecipeNameInput(e.target.value)}
+                  placeholder={isRTL ? 'مثلاً: سمر لان 80/80 کڑھائی سوٹ...' : 'e.g. Summer Lawn 80/80 Embroidered Suit'}
+                  className="w-full rounded-xl border border-primary/50 bg-white dark:bg-meta-4 py-2.5 px-3.5 text-xs font-bold text-black dark:text-white outline-none focus:ring-2 focus:ring-primary/30"
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleConfirmSaveRecipe();
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Quick Summary Pill preview */}
+              <div className="bg-slate-50 dark:bg-meta-4/30 p-3 rounded-xl border border-stroke dark:border-strokedark text-[11px] space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{isRTL ? 'پیداواری مقدار:' : 'Batch Quantity:'}</span>
+                  <span className="font-bold font-mono text-black dark:text-white">{batchQuantity} {uom}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{isRTL ? 'خام اجزاء کی تعداد:' : 'Raw Materials:'}</span>
+                  <span className="font-bold font-mono text-black dark:text-white">{items.length} items</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{isRTL ? 'فی یونٹ لاگت:' : 'Unit Cost:'}</span>
+                  <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">PKR {calculations.unitCost.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-stroke dark:border-strokedark">
+              <button
+                type="button"
+                onClick={() => setIsSaveModalOpen(false)}
+                disabled={savingRecipe}
+                className="px-4 py-2 rounded-xl border border-stroke dark:border-strokedark text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-meta-4 transition cursor-pointer"
+              >
+                {isRTL ? 'منسوخ' : 'Cancel'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmSaveRecipe}
+                disabled={savingRecipe}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition disabled:opacity-50 cursor-pointer"
+              >
+                {savingRecipe ? (
+                  <span>{isRTL ? 'محفوظ ہو رہا ہے...' : 'Saving...'}</span>
+                ) : (
+                  <>
+                    <MdSave size={14} />
+                    <span>{isRTL ? 'نسخہ محفوظ کریں' : 'Save Recipe'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
