@@ -1048,8 +1048,8 @@ export const POSTerminal: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Product Image */}
-                        <div className="relative aspect-4/3 w-full rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 mb-2.5">
+                        {/* Product Image / Full Placeholder */}
+                        <div className="relative w-full h-48 sm:h-52 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 mb-2.5 shrink-0">
                           {prod.image_url ? (
                             <img
                               src={prod.image_url}
@@ -1058,8 +1058,8 @@ export const POSTerminal: React.FC = () => {
                               loading="lazy"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-slate-300 dark:text-slate-600">
-                              <LuShoppingBag size={32} />
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200/60 dark:from-slate-800/50 dark:to-slate-800/90 text-slate-300 dark:text-slate-600 group-hover:text-primary/70 transition-colors">
+                              <LuShoppingBag size={48} className="opacity-70 group-hover:scale-110 transition-transform duration-200" />
                             </div>
                           )}
 
