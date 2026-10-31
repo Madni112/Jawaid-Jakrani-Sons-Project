@@ -8,6 +8,7 @@ import DefaultLayout from '../layout/DefaultLayout';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NotFound from '../pages/Error/NotFound';
 import SettingsPage from '../pages/Settings/SettingsPage';
+import POSTerminal from '../pages/POS/POSTerminal';
 import { useAuth } from '../Context/Auth';
 
 /**
@@ -130,6 +131,20 @@ function Navigation() {
       <Route path="/dev/master" element={<DeveloperDashboard />} />
       <Route path="/Administration/Roles" element={<DeveloperDashboard />} />
       <Route path="/Administration/Users" element={<DeveloperDashboard />} />
+
+      {/* 3.8. DEDICATED ATELIER POS TERMINAL */}
+      <Route
+        path="/pos/terminal"
+        element={
+          <AppRouteGuard>
+            <POSTerminal />
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/pos"
+        element={<Navigate to="/pos/terminal" replace />}
+      />
 
       {/* 4. SETTINGS & PREFERENCES */}
       <Route

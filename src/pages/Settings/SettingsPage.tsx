@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import { POSSettingsTab } from './POSSettingsTab';
 import {
   LuUser,
   LuPalette,
@@ -44,6 +46,8 @@ import {
   LuRadio,
   LuCpu,
   LuGlobe,
+  LuStore,
+  LuPrinter,
 } from 'react-icons/lu';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -157,6 +161,14 @@ const SETTINGS_TABS: TabItem[] = [
     description: 'Export records & complete ERP snapshots',
     urDescription: 'ریکارڈز اور مکمل بیک اپ اسنیپ شاٹس',
     icon: LuHardDrive,
+  },
+  {
+    id: 'pos_settings',
+    label: 'POS & Counter Settings',
+    urLabel: 'پی او ایس سیٹنگز',
+    description: 'Receipt layout, terminal defaults, scanners & taxes',
+    urDescription: 'رسید لے آؤٹ، ٹرمینل ڈیفالٹس، اسکینرز اور ٹیکس',
+    icon: LuStore,
   },
 ];
 
@@ -327,7 +339,15 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
 const SettingsPage: React.FC = () => {
   const { userEmail, role, businessName, tenantId } = useAuth();
   const { isRTL } = useLanguage();
-  const [activeTab, setActiveTab] = useState<string>('profile');
+  const location = useLocation();
+  const searchTab = new URLSearchParams(location.search).get('tab');
+  const [activeTab, setActiveTab] = useState<string>(searchTab || 'profile');
+
+  useEffect(() => {
+    const p = new URLSearchParams(location.search).get('tab');
+    if (p) setActiveTab(p);
+  }, [location.search]);
+
   const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('navbar');
   const [colorMode, setColorMode] = useColorMode();
 
@@ -2846,6 +2866,7 @@ const SettingsPage: React.FC = () => {
               </div>
             </div>
           )}
+                  {activeTab === 'pos_settings' && <POSSettingsTab />}
         </main>
       </div>
     </div>

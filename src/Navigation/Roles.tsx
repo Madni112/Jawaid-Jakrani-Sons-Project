@@ -104,6 +104,10 @@ import QuotationList from '../pages/CRM/Quotations/QuotationList';
 import AddQuotation from '../pages/CRM/Quotations/AddQuotation';
 import PrintQuotation from '../pages/CRM/Quotations/PrintQuotation';
 import FollowUps from '../pages/CRM/FollowUps';
+import POSTerminal from '../pages/POS/POSTerminal';
+import POSOrders from '../pages/POS/POSOrders';
+import POSRegister from '../pages/POS/POSRegister';
+import POSCatalog from '../pages/POS/POSCatalog';
 
 export const adminRoutes = [
   {
@@ -125,6 +129,36 @@ export const adminRoutes = [
     label: 'Warehouse Dashboard',
     icon: MdWarehouse,
     hideFromSidebar: true,
+  },
+  {
+    label: 'Point of Sale (POS)',
+    icon: MdPointOfSale,
+    children: [
+      {
+        path: '/pos/terminal',
+        component: <POSTerminal />,
+        label: 'Register Terminal',
+        icon: MdPointOfSale,
+      },
+      {
+        path: '/pos/orders',
+        component: <POSOrders />,
+        label: 'POS Orders & Receipts',
+        icon: MdReceiptLong,
+      },
+      {
+        path: '/pos/shifts',
+        component: <POSRegister />,
+        label: 'Cash Drawer / Shifts',
+        icon: MdAccountBalanceWallet,
+      },
+      {
+        path: '/pos/catalog',
+        component: <POSCatalog />,
+        label: 'Boutique Catalog',
+        icon: MdInventory2,
+      },
+    ],
   },
   {
     label: 'Inventory',
