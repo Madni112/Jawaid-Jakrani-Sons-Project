@@ -291,6 +291,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
       toast.success(`Updated POS catalog! ${selectedErpIds.size} products now active on POS Terminal.`);
       setIsErpImportModalOpen(false);
       await loadData();
+      window.dispatchEvent(new Event('pos_catalog_updated'));
     } catch (e) {
       console.error(e);
       toast.error('Failed to sync products to POS');
@@ -335,6 +336,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
       setNewImageUrl('');
       setNewCustomCategory('');
       await loadData();
+      window.dispatchEvent(new Event('pos_catalog_updated'));
     } catch (err) {
       console.error('Error creating product:', err);
       toast.error('Failed to create product');
@@ -411,6 +413,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     );
     await posService.toggleProductPosVisibility(productId, nextVal);
     toast.success(nextVal ? 'Product made visible on POS' : 'Product hidden from POS');
+    window.dispatchEvent(new Event('pos_catalog_updated'));
   };
 
   // Toggle Category Visibility (also affects its products if desired)
@@ -421,6 +424,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     );
     await posService.updateCategoryVisibility(categoryId, nextVal);
     toast.success(nextVal ? 'Category enabled in POS' : 'Category hidden from POS');
+    window.dispatchEvent(new Event('pos_catalog_updated'));
   };
 
   // Generate Unique Barcode with Permanent Lock
@@ -473,6 +477,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
 
     setEditingImageItem(null);
     setImageUrlInput('');
+    window.dispatchEvent(new Event('pos_catalog_updated'));
   };
 
   // Handle Local File Upload (Base64 data URL)

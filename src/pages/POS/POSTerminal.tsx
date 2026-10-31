@@ -36,7 +36,8 @@ import {
   LuArrowDownLeft,
   LuArrowUpRight,
   LuHelpCircle,
-  LuSparkles
+  LuSparkles,
+  LuCalendar
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import { IoBarcodeOutline } from 'react-icons/io5';
@@ -88,10 +89,12 @@ export const POSTerminal: React.FC = () => {
 
   // Time & Session
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [currentDate, setCurrentDate] = useState<string>('');
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
       setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setCurrentDate(now.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }));
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
@@ -107,6 +110,7 @@ export const POSTerminal: React.FC = () => {
   const [categories, setCategories] = useState<PosCategoryItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortByDate, setSortByDate] = useState<'newest' | 'oldest'>('newest');
   const [loadingCatalog, setLoadingCatalog] = useState<boolean>(true);
 
   // Load Catalog Data
@@ -130,9 +134,25 @@ export const POSTerminal: React.FC = () => {
     loadCatalog();
   }, []);
 
-  // Filtered Products
+  // Automatically refresh catalog when returning to register
+  useEffect(() => {
+    if (activeView === 'register') {
+      loadCatalog();
+    }
+  }, [activeView]);
+
+  // Listen for instant updates from catalog (images, visibility, additions)
+  useEffect(() => {
+    const handleCatalogUpdate = () => {
+      loadCatalog();
+    };
+    window.addEventListener('pos_catalog_updated', handleCatalogUpdate);
+    return () => window.removeEventListener('pos_catalog_updated', handleCatalogUpdate);
+  }, []);
+
+  // Filtered Products (with Date-Wise Sorting)
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
+    const filtered = products.filter((p) => {
       if (p.show_in_pos === false) return false;
       const matchCat =
         selectedCategory === 'All' ||
@@ -147,7 +167,13 @@ export const POSTerminal: React.FC = () => {
         (p.barcode && p.barcode.toLowerCase().includes(query));
       return matchCat && matchSearch;
     });
-  }, [products, selectedCategory, searchQuery]);
+
+    return filtered.sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : Number(a.id) || 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : Number(b.id) || 0;
+      return sortByDate === 'newest' ? timeB - timeA : timeA - timeB;
+    });
+  }, [products, selectedCategory, searchQuery, sortByDate]);
 
   // Current Ticket / Cart State
   const [cartItems, setCartItems] = useState<PosOrderItem[]>([]);
@@ -493,7 +519,10 @@ export const POSTerminal: React.FC = () => {
           <nav className="p-3 space-y-1">
             <button
               type="button"
-              onClick={() => setActiveView('register')}
+              onClick={() => {
+                setActiveView('register');
+                loadCatalog();
+              }}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition duration-150 cursor-pointer ${
                 activeView === 'register'
                   ? 'shadow-xs'
@@ -699,12 +728,18 @@ export const POSTerminal: React.FC = () => {
           
           {/* Left: Terminal pill & Live clock */}
           <div className="flex items-center gap-4 shrink-0">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                 {posConfig.terminal_name}
               </span>
-              <span className="text-[10px] text-slate-400 font-mono">
+              <span className="text-slate-300 dark:text-slate-600">•</span>
+              <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <LuCalendar size={13} className="text-primary opacity-80" />
+                {currentDate}
+              </span>
+              <span className="text-slate-300 dark:text-slate-600">•</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono font-bold">
                 {currentTime}
               </span>
             </div>
@@ -940,6 +975,17 @@ export const POSTerminal: React.FC = () => {
                     </button>
                   );
                 })}
+
+              {/* Date-Wise Sort Toggle Pill */}
+              <button
+                type="button"
+                onClick={() => setSortByDate((prev) => (prev === 'newest' ? 'oldest' : 'newest'))}
+                className="ml-auto px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs"
+                title="Toggle ordering: Newest Added First vs Oldest First"
+              >
+                <LuClock size={13} className="text-primary" />
+                <span>{sortByDate === 'newest' ? '📅 Newest First' : '📅 Oldest First'}</span>
+              </button>
             </div>
 
             {/* Product Card Grid (4 Columns) */}

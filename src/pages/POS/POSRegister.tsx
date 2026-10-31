@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LuBanknote,
@@ -16,7 +16,9 @@ import {
   LuAlertTriangle,
   LuCoins,
   LuX,
-  LuFileText
+  LuFileText,
+  LuCalendar,
+  LuFilter
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import toast from 'react-hot-toast';
@@ -65,7 +67,58 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
 
   const [selectedZReport, setSelectedZReport] = useState<PosShift | null>(null);
 
+  // Date Filter State for Daily Summary & Z-Reports
+  const [dateFilter, setDateFilter] = useState<'All' | 'Today' | 'Yesterday' | 'Last7Days' | 'Custom'>('All');
+  const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+
   const currentCashierName = userEmail?.split('@')[0] || 'Alex Rivera';
+
+  // Filtered Shifts by Date
+  const filteredShifts = useMemo(() => {
+    if (dateFilter === 'All') return allShifts;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+
+    return allShifts.filter((s) => {
+      const shiftDate = new Date(s.opened_at);
+      const shiftDateStr = shiftDate.toISOString().split('T')[0];
+
+      if (dateFilter === 'Today') return shiftDateStr === todayStr;
+      if (dateFilter === 'Yesterday') return shiftDateStr === yesterdayStr;
+      if (dateFilter === 'Last7Days') return shiftDate >= sevenDaysAgo;
+      if (dateFilter === 'Custom') return shiftDateStr === customDate;
+      return true;
+    });
+  }, [allShifts, dateFilter, customDate]);
+
+  // Daily Summary Stats for the selected date filter
+  const dateStats = useMemo(() => {
+    let totalVolume = 0;
+    let cashSales = 0;
+    let cardSales = 0;
+    let digitalSales = 0;
+    let totalVariance = 0;
+
+    for (const s of filteredShifts) {
+      cashSales += s.cash_sales || 0;
+      cardSales += s.card_sales || 0;
+      digitalSales += s.digital_sales || 0;
+      totalVolume += (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
+      totalVariance += (s.variance || 0);
+    }
+
+    return {
+      totalVolume,
+      cashSales,
+      cardSales,
+      digitalSales,
+      totalVariance,
+      count: filteredShifts.length
+    };
+  }, [filteredShifts]);
 
   // Refresh shifts data
   const refreshShifts = () => {
@@ -330,16 +383,101 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
         </div>
       )}
 
-      {/* Shifts History Table */}
+      {/* Shifts History & Daily Z-Report Section */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-            <LuClock className="text-primary" />
-            <span>Shift Reconciliation & Z-Report History</span>
-          </h3>
-          <span className="text-xs text-slate-400 font-mono">
-            {allShifts.length} Recorded Sessions
-          </span>
+        {/* Section Header with Date Filter */}
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <LuClock className="text-primary" />
+              <span>Shift Reconciliation & Daily Z-Report History</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Filter by date to view and reprint official daily register close summaries.
+            </p>
+          </div>
+
+          {/* Date Filter Controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200/80 dark:border-slate-700/60 text-xs font-bold">
+              {(['All', 'Today', 'Yesterday', 'Last7Days'] as const).map((mode) => {
+                const label = mode === 'All' ? 'All Dates' : mode === 'Last7Days' ? '7 Days' : mode;
+                const isSelected = dateFilter === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setDateFilter(mode)}
+                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-[11px] ${
+                      isSelected
+                        ? 'shadow-xs text-white'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    style={isSelected ? { backgroundColor: accentColor } : undefined}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Date Picker */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60">
+              <LuCalendar size={13} className="text-slate-400 shrink-0" />
+              <input
+                type="date"
+                value={customDate}
+                onChange={(e) => {
+                  setCustomDate(e.target.value);
+                  setDateFilter('Custom');
+                }}
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Date Filter Summary KPI Strip */}
+        <div className="bg-slate-50 dark:bg-[#0c1017] px-4 py-3 border-b border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs font-medium">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Filtered Sessions</span>
+              <span className="font-extrabold text-slate-800 dark:text-slate-200 font-mono text-sm">
+                {dateStats.count} {dateStats.count === 1 ? 'Shift' : 'Shifts'}
+              </span>
+            </div>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Total Sales Volume</span>
+              <span className="font-extrabold text-slate-900 dark:text-white font-mono text-sm">
+                Rs. {dateStats.totalVolume.toLocaleString()}
+              </span>
+            </div>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-emerald-500 block tracking-wider">Cash Sales</span>
+              <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
+                Rs. {dateStats.cashSales.toLocaleString()}
+              </span>
+            </div>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-sky-500 block tracking-wider">Card / Digital</span>
+              <span className="font-extrabold text-sky-600 dark:text-sky-400 font-mono text-sm">
+                Rs. {(dateStats.cardSales + dateStats.digitalSales).toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          {dateFilter !== 'All' && (
+            <button
+              type="button"
+              onClick={() => setDateFilter('All')}
+              className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+            >
+              Reset to All Dates
+            </button>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -358,7 +496,16 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-              {allShifts.map((s) => {
+              {filteredShifts.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-10 text-center text-slate-400">
+                    <LuCalendar className="mx-auto text-2xl mb-2 opacity-40" />
+                    <p className="font-bold text-sm text-slate-600 dark:text-slate-300">No shift sessions found for this date.</p>
+                    <p className="text-xs text-slate-400 mt-1">Try selecting another date or click "All Dates".</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredShifts.map((s) => {
                 const totalVol = s.cash_sales + s.card_sales + s.digital_sales;
                 const isClosed = s.status === 'Closed';
 
@@ -417,7 +564,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>

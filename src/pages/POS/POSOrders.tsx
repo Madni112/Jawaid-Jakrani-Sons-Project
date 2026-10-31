@@ -55,6 +55,8 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [methodFilter, setMethodFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>(isReturnsOnly ? 'Completed' : (defaultStatus || 'All'));
+  const [dateFilter, setDateFilter] = useState<'All' | 'Today' | 'Yesterday' | 'Last7Days' | 'Custom'>('All');
+  const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
   // Modal for thermal receipt reprint
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
@@ -68,8 +70,13 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
     }
   }, [location.search]);
 
-  // Filtered Orders
+  // Filtered Orders (by Tender, Status, Date, and Query)
   const filteredOrders = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+
     return orders.filter((o) => {
       if (methodFilter !== 'All' && o.payment_method.toLowerCase() !== methodFilter.toLowerCase()) {
         return false;
@@ -77,6 +84,14 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
       if (statusFilter !== 'All' && o.status.toLowerCase() !== statusFilter.toLowerCase()) {
         return false;
       }
+      const orderDate = new Date(o.created_at);
+      const orderDateStr = orderDate.toISOString().split('T')[0];
+
+      if (dateFilter === 'Today' && orderDateStr !== todayStr) return false;
+      if (dateFilter === 'Yesterday' && orderDateStr !== yesterdayStr) return false;
+      if (dateFilter === 'Last7Days' && orderDate < sevenDaysAgo) return false;
+      if (dateFilter === 'Custom' && orderDateStr !== customDate) return false;
+
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
       return (
@@ -85,17 +100,18 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
         o.cashier_name.toLowerCase().includes(q)
       );
     });
-  }, [orders, methodFilter, statusFilter, searchQuery]);
+  }, [orders, methodFilter, statusFilter, dateFilter, customDate, searchQuery]);
 
   // Financial Stats
   const stats = useMemo(() => {
-    const totalRev = orders.reduce((sum, o) => sum + (o.status === 'Completed' ? o.total_amount : 0), 0);
-    const cashTotal = orders.filter((o) => o.payment_method === 'Cash' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
-    const cardTotal = orders.filter((o) => o.payment_method === 'Card' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
-    const digitalTotal = orders.filter((o) => o.payment_method === 'Digital' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
-    const avgTicket = orders.length > 0 ? Math.round(totalRev / orders.length) : 0;
+    const totalRev = filteredOrders.reduce((sum, o) => sum + (o.status === 'Completed' ? o.total_amount : 0), 0);
+    const cashTotal = filteredOrders.filter((o) => o.payment_method === 'Cash' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
+    const cardTotal = filteredOrders.filter((o) => o.payment_method === 'Card' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
+    const digitalTotal = filteredOrders.filter((o) => o.payment_method === 'Digital' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
+    const completedCount = filteredOrders.filter((o) => o.status === 'Completed').length;
+    const avgTicket = completedCount > 0 ? Math.round(totalRev / completedCount) : 0;
     return { totalRev, cashTotal, cardTotal, digitalTotal, avgTicket };
-  }, [orders]);
+  }, [filteredOrders]);
 
   // Process Return / Refund
   const handleRefundOrder = (order: PosOrder) => {
@@ -247,7 +263,44 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
           />
         </div>
 
-        <div className="flex items-center gap-2.5 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {/* Date Presets */}
+          <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200/80 dark:border-slate-700/60 text-xs font-bold">
+            {(['All', 'Today', 'Yesterday', 'Last7Days'] as const).map((mode) => {
+              const label = mode === 'All' ? 'All Dates' : mode === 'Last7Days' ? '7 Days' : mode;
+              const isSelected = dateFilter === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setDateFilter(mode)}
+                  className={`px-2 py-1 rounded-lg transition cursor-pointer text-[11px] ${
+                    isSelected
+                      ? 'shadow-xs text-white'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  style={isSelected ? { backgroundColor: accentColor } : undefined}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom Date Input */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60">
+            <LuCalendar size={13} className="text-slate-400 shrink-0" />
+            <input
+              type="date"
+              value={customDate}
+              onChange={(e) => {
+                setCustomDate(e.target.value);
+                setDateFilter('Custom');
+              }}
+              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+            />
+          </div>
+
           <select
             value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}

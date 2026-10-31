@@ -112,6 +112,7 @@ export interface PosProductItem {
   uom: string;
   image_url?: string;
   show_in_pos: boolean;
+  created_at?: string;
 }
 
 export interface PosCategoryItem {
@@ -685,7 +686,7 @@ export const posService = {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, product_name, item_sr_no, category, sub_category, sub_sub_category, uom, retail_price, sales_price, price, current_stock')
+        .select('id, product_name, item_sr_no, category, sub_category, sub_sub_category, uom, retail_price, sales_price, price, current_stock, created_at')
         .order('category', { ascending: true })
         .order('product_name', { ascending: true });
 
@@ -707,7 +708,8 @@ export const posService = {
             retail_price: Number(p.retail_price ?? p.sales_price ?? p.price ?? 0),
             uom: p.uom || 'PCS',
             image_url: meta.image_url,
-            show_in_pos: meta.show_in_pos ?? true
+            show_in_pos: meta.show_in_pos ?? true,
+            created_at: p.created_at || meta.created_at || undefined
           };
         });
       }
@@ -726,7 +728,7 @@ export const posService = {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, product_name, item_sr_no, category, sub_category, sub_sub_category, uom, retail_price, sales_price, price, current_stock')
+        .select('id, product_name, item_sr_no, category, sub_category, sub_sub_category, uom, retail_price, sales_price, price, current_stock, created_at')
         .order('category', { ascending: true })
         .order('product_name', { ascending: true });
 
@@ -748,7 +750,8 @@ export const posService = {
             retail_price: Number(p.retail_price ?? p.sales_price ?? p.price ?? 0),
             uom: p.uom || 'PCS',
             image_url: meta.image_url,
-            show_in_pos: meta.show_in_pos ?? true
+            show_in_pos: meta.show_in_pos ?? true,
+            created_at: p.created_at || meta.created_at || undefined
           };
         });
       }
@@ -819,7 +822,8 @@ export const posService = {
       image_url: productData.image_url,
       barcode: productData.barcode || this.generateUniqueBarcode({ id }),
       barcode_locked: productData.barcode_locked ?? true,
-      show_in_pos: productData.show_in_pos ?? true
+      show_in_pos: productData.show_in_pos ?? true,
+      created_at: new Date().toISOString()
     };
 
     // 1. Try insert into Supabase products table
