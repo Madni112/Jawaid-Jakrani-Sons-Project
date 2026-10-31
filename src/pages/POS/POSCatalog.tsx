@@ -216,7 +216,7 @@ export const POSCatalog: React.FC = () => {
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
               <LuShoppingBag className="text-primary" />
-              <span>Boutique Catalog & POS Visibility</span>
+              <span>POS Store Catalog & Visibility</span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Select which items & categories appear on the POS counter, upload display images, and generate immutable barcodes.

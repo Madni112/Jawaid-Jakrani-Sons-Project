@@ -155,7 +155,7 @@ export const adminRoutes = [
       {
         path: '/pos/catalog',
         component: <POSCatalog />,
-        label: 'Boutique Catalog',
+        label: 'POS Store Catalog',
         icon: MdInventory2,
       },
     ],

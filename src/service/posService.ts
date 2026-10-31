@@ -532,6 +532,66 @@ export const posService = {
   },
 
   // ── 5. PRODUCTS & CATEGORIES VISIBILITY ──
+  async getProducts(): Promise<PosProductItem[]> {
+    return this.getPosProducts();
+  },
+
+  async getCategories(): Promise<PosCategoryItem[]> {
+    // 1. Try reading from inventory_categories in Supabase
+    try {
+      const { data, error } = await supabase
+        .from('inventory_categories')
+        .select('*')
+        .order('name');
+
+      if (!error && data && data.length > 0) {
+        return data.map((c: any) => ({
+          id: String(c.id),
+          name: c.name || c.category_name || 'Category',
+          image_url: c.image_url,
+          icon_name: c.icon_name,
+          show_in_pos: c.show_in_pos !== false
+        }));
+      }
+    } catch (e) {
+      console.warn('Could not read categories from DB:', e);
+    }
+
+    // 2. Fallback: extract distinct categories from products
+    const products = await this.getProducts();
+    const uniqueCats = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
+    if (uniqueCats.length > 0) {
+      return uniqueCats.map((name, i) => ({
+        id: `cat-${i + 1}`,
+        name,
+        show_in_pos: true
+      }));
+    }
+
+    return [
+      { id: 'cat-1', name: 'Audio & Tech', show_in_pos: true },
+      { id: 'cat-2', name: 'Apparel', show_in_pos: true },
+      { id: 'cat-3', name: 'Home', show_in_pos: true },
+      { id: 'cat-4', name: 'Accessories', show_in_pos: true }
+    ];
+  },
+
+  async updateCategoryVisibility(categoryId: string, show: boolean) {
+    try {
+      await supabase.from('inventory_categories').update({ show_in_pos: show }).eq('id', categoryId);
+    } catch (e) {
+      console.warn('Could not update category in DB:', e);
+    }
+  },
+
+  async updateCategoryImage(categoryId: string, imageUrl: string) {
+    try {
+      await supabase.from('inventory_categories').update({ image_url: imageUrl }).eq('id', categoryId);
+    } catch (e) {
+      console.warn('Could not update category image in DB:', e);
+    }
+  },
+
   async getPosProducts(): Promise<PosProductItem[]> {
     // 1. Try reading live products from database
     try {
