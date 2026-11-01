@@ -278,6 +278,43 @@ export const POSTerminal: React.FC = () => {
     }
   };
 
+  // Cart Calculations
+  const subtotal = useMemo(() => {
+    return cartItems.reduce((acc, it) => acc + it.line_total, 0);
+  }, [cartItems]);
+
+  const discountAmount = useMemo(() => {
+    return Math.round((subtotal * (discountPercent || 0)) / 100);
+  }, [subtotal, discountPercent]);
+
+  const taxableAmount = Math.max(0, subtotal - discountAmount);
+
+  const taxAmount = useMemo(() => {
+    return Math.round((taxableAmount * (taxPercent || 0)) / 100);
+  }, [taxableAmount, taxPercent]);
+
+  const grandTotal = Math.max(0, taxableAmount + taxAmount);
+  const changeDue = Math.max(0, cashTendered - grandTotal);
+
+  // Packaging & Handover selection handlers
+  const handleSelectFulfillment = (type: string) => {
+    setFulfillmentType(type);
+    setIsFulfillmentModalOpen(false);
+    playTone('success');
+    toast.success(`Packaging mode: ${type}`);
+    if (pendingOpenPaymentAfterFulfillment) {
+      setPendingOpenPaymentAfterFulfillment(false);
+      setCashTendered(grandTotal);
+      setIsPayModalOpen(true);
+    }
+  };
+
+  const handleCloseFulfillmentModal = () => {
+    setIsFulfillmentModalOpen(false);
+    setPendingOpenPaymentAfterFulfillment(false);
+    // Explicitly remains unselected if closed without choosing
+  };
+
   // Keyboard Shortcuts (F2: Search/Scan, F4: Hold, F9: Pay, Esc: Clear/Close)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -325,43 +362,6 @@ export const POSTerminal: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cartItems, isLocked, isPayModalOpen, isReceiptModalOpen, isHeldModalOpen, isDrawerModalOpen, isFulfillmentModalOpen, pendingOpenPaymentAfterFulfillment, grandTotal]);
-
-  // Cart Calculations
-  const subtotal = useMemo(() => {
-    return cartItems.reduce((acc, it) => acc + it.line_total, 0);
-  }, [cartItems]);
-
-  const discountAmount = useMemo(() => {
-    return Math.round((subtotal * (discountPercent || 0)) / 100);
-  }, [subtotal, discountPercent]);
-
-  const taxableAmount = Math.max(0, subtotal - discountAmount);
-
-  const taxAmount = useMemo(() => {
-    return Math.round((taxableAmount * (taxPercent || 0)) / 100);
-  }, [taxableAmount, taxPercent]);
-
-  const grandTotal = Math.max(0, taxableAmount + taxAmount);
-  const changeDue = Math.max(0, cashTendered - grandTotal);
-
-  // Packaging & Handover selection handlers
-  const handleSelectFulfillment = (type: string) => {
-    setFulfillmentType(type);
-    setIsFulfillmentModalOpen(false);
-    playTone('success');
-    toast.success(`Packaging mode: ${type}`);
-    if (pendingOpenPaymentAfterFulfillment) {
-      setPendingOpenPaymentAfterFulfillment(false);
-      setCashTendered(grandTotal);
-      setIsPayModalOpen(true);
-    }
-  };
-
-  const handleCloseFulfillmentModal = () => {
-    setIsFulfillmentModalOpen(false);
-    setPendingOpenPaymentAfterFulfillment(false);
-    // Explicitly remains unselected if closed without choosing
-  };
 
   // Guard check: Cash Drawer & Day session must be open before any sale activity
   const requireOpenDrawer = (): boolean => {
