@@ -191,6 +191,7 @@ export const POSTerminal: React.FC = () => {
   const [customerTier, setCustomerTier] = useState<'VIP' | 'Regular' | 'Retail'>('VIP');
   const [fulfillmentType, setFulfillmentType] = useState<string>('');
   const [isFulfillmentModalOpen, setIsFulfillmentModalOpen] = useState<boolean>(false);
+  const [pendingOpenPaymentAfterFulfillment, setPendingOpenPaymentAfterFulfillment] = useState<boolean>(false);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [taxPercent, setTaxPercent] = useState<number>(posConfig.default_tax_rate || 0);
 
@@ -286,28 +287,19 @@ export const POSTerminal: React.FC = () => {
       if (isFulfillmentModalOpen) {
         if (e.key === '1' || e.code === 'Digit1' || e.code === 'Numpad1') {
           e.preventDefault();
-          setFulfillmentType('In-Store Bag');
-          setIsFulfillmentModalOpen(false);
-          playTone('success');
-          toast.success('Packaging mode: In-Store Bag');
+          handleSelectFulfillment('In-Store Bag');
           return;
         } else if (e.key === '2' || e.code === 'Digit2' || e.code === 'Numpad2') {
           e.preventDefault();
-          setFulfillmentType('Takeaway');
-          setIsFulfillmentModalOpen(false);
-          playTone('success');
-          toast.success('Packaging mode: Shop Pickup / Takeaway');
+          handleSelectFulfillment('Takeaway');
           return;
         } else if (e.key === '3' || e.code === 'Digit3' || e.code === 'Numpad3') {
           e.preventDefault();
-          setFulfillmentType('Delivery');
-          setIsFulfillmentModalOpen(false);
-          playTone('success');
-          toast.success('Packaging mode: Delivery / Courier');
+          handleSelectFulfillment('Delivery');
           return;
-        } else if (e.key === 'Escape' || e.key === 'Enter') {
+        } else if (e.key === 'Escape') {
           e.preventDefault();
-          setIsFulfillmentModalOpen(false);
+          handleCloseFulfillmentModal();
           return;
         }
       }
@@ -323,7 +315,7 @@ export const POSTerminal: React.FC = () => {
         e.preventDefault();
         if (cartItems.length > 0 && !isPayModalOpen) handleOpenPayment();
       } else if (e.key === 'Escape') {
-        if (isFulfillmentModalOpen) setIsFulfillmentModalOpen(false);
+        if (isFulfillmentModalOpen) handleCloseFulfillmentModal();
         else if (isReceiptModalOpen) setIsReceiptModalOpen(false);
         else if (isPayModalOpen) setIsPayModalOpen(false);
         else if (isHeldModalOpen) setIsHeldModalOpen(false);
@@ -332,7 +324,7 @@ export const POSTerminal: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cartItems, isLocked, isPayModalOpen, isReceiptModalOpen, isHeldModalOpen, isDrawerModalOpen, isFulfillmentModalOpen]);
+  }, [cartItems, isLocked, isPayModalOpen, isReceiptModalOpen, isHeldModalOpen, isDrawerModalOpen, isFulfillmentModalOpen, pendingOpenPaymentAfterFulfillment, grandTotal]);
 
   // Cart Calculations
   const subtotal = useMemo(() => {
@@ -351,6 +343,25 @@ export const POSTerminal: React.FC = () => {
 
   const grandTotal = Math.max(0, taxableAmount + taxAmount);
   const changeDue = Math.max(0, cashTendered - grandTotal);
+
+  // Packaging & Handover selection handlers
+  const handleSelectFulfillment = (type: string) => {
+    setFulfillmentType(type);
+    setIsFulfillmentModalOpen(false);
+    playTone('success');
+    toast.success(`Packaging mode: ${type}`);
+    if (pendingOpenPaymentAfterFulfillment) {
+      setPendingOpenPaymentAfterFulfillment(false);
+      setCashTendered(grandTotal);
+      setIsPayModalOpen(true);
+    }
+  };
+
+  const handleCloseFulfillmentModal = () => {
+    setIsFulfillmentModalOpen(false);
+    setPendingOpenPaymentAfterFulfillment(false);
+    // Explicitly remains unselected if closed without choosing
+  };
 
   // Guard check: Cash Drawer & Day session must be open before any sale activity
   const requireOpenDrawer = (): boolean => {
@@ -399,11 +410,6 @@ export const POSTerminal: React.FC = () => {
       };
       return [...prev, newItem];
     });
-
-    // If packaging & handover status is unselected, prompt cashier with horizontal modal
-    if (!fulfillmentType) {
-      setIsFulfillmentModalOpen(true);
-    }
   };
 
   // Adjust Quantity
@@ -516,8 +522,8 @@ export const POSTerminal: React.FC = () => {
     }
     if (!fulfillmentType) {
       playTone('warning');
+      setPendingOpenPaymentAfterFulfillment(true);
       setIsFulfillmentModalOpen(true);
-      toast.error('Please select packaging & handover mode first');
       return;
     }
     setCashTendered(grandTotal);
@@ -934,7 +940,6 @@ export const POSTerminal: React.FC = () => {
                 setCartItems([]);
                 setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
                 setFulfillmentType('');
-                setIsFulfillmentModalOpen(true);
                 toast.success('New sale order started');
               }}
               className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
@@ -2015,8 +2020,14 @@ export const POSTerminal: React.FC = () => {
           MODAL: ORDER PACKAGING & HANDOVER MODE (HORIZONTAL & KEYBOARD FRIENDLY)
          ───────────────────────────────────────────────────────────── */}
       {isFulfillmentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-4xl rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={handleCloseFulfillmentModal}
+        >
+          <div
+            className="w-full max-w-4xl rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -2034,9 +2045,9 @@ export const POSTerminal: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setIsFulfillmentModalOpen(false)}
+                onClick={handleCloseFulfillmentModal}
                 className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
-                title="Close (Esc)"
+                title="Close (Esc) - Remains unselected"
               >
                 <LuX size={20} />
               </button>
@@ -2047,12 +2058,7 @@ export const POSTerminal: React.FC = () => {
               {/* Option 1: In-Store Bag */}
               <button
                 type="button"
-                onClick={() => {
-                  setFulfillmentType('In-Store Bag');
-                  setIsFulfillmentModalOpen(false);
-                  playTone('success');
-                  toast.success('Packaging mode: In-Store Bag');
-                }}
+                onClick={() => handleSelectFulfillment('In-Store Bag')}
                 className={`relative text-left p-5 rounded-2xl border-2 transition-all duration-150 flex flex-col justify-between cursor-pointer group hover:scale-[1.02] active:scale-[0.98] ${
                   fulfillmentType === 'In-Store Bag'
                     ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10 ring-2 ring-emerald-500/20'
@@ -2117,12 +2123,7 @@ export const POSTerminal: React.FC = () => {
               {/* Option 2: Takeaway / Shop Pickup */}
               <button
                 type="button"
-                onClick={() => {
-                  setFulfillmentType('Takeaway');
-                  setIsFulfillmentModalOpen(false);
-                  playTone('success');
-                  toast.success('Packaging mode: Shop Pickup / Takeaway');
-                }}
+                onClick={() => handleSelectFulfillment('Takeaway')}
                 className={`relative text-left p-5 rounded-2xl border-2 transition-all duration-150 flex flex-col justify-between cursor-pointer group hover:scale-[1.02] active:scale-[0.98] ${
                   fulfillmentType === 'Takeaway'
                     ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/20'
@@ -2187,12 +2188,7 @@ export const POSTerminal: React.FC = () => {
               {/* Option 3: Delivery / Courier */}
               <button
                 type="button"
-                onClick={() => {
-                  setFulfillmentType('Delivery');
-                  setIsFulfillmentModalOpen(false);
-                  playTone('success');
-                  toast.success('Packaging mode: Delivery / Courier');
-                }}
+                onClick={() => handleSelectFulfillment('Delivery')}
                 className={`relative text-left p-5 rounded-2xl border-2 transition-all duration-150 flex flex-col justify-between cursor-pointer group hover:scale-[1.02] active:scale-[0.98] ${
                   fulfillmentType === 'Delivery'
                     ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10 ring-2 ring-primary/20'
@@ -2265,13 +2261,13 @@ export const POSTerminal: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setIsFulfillmentModalOpen(false)}
+                onClick={handleCloseFulfillmentModal}
                 className="px-4 py-1.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
               >
                 Close (Esc)
               </button>
+              </div>
             </div>
-          </div>
         </div>
       )}
 
