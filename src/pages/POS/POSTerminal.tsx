@@ -203,11 +203,42 @@ export const POSTerminal: React.FC = () => {
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState<boolean>(false);
   const [receiptSize, setReceiptSize] = useState<'80mm' | '58mm'>(posConfig.receipt_paper_size || '80mm');
 
-  // Cash Drawer Modal State
+  // Cash Drawer & Day Session Modal State
   const [isDrawerModalOpen, setIsDrawerModalOpen] = useState<boolean>(false);
+  const [drawerTab, setDrawerTab] = useState<'open_day' | 'close_day' | 'movement'>('open_day');
+
+  // Day Open State
+  const [dayOpenDate, setDayOpenDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [dayOpenPettyCash, setDayOpenPettyCash] = useState<number>(() => posService.getLastClosingPettyCash());
+  const [dayOpenCashIn, setDayOpenCashIn] = useState<number>(0);
+  const [dayOpenCashOut, setDayOpenCashOut] = useState<number>(0);
+
+  // Day Close State
+  const [dayCloseDate, setDayCloseDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [dayCloseCashOut, setDayCloseCashOut] = useState<number>(0);
+  const [dayCloseCashIn, setDayCloseCashIn] = useState<number>(0);
+  const [dayCloseNotes, setDayCloseNotes] = useState<string>('');
+
+  // Quick Movement State
   const [drawerMovementType, setDrawerMovementType] = useState<'in' | 'out'>('in');
   const [drawerAmount, setDrawerAmount] = useState<number>(0);
   const [drawerReason, setDrawerReason] = useState<string>('');
+
+  const handleOpenDrawerModal = () => {
+    const shift = posService.getActiveShift();
+    setActiveShift(shift);
+    if (!shift) {
+      setDrawerTab('open_day');
+      setDayOpenPettyCash(posService.getLastClosingPettyCash());
+      setDayOpenCashIn(0);
+      setDayOpenCashOut(0);
+    } else {
+      setDrawerTab('movement');
+      setDayCloseCashOut(0);
+      setDayCloseCashIn(0);
+    }
+    setIsDrawerModalOpen(true);
+  };
 
   // Barcode Scanner Ref
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -458,6 +489,48 @@ export const POSTerminal: React.FC = () => {
     }
   };
 
+  // Open Day Submit
+  const handleOpenDaySubmit = async () => {
+    try {
+      const shift = await posService.openDayShift({
+        businessDate: dayOpenDate,
+        cashierName: userEmail?.split('@')[0] || 'Alex Rivera',
+        openingPettyCash: dayOpenPettyCash,
+        cashIn: dayOpenCashIn,
+        cashOut: dayOpenCashOut,
+        terminalCode: posConfig.terminal_name
+      });
+      setActiveShift(shift);
+      setIsDrawerModalOpen(false);
+      playTone('success');
+      toast.success(`Day opened for ${dayOpenDate}! Opening Balance: Rs. ${shift.opening_float.toLocaleString()}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to open day');
+    }
+  };
+
+  // Close Day Submit
+  const handleCloseDaySubmit = async () => {
+    if (!activeShift) {
+      toast.error('No active shift open to close.');
+      return;
+    }
+    try {
+      const closed = await posService.closeDayShift({
+        shiftId: activeShift.id,
+        cashOut: dayCloseCashOut,
+        cashIn: dayCloseCashIn,
+        closingNotes: dayCloseNotes
+      });
+      setActiveShift(null);
+      setIsDrawerModalOpen(false);
+      playTone('success');
+      toast.success(`Day closed! Remaining Petty Cash: Rs. ${(closed.closing_petty_cash || 0).toLocaleString()} saved for next day.`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to close day');
+    }
+  };
+
   // Drawer Cash In / Out
   const handleDrawerMovement = () => {
     if (!drawerAmount || drawerAmount <= 0) {
@@ -590,7 +663,7 @@ export const POSTerminal: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setIsDrawerModalOpen(true)}
+              onClick={handleOpenDrawerModal}
               className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition cursor-pointer"
             >
               <div className="flex items-center gap-3">
@@ -816,7 +889,7 @@ export const POSTerminal: React.FC = () => {
             {/* Quick Drawer */}
             <button
               type="button"
-              onClick={() => setIsDrawerModalOpen(true)}
+              onClick={handleOpenDrawerModal}
               className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold transition cursor-pointer"
               title="Quick cash drawer operations"
             >
@@ -1815,13 +1888,21 @@ export const POSTerminal: React.FC = () => {
          ───────────────────────────────────────────────────────────── */}
       {isDrawerModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Header */}
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <LuBanknote className="text-emerald-500 text-lg" />
-                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                  Cash Drawer Operations
-                </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <LuBanknote size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight">
+                    Cash Drawer & Day Session
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    Day Open, Day Close petty cash reconciliation & cash in/out
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -1832,82 +1913,390 @@ export const POSTerminal: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              {/* Drawer Live Balance Card */}
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                  Calculated Drawer Float & Cash
-                </span>
-                <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  Rs. {(activeShift?.expected_cash || 24500).toLocaleString()}
-                </div>
-              </div>
-
-              {/* Movement Type Switcher */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDrawerMovementType('in')}
-                  className={`py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    drawerMovementType === 'in'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  <LuArrowDownLeft size={14} />
-                  <span>Cash In (+)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDrawerMovementType('out')}
-                  className={`py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    drawerMovementType === 'out'
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  <LuArrowUpRight size={14} />
-                  <span>Cash Out (-)</span>
-                </button>
-              </div>
-
-              {/* Amount Input */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Amount (Rs.):
-                </label>
-                <input
-                  type="number"
-                  value={drawerAmount || ''}
-                  onChange={(e) => setDrawerAmount(Number(e.target.value) || 0)}
-                  placeholder="e.g. 5000"
-                  className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              {/* Reason / Notes */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Reason / Description:
-                </label>
-                <input
-                  type="text"
-                  value={drawerReason}
-                  onChange={(e) => setDrawerReason(e.target.value)}
-                  placeholder="e.g. Petty cash refill, vendor cash drop"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              {/* Submit */}
+            {/* Navigation Tabs */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-1.5 gap-1 shrink-0">
               <button
                 type="button"
-                onClick={handleDrawerMovement}
-                className="w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition shadow-sm cursor-pointer"
-                style={{ backgroundColor: accentColor }}
+                onClick={() => setDrawerTab('open_day')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  drawerTab === 'open_day'
+                    ? 'bg-white dark:bg-[#111622] text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+                style={drawerTab === 'open_day' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
               >
-                Record Cash {drawerMovementType.toUpperCase()}
+                <span>🌅 Day Open</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setDrawerTab('close_day')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  drawerTab === 'close_day'
+                    ? 'bg-white dark:bg-[#111622] text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+                style={drawerTab === 'close_day' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
+              >
+                <span>🌙 Day Close</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawerTab('movement')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  drawerTab === 'movement'
+                    ? 'bg-white dark:bg-[#111622] text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+                style={drawerTab === 'movement' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
+              >
+                <span>🔄 Cash In / Out</span>
+              </button>
+            </div>
+
+            {/* Tab Body */}
+            <div className="p-5 overflow-y-auto space-y-4">
+              {/* TAB 1: DAY OPEN */}
+              {drawerTab === 'open_day' && (
+                <div className="space-y-4">
+                  {activeShift ? (
+                    <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                          <LuCheckCircle2 size={16} />
+                          <span>Shift #{activeShift.session_number} is Currently Open</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                          {activeShift.business_date || new Date(activeShift.opened_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        Opening Float: <strong>Rs. {activeShift.opening_float.toLocaleString()}</strong> (Petty Cash: Rs. {(activeShift.opening_petty_cash || 0).toLocaleString()}, Cash In: Rs. {(activeShift.opening_cash_in || 0).toLocaleString()}).
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setDrawerTab('close_day')}
+                        className="mt-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition shadow-xs cursor-pointer"
+                        style={{ backgroundColor: accentColor }}
+                      >
+                        Proceed to Day Close ➔
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Date Select */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                          <LuCalendar size={13} className="text-primary" />
+                          <span>Business Date:</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={dayOpenDate}
+                          onChange={(e) => setDayOpenDate(e.target.value)}
+                          className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Opening Petty Cash (Brought Forward) */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            Petty Cash (Remaining from Last Close):
+                          </label>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            Auto-filled from previous day
+                          </span>
+                        </div>
+                        <input
+                          type="number"
+                          value={dayOpenPettyCash || ''}
+                          onChange={(e) => setDayOpenPettyCash(Number(e.target.value) || 0)}
+                          placeholder="e.g. 20000"
+                          className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+
+                      {/* Cash In */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          Cash In / Float Added (Rs.):
+                        </label>
+                        <input
+                          type="number"
+                          value={dayOpenCashIn || ''}
+                          onChange={(e) => setDayOpenCashIn(Number(e.target.value) || 0)}
+                          placeholder="e.g. 5000"
+                          className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+
+                      {/* Optional Cash Out */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                          <span>Cash Out (Optional Morning Drop / Expense) (Rs.):</span>
+                          <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                        </label>
+                        <input
+                          type="number"
+                          value={dayOpenCashOut || ''}
+                          onChange={(e) => setDayOpenCashOut(Number(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+
+                      {/* Live Calculation Preview */}
+                      <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between font-mono">
+                          <span>Petty Cash: Rs. {dayOpenPettyCash.toLocaleString()}</span>
+                          <span>+ Cash In: Rs. {dayOpenCashIn.toLocaleString()}</span>
+                          <span>- Cash Out: Rs. {dayOpenCashOut.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
+                          <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                            Total Opening Balance:
+                          </span>
+                          <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            Rs. {(dayOpenPettyCash + dayOpenCashIn - dayOpenCashOut).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Submit */}
+                      <button
+                        type="button"
+                        onClick={handleOpenDaySubmit}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition shadow-sm cursor-pointer hover:opacity-90"
+                        style={{ backgroundColor: accentColor }}
+                      >
+                        Confirm & Open Day (Rs. {(dayOpenPettyCash + dayOpenCashIn - dayOpenCashOut).toLocaleString()})
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: DAY CLOSE */}
+              {drawerTab === 'close_day' && (
+                <div className="space-y-4">
+                  {!activeShift ? (
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
+                      <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                        No active shift is currently open.
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Please open the day first to record sales and reconcile closing cash.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setDrawerTab('open_day')}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white transition shadow-xs cursor-pointer"
+                        style={{ backgroundColor: accentColor }}
+                      >
+                        Go to Day Open ➔
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Date Select */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                          <LuCalendar size={13} className="text-primary" />
+                          <span>Closing Date:</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={dayCloseDate}
+                          onChange={(e) => setDayCloseDate(e.target.value)}
+                          className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Day Sales & Opening Stats */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                            Opening Petty Cash
+                          </span>
+                          <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block">
+                            Rs. {(activeShift.opening_petty_cash ?? activeShift.opening_float).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                            Today's Cash Sales
+                          </span>
+                          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                            Rs. {(activeShift.cash_sales || 0).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Cash Out (Main - Bank Deposit / Owner Payout) */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          Cash Out (Take Home / Deposit to Owner / Bank) (Rs.):
+                        </label>
+                        <input
+                          type="number"
+                          value={dayCloseCashOut || ''}
+                          onChange={(e) => setDayCloseCashOut(Number(e.target.value) || 0)}
+                          placeholder="e.g. 50000"
+                          className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+
+                      {/* Optional Cash In */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                          <span>Cash In (Optional late return / recovery) (Rs.):</span>
+                          <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                        </label>
+                        <input
+                          type="number"
+                          value={dayCloseCashIn || ''}
+                          onChange={(e) => setDayCloseCashIn(Number(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+
+                      {/* Formula Box: (The Sale - Cash Out + (if Cash In)) + Opening Petty Cash = Remaining Petty Cash */}
+                      {(() => {
+                        const sales = Number(activeShift.cash_sales) || 0;
+                        const openPetty = Number(activeShift.opening_petty_cash ?? activeShift.opening_float) || 0;
+                        const closingPetty = Math.max(0, sales - dayCloseCashOut + dayCloseCashIn + openPetty);
+
+                        return (
+                          <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1.5">
+                            <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wider">
+                              Closing Formula Calculation
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300">
+                              Sales (Rs. {sales.toLocaleString()}) - Cash Out (Rs. {dayCloseCashOut.toLocaleString()}) + Cash In (Rs. {dayCloseCashIn.toLocaleString()}) + Opening Petty (Rs. {openPetty.toLocaleString()})
+                            </div>
+                            <div className="flex items-center justify-between pt-1 border-t border-emerald-500/20">
+                              <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                                Remaining Petty Cash (for Tomorrow):
+                              </span>
+                              <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                                Rs. {closingPetty.toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                              ✓ This remaining amount will automatically fill tomorrow's Day Open.
+                            </p>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Closing Notes */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          Closing Notes / Handover:
+                        </label>
+                        <input
+                          type="text"
+                          value={dayCloseNotes}
+                          onChange={(e) => setDayCloseNotes(e.target.value)}
+                          placeholder="e.g. Handed Rs. 40,000 to owner, Rs. 15,000 kept in drawer"
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+
+                      {/* Submit */}
+                      <button
+                        type="button"
+                        onClick={handleCloseDaySubmit}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition shadow-sm cursor-pointer hover:opacity-90 bg-rose-600 hover:bg-rose-700"
+                      >
+                        Close Day & Finalize Petty Cash
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: QUICK CASH IN / OUT (DURING DAY) */}
+              {drawerTab === 'movement' && (
+                <div className="space-y-4">
+                  {/* Drawer Live Balance Card */}
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      Calculated Drawer Float & Cash
+                    </span>
+                    <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                      Rs. {(activeShift?.expected_cash || 24500).toLocaleString()}
+                    </div>
+                  </div>
+
+                  {/* Movement Type Switcher */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDrawerMovementType('in')}
+                      className={`py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        drawerMovementType === 'in'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      <LuArrowDownLeft size={14} />
+                      <span>Cash In (+)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerMovementType('out')}
+                      className={`py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        drawerMovementType === 'out'
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      <LuArrowUpRight size={14} />
+                      <span>Cash Out (-)</span>
+                    </button>
+                  </div>
+
+                  {/* Amount Input */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Amount (Rs.):
+                    </label>
+                    <input
+                      type="number"
+                      value={drawerAmount || ''}
+                      onChange={(e) => setDrawerAmount(Number(e.target.value) || 0)}
+                      placeholder="e.g. 5000"
+                      className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  {/* Reason / Notes */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Reason / Description:
+                    </label>
+                    <input
+                      type="text"
+                      value={drawerReason}
+                      onChange={(e) => setDrawerReason(e.target.value)}
+                      placeholder="e.g. Petty cash refill, vendor cash drop, tea/refreshment"
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  {/* Submit */}
+                  <button
+                    type="button"
+                    onClick={handleDrawerMovement}
+                    className="w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition shadow-sm cursor-pointer"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    Record Cash {drawerMovementType.toUpperCase()}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

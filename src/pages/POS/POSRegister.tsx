@@ -54,11 +54,17 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
 
   // Modal States
   const [isOpenShiftModal, setIsOpenShiftModal] = useState<boolean>(false);
-  const [newOpeningFloat, setNewOpeningFloat] = useState<number>(20000);
+  const [dayOpenDate, setDayOpenDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [dayOpenPettyCash, setDayOpenPettyCash] = useState<number>(() => posService.getLastClosingPettyCash());
+  const [dayOpenCashIn, setDayOpenCashIn] = useState<number>(0);
+  const [dayOpenCashOut, setDayOpenCashOut] = useState<number>(0);
 
   const [isCloseShiftModal, setIsCloseShiftModal] = useState<boolean>(false);
+  const [dayCloseDate, setDayCloseDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [dayCloseCashOut, setDayCloseCashOut] = useState<number>(0);
+  const [dayCloseCashIn, setDayCloseCashIn] = useState<number>(0);
+  const [dayCloseNotes, setDayCloseNotes] = useState<string>('');
   const [actualCountedCash, setActualCountedCash] = useState<number>(0);
-  const [closingNotes, setClosingNotes] = useState<string>('');
 
   const [isCashInOutModal, setIsCashInOutModal] = useState<boolean>(false);
   const [cashInOutType, setCashInOutType] = useState<'in' | 'out'>('in');
@@ -128,24 +134,31 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
 
   // Open Shift
   const handleOpenShift = async () => {
-    if (newOpeningFloat < 0) {
-      toast.error('Float cannot be negative');
-      return;
-    }
-    const shift = await posService.openShift(currentCashierName, newOpeningFloat);
+    const shift = await posService.openDayShift({
+      businessDate: dayOpenDate,
+      cashierName: currentCashierName,
+      openingPettyCash: dayOpenPettyCash,
+      cashIn: dayOpenCashIn,
+      cashOut: dayOpenCashOut
+    });
     refreshShifts();
     setIsOpenShiftModal(false);
-    toast.success(`Shift #${shift.session_number} started with Rs. ${newOpeningFloat.toLocaleString()} float!`);
+    toast.success(`Day opened for ${dayOpenDate}! Opening Float: Rs. ${shift.opening_float.toLocaleString()}`);
   };
 
   // Close Shift & Produce Z-Report
   const handleCloseShift = async () => {
     if (!activeShift) return;
-    const closed = await posService.closeShift(activeShift.id, actualCountedCash, closingNotes);
+    const closed = await posService.closeDayShift({
+      shiftId: activeShift.id,
+      cashOut: dayCloseCashOut,
+      cashIn: dayCloseCashIn,
+      closingNotes: dayCloseNotes
+    });
     refreshShifts();
     setIsCloseShiftModal(false);
     setSelectedZReport(closed);
-    toast.success(`Shift #${closed.session_number} closed. Z-Report generated!`);
+    toast.success(`Day closed! Remaining Petty Cash: Rs. ${(closed.closing_petty_cash || 0).toLocaleString()} carried forward.`);
   };
 
   // Cash In / Cash Out
@@ -570,16 +583,14 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
         </div>
       </div>
 
-      {/* ─────────────────────────────────────────────────────────────
-          MODAL 1: OPEN SHIFT MODAL
-         ───────────────────────────────────────────────────────────── */}
+      {/* Day Open Modal */}
       {isOpenShiftModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-                <LuUnlock className="text-emerald-500" />
-                <span>Open Register Shift</span>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                <LuUnlock className="text-emerald-500" size={18} />
+                <span>Day Open (Petty Cash & Initial Change)</span>
               </h3>
               <button
                 type="button"
@@ -590,32 +601,79 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3.5">
+              {/* Date Input */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Opening Cash Float in Drawer (Rs.):
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Business Date:</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Select Operating Day</span>
+                </label>
+                <input
+                  type="date"
+                  value={dayOpenDate}
+                  onChange={(e) => setDayOpenDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm font-semibold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Opening Petty Cash */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Opening Petty Cash (Rs.):</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                    Auto-filled from last close
+                  </span>
                 </label>
                 <input
                   type="number"
-                  value={newOpeningFloat}
-                  onChange={(e) => setNewOpeningFloat(Number(e.target.value) || 0)}
-                  placeholder="e.g. 20000"
+                  value={dayOpenPettyCash || ''}
+                  onChange={(e) => setDayOpenPettyCash(Number(e.target.value) || 0)}
+                  placeholder="0"
                   className="w-full px-3 py-2 text-base font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
-              {/* Quick Float Shortcuts */}
-              <div className="grid grid-cols-3 gap-2">
-                {[10000, 20000, 50000].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => setNewOpeningFloat(amt)}
-                    className="py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
-                  >
-                    Rs. {amt.toLocaleString()}
-                  </button>
-                ))}
+              {/* Cash In */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Cash In (Rs.):</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Drawer change / extra cash</span>
+                </label>
+                <input
+                  type="number"
+                  value={dayOpenCashIn || ''}
+                  onChange={(e) => setDayOpenCashIn(Number(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Cash Out (Optional) */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Cash Out (Optional) (Rs.):</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Initial withdrawal if any</span>
+                </label>
+                <input
+                  type="number"
+                  value={dayOpenCashOut || ''}
+                  onChange={(e) => setDayOpenCashOut(Number(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Calculated Starting Balance Card */}
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  Calculated Starting Drawer Float
+                </span>
+                <div className="text-xl font-black text-slate-900 dark:text-white font-mono">
+                  Rs. {((Number(dayOpenPettyCash) || 0) + (Number(dayOpenCashIn) || 0) - (Number(dayOpenCashOut) || 0)).toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Petty Cash (Rs. {Number(dayOpenPettyCash).toLocaleString()}) + Cash In (Rs. {Number(dayOpenCashIn).toLocaleString()}) - Cash Out (Rs. {Number(dayOpenCashOut).toLocaleString()})
+                </div>
               </div>
             </div>
 
@@ -630,26 +688,23 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               <button
                 type="button"
                 onClick={handleOpenShift}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
               >
-                Open Shift
+                Open Day Register
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────
-          MODAL 2: CLOSE SHIFT WITH RECONCILIATION & Z-REPORT
-         ───────────────────────────────────────────────────────────── */}
+      {/* Day Close Modal */}
       {isCloseShiftModal && activeShift && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-                <LuLock className="text-amber-500" />
-                <span>Close Shift & Cash Reconciliation</span>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                <LuLock className="text-rose-500" size={18} />
+                <span>Day Close & Petty Cash Carry Forward</span>
               </h3>
               <button
                 type="button"
@@ -661,52 +716,86 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
             </div>
 
             <div className="space-y-3.5">
-              {/* Expected vs Actual Count */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    System Calculated Cash
-                  </span>
-                  <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-0.5">
-                    Rs. {activeShift.expected_cash.toLocaleString()}
-                  </div>
-                </div>
-                <span className="text-xs text-slate-500 font-semibold">
-                  Float + Sales + In - Out
-                </span>
-              </div>
-
-              {/* Actual Count Input */}
+              {/* Closing Date */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Actual Physical Cash Counted in Drawer (Rs.):
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Closing Date:</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Day being closed</span>
                 </label>
                 <input
-                  type="number"
-                  value={actualCountedCash || ''}
-                  onChange={(e) => setActualCountedCash(Number(e.target.value) || 0)}
-                  placeholder="Enter counted cash"
-                  className="w-full px-3 py-2 text-base font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  type="date"
+                  value={dayCloseDate}
+                  onChange={(e) => setDayCloseDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm font-semibold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
-              {/* Live Variance Calculation */}
+              {/* Day Figures Summary */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Today's Cash Sales
+                  </span>
+                  <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                    Rs. {(activeShift.cash_sales || 0).toLocaleString()}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Opening Petty Cash
+                  </span>
+                  <span className="text-base font-black font-mono text-slate-900 dark:text-white">
+                    Rs. {(activeShift.opening_petty_cash ?? activeShift.opening_float ?? 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Cash Out Input (Sales Collection / Bank Deposit) */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Cash Out (Owner Payout / Bank Deposit) (Rs.):</span>
+                  <span className="text-[10px] text-rose-500 font-bold">Subtracted (-)</span>
+                </label>
+                <input
+                  type="number"
+                  value={dayCloseCashOut || ''}
+                  onChange={(e) => setDayCloseCashOut(Number(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Cash In Input (Optional) */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Cash In (Optional) (Rs.):</span>
+                  <span className="text-[10px] text-emerald-500 font-bold">Added (+)</span>
+                </label>
+                <input
+                  type="number"
+                  value={dayCloseCashIn || ''}
+                  onChange={(e) => setDayCloseCashIn(Number(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 text-sm font-bold font-mono rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Formula & Remaining Petty Cash Card */}
               {(() => {
-                const variance = actualCountedCash - activeShift.expected_cash;
+                const sales = activeShift.cash_sales || 0;
+                const openPetty = activeShift.opening_petty_cash ?? activeShift.opening_float ?? 0;
+                const remainingPetty = Math.max(0, sales - (Number(dayCloseCashOut) || 0) + (Number(dayCloseCashIn) || 0) + openPetty);
                 return (
-                  <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                    variance === 0
-                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-                      : variance > 0
-                      ? 'bg-sky-500/10 border-sky-500/20 text-sky-700 dark:text-sky-400'
-                      : 'bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400'
-                  }`}>
-                    <span className="text-xs font-bold">
-                      {variance === 0 ? '✓ Balanced' : variance > 0 ? 'Cash Surplus (Over)' : 'Cash Shortage'}
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      Calculated Closing Petty Cash (Carried to Next Day)
                     </span>
-                    <span className="text-sm font-black font-mono">
-                      {variance >= 0 ? `+ Rs. ${variance.toLocaleString()}` : `- Rs. ${Math.abs(variance).toLocaleString()}`}
-                    </span>
+                    <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                      Rs. {remainingPetty.toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      Sale (Rs. {sales.toLocaleString()}) - Cash Out (Rs. {Number(dayCloseCashOut).toLocaleString()}) + Cash In (Rs. {Number(dayCloseCashIn).toLocaleString()}) + Opening Petty (Rs. {openPetty.toLocaleString()})
+                    </div>
                   </div>
                 );
               })()}
@@ -718,8 +807,8 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                 </label>
                 <input
                   type="text"
-                  value={closingNotes}
-                  onChange={(e) => setClosingNotes(e.target.value)}
+                  value={dayCloseNotes}
+                  onChange={(e) => setDayCloseNotes(e.target.value)}
                   placeholder="e.g. End of day reconciliation by Alex"
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                 />
@@ -737,10 +826,9 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               <button
                 type="button"
                 onClick={handleCloseShift}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer hover:opacity-90 bg-rose-600 hover:bg-rose-700"
               >
-                Confirm & Close Shift
+                Confirm & Close Day
               </button>
             </div>
           </div>

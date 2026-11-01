@@ -53,12 +53,19 @@ export interface PosShift {
   session_number: number;
   opened_at: string;
   closed_at?: string;
+  business_date?: string;
+  opening_petty_cash?: number;
+  opening_cash_in?: number;
+  opening_cash_out?: number;
   opening_float: number;
   cash_sales: number;
   card_sales: number;
   digital_sales: number;
   cash_in: number;
   cash_out: number;
+  closing_cash_out?: number;
+  closing_cash_in?: number;
+  closing_petty_cash?: number;
   expected_cash: number;
   actual_counted_cash?: number;
   variance?: number;
@@ -377,6 +384,130 @@ export const posService = {
     } catch {
       return [];
     }
+  },
+
+  getLastClosingPettyCash(): number {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pos_last_closing_petty_cash');
+      if (saved !== null) {
+        return Number(saved) || 0;
+      }
+    }
+    const all = this.getAllShifts();
+    const closed = all.filter(s => s.status === 'Closed' && s.closing_petty_cash !== undefined);
+    if (closed.length > 0) {
+      return Number(closed[0].closing_petty_cash) || 0;
+    }
+    return 20000;
+  },
+
+  async openDayShift(params: {
+    businessDate: string;
+    cashierName: string;
+    openingPettyCash: number;
+    cashIn: number;
+    cashOut?: number;
+    terminalCode?: string;
+  }): Promise<PosShift> {
+    const existing = this.getActiveShift();
+    if (existing) return existing;
+
+    const all = this.getAllShifts();
+    const nextSessionNum = all.length > 0 ? Math.max(...all.map(s => s.session_number || 400)) + 1 : 401;
+
+    const openingPetty = Number(params.openingPettyCash) || 0;
+    const initialIn = Number(params.cashIn) || 0;
+    const initialOut = Number(params.cashOut) || 0;
+    const openingFloat = openingPetty + initialIn - initialOut;
+
+    const newShift: PosShift = {
+      id: `shift-${Date.now()}`,
+      terminal_code: params.terminalCode || 'Register 01',
+      cashier_name: params.cashierName,
+      session_number: nextSessionNum,
+      opened_at: new Date().toISOString(),
+      business_date: params.businessDate,
+      opening_petty_cash: openingPetty,
+      opening_cash_in: initialIn,
+      opening_cash_out: initialOut,
+      opening_float: openingFloat,
+      cash_sales: 0,
+      card_sales: 0,
+      digital_sales: 0,
+      cash_in: initialIn,
+      cash_out: initialOut,
+      expected_cash: openingFloat,
+      status: 'Open'
+    };
+
+    const updated = [newShift, ...all];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
+    }
+
+    try {
+      await supabase.from('pos_shifts').insert([newShift]);
+    } catch (e) {
+      console.warn('Could not persist shift to Supabase:', e);
+    }
+
+    return newShift;
+  },
+
+  async closeDayShift(params: {
+    shiftId: string;
+    cashOut: number;
+    cashIn?: number;
+    closingNotes?: string;
+    actualCountedCash?: number;
+  }): Promise<PosShift> {
+    const all = this.getAllShifts();
+    const shift = all.find(s => s.id === params.shiftId);
+    if (!shift) throw new Error('Shift not found');
+
+    const closingOut = Number(params.cashOut) || 0;
+    const closingIn = Number(params.cashIn) || 0;
+
+    const totalCashIn = (shift.cash_in || 0) + closingIn;
+    const totalCashOut = (shift.cash_out || 0) + closingOut;
+
+    // Formula: The Sale - Cash Out + (if Cash In) + Opening Petty Cash
+    const cashSales = Number(shift.cash_sales) || 0;
+    const openingPetty = Number(shift.opening_petty_cash ?? shift.opening_float) || 0;
+    const closingPettyCash = Math.max(0, cashSales - closingOut + closingIn + openingPetty);
+
+    const expected = Number(shift.opening_float) + cashSales + closingIn - closingOut;
+    const counted = params.actualCountedCash !== undefined ? Number(params.actualCountedCash) : expected;
+    const variance = counted - expected;
+
+    const updatedShift: PosShift = {
+      ...shift,
+      closed_at: new Date().toISOString(),
+      cash_in: totalCashIn,
+      cash_out: totalCashOut,
+      closing_cash_out: closingOut,
+      closing_cash_in: closingIn,
+      closing_petty_cash: closingPettyCash,
+      expected_cash: expected,
+      actual_counted_cash: counted,
+      variance,
+      status: 'Closed',
+      closing_notes: params.closingNotes || ''
+    };
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pos_last_closing_petty_cash', String(closingPettyCash));
+      const updated = all.map(s => (s.id === params.shiftId ? updatedShift : s));
+      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
+    }
+
+    try {
+      await supabase.from('pos_shifts').update(updatedShift).eq('id', params.shiftId);
+    } catch (e) {
+      console.warn('Could not update shift in Supabase:', e);
+    }
+
+    return updatedShift;
   },
 
   async openShift(cashierName: string, openingFloat: number, terminalCode: string = 'Register 01'): Promise<PosShift> {
