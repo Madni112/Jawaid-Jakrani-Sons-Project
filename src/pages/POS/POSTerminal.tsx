@@ -347,8 +347,24 @@ export const POSTerminal: React.FC = () => {
   const grandTotal = Math.max(0, taxableAmount + taxAmount);
   const changeDue = Math.max(0, cashTendered - grandTotal);
 
+  // Guard check: Cash Drawer & Day session must be open before any sale activity
+  const requireOpenDrawer = (): boolean => {
+    if (!activeShift) {
+      playTone('warning');
+      toast.error('Please open the drawer first! Business day is closed.', {
+        id: 'drawer-closed-guard',
+        duration: 4000,
+        icon: '🔒'
+      });
+      handleOpenDrawerModal();
+      return false;
+    }
+    return true;
+  };
+
   // Add Item to Cart
   const handleAddToCart = (product: PosProductItem) => {
+    if (!requireOpenDrawer()) return;
     playTone('scan');
     setCartItems((prev) => {
       const idx = prev.findIndex((it) => it.product_id === product.id);
@@ -420,6 +436,7 @@ export const POSTerminal: React.FC = () => {
   // Barcode / Fast Input Submit
   const handleBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireOpenDrawer()) return;
     const query = searchQuery.trim();
     if (!query) return;
 
@@ -481,6 +498,7 @@ export const POSTerminal: React.FC = () => {
 
   // Open Payment Modal
   const handleOpenPayment = () => {
+    if (!requireOpenDrawer()) return;
     if (cartItems.length === 0) {
       toast.error('Cart is empty. Add products to ticket first.');
       return;
@@ -721,8 +739,8 @@ export const POSTerminal: React.FC = () => {
                 <LuBanknote size={17} className="text-emerald-500" />
                 <span>Cash Drawer</span>
               </div>
-              <span className="text-[10px] font-mono font-bold text-slate-400">
-                Rs. {(activeShift?.expected_cash || 24500).toLocaleString()}
+              <span className={`text-[10px] font-mono font-bold ${activeShift ? 'text-slate-400' : 'text-amber-500'}`}>
+                {activeShift ? `Rs. ${(activeShift.expected_cash || 0).toLocaleString()}` : 'Day Closed'}
               </span>
             </button>
 
@@ -888,6 +906,7 @@ export const POSTerminal: React.FC = () => {
             <button
               type="button"
               onClick={() => {
+                if (!requireOpenDrawer()) return;
                 if (cartItems.length > 0 && !window.confirm('Start new fresh sale order? Current items will be reset.')) return;
                 setCartItems([]);
                 setTicketNumber(`#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -942,11 +961,20 @@ export const POSTerminal: React.FC = () => {
             <button
               type="button"
               onClick={handleOpenDrawerModal}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold transition cursor-pointer"
-              title="Quick cash drawer operations"
+              className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                activeShift
+                  ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30'
+              }`}
+              title="Cash drawer & business day operations"
             >
               <LuBanknote size={15} />
               <span>Drawer</span>
+              {!activeShift && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500 text-white font-mono font-bold">
+                  Closed
+                </span>
+              )}
             </button>
 
             {/* Sound Toggle */}
@@ -991,9 +1019,19 @@ export const POSTerminal: React.FC = () => {
                 <span className="block text-xs font-bold text-slate-900 dark:text-white capitalize">
                   {currentCashierName}
                 </span>
-                <span className="block text-[10px] text-emerald-500 font-semibold">
-                  Shift Active
-                </span>
+                {activeShift ? (
+                  <span className="block text-[10px] text-emerald-500 font-semibold">
+                    Shift Active
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleOpenDrawerModal}
+                    className="block text-[10px] text-amber-500 font-bold hover:underline cursor-pointer"
+                  >
+                    🔒 Day Closed (Open)
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1008,6 +1046,24 @@ export const POSTerminal: React.FC = () => {
              ───────────────────────────────────────────────────────────── */}
           <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-[#0B0F17] min-w-0">
             
+            {/* Warning Banner when Cash Drawer / Day is closed */}
+            {!activeShift && (
+              <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center justify-between gap-3 text-amber-700 dark:text-amber-300 shrink-0">
+                <div className="flex items-center gap-2 text-xs font-bold">
+                  <LuLock size={15} className="text-amber-500 shrink-0" />
+                  <span>Cash Drawer & Day Session are closed. Please open the drawer first to create sales.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenDrawerModal}
+                  className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0"
+                >
+                  <LuUnlock size={13} />
+                  <span>Open Drawer First</span>
+                </button>
+              </div>
+            )}
+
             {/* Category Filter Pills (Category in Big, Sub & Parent in Small) */}
             <div className="p-3 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 flex items-center gap-2.5 overflow-x-auto no-scrollbar shrink-0">
               <button
@@ -1241,7 +1297,7 @@ export const POSTerminal: React.FC = () => {
                   <LuCoins className="text-amber-500 text-sm" />
                   <span>Drawer Balance:</span>
                   <strong className="text-slate-800 dark:text-white font-mono">
-                    Rs. {(activeShift?.expected_cash || 24500).toLocaleString()}
+                    {activeShift ? `Rs. ${(activeShift.expected_cash || 0).toLocaleString()}` : 'Closed (Day Not Open)'}
                   </strong>
                 </span>
 
@@ -1251,7 +1307,7 @@ export const POSTerminal: React.FC = () => {
                   <LuReceipt className="text-sky-500 text-sm" />
                   <span>Sales Today:</span>
                   <strong className="text-slate-800 dark:text-white font-mono">
-                    {posService.getAllOrders().length} Tickets
+                    {posService.getAllOrders().length} Orders
                   </strong>
                 </span>
               </div>
@@ -1464,19 +1520,30 @@ export const POSTerminal: React.FC = () => {
 
               {/* Action Buttons: Hold, Clear & Place Order */}
               <div className="space-y-2">
-                <button
-                  type="button"
-                  disabled={cartItems.length === 0}
-                  onClick={handleOpenPayment}
-                  className="w-full py-3.5 rounded-xl font-extrabold text-sm uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-95 active:scale-98"
-                  style={{
-                    backgroundColor: accentColor,
-                    color: contrastText
-                  }}
-                >
-                  <MdPointOfSale size={18} />
-                  <span>Place Order [F9] • Rs. {grandTotal.toLocaleString()}</span>
-                </button>
+                {!activeShift ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenDrawerModal}
+                    className="w-full py-3.5 rounded-xl font-extrabold text-xs uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer bg-amber-500 hover:bg-amber-600 text-white animate-pulse"
+                  >
+                    <LuLock size={16} />
+                    <span>Please Open Drawer First</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={cartItems.length === 0}
+                    onClick={handleOpenPayment}
+                    className="w-full py-3.5 rounded-xl font-extrabold text-sm uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-95 active:scale-98"
+                    style={{
+                      backgroundColor: accentColor,
+                      color: contrastText
+                    }}
+                  >
+                    <MdPointOfSale size={18} />
+                    <span>Place Order [F9] • Rs. {grandTotal.toLocaleString()}</span>
+                  </button>
+                )}
 
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -1496,7 +1563,7 @@ export const POSTerminal: React.FC = () => {
                     className="py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
                   >
                     <LuTrash2 size={14} />
-                    <span>Clear Ticket</span>
+                    <span>Clear Order</span>
                   </button>
                 </div>
               </div>
