@@ -1246,21 +1246,42 @@ export const posService = {
   },
 
   async lockProductBarcode(productId: string, barcode: string) {
+    return this.updateProductBarcode(productId, barcode, true);
+  },
+
+  async updateProductBarcode(productId: string, barcode: string, locked: boolean = false) {
+    const cleanBarcode = barcode.trim();
     const metaMap = getStoredProductMeta();
     metaMap[productId] = {
       ...(metaMap[productId] || { show_in_pos: true }),
-      barcode,
-      barcode_locked: true
+      barcode: cleanBarcode,
+      barcode_locked: locked
     };
     saveStoredProductMeta(metaMap);
 
     try {
       await supabase
         .from('products')
-        .update({ barcode, barcode_locked: true })
+        .update({ barcode: cleanBarcode, barcode_locked: locked })
         .eq('id', productId);
     } catch (e) {
-      console.warn('Could not lock barcode in DB:', e);
+      console.warn('Could not update barcode in DB:', e);
+    }
+  },
+
+  async unlockProductBarcode(productId: string) {
+    const metaMap = getStoredProductMeta();
+    if (metaMap[productId]) {
+      metaMap[productId].barcode_locked = false;
+      saveStoredProductMeta(metaMap);
+    }
+    try {
+      await supabase
+        .from('products')
+        .update({ barcode_locked: false })
+        .eq('id', productId);
+    } catch (e) {
+      console.warn('Could not unlock barcode in DB:', e);
     }
   }
 };

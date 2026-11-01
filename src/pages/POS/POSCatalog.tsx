@@ -20,7 +20,10 @@ import {
   LuArrowLeft,
   LuSparkles,
   LuFilter,
-  LuSave
+  LuSave,
+  LuPencil,
+  LuUnlock,
+  LuScan
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import { IoBarcodeOutline } from 'react-icons/io5';
@@ -90,6 +93,11 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
 
   // Barcode Print Modal
   const [printingProduct, setPrintingProduct] = useState<PosProductItem | null>(null);
+
+  // Custom Barcode Modal
+  const [editingBarcodeItem, setEditingBarcodeItem] = useState<PosProductItem | null>(null);
+  const [customBarcodeVal, setCustomBarcodeVal] = useState<string>('');
+  const [customBarcodeLock, setCustomBarcodeLock] = useState<boolean>(true);
 
   // Image Upload Preview Modal
   const [editingImageItem, setEditingImageItem] = useState<{ id: string; type: 'product' | 'category'; currentUrl?: string; name: string } | null>(null);
@@ -427,17 +435,78 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     window.dispatchEvent(new Event('pos_catalog_updated'));
   };
 
-  // Generate Unique Barcode with Permanent Lock
-  const handleGenerateBarcode = async (product: PosProductItem) => {
-    if (product.barcode_locked) {
-      toast.error('Barcode is permanently locked and cannot be modified.');
+  // Open Custom Barcode Modal
+  const handleOpenEditBarcode = (product: PosProductItem) => {
+    setEditingBarcodeItem(product);
+    setCustomBarcodeVal(product.barcode || '');
+    setCustomBarcodeLock(product.barcode_locked ?? true);
+  };
+
+  // Save Custom Barcode
+  const handleSaveCustomBarcode = async () => {
+    if (!editingBarcodeItem) return;
+    const val = customBarcodeVal.trim();
+    if (!val) {
+      toast.error('Please enter or scan a barcode.');
       return;
     }
 
-    if (
-      product.barcode &&
-      !window.confirm(`Generate and permanently lock barcode for "${product.product_name}"? Once locked, it can NEVER be reverted.`)
-    ) {
+    // Check for duplicate barcode in other products
+    const duplicate = products.find(
+      (p) => p.id !== editingBarcodeItem.id && p.barcode && p.barcode.toLowerCase() === val.toLowerCase()
+    );
+    if (duplicate) {
+      toast.error(`Barcode "${val}" is already assigned to "${duplicate.product_name}"`);
+      return;
+    }
+
+    // Update state immediately
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === editingBarcodeItem.id
+          ? { ...p, barcode: val, barcode_locked: customBarcodeLock }
+          : p
+      )
+    );
+
+    await posService.updateProductBarcode(editingBarcodeItem.id, val, customBarcodeLock);
+    window.dispatchEvent(new Event('pos_catalog_updated'));
+    toast.success(`Barcode updated for "${editingBarcodeItem.product_name}"`);
+    setEditingBarcodeItem(null);
+  };
+
+  // Unlock Barcode for modifications
+  const handleUnlockBarcode = async (product: PosProductItem) => {
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === product.id ? { ...p, barcode_locked: false } : p
+      )
+    );
+    await posService.unlockProductBarcode(product.id);
+    window.dispatchEvent(new Event('pos_catalog_updated'));
+    toast.success(`Barcode unlocked for "${product.product_name}". You can now edit it.`);
+  };
+
+  // Lock Barcode to prevent accidental changes
+  const handleLockBarcode = async (product: PosProductItem) => {
+    if (!product.barcode) {
+      toast.error('No barcode to lock.');
+      return;
+    }
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === product.id ? { ...p, barcode_locked: true } : p
+      )
+    );
+    await posService.lockProductBarcode(product.id, product.barcode);
+    window.dispatchEvent(new Event('pos_catalog_updated'));
+    toast.success(`Barcode locked for "${product.product_name}"`);
+  };
+
+  // Generate Unique Barcode
+  const handleGenerateBarcode = async (product: PosProductItem) => {
+    if (product.barcode_locked) {
+      toast.error('Barcode is locked. Click unlock first to change it.');
       return;
     }
 
@@ -452,9 +521,10 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
       )
     );
 
-    // Persist lock to service/database
+    // Persist to service/database
     await posService.lockProductBarcode(product.id, newBarcode);
-    toast.success(`Generated & permanently locked barcode: ${newBarcode}`);
+    window.dispatchEvent(new Event('pos_catalog_updated'));
+    toast.success(`Generated & locked barcode: ${newBarcode}`);
   };
 
   // Image Upload / URL Save
@@ -744,42 +814,74 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                             Rs. {p.retail_price.toLocaleString()}
                           </td>
 
-                          {/* Barcode & Irreversible Lock */}
+                          {/* Barcode & Lock Status */}
                           <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               {p.barcode ? (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/80 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
-                                    {p.barcode}
-                                  </span>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditBarcode(p)}
+                                    title="Click to edit or scan barcode"
+                                    className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition cursor-pointer"
+                                  >
+                                    <span>{p.barcode}</span>
+                                    <LuPencil size={10} className="text-slate-400" />
+                                  </button>
 
                                   {p.barcode_locked ? (
-                                    <span
-                                      className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1 shrink-0"
-                                      title="This barcode is permanently locked into the system and cannot be altered or reverted."
-                                    >
-                                      <LuLock size={11} />
-                                      <span>Locked</span>
-                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <span
+                                        className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1 shrink-0"
+                                        title="Locked: Protected from accidental changes."
+                                      >
+                                        <LuLock size={11} />
+                                        <span>Locked</span>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUnlockBarcode(p)}
+                                        className="p-1 rounded text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-500/10 transition cursor-pointer"
+                                        title="Unlock barcode to edit or reassign"
+                                      >
+                                        <LuUnlock size={13} />
+                                      </button>
+                                    </div>
                                   ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleGenerateBarcode(p)}
-                                      className="px-2 py-0.5 rounded-full text-[10px] font-bold text-primary border border-primary/30 hover:bg-primary/10 transition cursor-pointer"
-                                    >
-                                      Lock Now
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleLockBarcode(p)}
+                                        className="px-2 py-0.5 rounded-full text-[10px] font-bold text-primary border border-primary/30 hover:bg-primary/10 transition cursor-pointer flex items-center gap-1"
+                                        title="Lock this barcode"
+                                      >
+                                        <LuLock size={10} />
+                                        <span>Lock Now</span>
+                                      </button>
+                                    </div>
                                   )}
-                                </div>
+                                </>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleGenerateBarcode(p)}
-                                  className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
-                                >
-                                  <LuSparkles size={12} />
-                                  <span>Generate Barcode</span>
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditBarcode(p)}
+                                    className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                    title="Type custom code or scan physical tag"
+                                  >
+                                    <LuScan size={12} />
+                                    <span>Custom / Scan</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGenerateBarcode(p)}
+                                    className="px-2 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                    title="Auto-generate 13-digit barcode"
+                                  >
+                                    <LuSparkles size={11} />
+                                    <span>Auto</span>
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </td>
@@ -967,6 +1069,130 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               >
                 <LuPrinter size={14} />
                 <span>Print Sticker</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL: CUSTOM BARCODE & SCANNER SETUP
+         ───────────────────────────────────────────────────────────── */}
+      {editingBarcodeItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <LuScan className="text-primary" />
+                  <span>Custom Barcode & Scanner Setup</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Product: <strong className="text-slate-800 dark:text-slate-200">{editingBarcodeItem.product_name}</strong>
+                  {editingBarcodeItem.item_sr_no && <span className="ml-1 font-mono text-[10px]">({editingBarcodeItem.item_sr_no})</span>}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingBarcodeItem(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <LuX size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Barcode / Tag Code:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setCustomBarcodeVal(posService.generateUniqueBarcode(editingBarcodeItem))}
+                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <LuSparkles size={11} />
+                    <span>Generate Unique</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customBarcodeVal}
+                    onChange={(e) => setCustomBarcodeVal(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSaveCustomBarcode();
+                      }
+                    }}
+                    placeholder="Scan with barcode gun or type custom code..."
+                    autoFocus
+                    className="w-full px-3 py-2.5 text-sm font-mono font-bold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary pl-9"
+                  />
+                  <LuScan className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Tip: Connect your USB / Bluetooth handheld barcode scanner and scan directly into this field.
+                </p>
+              </div>
+
+              {/* Live Barcode Graphic Preview */}
+              {customBarcodeVal.trim() && (
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Live Barcode Preview
+                  </span>
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs max-w-full overflow-hidden flex justify-center">
+                    <Barcode
+                      value={customBarcodeVal.trim()}
+                      format="CODE128"
+                      width={1.6}
+                      height={40}
+                      fontSize={11}
+                      margin={0}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Lock Barcode Option */}
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={customBarcodeLock}
+                  onChange={(e) => setCustomBarcodeLock(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 mt-0.5"
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                    <LuLock size={12} className="text-amber-500" />
+                    <span>Lock Barcode</span>
+                  </span>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Prevents accidental re-generation or overrides during quick store operations. Can be unlocked anytime using the unlock button.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingBarcodeItem(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCustomBarcode}
+                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold text-white transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                style={{ backgroundColor: accentColor }}
+              >
+                <LuSave size={15} />
+                <span>Save Barcode</span>
               </button>
             </div>
           </div>
@@ -1510,7 +1736,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                     onChange={(e) => setNewLockBarcode(e.target.checked)}
                     className="rounded text-primary focus:ring-primary"
                   />
-                  <span>Permanently lock this barcode (cannot be reverted)</span>
+                  <span>Lock barcode (protect from accidental alterations, can unlock anytime)</span>
                 </label>
               </div>
 
