@@ -198,6 +198,8 @@ export const POSTerminal: React.FC = () => {
   // Held Orders State
   const [heldOrders, setHeldOrders] = useState<PosHeldOrder[]>(() => posService.getHeldOrders());
   const [isHeldModalOpen, setIsHeldModalOpen] = useState<boolean>(false);
+  const [isHoldNoteModalOpen, setIsHoldNoteModalOpen] = useState<boolean>(false);
+  const [holdNoteInput, setHoldNoteInput] = useState<string>('');
 
   // Lock Terminal State
   const [isLocked, setIsLocked] = useState<boolean>(false);
@@ -347,12 +349,13 @@ export const POSTerminal: React.FC = () => {
         barcodeInputRef.current?.select();
       } else if (e.key === 'F4') {
         e.preventDefault();
-        if (cartItems.length > 0) handleHoldOrder();
+        if (cartItems.length > 0) handleOpenHoldModal();
       } else if (e.key === 'F9') {
         e.preventDefault();
         if (cartItems.length > 0 && !isPayModalOpen) handleOpenPayment();
       } else if (e.key === 'Escape') {
-        if (isFulfillmentModalOpen) handleCloseFulfillmentModal();
+        if (isHoldNoteModalOpen) setIsHoldNoteModalOpen(false);
+        else if (isFulfillmentModalOpen) handleCloseFulfillmentModal();
         else if (isReceiptModalOpen) setIsReceiptModalOpen(false);
         else if (isPayModalOpen) setIsPayModalOpen(false);
         else if (isHeldModalOpen) setIsHeldModalOpen(false);
@@ -361,7 +364,7 @@ export const POSTerminal: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cartItems, isLocked, isPayModalOpen, isReceiptModalOpen, isHeldModalOpen, isDrawerModalOpen, isFulfillmentModalOpen, pendingOpenPaymentAfterFulfillment, grandTotal]);
+  }, [cartItems, isLocked, isPayModalOpen, isReceiptModalOpen, isHeldModalOpen, isDrawerModalOpen, isFulfillmentModalOpen, isHoldNoteModalOpen, pendingOpenPaymentAfterFulfillment, grandTotal]);
 
   // Guard check: Cash Drawer & Day session must be open before any sale activity
   const requireOpenDrawer = (): boolean => {
@@ -441,12 +444,12 @@ export const POSTerminal: React.FC = () => {
   // Clear Cart
   const handleClearCart = () => {
     if (cartItems.length === 0) return;
-    if (window.confirm('Clear all items on current ticket?')) {
+    if (window.confirm('Clear all items on current order?')) {
       playTone('delete');
       setCartItems([]);
       setDiscountPercent(0);
       setFulfillmentType('');
-      toast.success('Cart cleared');
+      toast.success('Order cart cleared');
     }
   };
 
@@ -474,50 +477,89 @@ export const POSTerminal: React.FC = () => {
     }
   };
 
-  // Hold / Park Current Order
-  const handleHoldOrder = () => {
+  // Open Hold Order Note Prompt (Option 2)
+  const handleOpenHoldModal = () => {
+    if (!requireOpenDrawer()) return;
+    if (cartItems.length === 0) {
+      toast.error('No items in current order to hold.');
+      return;
+    }
+    setHoldNoteInput('');
+    setIsHoldNoteModalOpen(true);
+  };
+
+  // Confirm Hold Order
+  const handleConfirmHoldOrder = (customNote?: string) => {
     if (cartItems.length === 0) return;
-    const ticketLabel = `${customerName} (${cartItems.length} items)`;
-    const newHeld: PosHeldOrder = {
-      id: `held-${Date.now()}`,
-      ticket_label: ticketLabel,
-      ticket_number: ticketNumber,
+    const finalNote = (typeof customNote === 'string' ? customNote : holdNoteInput).trim();
+    const orderLabel = `${customerName} (${cartItems.length} items)`;
+
+    posService.holdOrder({
+      order_number: ticketNumber,
+      order_label: orderLabel,
+      note: finalNote,
       cashier_name: userEmail?.split('@')[0] || 'Cashier',
       items: cartItems,
       subtotal,
+      discount_percent: discountPercent,
+      fulfillment_type: fulfillmentType,
       customer_name: customerName,
-      customer_tier: customerTier,
-      created_at: new Date().toISOString()
-    };
-    posService.holdOrder(newHeld);
+      customer_tier: customerTier
+    });
+
     setHeldOrders(posService.getHeldOrders());
     setCartItems([]);
+    setDiscountPercent(0);
+    setFulfillmentType('');
     setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
+    setIsHoldNoteModalOpen(false);
     playTone('notification');
-    toast.success(`Order ${ticketNumber} parked into Held Orders`);
+    toast.success(`Order ${ticketNumber} parked in Held Orders`);
   };
 
-  // Resume Held Order
+  // Resume Held Order with SAFE AUTO-SWAP (Option 2)
   const handleResumeHeldOrder = (held: PosHeldOrder) => {
+    const resumeOrderNumber = held.order_number || held.ticket_number || '';
+
+    // SAFE AUTO-SWAP: If current cart has items, automatically park current cart so nothing is lost!
     if (cartItems.length > 0) {
-      if (!window.confirm('Replace current active ticket with held order?')) return;
+      const activeLabel = `${customerName} (${cartItems.length} items)`;
+      posService.holdOrder({
+        order_number: ticketNumber,
+        order_label: activeLabel,
+        note: 'Auto-parked during order switch',
+        cashier_name: userEmail?.split('@')[0] || 'Cashier',
+        items: cartItems,
+        subtotal,
+        discount_percent: discountPercent,
+        fulfillment_type: fulfillmentType,
+        customer_name: customerName,
+        customer_tier: customerTier
+      });
+      toast.success(`Active order ${ticketNumber} auto-parked safely`);
     }
+
+    // Restore held order with full context
     setCartItems(held.items);
     setCustomerName(held.customer_name || 'Walk-in Customer');
     setCustomerTier((held.customer_tier as any) || 'VIP');
-    setTicketNumber(held.ticket_number);
+    setDiscountPercent(held.discount_percent || 0);
+    setFulfillmentType(held.fulfillment_type || '');
+    setTicketNumber(resumeOrderNumber);
+
+    // Remove from held list
     posService.removeHeldOrder(held.id);
     setHeldOrders(posService.getHeldOrders());
     setIsHeldModalOpen(false);
     playTone('notification');
-    toast.success(`Resumed ticket ${held.ticket_number}`);
+    toast.success(`Resumed order ${resumeOrderNumber}`);
   };
 
   // Open Payment Modal
   const handleOpenPayment = () => {
     if (!requireOpenDrawer()) return;
     if (cartItems.length === 0) {
-      toast.error('Cart is empty. Add products to ticket first.');
+      toast.error('Cart is empty. Add products to order first.');
       return;
     }
     if (!fulfillmentType) {
@@ -563,7 +605,7 @@ export const POSTerminal: React.FC = () => {
 
       const saved = await posService.createOrder(orderPayload);
       playTone('success');
-      toast.success(`Sale completed! Ticket: ${saved.order_number}`);
+      toast.success(`Sale completed! Order: ${saved.order_number}`);
 
       setCompletedOrder(saved);
       setIsPayModalOpen(false);
@@ -1645,7 +1687,7 @@ export const POSTerminal: React.FC = () => {
                   <button
                     type="button"
                     disabled={cartItems.length === 0}
-                    onClick={handleHoldOrder}
+                    onClick={handleOpenHoldModal}
                     className="py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
                   >
                     <LuPauseCircle size={14} />
@@ -2272,77 +2314,244 @@ export const POSTerminal: React.FC = () => {
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          MODAL 3: HELD ORDERS DRAWER
+          MODAL: HOLD ORDER QUICK-NOTE (OPTION 2)
          ───────────────────────────────────────────────────────────── */}
-      {isHeldModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <LuPauseCircle className="text-amber-500 text-lg" />
-                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                  Parked / Held Orders ({heldOrders.length})
-                </h3>
+      {isHoldNoteModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={() => setIsHoldNoteModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                  <LuPauseCircle size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Hold Order: {ticketNumber}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Add an optional reference note or press Enter to park immediately
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsHeldModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+                onClick={() => setIsHoldNoteModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
               >
                 <LuX size={18} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleConfirmHoldOrder(holdNoteInput);
+              }}
+              className="p-4 space-y-3"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Order Reference / Note (Optional):
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={holdNoteInput}
+                  onChange={(e) => setHoldNoteInput(e.target.value)}
+                  placeholder="e.g. Trying another suit / At ATM / Reserved"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                />
+              </div>
+
+              {/* Quick suggestion tags */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {['Trying another suit', 'Customer at ATM', 'Waiting for fabric', 'Phone Inquiry'].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      setHoldNoteInput(tag);
+                      handleConfirmHoldOrder(tag);
+                    }}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 hover:bg-amber-500/15 hover:text-amber-600 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                  >
+                    + {tag}
+                  </button>
+                ))}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setIsHoldNoteModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl font-bold text-xs text-slate-500 hover:text-slate-700 dark:hover:text-white transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-600 text-white transition shadow-sm cursor-pointer"
+                >
+                  Park Order [Enter]
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 3: HELD ORDERS SLIDE-OVER DRAWER (OPTION 2)
+         ───────────────────────────────────────────────────────────── */}
+      {isHeldModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-fadeIn"
+          onClick={() => setIsHeldModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-[#111622] border-l border-slate-200 dark:border-slate-800 shadow-2xl h-full flex flex-col animate-slideLeft"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                  <LuPauseCircle size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    Held Orders
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white">
+                      {heldOrders.length}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Safe Auto-Swap enabled • Switch without losing active items
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHeldModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800"
+                title="Close (Esc)"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {heldOrders.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs">
-                  No orders currently held.
+                <div className="py-16 text-center text-slate-400">
+                  <LuPauseCircle size={36} className="mx-auto mb-2 text-slate-300 dark:text-slate-700" />
+                  <p className="text-xs font-semibold">No orders currently on hold.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Press [F4] while ringing an order to park it.</p>
                 </div>
               ) : (
-                heldOrders.map((h) => (
-                  <div
-                    key={h.id}
-                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between gap-3"
-                  >
-                    <div>
-                      <span className="font-mono font-bold text-xs text-primary">
-                        {h.ticket_number}
-                      </span>
-                      <h5 className="font-bold text-xs text-slate-800 dark:text-slate-200 mt-0.5">
-                        {h.ticket_label}
-                      </h5>
-                      <span className="text-[10px] text-slate-400">
-                        {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Cashier: {h.cashier_name}
-                      </span>
-                    </div>
+                heldOrders.map((h) => {
+                  const displayOrderNumber = h.order_number || h.ticket_number || 'Order';
+                  return (
+                    <div
+                      key={h.id}
+                      className="p-4 rounded-2xl bg-white dark:bg-[#161D2B] border border-slate-200 dark:border-slate-800/90 hover:border-amber-500/50 transition-all shadow-xs space-y-2.5"
+                    >
+                      {/* Top Row: Order ID, Time, Packaging */}
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-black text-xs text-slate-900 dark:text-white">
+                          {displayOrderNumber}
+                        </span>
+                        <div className="flex items-center gap-1.5 text-[11px]">
+                          {h.fulfillment_type && (
+                            <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                              {h.fulfillment_type}
+                            </span>
+                          )}
+                          <span className="text-slate-400 font-medium">
+                            {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs font-mono text-slate-900 dark:text-white">
-                        Rs. {h.subtotal.toLocaleString()}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleResumeHeldOrder(h)}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer"
-                      >
-                        Resume
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm('Delete this held ticket?')) {
-                            posService.removeHeldOrder(h.id);
-                            setHeldOrders(posService.getHeldOrders());
-                            toast.success('Held order discarded');
-                          }
-                        }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 transition cursor-pointer"
-                      >
-                        <LuTrash2 size={14} />
-                      </button>
+                      {/* Note / Tag */}
+                      {h.note && (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-300/40 px-2.5 py-1 rounded-xl">
+                          <LuTag size={12} className="shrink-0" />
+                          <span className="font-semibold">{h.note}</span>
+                        </div>
+                      )}
+
+                      {/* Customer & Items Meta */}
+                      <div className="text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                        <span className="font-bold truncate max-w-[200px]">
+                          {h.customer_name || 'Walk-in Customer'}
+                        </span>
+                        <span className="text-slate-400 font-mono text-[11px]">
+                          {h.items?.length || 0} item{(h.items?.length || 0) !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+
+                      {/* Items Preview Chips */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                        {h.items?.slice(0, 4).map((it, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-[10px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[130px]"
+                            title={it.product_name}
+                          >
+                            <span className="font-bold text-slate-900 dark:text-white">{it.quantity}x</span>
+                            <span className="truncate">{it.product_name}</span>
+                          </div>
+                        ))}
+                        {(h.items?.length || 0) > 4 && (
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            +{(h.items?.length || 0) - 4} more
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Bottom Action Row */}
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Total</span>
+                          <span className="font-mono font-black text-sm text-slate-900 dark:text-white">
+                            Rs. {h.subtotal.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete held order ${displayOrderNumber}?`)) {
+                                posService.removeHeldOrder(h.id);
+                                setHeldOrders(posService.getHeldOrders());
+                                toast.success(`Order ${displayOrderNumber} deleted`);
+                              }
+                            }}
+                            className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                            title="Delete Held Order"
+                          >
+                            <LuTrash2 size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleResumeHeldOrder(h)}
+                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <LuRotateCcw size={13} />
+                            <span>Resume Order</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

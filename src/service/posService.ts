@@ -76,11 +76,16 @@ export interface PosShift {
 export interface PosHeldOrder {
   id: string;
   tenant_id?: string;
-  ticket_label: string;
-  ticket_number: string;
+  order_number: string;
+  order_label?: string;
+  ticket_label?: string;
+  ticket_number?: string;
+  note?: string;
   cashier_name: string;
   items: PosOrderItem[];
   subtotal: number;
+  discount_percent?: number;
+  fulfillment_type?: string;
   customer_name?: string;
   customer_tier?: string;
   created_at: string;
@@ -920,13 +925,33 @@ export const posService = {
     }
   },
 
-  holdOrder(held: Omit<PosHeldOrder, 'id' | 'ticket_number' | 'created_at'>): PosHeldOrder {
+  holdOrder(held: {
+    order_number: string;
+    order_label?: string;
+    note?: string;
+    cashier_name: string;
+    items: PosOrderItem[];
+    subtotal: number;
+    discount_percent?: number;
+    fulfillment_type?: string;
+    customer_name?: string;
+    customer_tier?: string;
+  }): PosHeldOrder {
     const list = this.getHeldOrders();
-    const num = `#HOLD-${list.length + 1}`;
     const newHeld: PosHeldOrder = {
-      ...held,
       id: `held-${Date.now()}`,
-      ticket_number: num,
+      order_number: held.order_number,
+      order_label: held.order_label || held.order_number,
+      ticket_number: held.order_number,
+      ticket_label: held.order_label || held.order_number,
+      note: held.note || '',
+      cashier_name: held.cashier_name,
+      items: held.items,
+      subtotal: held.subtotal,
+      discount_percent: held.discount_percent || 0,
+      fulfillment_type: held.fulfillment_type || '',
+      customer_name: held.customer_name,
+      customer_tier: held.customer_tier,
       created_at: new Date().toISOString()
     };
     const updated = [newHeld, ...list];
@@ -934,6 +959,10 @@ export const posService = {
       localStorage.setItem(STORAGE_HELD, JSON.stringify(updated));
     }
     return newHeld;
+  },
+
+  removeHeldOrder(id: string) {
+    this.deleteHeldOrder(id);
   },
 
   deleteHeldOrder(id: string) {
