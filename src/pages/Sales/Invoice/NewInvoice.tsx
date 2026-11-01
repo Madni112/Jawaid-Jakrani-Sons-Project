@@ -917,7 +917,7 @@ const NewInvoice = () => {
     if (matchSqm && Number(matchSqm[1]) > 0) {
       sqmPerBox = Number(matchSqm[1]);
     } else {
-      const dimMatch = String(`${selectedProduct.sub_category || ''} ${selectedProduct.product_description || ''} ${selectedProduct.item_sr_no || ''}`).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
+      const dimMatch = String(`${selectedProduct.category || ''} ${selectedProduct.product_name || ''} ${selectedProduct.sub_category || ''} ${selectedProduct.product_description || ''} ${selectedProduct.item_sr_no || ''}`).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
       if (dimMatch) {
         const h = Number(dimMatch[1]) || 60;
         const w = Number(dimMatch[2]) || 60;
@@ -1058,7 +1058,7 @@ const NewInvoice = () => {
     if (matchSqm && Number(matchSqm[1]) > 0) {
       sqmPerBox = Number(matchSqm[1]);
     } else {
-      const dimMatch = String(`${selectedProduct.sub_category || ''} ${selectedProduct.product_description || ''} ${selectedProduct.item_sr_no || ''}`).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
+      const dimMatch = String(`${selectedProduct.category || ''} ${selectedProduct.product_name || ''} ${selectedProduct.sub_category || ''} ${selectedProduct.product_description || ''} ${selectedProduct.item_sr_no || ''}`).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
       if (dimMatch) {
         const h = Number(dimMatch[1]) || 60;
         const w = Number(dimMatch[2]) || 60;

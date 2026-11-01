@@ -1012,7 +1012,16 @@ const ProductList = () => {
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800/50">
                   <span className="text-xs font-semibold text-slate-500">Dimensions</span>
-                  <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedQuickViewProduct.dimensions || 'N/A'}</span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                    {(() => {
+                      const sizeMatch = String(selectedQuickViewProduct.product_description || '').match(/Size:\s*([^|]+)/i);
+                      if (sizeMatch) return sizeMatch[1].trim();
+                      const text = `${selectedQuickViewProduct.category || ''} ${selectedQuickViewProduct.product_name || ''} ${selectedQuickViewProduct.sub_category || ''}`;
+                      const match = text.match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
+                      if (match) return `${match[1]} × ${match[2]} cm`;
+                      return selectedQuickViewProduct.dimensions || 'N/A';
+                    })()}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800/50">
                   <span className="text-xs font-semibold text-slate-500">Weight</span>

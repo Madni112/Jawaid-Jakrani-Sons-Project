@@ -710,8 +710,19 @@ const BulkProductUpload = () => {
           );
           const piecesPerBox = rawPcs > 0 ? rawPcs : 1;
 
-          const rawW = Number(row['WIDTH'] || row['W'] || 0);
-          const rawH = Number(row['HEIGHT'] || row['H'] || 0);
+          const rawWVal = row['WIDTH'] || row['W'] || row['WIDTH (CM)'] || row['TILE WIDTH'] || row['WIDTH(CM)'] || 0;
+          const rawHVal = row['HEIGHT'] || row['H'] || row['HEIGHT (CM)'] || row['TILE HEIGHT'] || row['HEIGHT(CM)'] || row['LENGTH'] || 0;
+          let rawW = Number(rawWVal);
+          let rawH = Number(rawHVal);
+
+          // Auto-infer dimensions from Category (e.g. "40 x 40") or Description (e.g. "40x40") if missing
+          if ((!rawW || !rawH) && (cleanCategory || cleanName)) {
+            const dimMatch = `${cleanCategory} ${cleanName}`.match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
+            if (dimMatch) {
+              if (!rawH) rawH = Number(dimMatch[1]) || 0;
+              if (!rawW) rawW = Number(dimMatch[2]) || 0;
+            }
+          }
 
           // Numeric prices and minimum
           const rawPur = parseFloat(
@@ -1335,10 +1346,31 @@ const BulkProductUpload = () => {
           updatePayload.bin = r.print || r.brand;
         }
         if (r.minimumStock > 0) updatePayload.min_stock_alert = r.minimumStock;
-        if (mode === 'TILES' && r.piecesPerBox) {
-          updatePayload.pieces_per_box = r.piecesPerBox;
-          updatePayload.pcs_per_box = r.piecesPerBox;
-          updatePayload.pieces_per_packing = r.piecesPerBox;
+        // Tile dimensions, packing, and description update
+        const w = r.tileWidth || 0;
+        const h = r.tileHeight || 0;
+        const pcs = (r.piecesPerBox && r.piecesPerBox > 0)
+          ? r.piecesPerBox
+          : (r.matchedDbProduct?.pieces_per_box || 1);
+
+        if (mode === 'TILES' || (w > 0 && h > 0) || pcs > 1) {
+          if (r.piecesPerBox) {
+            updatePayload.pieces_per_box = r.piecesPerBox;
+            updatePayload.pcs_per_box = r.piecesPerBox;
+            updatePayload.pieces_per_packing = r.piecesPerBox;
+          }
+          if (w > 0 && h > 0) {
+            const sqMPerPiece = (w / 100) * (h / 100);
+            const sqMPerBox = sqMPerPiece * pcs;
+            const sizeStr = `${w}×${h} cm`;
+            const printStr = r.print || r.matchedDbProduct?.bin || '';
+            const brandStr = r.brand || r.matchedDbProduct?.brand || '';
+            updatePayload.scenario_name = 'Tile Metric';
+            updatePayload.product_description = `[TILE PRODUCT] Size: ${sizeStr} | Box: ${pcs} pcs (${sqMPerBox.toFixed(4)} sq.m / box) | Finish/Print: ${printStr} | Brand: ${brandStr}`;
+            if (!updatePayload.category && !r.matchedDbProduct?.category) {
+              updatePayload.category = `${w}x${h}`;
+            }
+          }
         }
 
         if (Object.keys(updatePayload).length > 0) {

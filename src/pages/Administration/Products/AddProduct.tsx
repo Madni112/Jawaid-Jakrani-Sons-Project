@@ -1,7 +1,7 @@
 // Helper: parse tile dimensions (h × w) from sub_category, description, or SKU
 const parseTileDimensions = (data: any) => {
   if (!data) return { h: 24, w: 24 };
-  const text = `${data?.sub_category || ''} ${data?.product_description || ''} ${data?.item_sr_no || ''}`;
+  const text = `${data?.category || ''} ${data?.product_name || ''} ${data?.sub_category || ''} ${data?.product_description || ''} ${data?.item_sr_no || ''}`;
   const match = text.match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
   if (match) {
     return {
