@@ -555,18 +555,52 @@ export const posService = {
   },
 
   getLastClosingPettyCash(): number {
-    if (typeof window !== 'undefined') {
+    return this.getPettyCashForDate(new Date().toISOString().split('T')[0]).amount;
+  },
+
+  getPettyCashForDate(targetDate: string): { amount: number; foundDate: string | null; isFound: boolean } {
+    const all = this.getAllShifts();
+    // Search for the latest closed shift prior to the selected business date
+    const priorClosedShifts = all
+      .filter(s => {
+        if (s.status !== 'Closed') return false;
+        const shiftDate = s.business_date || (s.opened_at ? s.opened_at.split('T')[0] : '');
+        return shiftDate < targetDate;
+      })
+      .sort((a, b) => {
+        const dateA = a.business_date || a.opened_at;
+        const dateB = b.business_date || b.opened_at;
+        return dateB.localeCompare(dateA); // Most recent date first
+      });
+
+    if (priorClosedShifts.length > 0) {
+      const latest = priorClosedShifts[0];
+      const petty = latest.closing_petty_cash !== undefined ? Number(latest.closing_petty_cash) : Number(latest.expected_cash || 0);
+      const displayDate = latest.business_date || (latest.opened_at ? new Date(latest.opened_at).toLocaleDateString() : 'Previous day');
+      return {
+        amount: petty,
+        foundDate: displayDate,
+        isFound: true
+      };
+    }
+
+    // If today's date and localStorage has cached closing petty cash, check if it fits
+    if (typeof window !== 'undefined' && targetDate >= new Date().toISOString().split('T')[0]) {
       const saved = localStorage.getItem('pos_last_closing_petty_cash');
       if (saved !== null) {
-        return Number(saved) || 0;
+        return {
+          amount: Number(saved) || 0,
+          foundDate: 'Last closed shift',
+          isFound: true
+        };
       }
     }
-    const all = this.getAllShifts();
-    const closed = all.filter(s => s.status === 'Closed' && s.closing_petty_cash !== undefined);
-    if (closed.length > 0) {
-      return Number(closed[0].closing_petty_cash) || 0;
-    }
-    return 20000;
+
+    return {
+      amount: 0,
+      foundDate: null,
+      isFound: false
+    };
   },
 
   async openDayShift(params: {

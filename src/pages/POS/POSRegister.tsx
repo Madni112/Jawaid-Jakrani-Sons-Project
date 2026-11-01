@@ -68,6 +68,17 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   const [dayOpenPettyCash, setDayOpenPettyCash] = useState<number>(() => posService.getLastClosingPettyCash());
   const [dayOpenCashIn, setDayOpenCashIn] = useState<number>(0);
   const [dayOpenCashOut, setDayOpenCashOut] = useState<number>(0);
+  const [pettyCashSource, setPettyCashSource] = useState<string>(() => {
+    const lookup = posService.getPettyCashForDate(new Date().toISOString().split('T')[0]);
+    return lookup.isFound ? `Auto-filled from ${lookup.foundDate} close` : 'Manual start / First day';
+  });
+
+  const handleDayOpenDateChange = (newDate: string) => {
+    setDayOpenDate(newDate);
+    const lookup = posService.getPettyCashForDate(newDate);
+    setDayOpenPettyCash(lookup.amount);
+    setPettyCashSource(lookup.isFound ? `Auto-filled from ${lookup.foundDate} close` : 'No prior shift before this date (enter manually)');
+  };
 
   const [isCloseShiftModal, setIsCloseShiftModal] = useState<boolean>(false);
   const [dayCloseDate, setDayCloseDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
@@ -1406,7 +1417,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                 <input
                   type="date"
                   value={dayOpenDate}
-                  onChange={(e) => setDayOpenDate(e.target.value)}
+                  onChange={(e) => handleDayOpenDateChange(e.target.value)}
                   className="w-full px-3 py-2 text-sm font-semibold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -1416,7 +1427,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                   <span>Opening Petty Cash (Rs.):</span>
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                    Auto-filled from last close
+                    {pettyCashSource}
                   </span>
                 </label>
                 <input
