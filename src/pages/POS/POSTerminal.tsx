@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import {
   LuStore,
+  LuPackage,
+  LuTruck,
   LuSearch,
   LuPlus,
   LuMinus,
@@ -179,10 +181,11 @@ export const POSTerminal: React.FC = () => {
 
   // Current Ticket / Cart State
   const [cartItems, setCartItems] = useState<PosOrderItem[]>([]);
-  const [ticketNumber, setTicketNumber] = useState<string>(() => `#TK-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [ticketNumber, setTicketNumber] = useState<string>(() => `#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
   const [customerName, setCustomerName] = useState<string>(posConfig.default_customer_name || 'Walk-in Customer');
   const [customerTier, setCustomerTier] = useState<'VIP' | 'Regular' | 'Retail'>('VIP');
   const [fulfillmentType, setFulfillmentType] = useState<string>(posConfig.default_fulfillment || 'In-Store Bag');
+  const [isFulfillmentModalOpen, setIsFulfillmentModalOpen] = useState<boolean>(false);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [taxPercent, setTaxPercent] = useState<number>(posConfig.default_tax_rate || 0);
 
@@ -274,6 +277,36 @@ export const POSTerminal: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isLocked) return;
 
+      // When fulfillment modal is open, quick-pick 1, 2, 3
+      if (isFulfillmentModalOpen) {
+        if (e.key === '1') {
+          e.preventDefault();
+          setFulfillmentType('In-Store Bag');
+          setIsFulfillmentModalOpen(false);
+          playTone('success');
+          toast.success('Packaging: In-Store Bag');
+          return;
+        } else if (e.key === '2') {
+          e.preventDefault();
+          setFulfillmentType('Takeaway');
+          setIsFulfillmentModalOpen(false);
+          playTone('success');
+          toast.success('Packaging: Shop Pickup / Takeaway');
+          return;
+        } else if (e.key === '3') {
+          e.preventDefault();
+          setFulfillmentType('Delivery');
+          setIsFulfillmentModalOpen(false);
+          playTone('success');
+          toast.success('Packaging: Delivery / Courier');
+          return;
+        } else if (e.key === 'Escape' || e.key === 'Enter') {
+          e.preventDefault();
+          setIsFulfillmentModalOpen(false);
+          return;
+        }
+      }
+
       if (e.key === 'F2') {
         e.preventDefault();
         barcodeInputRef.current?.focus();
@@ -285,7 +318,8 @@ export const POSTerminal: React.FC = () => {
         e.preventDefault();
         if (cartItems.length > 0 && !isPayModalOpen) handleOpenPayment();
       } else if (e.key === 'Escape') {
-        if (isReceiptModalOpen) setIsReceiptModalOpen(false);
+        if (isFulfillmentModalOpen) setIsFulfillmentModalOpen(false);
+        else if (isReceiptModalOpen) setIsReceiptModalOpen(false);
         else if (isPayModalOpen) setIsPayModalOpen(false);
         else if (isHeldModalOpen) setIsHeldModalOpen(false);
         else if (isDrawerModalOpen) setIsDrawerModalOpen(false);
@@ -293,7 +327,7 @@ export const POSTerminal: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cartItems, isLocked, isPayModalOpen, isReceiptModalOpen, isHeldModalOpen, isDrawerModalOpen]);
+  }, [cartItems, isLocked, isPayModalOpen, isReceiptModalOpen, isHeldModalOpen, isDrawerModalOpen, isFulfillmentModalOpen]);
 
   // Cart Calculations
   const subtotal = useMemo(() => {
@@ -424,7 +458,7 @@ export const POSTerminal: React.FC = () => {
     posService.holdOrder(newHeld);
     setHeldOrders(posService.getHeldOrders());
     setCartItems([]);
-    setTicketNumber(`#TK-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+    setTicketNumber(`#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
     playTone('notification');
     toast.success(`Ticket ${ticketNumber} parked into Held Orders`);
   };
@@ -496,7 +530,7 @@ export const POSTerminal: React.FC = () => {
       // Refresh Shift & Cart
       setActiveShift(posService.getActiveShift());
       setCartItems([]);
-      setTicketNumber(`#TK-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+      setTicketNumber(`#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
       setDiscountPercent(0);
     } catch (err) {
       console.error('Failed to complete sale:', err);
@@ -643,7 +677,7 @@ export const POSTerminal: React.FC = () => {
             >
               <div className="flex items-center gap-3">
                 <LuPauseCircle size={17} className="text-amber-500" />
-                <span>Held Tickets</span>
+                <span>Held Orders</span>
               </div>
               {heldOrders.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -850,19 +884,20 @@ export const POSTerminal: React.FC = () => {
               </button>
             )}
 
-            {/* Quick Action: New Ticket */}
+            {/* Quick Action: + New Sale */}
             <button
               type="button"
               onClick={() => {
-                if (cartItems.length > 0 && !window.confirm('Start new fresh ticket? Current items will be reset.')) return;
+                if (cartItems.length > 0 && !window.confirm('Start new fresh sale order? Current items will be reset.')) return;
                 setCartItems([]);
-                setTicketNumber(`#TK-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
-                toast.success('New ticket initialized');
+                setTicketNumber(`#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+                setIsFulfillmentModalOpen(true);
+                toast.success('New sale order started');
               }}
               className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
             >
               <LuPlus size={14} className="text-primary" />
-              <span>New Ticket</span>
+              <span>+ New Sale</span>
             </button>
           </div>
 
@@ -896,7 +931,7 @@ export const POSTerminal: React.FC = () => {
               type="button"
               onClick={() => setIsHeldModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold transition cursor-pointer"
-              title="Held tickets"
+              title="Held orders"
             >
               <LuPauseCircle size={15} />
               <span className="hidden sm:inline">Held</span>
@@ -1263,21 +1298,31 @@ export const POSTerminal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Order Meta: Ticket Number & Fulfillment dropdown */}
+              {/* Order Meta: Order Number & Fulfillment Handover Pill */}
               <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60 text-xs">
-                <span className="font-mono font-bold text-slate-600 dark:text-slate-300">
-                  {ticketNumber}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Order:</span>
+                  <span className="font-mono font-black text-slate-800 dark:text-slate-100">
+                    {ticketNumber}
+                  </span>
+                </div>
 
-                <select
-                  value={fulfillmentType}
-                  onChange={(e) => setFulfillmentType(e.target.value)}
-                  className="text-[11px] font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700/60 focus:outline-none cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => setIsFulfillmentModalOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer hover:shadow-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700/80"
+                  title="Click to change order packaging & handover mode"
                 >
-                  <option value="In-Store Bag">In-Store Bag</option>
-                  <option value="Takeaway">Takeaway</option>
-                  <option value="Delivery">Delivery</option>
-                </select>
+                  {fulfillmentType === 'Delivery' ? (
+                    <LuTruck size={13} className="text-primary" />
+                  ) : fulfillmentType === 'Takeaway' ? (
+                    <LuPackage size={13} className="text-amber-500" />
+                  ) : (
+                    <LuShoppingBag size={13} className="text-emerald-500" />
+                  )}
+                  <span>{fulfillmentType}</span>
+                  <LuChevronDown size={11} className="text-slate-400" />
+                </button>
               </div>
             </div>
 
@@ -1289,7 +1334,7 @@ export const POSTerminal: React.FC = () => {
                     <LuReceipt size={26} />
                   </div>
                   <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    No items on ticket
+                    No items in order
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
                     Tap products from the catalog or scan barcodes to begin sale.
@@ -1441,7 +1486,7 @@ export const POSTerminal: React.FC = () => {
                     className="py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
                   >
                     <LuPauseCircle size={14} />
-                    <span>Hold [F4]</span>
+                    <span>Hold Order [F4]</span>
                   </button>
 
                   <button
@@ -1501,7 +1546,7 @@ export const POSTerminal: React.FC = () => {
                   <span>Payment Tender</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Ticket {ticketNumber} • {customerName}
+                  Order {ticketNumber} • {customerName}
                 </p>
               </div>
               <button
@@ -1710,7 +1755,7 @@ export const POSTerminal: React.FC = () => {
                 {/* Ticket Meta */}
                 <div className="py-2.5 border-b border-dashed border-black space-y-1 text-[11px]">
                   <div className="flex justify-between">
-                    <span>Ticket #:</span>
+                    <span>Order #:</span>
                     <span className="font-bold">{completedOrder.order_number}</span>
                   </div>
                   <div className="flex justify-between">
@@ -1818,7 +1863,7 @@ export const POSTerminal: React.FC = () => {
               <div className="flex items-center gap-2">
                 <LuPauseCircle className="text-amber-500 text-lg" />
                 <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                  Held / Parked Tickets ({heldOrders.length})
+                  Parked / Held Orders ({heldOrders.length})
                 </h3>
               </div>
               <button
@@ -1833,7 +1878,7 @@ export const POSTerminal: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
               {heldOrders.length === 0 ? (
                 <div className="py-8 text-center text-slate-400 text-xs">
-                  No tickets currently held.
+                  No orders currently held.
                 </div>
               ) : (
                 heldOrders.map((h) => (
@@ -1870,7 +1915,7 @@ export const POSTerminal: React.FC = () => {
                           if (window.confirm('Delete this held ticket?')) {
                             posService.removeHeldOrder(h.id);
                             setHeldOrders(posService.getHeldOrders());
-                            toast.success('Held ticket discarded');
+                            toast.success('Held order discarded');
                           }
                         }}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 transition cursor-pointer"
