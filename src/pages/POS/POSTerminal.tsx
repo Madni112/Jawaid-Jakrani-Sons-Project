@@ -1145,12 +1145,12 @@ export const POSTerminal: React.FC = () => {
               </div>
             )}
 
-            {/* Category Filter Pills (Category in Big, Sub & Parent in Small) */}
+            {/* Category Filter Pills (with Category Image Avatar) */}
             <div className="p-3 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 flex items-center gap-2.5 overflow-x-auto no-scrollbar shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedCategory('All')}
-                className={`px-3.5 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex flex-col justify-center min-w-[110px] border ${
+                className={`px-3 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex items-center gap-2.5 min-w-[120px] border ${
                   selectedCategory === 'All'
                     ? 'shadow-xs border-transparent scale-[1.02]'
                     : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
@@ -1161,21 +1161,32 @@ export const POSTerminal: React.FC = () => {
                     : undefined
                 }
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-black tracking-tight">All Items</span>
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
-                      selectedCategory === 'All'
-                        ? 'bg-black/20 text-white'
-                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    {products.filter((p) => p.show_in_pos !== false).length}
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    selectedCategory === 'All'
+                      ? 'bg-black/15 text-white'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  <LuLayers size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-xs font-black tracking-tight">All Items</span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
+                        selectedCategory === 'All'
+                          ? 'bg-black/20 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {products.filter((p) => p.show_in_pos !== false).length}
+                    </span>
+                  </div>
+                  <span className="text-[10px] opacity-75 font-medium mt-0.5 block leading-tight">
+                    All Categories
                   </span>
                 </div>
-                <span className="text-[10px] opacity-75 font-medium mt-0.5 block leading-tight">
-                  All Categories
-                </span>
               </button>
 
               {categories
@@ -1201,7 +1212,7 @@ export const POSTerminal: React.FC = () => {
                       key={cat.id}
                       type="button"
                       onClick={() => setSelectedCategory(cat.id)}
-                      className={`px-3.5 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex flex-col justify-center min-w-[130px] max-w-[240px] border ${
+                      className={`px-3 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex items-center gap-2.5 min-w-[130px] max-w-[250px] border ${
                         isSelected
                           ? 'shadow-xs border-transparent scale-[1.02]'
                           : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
@@ -1213,23 +1224,42 @@ export const POSTerminal: React.FC = () => {
                       }
                       title={cat.full_path || cat.name}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-black tracking-tight truncate">
-                          {cat.name}
-                        </span>
-                        <span
-                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
+                      {cat.image_url ? (
+                        <img
+                          src={cat.image_url}
+                          alt={cat.name}
+                          className="w-8 h-8 rounded-lg object-cover shrink-0 border border-black/10 dark:border-white/10 shadow-2xs"
+                        />
+                      ) : (
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                             isSelected
-                              ? 'bg-black/20 text-white'
+                              ? 'bg-black/15 text-white'
                               : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                           }`}
                         >
-                          {count}
+                          <LuTag size={15} />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="text-xs font-black tracking-tight truncate">
+                            {cat.name}
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
+                              isSelected
+                                ? 'bg-black/20 text-white'
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            }`}
+                          >
+                            {count}
+                          </span>
+                        </div>
+                        <span className="text-[10px] opacity-75 font-medium mt-0.5 truncate block leading-tight">
+                          {subtitleText}
                         </span>
                       </div>
-                      <span className="text-[10px] opacity-75 font-medium mt-0.5 truncate block leading-tight">
-                        {subtitleText}
-                      </span>
                     </button>
                   );
                 })}
