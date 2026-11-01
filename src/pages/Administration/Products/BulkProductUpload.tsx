@@ -614,21 +614,43 @@ const BulkProductUpload = () => {
         setExistingBrands(brandsRes.data || []);
         setExistingPrints(printsRes.data || []);
 
-        // Build database lookup maps (lowercase trimmed 2-layer composite: Code + Name)
+        // Helper to normalize strings (strips bracket spaces, punctuation spacing, case)
+        const normalizeStr = (s: string) =>
+          String(s || '')
+            .replace(/[\.\-\s]*(a39|shop)\s*$/i, '')
+            .replace(/\s*[\(\[\{]\s*/g, '(')
+            .replace(/\s*[\)\]\}]\s*/g, ')')
+            .replace(/\s*[\/\\]\s*/g, '/')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+
+        // Build database lookup maps
         const dbByComposite = new Map<string, any>();
+        const dbByCode = new Map<string, any>();
+        const dbByNormComposite = new Map<string, any>();
 
         (dbProducts || []).forEach((p: any) => {
-          const codeKey = String(p.item_sr_no || '').trim().toLowerCase();
-          const nameKey = String(p.product_name || '').replace(/\s+/g, ' ').trim().toLowerCase();
-          if (codeKey || nameKey) {
-            dbByComposite.set(`${codeKey}:::${nameKey}`, p);
+          const rawCode = String(p.item_sr_no || '').trim().toLowerCase();
+          const rawName = String(p.product_name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          const normName = normalizeStr(p.product_name);
+
+          if (rawCode) {
+            dbByCode.set(rawCode, p);
+          }
+          if (rawCode || rawName) {
+            dbByComposite.set(`${rawCode}:::${rawName}`, p);
+          }
+          if (rawCode || normName) {
+            dbByNormComposite.set(`${rawCode}:::${normName}`, p);
           }
         });
 
         const suffixRegex = /[\.\-\s]*(a39|shop)\s*$/i;
 
-        // In-file duplicate tracking map (2-Layer: Code + Description)
-        const fileSeenComposite = new Map<string, number>(); // compositeKey -> first 1-based row index
+        // In-file duplicate tracking maps
+        const fileSeenComposite = new Map<string, number>();
+        const fileSeenCode = new Map<string, number>();
 
         const parsedTileList: ProcessedRow[] = [];
         const parsedOtherList: ProcessedRow[] = [];
@@ -647,16 +669,26 @@ const BulkProductUpload = () => {
 
           const codeKey = cleanCode.toLowerCase();
           const nameKey = cleanName.toLowerCase();
+          const normName = normalizeStr(cleanName);
           const compositeKey = `${codeKey}:::${nameKey}`;
+          const normCompositeKey = `${codeKey}:::${normName}`;
 
           // Brand extraction
           const rawBrand = String(
             row['BRAND'] || row['BRAND / BIN'] || row['BIN'] || ''
           ).trim();
 
-          // Category fields (tolerant to typos like Pareent category / Sub Categry)
+          // Category fields (tolerant to typos like Parant / Pareent / Sub Categry)
           const rawParentCat = String(
-            row['PARENT CATEGORY'] || row['PAREENT CATEGORY'] || row['PARENT_CATEGORY'] || row['PARENT'] || ''
+            row['PARENT CATEGORY'] ||
+            row['PAREENT CATEGORY'] ||
+            row['PARANT CATEGORY'] ||
+            row['PARRENT CATEGORY'] ||
+            row['PARENT_CATEGORY'] ||
+            row['PARANT_CATEGORY'] ||
+            row['PARENT'] ||
+            row['PARANT'] ||
+            ''
           ).trim();
           const rawSubCat = String(
             row['SUB CATEGORY'] || row['SUB CATEGRY'] || row['SUB_CATEGORY'] || row['SUB'] || ''
@@ -690,7 +722,12 @@ const BulkProductUpload = () => {
           ) || 0;
 
           // Check if this row is a tile product:
-          const isTileRow = rawParentCat.toLowerCase().includes('tile');
+          const isTileRow =
+            rawParentCat.toLowerCase().includes('tile') ||
+            rawSubCat.toLowerCase().includes('tile') ||
+            cleanName.toLowerCase().includes('tile') ||
+            String(row['PIECES PER BOX'] || row['PIECES_PER_BOX'] || row['PCS PER BOX'] || row['PCS/BOX'] || row['PACKING'] || '').trim() !== '' ||
+            (rawW > 0 && rawH > 0);
           const rawUom = String(row['UOM'] || (isTileRow ? 'BOX' : 'PCS')).trim() || (isTileRow ? 'BOX' : 'PCS');
 
           // Tile metric calculations (width & height in cm)
@@ -722,23 +759,34 @@ const BulkProductUpload = () => {
             status = 'invalid';
             statusReason = 'Missing product description / name';
           }
-          // Check 2: Duplicate in File (2-Layer: Code AND Description both duplicate)
-          else if (fileSeenComposite.has(compositeKey)) {
+          // Check 2: Duplicate in File (Code match OR Description match)
+          else if (codeKey && fileSeenCode.has(codeKey)) {
             status = 'duplicate_in_file';
-            matchedFileRowIndex = fileSeenComposite.get(compositeKey);
-            statusReason = `Duplicate: Both Code ("${cleanCode || 'None'}") and Description match Row #${matchedFileRowIndex} in this file`;
+            matchedFileRowIndex = fileSeenCode.get(codeKey);
+            statusReason = `Duplicate: Code "${cleanCode}" matches Row #${matchedFileRowIndex} in this file`;
+          } else if (fileSeenComposite.has(compositeKey) || fileSeenComposite.has(normCompositeKey)) {
+            status = 'duplicate_in_file';
+            matchedFileRowIndex = fileSeenComposite.get(compositeKey) || fileSeenComposite.get(normCompositeKey);
+            statusReason = `Duplicate: Description matches Row #${matchedFileRowIndex} in this file`;
           }
-          // Check 3: Duplicate in Database (2-Layer: Code AND Description both duplicate)
-          else if (dbByComposite.has(compositeKey)) {
-            const matched = dbByComposite.get(compositeKey);
+          // Check 3: Duplicate in Database (Code match OR Normalized Description match)
+          else if (codeKey && dbByCode.has(codeKey)) {
+            const matched = dbByCode.get(codeKey);
             status = 'duplicate_in_db';
             matchedDbProduct = matched;
-            statusReason = `Already in Database: Both Code and Description match "${matched.product_name}" (DB ID #${matched.id})`;
+            statusReason = `Already in Database: Code "${cleanCode}" matches "${matched.product_name}" (DB ID #${matched.id})`;
+          } else if (dbByComposite.has(compositeKey) || dbByNormComposite.has(normCompositeKey)) {
+            const matched = dbByComposite.get(compositeKey) || dbByNormComposite.get(normCompositeKey);
+            status = 'duplicate_in_db';
+            matchedDbProduct = matched;
+            statusReason = `Already in Database: Description matches "${matched.product_name}" (DB ID #${matched.id})`;
           }
 
           // Register in seen map if clean
           if (status !== 'duplicate_in_file' && status !== 'invalid') {
+            if (codeKey) fileSeenCode.set(codeKey, rowIndex);
             fileSeenComposite.set(compositeKey, rowIndex);
+            fileSeenComposite.set(normCompositeKey, rowIndex);
           }
 
           const processedItem: ProcessedRow = {
