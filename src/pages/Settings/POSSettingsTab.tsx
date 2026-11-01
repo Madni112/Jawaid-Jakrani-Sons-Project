@@ -2,25 +2,52 @@ import React, { useState } from 'react';
 import { useLanguage } from '../../Context/LanguageContext';
 import { posService, PosSettings } from '../../service/posService';
 import {
+  PRESET_THEME_COLORS,
+  getSavedAccentColor,
+  applyAccentColor,
+  getContrastTextColor
+} from '../../constant/themeConfig';
+import {
   LuStore,
   LuPrinter,
   LuReceipt,
   LuSave,
-  LuCheck
+  LuCheck,
+  LuX,
+  LuSparkles,
+  LuPenLine
 } from 'react-icons/lu';
 import { IoBarcodeOutline } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 
-export const POSSettingsTab: React.FC = () => {
+export interface POSSettingsTabProps {
+  onClose?: () => void;
+  isModal?: boolean;
+}
+
+export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal }) => {
   const { isRTL } = useLanguage();
   const [posConfig, setPosConfig] = useState<PosSettings>(() => posService.getSettings());
   const [savingPosSettings, setSavingPosSettings] = useState<boolean>(false);
+  const [themeColor, setThemeColor] = useState<string>(getSavedAccentColor());
+  const [customHex, setCustomHex] = useState<string>(getSavedAccentColor().replace('#', ''));
+
+  const handleColorChange = (hex: string) => {
+    const cleanHex = hex.startsWith('#') ? hex : `#${hex}`;
+    setThemeColor(cleanHex);
+    setCustomHex(cleanHex.replace('#', ''));
+    applyAccentColor(cleanHex);
+  };
 
   const handleSavePosSettings = async () => {
     try {
       setSavingPosSettings(true);
       await posService.saveSettings(posConfig);
+      window.dispatchEvent(new Event('pos_settings_updated'));
       toast.success(isRTL ? 'پی او ایس سیٹنگز محفوظ ہو گئیں' : 'POS Settings saved successfully!');
+      if (onClose) {
+        onClose();
+      }
     } catch {
       toast.error('Failed to save POS settings');
     } finally {
@@ -48,23 +75,100 @@ export const POSSettingsTab: React.FC = () => {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSavePosSettings}
-          disabled={savingPosSettings}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-md hover:bg-opacity-90 transition disabled:opacity-50 cursor-pointer self-start sm:self-auto shrink-0"
-        >
-          <LuSave size={15} />
-          <span>
-            {savingPosSettings
-              ? isRTL
-                ? 'محفوظ ہو رہا ہے...'
-                : 'Saving...'
-              : isRTL
-              ? 'سیٹنگز محفوظ کریں'
-              : 'Save POS Settings'}
-          </span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={handleSavePosSettings}
+            disabled={savingPosSettings}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-md hover:bg-opacity-90 transition disabled:opacity-50 cursor-pointer shrink-0"
+          >
+            <LuSave size={15} />
+            <span>
+              {savingPosSettings
+                ? isRTL
+                  ? 'محفوظ ہو رہا ہے...'
+                  : 'Saving...'
+                : isRTL
+                ? 'سیٹنگز محفوظ کریں'
+                : 'Save POS Settings'}
+            </span>
+          </button>
+
+          {isModal && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+              title="Close Settings"
+            >
+              <LuX size={18} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* SECTION 0: POS & TERMINAL COLOR THEME */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm space-y-4">
+        <div className="pb-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-primary font-bold text-sm">
+            <LuSparkles size={18} />
+            <span>{isRTL ? 'پی او ایس کا تھیم رنگ' : 'POS Terminal Theme & Accent Color'}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-mono font-bold">
+            <span
+              className="w-3.5 h-3.5 rounded-full border border-black/15 shadow-2xs shrink-0"
+              style={{ backgroundColor: themeColor }}
+            />
+            <span className="text-slate-700 dark:text-slate-200 uppercase">{themeColor}</span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {isRTL
+              ? 'پی او ایس بٹنوں، ایکٹو کیٹیگریز اور چیک آؤٹ کے لیے ایک رنگ منتخب کریں:'
+              : 'Choose a primary accent color for POS buttons, active categories, badges, and checkout:'}
+          </p>
+
+          {/* Quick Swatches */}
+          <div className="flex flex-wrap gap-2.5 items-center">
+            {PRESET_THEME_COLORS.slice(0, 16).map((c) => {
+              const isSelected = themeColor.toLowerCase() === c.hex.toLowerCase();
+              return (
+                <button
+                  key={c.name}
+                  type="button"
+                  onClick={() => handleColorChange(c.hex)}
+                  className={`w-8 h-8 rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-center border shadow-xs hover:scale-110 ${
+                    isSelected
+                      ? 'ring-2 ring-offset-2 ring-primary border-white scale-110'
+                      : 'border-black/10 dark:border-white/10 hover:border-black/30'
+                  }`}
+                  style={{ backgroundColor: c.hex }}
+                  title={c.name}
+                >
+                  {isSelected && (
+                    <LuCheck size={14} style={{ color: getContrastTextColor(c.hex) }} />
+                  )}
+                </button>
+              );
+            })}
+
+            {/* Custom Color Wheel Picker */}
+            <label
+              className="relative w-8 h-8 rounded-xl border border-slate-300 dark:border-slate-700 shadow-xs flex items-center justify-center cursor-pointer hover:scale-110 transition shrink-0 bg-slate-100 dark:bg-slate-800"
+              title="Pick custom color"
+            >
+              <LuPenLine size={14} className="text-slate-600 dark:text-slate-300" />
+              <input
+                type="color"
+                value={themeColor}
+                onChange={(e) => handleColorChange(e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+            </label>
+          </div>
+        </div>
       </div>
 
       {/* SECTION 1: STORE & RECEIPT HEADER */}

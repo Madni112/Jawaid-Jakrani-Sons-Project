@@ -42,7 +42,9 @@ import {
   LuSparkles,
   LuCalendar,
   LuCheckCircle2,
-  LuBarChart3
+  LuBarChart3,
+  LuSettings,
+  LuLogOut
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import { IoBarcodeOutline } from 'react-icons/io5';
@@ -50,6 +52,8 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
 import useColorMode from '../../hooks/useColorMode';
+import ClickOutside from '../../components/ClickOutside';
+import { POSSettingsTab } from '../Settings/POSSettingsTab';
 import {
   getSavedAccentColor,
   getContrastTextColor,
@@ -72,10 +76,18 @@ import {
 
 export const POSTerminal: React.FC = () => {
   const navigate = useNavigate();
-  const { userEmail, businessName, currentUser } = useAuth();
+  const { userEmail, businessName, currentUser, logout, userName } = useAuth();
   const { isRTL } = useLanguage();
   const [colorMode, setColorMode] = useColorMode();
   const isDark = isDarkModeActive();
+
+  // Cashier profile info
+  const displayCashierName = userName || currentUser?.user_metadata?.full_name || currentUser?.user_metadata?.name || (userEmail ? userEmail.split('@')[0] : 'Uzair Jibran');
+  const displayCashierEmail = userEmail || currentUser?.email || 'cashier@uzairjibran.com';
+
+  // Profile dropdown and In-POS settings modal
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState<boolean>(false);
+  const [isPosSettingsModalOpen, setIsPosSettingsModalOpen] = useState<boolean>(false);
 
   // Dynamic Theme Accent
   const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
@@ -91,6 +103,17 @@ export const POSTerminal: React.FC = () => {
   const [posConfig, setPosConfig] = useState<PosSettings>(() => posService.getSettings());
   const [activeShift, setActiveShift] = useState<PosShift | null>(() => posService.getActiveShift());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(posConfig.sound_effects_enabled);
+
+  // Sync settings when changed in POS Settings Modal
+  useEffect(() => {
+    const handleSettingsUpdate = () => {
+      const updated = posService.getSettings();
+      setPosConfig(updated);
+      setSoundEnabled(updated.sound_effects_enabled);
+    };
+    window.addEventListener('pos_settings_updated', handleSettingsUpdate);
+    return () => window.removeEventListener('pos_settings_updated', handleSettingsUpdate);
+  }, []);
 
   // Time & Session
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -1085,36 +1108,120 @@ export const POSTerminal: React.FC = () => {
               {isDark ? <LuSun size={16} className="text-amber-400" /> : <LuMoon size={16} />}
             </button>
 
-            {/* Active Cashier Avatar & Name */}
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-xs"
-                style={{
-                  backgroundColor: accentColor,
-                  color: contrastText
-                }}
+            {/* Active Cashier Avatar, Name & Profile Dropdown */}
+            <ClickOutside onClick={() => setProfileDropdownOpen(false)} className="relative">
+              <button
+                type="button"
+                onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800 hover:opacity-90 transition cursor-pointer select-none text-left"
+                title="Cashier Profile & POS Settings"
               >
-                {currentCashierName.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="hidden xl:block leading-tight text-left">
-                <span className="block text-xs font-bold text-slate-900 dark:text-white capitalize">
-                  {currentCashierName}
-                </span>
-                {activeShift ? (
-                  <span className="block text-[10px] text-emerald-500 font-semibold">
-                    Shift Active
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-xs shrink-0"
+                  style={{
+                    backgroundColor: accentColor,
+                    color: contrastText
+                  }}
+                >
+                  {displayCashierName.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="hidden xl:block leading-tight text-left">
+                  <span className="block text-xs font-bold text-slate-900 dark:text-white capitalize truncate max-w-[120px]">
+                    {displayCashierName}
                   </span>
-                ) : (
+                  {activeShift ? (
+                    <span className="block text-[10px] text-emerald-500 font-semibold">
+                      Shift Active
+                    </span>
+                  ) : (
+                    <span className="block text-[10px] text-amber-500 font-bold">
+                      🔒 Day Closed
+                    </span>
+                  )}
+                </div>
+                <LuChevronDown
+                  size={14}
+                  className={`text-slate-400 transition-transform duration-200 hidden sm:block ${
+                    profileDropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {/* Profile Dropdown Menu */}
+              {profileDropdownOpen && (
+                <div className="absolute right-0 mt-2.5 w-64 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-2 z-50 animate-fadeIn space-y-1">
+                  {/* User Profile Info Card */}
+                  <div className="px-3 py-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800/80 mb-1">
+                    <p className="text-xs font-black text-slate-900 dark:text-white capitalize truncate" title={displayCashierName}>
+                      {displayCashierName}
+                    </p>
+                    <p className="text-[11px] text-slate-400 font-mono truncate" title={displayCashierEmail}>
+                      {displayCashierEmail}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-400 font-medium">Drawer Status:</span>
+                      {activeShift ? (
+                        <span className="font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                          Shift Active
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileDropdownOpen(false);
+                            handleOpenDrawerModal();
+                          }}
+                          className="font-bold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded cursor-pointer"
+                        >
+                          Open Drawer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Settings Button (Opens In-POS Settings Modal) */}
                   <button
                     type="button"
-                    onClick={handleOpenDrawerModal}
-                    className="block text-[10px] text-amber-500 font-bold hover:underline cursor-pointer"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      setIsPosSettingsModalOpen(true);
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                   >
-                    🔒 Day Closed (Open)
+                    <LuSettings size={15} className="text-primary" />
+                    <span>POS Settings</span>
                   </button>
-                )}
-              </div>
-            </div>
+
+                  {/* Exit to ERP Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      navigate('/');
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    <LuArrowLeft size={15} className="text-slate-500" />
+                    <span>Exit to ERP</span>
+                  </button>
+
+                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
+
+                  {/* Logout Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      logout();
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition cursor-pointer"
+                  >
+                    <LuLogOut size={15} />
+                    <span>Log Out</span>
+                  </button>
+                </div>
+              )}
+            </ClickOutside>
           </div>
         </header>
 
@@ -3047,6 +3154,17 @@ export const POSTerminal: React.FC = () => {
                 <span>Unlock Terminal Session</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL: IN-POS SETTINGS & TERMINAL CONFIGURATION
+         ───────────────────────────────────────────────────────────── */}
+      {isPosSettingsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 sm:p-6 animate-fadeIn">
+          <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 sm:p-7">
+            <POSSettingsTab isModal onClose={() => setIsPosSettingsModalOpen(false)} />
           </div>
         </div>
       )}
