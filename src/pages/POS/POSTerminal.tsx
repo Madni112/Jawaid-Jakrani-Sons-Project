@@ -181,7 +181,11 @@ export const POSTerminal: React.FC = () => {
 
   // Current Ticket / Cart State
   const [cartItems, setCartItems] = useState<PosOrderItem[]>([]);
-  const [ticketNumber, setTicketNumber] = useState<string>(() => posService.getNextOrderNumber());
+  const [ticketNumber, setTicketNumber] = useState<string>(() => {
+    const shift = posService.getActiveShift();
+    if (!shift) return '';
+    return posService.getNextOrderNumber(shift.business_date);
+  });
   const [customerName, setCustomerName] = useState<string>(posConfig.default_customer_name || 'Walk-in Customer');
   const [customerTier, setCustomerTier] = useState<'VIP' | 'Regular' | 'Retail'>('VIP');
   const [fulfillmentType, setFulfillmentType] = useState<string>(posConfig.default_fulfillment || 'In-Store Bag');
@@ -475,7 +479,7 @@ export const POSTerminal: React.FC = () => {
     posService.holdOrder(newHeld);
     setHeldOrders(posService.getHeldOrders());
     setCartItems([]);
-    setTicketNumber(posService.getNextOrderNumber());
+    setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
     playTone('notification');
     toast.success(`Order ${ticketNumber} parked into Held Orders`);
   };
@@ -547,9 +551,10 @@ export const POSTerminal: React.FC = () => {
       setIsReceiptModalOpen(true);
 
       // Refresh Shift & Cart
-      setActiveShift(posService.getActiveShift());
+      const updatedShift = posService.getActiveShift();
+      setActiveShift(updatedShift);
       setCartItems([]);
-      setTicketNumber(posService.getNextOrderNumber());
+      setTicketNumber(updatedShift ? posService.getNextOrderNumber(updatedShift.business_date) : '');
       setDiscountPercent(0);
     } catch (err) {
       console.error('Failed to complete sale:', err);
@@ -571,6 +576,7 @@ export const POSTerminal: React.FC = () => {
         terminalCode: posConfig.terminal_name
       });
       setActiveShift(shift);
+      setTicketNumber(posService.getNextOrderNumber(shift.business_date));
       setIsDrawerModalOpen(false);
       playTone('success');
       toast.success(`Day opened for ${dayOpenDate}! Opening Balance: Rs. ${shift.opening_float.toLocaleString()}`);
@@ -593,6 +599,8 @@ export const POSTerminal: React.FC = () => {
         closingNotes: dayCloseNotes
       });
       setActiveShift(null);
+      setTicketNumber('');
+      setCartItems([]);
       setIsDrawerModalOpen(false);
       playTone('success');
       toast.success(`Day closed! Remaining Petty Cash: Rs. ${(closed.closing_petty_cash || 0).toLocaleString()} saved for next day.`);
@@ -910,7 +918,7 @@ export const POSTerminal: React.FC = () => {
                 if (!requireOpenDrawer()) return;
                 if (cartItems.length > 0 && !window.confirm('Start new fresh sale order? Current items will be reset.')) return;
                 setCartItems([]);
-                setTicketNumber(posService.getNextOrderNumber());
+                setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
                 setIsFulfillmentModalOpen(true);
                 toast.success('New sale order started');
               }}
@@ -1359,33 +1367,74 @@ export const POSTerminal: React.FC = () => {
               <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60 text-xs">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Order:</span>
-                  <span className="font-mono font-black text-slate-800 dark:text-slate-100">
-                    {ticketNumber}
-                  </span>
+                  {activeShift && ticketNumber ? (
+                    <span className="font-mono font-black text-slate-800 dark:text-slate-100">
+                      {ticketNumber}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                      Day Closed (No Order)
+                    </span>
+                  )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsFulfillmentModalOpen(true)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer hover:shadow-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700/80"
-                  title="Click to change order packaging & handover mode"
-                >
-                  {fulfillmentType === 'Delivery' ? (
-                    <LuTruck size={13} className="text-primary" />
-                  ) : fulfillmentType === 'Takeaway' ? (
-                    <LuPackage size={13} className="text-amber-500" />
-                  ) : (
-                    <LuShoppingBag size={13} className="text-emerald-500" />
-                  )}
-                  <span>{fulfillmentType}</span>
-                  <LuChevronDown size={11} className="text-slate-400" />
-                </button>
+                {activeShift ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsFulfillmentModalOpen(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer hover:shadow-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700/80"
+                    title="Click to change order packaging & handover mode"
+                  >
+                    {fulfillmentType === 'Delivery' ? (
+                      <LuTruck size={13} className="text-primary" />
+                    ) : fulfillmentType === 'Takeaway' ? (
+                      <LuPackage size={13} className="text-amber-500" />
+                    ) : (
+                      <LuShoppingBag size={13} className="text-emerald-500" />
+                    )}
+                    <span>{fulfillmentType}</span>
+                    <LuChevronDown size={11} className="text-slate-400" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleOpenDrawerModal}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500 text-white hover:bg-amber-600 transition cursor-pointer"
+                  >
+                    <LuUnlock size={11} />
+                    <span>Open Day</span>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* 2. Scrollable Cart Items */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-              {cartItems.length === 0 ? (
+              {!activeShift ? (
+                <div
+                  onClick={handleOpenDrawerModal}
+                  className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-2xl transition"
+                  title="Click to open the cash drawer and business day session"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
+                    <LuLock size={26} />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Day Session is Closed
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
+                    No business date active. Please open the cash drawer to generate an Order ID and start taking sales.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleOpenDrawerModal}
+                    className="mt-3 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <LuUnlock size={13} />
+                    <span>Open Day Session</span>
+                  </button>
+                </div>
+              ) : cartItems.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
                   <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
                     <LuReceipt size={26} />

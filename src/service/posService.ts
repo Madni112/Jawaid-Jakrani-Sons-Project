@@ -800,11 +800,26 @@ export const posService = {
 
   // ── 3. ORDERS & CHECKOUT ──
   formatDatePrefix(date?: Date | string): string {
-    const d = date ? new Date(date) : new Date();
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `Order-${day}-${month}-${year}`;
+    if (!date) {
+      const shift = this.getActiveShift();
+      if (shift && shift.business_date) {
+        return this.formatDatePrefix(shift.business_date);
+      }
+      const d = new Date();
+      return `Order-${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+    }
+    if (typeof date === 'string') {
+      const isoMatch = date.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (isoMatch) {
+        return `Order-${isoMatch[3].padStart(2, '0')}-${isoMatch[2].padStart(2, '0')}-${isoMatch[1]}`;
+      }
+    }
+    const d = new Date(date);
+    if (isNaN(d.getTime())) {
+      const now = new Date();
+      return `Order-${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+    }
+    return `Order-${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
   },
 
   getNextOrderNumber(date?: Date | string): string {
