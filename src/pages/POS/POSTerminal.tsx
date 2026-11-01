@@ -189,7 +189,7 @@ export const POSTerminal: React.FC = () => {
   });
   const [customerName, setCustomerName] = useState<string>(posConfig.default_customer_name || 'Walk-in Customer');
   const [customerTier, setCustomerTier] = useState<'VIP' | 'Regular' | 'Retail'>('VIP');
-  const [fulfillmentType, setFulfillmentType] = useState<string>(posConfig.default_fulfillment || 'In-Store Bag');
+  const [fulfillmentType, setFulfillmentType] = useState<string>('');
   const [isFulfillmentModalOpen, setIsFulfillmentModalOpen] = useState<boolean>(false);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [taxPercent, setTaxPercent] = useState<number>(posConfig.default_tax_rate || 0);
@@ -282,28 +282,28 @@ export const POSTerminal: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isLocked) return;
 
-      // When fulfillment modal is open, quick-pick 1, 2, 3
+      // When fulfillment modal is open, quick-pick 1, 2, 3 (Keyboard friendly across top row & numpad)
       if (isFulfillmentModalOpen) {
-        if (e.key === '1') {
+        if (e.key === '1' || e.code === 'Digit1' || e.code === 'Numpad1') {
           e.preventDefault();
           setFulfillmentType('In-Store Bag');
           setIsFulfillmentModalOpen(false);
           playTone('success');
-          toast.success('Packaging: In-Store Bag');
+          toast.success('Packaging mode: In-Store Bag');
           return;
-        } else if (e.key === '2') {
+        } else if (e.key === '2' || e.code === 'Digit2' || e.code === 'Numpad2') {
           e.preventDefault();
           setFulfillmentType('Takeaway');
           setIsFulfillmentModalOpen(false);
           playTone('success');
-          toast.success('Packaging: Shop Pickup / Takeaway');
+          toast.success('Packaging mode: Shop Pickup / Takeaway');
           return;
-        } else if (e.key === '3') {
+        } else if (e.key === '3' || e.code === 'Digit3' || e.code === 'Numpad3') {
           e.preventDefault();
           setFulfillmentType('Delivery');
           setIsFulfillmentModalOpen(false);
           playTone('success');
-          toast.success('Packaging: Delivery / Courier');
+          toast.success('Packaging mode: Delivery / Courier');
           return;
         } else if (e.key === 'Escape' || e.key === 'Enter') {
           e.preventDefault();
@@ -399,6 +399,11 @@ export const POSTerminal: React.FC = () => {
       };
       return [...prev, newItem];
     });
+
+    // If packaging & handover status is unselected, prompt cashier with horizontal modal
+    if (!fulfillmentType) {
+      setIsFulfillmentModalOpen(true);
+    }
   };
 
   // Adjust Quantity
@@ -434,6 +439,7 @@ export const POSTerminal: React.FC = () => {
       playTone('delete');
       setCartItems([]);
       setDiscountPercent(0);
+      setFulfillmentType('');
       toast.success('Cart cleared');
     }
   };
@@ -508,6 +514,12 @@ export const POSTerminal: React.FC = () => {
       toast.error('Cart is empty. Add products to ticket first.');
       return;
     }
+    if (!fulfillmentType) {
+      playTone('warning');
+      setIsFulfillmentModalOpen(true);
+      toast.error('Please select packaging & handover mode first');
+      return;
+    }
     setCashTendered(grandTotal);
     setIsPayModalOpen(true);
   };
@@ -529,7 +541,7 @@ export const POSTerminal: React.FC = () => {
         customer_name: customerName,
         customer_tier: customerTier,
         terminal_code: posConfig.terminal_name || 'Terminal 01',
-        fulfillment_type: fulfillmentType,
+        fulfillment_type: fulfillmentType || 'In-Store Bag',
         subtotal,
         tax_percentage: taxPercent,
         tax_amount: taxAmount,
@@ -557,6 +569,7 @@ export const POSTerminal: React.FC = () => {
       setCartItems([]);
       setTicketNumber(updatedShift ? posService.getNextOrderNumber(updatedShift.business_date) : '');
       setDiscountPercent(0);
+      setFulfillmentType('');
     } catch (err) {
       console.error('Failed to complete sale:', err);
       toast.error('Failed to save POS order');
@@ -920,6 +933,7 @@ export const POSTerminal: React.FC = () => {
                 if (cartItems.length > 0 && !window.confirm('Start new fresh sale order? Current items will be reset.')) return;
                 setCartItems([]);
                 setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
+                setFulfillmentType('');
                 setIsFulfillmentModalOpen(true);
                 toast.success('New sale order started');
               }}
@@ -1380,33 +1394,48 @@ export const POSTerminal: React.FC = () => {
                 </div>
 
                 {activeShift ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsFulfillmentModalOpen(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-xs hover:border-primary/60 bg-white dark:bg-[#161D2B] border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 group active:scale-95"
-                    title="Click to change order handover mode"
-                  >
-                    {fulfillmentType === 'Delivery' ? (
-                      <span className="w-5 h-5 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
-                        <LuTruck size={12} />
+                  fulfillmentType ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsFulfillmentModalOpen(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-xs hover:border-primary/60 bg-white dark:bg-[#161D2B] border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 group active:scale-95"
+                      title="Click to change order handover mode"
+                    >
+                      {fulfillmentType === 'Delivery' ? (
+                        <span className="w-5 h-5 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                          <LuTruck size={12} />
+                        </span>
+                      ) : fulfillmentType === 'Takeaway' ? (
+                        <span className="w-5 h-5 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                          <LuPackage size={12} />
+                        </span>
+                      ) : (
+                        <span className="w-5 h-5 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                          <LuShoppingBag size={12} />
+                        </span>
+                      )}
+                      <span className="font-bold text-slate-800 dark:text-slate-100">
+                        {fulfillmentType}
                       </span>
-                    ) : fulfillmentType === 'Takeaway' ? (
-                      <span className="w-5 h-5 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                        <LuPackage size={12} />
+                      <span className="flex items-center gap-0.5 text-[10px] font-bold text-primary dark:text-primary-light bg-primary/10 px-1.5 py-0.5 rounded-md group-hover:bg-primary group-hover:text-white transition-colors ml-0.5">
+                        <LuArrowRightLeft size={9} />
+                        <span>Change</span>
                       </span>
-                    ) : (
-                      <span className="w-5 h-5 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-                        <LuShoppingBag size={12} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsFulfillmentModalOpen(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border border-amber-400 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all duration-150 cursor-pointer shadow-2xs group"
+                      title="Packaging not selected. Click to choose handover mode."
+                    >
+                      <LuShoppingBag size={13} className="text-amber-500 animate-bounce" />
+                      <span>Select Handover</span>
+                      <span className="text-[10px] bg-amber-500 text-white font-extrabold px-1.5 py-0.5 rounded-md group-hover:scale-105 transition-transform">
+                        Unselected
                       </span>
-                    )}
-                    <span className="font-bold text-slate-800 dark:text-slate-100">
-                      {fulfillmentType}
-                    </span>
-                    <span className="flex items-center gap-0.5 text-[10px] font-bold text-primary dark:text-primary-light bg-primary/10 px-1.5 py-0.5 rounded-md group-hover:bg-primary group-hover:text-white transition-colors ml-0.5">
-                      <LuArrowRightLeft size={9} />
-                      <span>Change</span>
-                    </span>
-                  </button>
+                    </button>
+                  )
                 ) : (
                   <button
                     type="button"
@@ -1983,38 +2012,38 @@ export const POSTerminal: React.FC = () => {
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          MODAL: ORDER PACKAGING & HANDOVER MODE
+          MODAL: ORDER PACKAGING & HANDOVER MODE (HORIZONTAL & KEYBOARD FRIENDLY)
          ───────────────────────────────────────────────────────────── */}
       {isFulfillmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+          <div className="w-full max-w-4xl rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                  <LuShoppingBag size={22} />
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <LuShoppingBag size={24} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                    Order Packaging & Handover
+                  <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-2">
+                    Select Packaging & Handover Mode
                   </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Select how this order will be packaged and delivered
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Choose how this order will be handed over to the customer. Press <kbd className="font-mono font-bold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">1</kbd>, <kbd className="font-mono font-bold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">2</kbd>, or <kbd className="font-mono font-bold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">3</kbd> to quick-select.
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsFulfillmentModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
                 title="Close (Esc)"
               >
-                <LuX size={18} />
+                <LuX size={20} />
               </button>
             </div>
 
-            {/* Modal Body: 3 Interactive Option Cards */}
-            <div className="p-4 space-y-3">
+            {/* Modal Body: 3 Interactive Option Cards HORIZONTALLY */}
+            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Option 1: In-Store Bag */}
               <button
                 type="button"
@@ -2022,51 +2051,66 @@ export const POSTerminal: React.FC = () => {
                   setFulfillmentType('In-Store Bag');
                   setIsFulfillmentModalOpen(false);
                   playTone('success');
-                  toast.success('Packaging: In-Store Bag');
+                  toast.success('Packaging mode: In-Store Bag');
                 }}
-                className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-center justify-between cursor-pointer group ${
+                className={`relative text-left p-5 rounded-2xl border-2 transition-all duration-150 flex flex-col justify-between cursor-pointer group hover:scale-[1.02] active:scale-[0.98] ${
                   fulfillmentType === 'In-Store Bag'
-                    ? 'border-emerald-500 bg-emerald-500/10 shadow-xs'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 hover:border-emerald-500/50 hover:bg-emerald-500/5'
+                    ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10 ring-2 ring-emerald-500/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 hover:border-emerald-500/60 hover:bg-emerald-500/5'
                 }`}
               >
-                <div className="flex items-center gap-3.5">
+                {/* Top Row: Hotkey Tag & Active Indicator */}
+                <div className="flex items-center justify-between w-full mb-3">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-mono font-black px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-2xs">
+                    <span className="text-[10px] text-slate-400 font-sans uppercase font-bold tracking-wider">Key</span> [ 1 ]
+                  </span>
                   <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-transform group-hover:scale-110 ${
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                       fulfillmentType === 'In-Store Bag'
-                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
-                        : 'bg-emerald-500/10 text-emerald-500'
+                        ? 'border-emerald-500 bg-emerald-500 text-white scale-110 shadow-xs'
+                        : 'border-slate-300 dark:border-slate-700 group-hover:border-emerald-400'
                     }`}
                   >
-                    <LuShoppingBag size={22} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm text-slate-900 dark:text-white">
-                        In-Store Bag
-                      </span>
-                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        Key [1]
-                      </span>
-                      {fulfillmentType === 'In-Store Bag' && (
-                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <LuCheck size={11} /> Selected
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Handed over immediately in a boutique shopping bag for walk-in customer.
-                    </p>
+                    {fulfillmentType === 'In-Store Bag' && <LuCheck size={14} className="stroke-[3]" />}
                   </div>
                 </div>
-                <div
-                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    fulfillmentType === 'In-Store Bag'
-                      ? 'border-emerald-500 bg-emerald-500 text-white'
-                      : 'border-slate-300 dark:border-slate-700'
-                  }`}
-                >
-                  {fulfillmentType === 'In-Store Bag' && <LuCheck size={12} />}
+
+                {/* Center Icon */}
+                <div className="my-2">
+                  <div
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all duration-200 group-hover:scale-105 ${
+                      fulfillmentType === 'In-Store Bag'
+                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                        : 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
+                    }`}
+                  >
+                    <LuShoppingBag size={28} />
+                  </div>
+                </div>
+
+                {/* Title & Description */}
+                <div className="mt-2">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      In-Store Bag
+                    </h4>
+                    {fulfillmentType === 'In-Store Bag' && (
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Boutique shopping bag handed over immediately to walk-in customer.
+                  </p>
+                </div>
+
+                {/* Bottom Action Hint */}
+                <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs font-bold">
+                  <span className={fulfillmentType === 'In-Store Bag' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 group-hover:text-emerald-500 transition-colors'}>
+                    {fulfillmentType === 'In-Store Bag' ? '✓ Currently Selected' : 'Press 1 or Click'}
+                  </span>
+                  <span className="text-slate-400 group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </button>
 
@@ -2077,51 +2121,66 @@ export const POSTerminal: React.FC = () => {
                   setFulfillmentType('Takeaway');
                   setIsFulfillmentModalOpen(false);
                   playTone('success');
-                  toast.success('Packaging: Shop Pickup / Takeaway');
+                  toast.success('Packaging mode: Shop Pickup / Takeaway');
                 }}
-                className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-center justify-between cursor-pointer group ${
+                className={`relative text-left p-5 rounded-2xl border-2 transition-all duration-150 flex flex-col justify-between cursor-pointer group hover:scale-[1.02] active:scale-[0.98] ${
                   fulfillmentType === 'Takeaway'
-                    ? 'border-amber-500 bg-amber-500/10 shadow-xs'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 hover:border-amber-500/50 hover:bg-amber-500/5'
+                    ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 hover:border-amber-500/60 hover:bg-amber-500/5'
                 }`}
               >
-                <div className="flex items-center gap-3.5">
+                {/* Top Row: Hotkey Tag & Active Indicator */}
+                <div className="flex items-center justify-between w-full mb-3">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-mono font-black px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shadow-2xs">
+                    <span className="text-[10px] text-slate-400 font-sans uppercase font-bold tracking-wider">Key</span> [ 2 ]
+                  </span>
                   <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-transform group-hover:scale-110 ${
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                       fulfillmentType === 'Takeaway'
-                        ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
-                        : 'bg-amber-500/10 text-amber-500'
+                        ? 'border-amber-500 bg-amber-500 text-white scale-110 shadow-xs'
+                        : 'border-slate-300 dark:border-slate-700 group-hover:border-amber-400'
                     }`}
                   >
-                    <LuPackage size={22} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm text-slate-900 dark:text-white">
-                        Shop Pickup / Takeaway
-                      </span>
-                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        Key [2]
-                      </span>
-                      {fulfillmentType === 'Takeaway' && (
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <LuCheck size={11} /> Selected
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Packed parcel or boxed suit reserved for customer pickup or takeaway.
-                    </p>
+                    {fulfillmentType === 'Takeaway' && <LuCheck size={14} className="stroke-[3]" />}
                   </div>
                 </div>
-                <div
-                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    fulfillmentType === 'Takeaway'
-                      ? 'border-amber-500 bg-amber-500 text-white'
-                      : 'border-slate-300 dark:border-slate-700'
-                  }`}
-                >
-                  {fulfillmentType === 'Takeaway' && <LuCheck size={12} />}
+
+                {/* Center Icon */}
+                <div className="my-2">
+                  <div
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all duration-200 group-hover:scale-105 ${
+                      fulfillmentType === 'Takeaway'
+                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+                        : 'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white'
+                    }`}
+                  >
+                    <LuPackage size={28} />
+                  </div>
+                </div>
+
+                {/* Title & Description */}
+                <div className="mt-2">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      Takeaway / Pickup
+                    </h4>
+                    {fulfillmentType === 'Takeaway' && (
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Packed parcel or boxed suit reserved for customer pickup or takeaway.
+                  </p>
+                </div>
+
+                {/* Bottom Action Hint */}
+                <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs font-bold">
+                  <span className={fulfillmentType === 'Takeaway' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 group-hover:text-amber-500 transition-colors'}>
+                    {fulfillmentType === 'Takeaway' ? '✓ Currently Selected' : 'Press 2 or Click'}
+                  </span>
+                  <span className="text-slate-400 group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </button>
 
@@ -2132,69 +2191,84 @@ export const POSTerminal: React.FC = () => {
                   setFulfillmentType('Delivery');
                   setIsFulfillmentModalOpen(false);
                   playTone('success');
-                  toast.success('Packaging: Delivery / Courier');
+                  toast.success('Packaging mode: Delivery / Courier');
                 }}
-                className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-center justify-between cursor-pointer group ${
+                className={`relative text-left p-5 rounded-2xl border-2 transition-all duration-150 flex flex-col justify-between cursor-pointer group hover:scale-[1.02] active:scale-[0.98] ${
                   fulfillmentType === 'Delivery'
-                    ? 'border-primary bg-primary/10 shadow-xs'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 hover:border-primary/50 hover:bg-primary/5'
+                    ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10 ring-2 ring-primary/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 hover:border-primary/60 hover:bg-primary/5'
                 }`}
               >
-                <div className="flex items-center gap-3.5">
+                {/* Top Row: Hotkey Tag & Active Indicator */}
+                <div className="flex items-center justify-between w-full mb-3">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-mono font-black px-2.5 py-1 rounded-lg bg-primary/15 text-primary dark:text-primary-light border border-primary/30 shadow-2xs">
+                    <span className="text-[10px] text-slate-400 font-sans uppercase font-bold tracking-wider">Key</span> [ 3 ]
+                  </span>
                   <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-transform group-hover:scale-110 ${
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                       fulfillmentType === 'Delivery'
-                        ? 'bg-primary text-white shadow-md shadow-primary/20'
-                        : 'bg-primary/10 text-primary'
+                        ? 'border-primary bg-primary text-white scale-110 shadow-xs'
+                        : 'border-slate-300 dark:border-slate-700 group-hover:border-primary/60'
                     }`}
                   >
-                    <LuTruck size={22} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm text-slate-900 dark:text-white">
-                        Delivery / Courier
-                      </span>
-                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        Key [3]
-                      </span>
-                      {fulfillmentType === 'Delivery' && (
-                        <span className="text-[10px] font-bold text-primary dark:text-primary-light bg-primary/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <LuCheck size={11} /> Selected
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Dispatched by rider, bike delivery, or courier service with tracking details.
-                    </p>
+                    {fulfillmentType === 'Delivery' && <LuCheck size={14} className="stroke-[3]" />}
                   </div>
                 </div>
-                <div
-                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    fulfillmentType === 'Delivery'
-                      ? 'border-primary bg-primary text-white'
-                      : 'border-slate-300 dark:border-slate-700'
-                  }`}
-                >
-                  {fulfillmentType === 'Delivery' && <LuCheck size={12} />}
+
+                {/* Center Icon */}
+                <div className="my-2">
+                  <div
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all duration-200 group-hover:scale-105 ${
+                      fulfillmentType === 'Delivery'
+                        ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                        : 'bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white'
+                    }`}
+                  >
+                    <LuTruck size={28} />
+                  </div>
+                </div>
+
+                {/* Title & Description */}
+                <div className="mt-2">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      Delivery / Courier
+                    </h4>
+                    {fulfillmentType === 'Delivery' && (
+                      <span className="text-[10px] font-bold text-primary dark:text-primary-light bg-primary/20 px-2 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Dispatched by rider, bike delivery, or courier service with tracking details.
+                  </p>
+                </div>
+
+                {/* Bottom Action Hint */}
+                <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs font-bold">
+                  <span className={fulfillmentType === 'Delivery' ? 'text-primary dark:text-primary-light' : 'text-slate-400 group-hover:text-primary transition-colors'}>
+                    {fulfillmentType === 'Delivery' ? '✓ Currently Selected' : 'Press 3 or Click'}
+                  </span>
+                  <span className="text-slate-400 group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </button>
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3 bg-slate-50 dark:bg-[#0c1017] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <span className="font-mono bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded font-bold">1</span>
-                <span className="font-mono bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded font-bold">2</span>
-                <span className="font-mono bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded font-bold">3</span>
-                <span>or click card to select</span>
-              </span>
+            <div className="p-4 bg-slate-50 dark:bg-[#0c1017] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                <span className="font-bold text-slate-900 dark:text-white">Keyboard Hotkeys:</span>
+                <span className="font-mono bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-bold text-emerald-600 dark:text-emerald-400">[1] Bag</span>
+                <span className="font-mono bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-bold text-amber-600 dark:text-amber-400">[2] Takeaway</span>
+                <span className="font-mono bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-bold text-primary">[3] Delivery</span>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsFulfillmentModalOpen(false)}
                 className="px-4 py-1.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
               >
-                Done
+                Close (Esc)
               </button>
             </div>
           </div>
