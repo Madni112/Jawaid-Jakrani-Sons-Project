@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { useAuth } from '../../../Context/Auth';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -596,16 +596,20 @@ const BulkProductUpload = () => {
           return;
         }
 
-        // 1. Fetch current database catalog, categories, brands, and prints for comparison
+        // 1. Fetch current database catalog, categories, brands, and prints for comparison (all pages, no 1000 limit)
         const [productsRes, catsRes, brandsRes, printsRes] = await Promise.all([
-          supabase
-            .from('products')
-            .select('id, product_name, item_sr_no, purchase_price, retail_price, category'),
-          tenantId
-            ? supabase.from('inventory_categories').select('*').eq('tenant_id', tenantId)
-            : supabase.from('inventory_categories').select('*'),
-          supabase.from('inventory_brands').select('*'),
-          supabase.from('inventory_prints').select('*'),
+          fetchAllPages(
+            supabase
+              .from('products')
+              .select('id, product_name, item_sr_no, purchase_price, retail_price, category')
+          ),
+          fetchAllPages(
+            tenantId
+              ? supabase.from('inventory_categories').select('*').eq('tenant_id', tenantId)
+              : supabase.from('inventory_categories').select('*')
+          ),
+          fetchAllPages(supabase.from('inventory_brands').select('*')),
+          fetchAllPages(supabase.from('inventory_prints').select('*')),
         ]);
 
         if (productsRes.error) throw productsRes.error;
@@ -1031,7 +1035,7 @@ const BulkProductUpload = () => {
     // 1. Fetch latest categories
     let catQuery = supabase.from('inventory_categories').select('*');
     if (tenantId) catQuery = catQuery.eq('tenant_id', tenantId);
-    const { data: latestCats } = await catQuery;
+    const { data: latestCats } = await fetchAllPages(catQuery);
     const catList: any[] = latestCats ? [...latestCats] : [];
 
     // In-memory maps for hierarchy tracking
@@ -1061,7 +1065,7 @@ const BulkProductUpload = () => {
     });
 
     // 2. Fetch latest brands
-    const { data: latestBrands } = await supabase.from('inventory_brands').select('*');
+    const { data: latestBrands } = await fetchAllPages(supabase.from('inventory_brands').select('*'));
     const brandMap = new Map<string, any>();
     (latestBrands || []).forEach(b => {
       brandMap.set(String(b.name || '').trim().toLowerCase(), b);
@@ -1070,7 +1074,7 @@ const BulkProductUpload = () => {
     // 3. Fetch latest prints
     const printMap = new Map<string, any>();
     try {
-      const { data: latestPrints } = await supabase.from('inventory_prints').select('*');
+      const { data: latestPrints } = await fetchAllPages(supabase.from('inventory_prints').select('*'));
       (latestPrints || []).forEach(p => {
         const lower = String(p.name || '').trim().toLowerCase();
         if (p.category_id) {
@@ -1216,13 +1220,13 @@ const BulkProductUpload = () => {
     try {
       let finalCatQuery = supabase.from('inventory_categories').select('*');
       if (tenantId) finalCatQuery = finalCatQuery.eq('tenant_id', tenantId);
-      const { data: refreshedCats } = await finalCatQuery;
+      const { data: refreshedCats } = await fetchAllPages(finalCatQuery);
       if (refreshedCats) setExistingCategories(refreshedCats);
 
-      const { data: refreshedBrands } = await supabase.from('inventory_brands').select('*');
+      const { data: refreshedBrands } = await fetchAllPages(supabase.from('inventory_brands').select('*'));
       if (refreshedBrands) setExistingBrands(refreshedBrands);
 
-      const { data: refreshedPrints } = await supabase.from('inventory_prints').select('*');
+      const { data: refreshedPrints } = await fetchAllPages(supabase.from('inventory_prints').select('*'));
       if (refreshedPrints) setExistingPrints(refreshedPrints);
     } catch (e) {}
 
