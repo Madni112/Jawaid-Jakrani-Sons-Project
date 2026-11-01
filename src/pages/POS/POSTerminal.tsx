@@ -1248,8 +1248,8 @@ export const POSTerminal: React.FC = () => {
             {/* 1. Ticket Header */}
             <div className="p-3.5 border-b border-slate-200 dark:border-slate-800/80 space-y-2.5">
               {/* Customer Selector */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <LuUser size={15} />
                   </div>
@@ -1258,22 +1258,8 @@ export const POSTerminal: React.FC = () => {
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="Customer Name"
-                    className="text-xs font-bold text-slate-900 dark:text-white bg-transparent border-none focus:outline-none truncate w-32"
+                    className="text-xs font-bold text-slate-900 dark:text-white bg-transparent border-none focus:outline-none truncate flex-1"
                   />
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCustomerTier(customerTier === 'VIP' ? 'Regular' : 'VIP')}
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase transition cursor-pointer ${
-                      customerTier === 'VIP'
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                    }`}
-                  >
-                    ★ {customerTier}
-                  </button>
                 </div>
               </div>
 
