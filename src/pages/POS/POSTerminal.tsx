@@ -155,15 +155,25 @@ export const POSTerminal: React.FC = () => {
     return () => window.removeEventListener('pos_catalog_updated', handleCatalogUpdate);
   }, []);
 
+  // Helper to accurately match a product to a category hierarchy
+  const isProductInCategory = (p: PosProductItem, cat: PosCategoryItem) => {
+    const leafMatch = p.category.toLowerCase() === cat.name.toLowerCase();
+    if (!leafMatch) return false;
+    if (cat.parent_name && p.parent_category) {
+      return p.parent_category.toLowerCase() === cat.parent_name.toLowerCase();
+    }
+    return true;
+  };
+
   // Filtered Products (with Date-Wise Sorting)
   const filteredProducts = useMemo(() => {
+    const activeCat = categories.find((c) => c.id === selectedCategory || c.name === selectedCategory);
+
     const filtered = products.filter((p) => {
       if (p.show_in_pos === false) return false;
       const matchCat =
         selectedCategory === 'All' ||
-        p.category.toLowerCase() === selectedCategory.toLowerCase() ||
-        (p.sub_category && p.sub_category.toLowerCase() === selectedCategory.toLowerCase()) ||
-        (p.parent_category && p.parent_category.toLowerCase() === selectedCategory.toLowerCase());
+        (activeCat ? isProductInCategory(p, activeCat) : p.category.toLowerCase() === selectedCategory.toLowerCase());
       const query = searchQuery.trim().toLowerCase();
       const matchSearch =
         !query ||
@@ -178,7 +188,7 @@ export const POSTerminal: React.FC = () => {
       const timeB = b.created_at ? new Date(b.created_at).getTime() : Number(b.id) || 0;
       return sortByDate === 'newest' ? timeB - timeA : timeA - timeB;
     });
-  }, [products, selectedCategory, searchQuery, sortByDate]);
+  }, [products, categories, selectedCategory, searchQuery, sortByDate]);
 
   // Current Ticket / Cart State
   const [cartItems, setCartItems] = useState<PosOrderItem[]>([]);
@@ -1172,13 +1182,9 @@ export const POSTerminal: React.FC = () => {
                 .filter((c) => c.show_in_pos !== false)
                 .map((cat) => {
                   const count = products.filter(
-                    (p) =>
-                      p.show_in_pos !== false &&
-                      (p.category.toLowerCase() === cat.name.toLowerCase() ||
-                        (cat.sub_name && p.sub_category?.toLowerCase() === cat.sub_name.toLowerCase()) ||
-                        (p.parent_category && p.parent_category.toLowerCase() === cat.name.toLowerCase()))
+                    (p) => p.show_in_pos !== false && isProductInCategory(p, cat)
                   ).length;
-                  const isSelected = selectedCategory.toLowerCase() === cat.name.toLowerCase();
+                  const isSelected = selectedCategory === cat.id || selectedCategory.toLowerCase() === cat.name.toLowerCase();
                   return { cat, count, isSelected };
                 })
                 .filter(({ count, isSelected }) => count > 0 || isSelected)
@@ -1194,7 +1200,7 @@ export const POSTerminal: React.FC = () => {
                     <button
                       key={cat.id}
                       type="button"
-                      onClick={() => setSelectedCategory(cat.name)}
+                      onClick={() => setSelectedCategory(cat.id)}
                       className={`px-3.5 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex flex-col justify-center min-w-[130px] max-w-[240px] border ${
                         isSelected
                           ? 'shadow-xs border-transparent scale-[1.02]'
@@ -1426,15 +1432,15 @@ export const POSTerminal: React.FC = () => {
               </div>
 
               {/* Order Meta: Order Number & Fulfillment Handover Pill */}
-              <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Order:</span>
+              <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/60 text-xs">
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Order:</span>
                   {activeShift && ticketNumber ? (
-                    <span className="font-mono font-black text-slate-800 dark:text-slate-100">
+                    <span className="font-mono font-black text-[11px] text-slate-800 dark:text-slate-100 whitespace-nowrap">
                       {ticketNumber}
                     </span>
                   ) : (
-                    <span className="font-mono text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                    <span className="font-mono text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 whitespace-nowrap">
                       Day Closed (No Order)
                     </span>
                   )}
