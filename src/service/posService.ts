@@ -799,6 +799,36 @@ export const posService = {
   },
 
   // ── 3. ORDERS & CHECKOUT ──
+  formatDatePrefix(date?: Date | string): string {
+    const d = date ? new Date(date) : new Date();
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `Order-${day}-${month}-${year}`;
+  },
+
+  getNextOrderNumber(date?: Date | string): string {
+    const prefix = this.formatDatePrefix(date); // e.g. "Order-01-11-2026"
+    const orders = this.getAllOrders();
+
+    const matchingSeqs: number[] = [];
+    orders.forEach((o) => {
+      const num = String(o.order_number || '');
+      if (num.startsWith(prefix)) {
+        const parts = num.split('-');
+        const lastPart = parts[parts.length - 1];
+        const seq = parseInt(lastPart, 10);
+        if (!isNaN(seq)) {
+          matchingSeqs.push(seq);
+        }
+      }
+    });
+
+    const nextSeq = matchingSeqs.length > 0 ? Math.max(...matchingSeqs) + 1 : 1;
+    const formattedSeq = String(nextSeq).padStart(3, '0');
+    return `${prefix}-${formattedSeq}`;
+  },
+
   getAllOrders(): PosOrder[] {
     if (typeof window === 'undefined') return [];
     try {
@@ -813,9 +843,9 @@ export const posService = {
     }
   },
 
-  async createOrder(orderPayload: Omit<PosOrder, 'id' | 'order_number' | 'created_at'>): Promise<PosOrder> {
+  async createOrder(orderPayload: Omit<PosOrder, 'id' | 'order_number' | 'created_at'> & { order_number?: string }): Promise<PosOrder> {
     const orders = this.getAllOrders();
-    const nextTicketNum = `#RT-${1080 + orders.length + 1}`;
+    const nextTicketNum = orderPayload.order_number || this.getNextOrderNumber();
     const id = `order-${Date.now()}`;
     const now = new Date().toISOString();
 

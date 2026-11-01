@@ -181,7 +181,7 @@ export const POSTerminal: React.FC = () => {
 
   // Current Ticket / Cart State
   const [cartItems, setCartItems] = useState<PosOrderItem[]>([]);
-  const [ticketNumber, setTicketNumber] = useState<string>(() => `#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [ticketNumber, setTicketNumber] = useState<string>(() => posService.getNextOrderNumber());
   const [customerName, setCustomerName] = useState<string>(posConfig.default_customer_name || 'Walk-in Customer');
   const [customerTier, setCustomerTier] = useState<'VIP' | 'Regular' | 'Retail'>('VIP');
   const [fulfillmentType, setFulfillmentType] = useState<string>(posConfig.default_fulfillment || 'In-Store Bag');
@@ -475,9 +475,9 @@ export const POSTerminal: React.FC = () => {
     posService.holdOrder(newHeld);
     setHeldOrders(posService.getHeldOrders());
     setCartItems([]);
-    setTicketNumber(`#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+    setTicketNumber(posService.getNextOrderNumber());
     playTone('notification');
-    toast.success(`Ticket ${ticketNumber} parked into Held Orders`);
+    toast.success(`Order ${ticketNumber} parked into Held Orders`);
   };
 
   // Resume Held Order
@@ -519,6 +519,7 @@ export const POSTerminal: React.FC = () => {
       setIsProcessingSale(true);
       const orderPayload: Omit<PosOrder, 'id' | 'order_number' | 'created_at'> = {
         shift_id: activeShift?.id,
+        order_number: ticketNumber,
         cashier_name: userEmail?.split('@')[0] || 'Cashier',
         customer_name: customerName,
         customer_tier: customerTier,
@@ -548,7 +549,7 @@ export const POSTerminal: React.FC = () => {
       // Refresh Shift & Cart
       setActiveShift(posService.getActiveShift());
       setCartItems([]);
-      setTicketNumber(`#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+      setTicketNumber(posService.getNextOrderNumber());
       setDiscountPercent(0);
     } catch (err) {
       console.error('Failed to complete sale:', err);
@@ -909,7 +910,7 @@ export const POSTerminal: React.FC = () => {
                 if (!requireOpenDrawer()) return;
                 if (cartItems.length > 0 && !window.confirm('Start new fresh sale order? Current items will be reset.')) return;
                 setCartItems([]);
-                setTicketNumber(`#ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+                setTicketNumber(posService.getNextOrderNumber());
                 setIsFulfillmentModalOpen(true);
                 toast.success('New sale order started');
               }}
