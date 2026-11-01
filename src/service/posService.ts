@@ -150,6 +150,13 @@ interface PosProductMeta {
   barcode_locked?: boolean;
 }
 
+export interface PosCategoryMeta {
+  image_url?: string;
+  show_in_pos?: boolean;
+}
+
+const STORAGE_CATEGORY_META = 'uj_pos_category_meta_v1';
+
 const getStoredProductMeta = (): Record<string, PosProductMeta> => {
   if (typeof window === 'undefined') return {};
   try {
@@ -163,6 +170,22 @@ const getStoredProductMeta = (): Record<string, PosProductMeta> => {
 const saveStoredProductMeta = (metaMap: Record<string, PosProductMeta>) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_PRODUCT_META, JSON.stringify(metaMap));
+  }
+};
+
+const getStoredCategoryMeta = (): Record<string, PosCategoryMeta> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(STORAGE_CATEGORY_META);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveStoredCategoryMeta = (metaMap: Record<string, PosCategoryMeta>) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_CATEGORY_META, JSON.stringify(metaMap));
   }
 };
 
@@ -979,6 +1002,8 @@ export const posService = {
   },
 
   async getCategories(): Promise<PosCategoryItem[]> {
+    const catMetaMap = getStoredCategoryMeta();
+
     // 1. Try reading from inventory_categories in Supabase
     try {
       const { data: dbCats, error } = await supabase
@@ -1015,15 +1040,36 @@ export const posService = {
             subName = '';
           }
 
+          let cloudImg: string | undefined = c.image_url;
+          let cloudShow: boolean = c.show_in_pos !== false;
+
+          // Parse cloud metadata tag embedded in description if available
+          if (c.description && typeof c.description === 'string') {
+            const match = c.description.match(/<!--pos:(.*?)-->/);
+            if (match && match[1]) {
+              try {
+                const parsed = JSON.parse(match[1]);
+                if (parsed.image_url) cloudImg = parsed.image_url;
+                if (typeof parsed.show_in_pos === 'boolean') cloudShow = parsed.show_in_pos;
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+
+          const localMeta = catMetaMap[String(c.id)] || catMetaMap[c.name] || {};
+          const finalImg = localMeta.image_url !== undefined ? localMeta.image_url : cloudImg;
+          const finalShow = localMeta.show_in_pos !== undefined ? localMeta.show_in_pos : cloudShow;
+
           return {
             id: String(c.id),
             name: c.name || c.category_name || 'Category',
             parent_name: parentName,
             sub_name: subName,
             full_path: [parentName, subName, c.name].filter(Boolean).join(' › '),
-            image_url: c.image_url,
+            image_url: finalImg,
             icon_name: c.icon_name,
-            show_in_pos: c.show_in_pos !== false
+            show_in_pos: finalShow
           };
         });
 
@@ -1053,13 +1099,16 @@ export const posService = {
       const catName = p.category || 'General';
       const key = catName.toLowerCase();
       if (!seenCat.has(key)) {
+        const catId = `cat-${idx + 1}`;
+        const localMeta = catMetaMap[catId] || catMetaMap[catName] || {};
         seenCat.set(key, {
-          id: `cat-${idx + 1}`,
+          id: catId,
           name: catName,
           parent_name: p.parent_category,
           sub_name: p.sub_category,
           full_path: [p.parent_category, p.sub_category, catName].filter(Boolean).join(' › '),
-          show_in_pos: true
+          image_url: localMeta.image_url,
+          show_in_pos: localMeta.show_in_pos !== false
         });
       }
     });
@@ -1075,16 +1124,62 @@ export const posService = {
   },
 
   async updateCategoryVisibility(categoryId: string, show: boolean) {
+    // 1. Immediately persist to localStorage
+    const catMetaMap = getStoredCategoryMeta();
+    catMetaMap[categoryId] = {
+      ...(catMetaMap[categoryId] || {}),
+      show_in_pos: show
+    };
+    saveStoredCategoryMeta(catMetaMap);
+
+    // 2. Sync to Supabase
     try {
-      await supabase.from('inventory_categories').update({ show_in_pos: show }).eq('id', categoryId);
+      const { error: colErr } = await supabase.from('inventory_categories').update({ show_in_pos: show }).eq('id', categoryId);
+      if (colErr && (colErr.code === 'PGRST204' || colErr.message?.includes('show_in_pos'))) {
+        // Embed in description tag
+        const { data: currentCat } = await supabase.from('inventory_categories').select('description').eq('id', categoryId).single();
+        if (currentCat) {
+          const rawDesc = currentCat.description || '';
+          const cleanDesc = rawDesc.replace(/\s*<!--pos:.*?-->/g, '').trim();
+          const metaObj = {
+            image_url: catMetaMap[categoryId]?.image_url,
+            show_in_pos: show
+          };
+          const newDesc = cleanDesc ? `${cleanDesc} <!--pos:${JSON.stringify(metaObj)}-->` : `<!--pos:${JSON.stringify(metaObj)}-->`;
+          await supabase.from('inventory_categories').update({ description: newDesc }).eq('id', categoryId);
+        }
+      }
     } catch (e) {
-      console.warn('Could not update category in DB:', e);
+      console.warn('Could not update category visibility in DB:', e);
     }
   },
 
   async updateCategoryImage(categoryId: string, imageUrl: string) {
+    // 1. Immediately persist to localStorage
+    const catMetaMap = getStoredCategoryMeta();
+    catMetaMap[categoryId] = {
+      ...(catMetaMap[categoryId] || { show_in_pos: true }),
+      image_url: imageUrl
+    };
+    saveStoredCategoryMeta(catMetaMap);
+
+    // 2. Sync to Supabase
     try {
-      await supabase.from('inventory_categories').update({ image_url: imageUrl }).eq('id', categoryId);
+      const { error: colErr } = await supabase.from('inventory_categories').update({ image_url: imageUrl }).eq('id', categoryId);
+      if (colErr && (colErr.code === 'PGRST204' || colErr.message?.includes('image_url'))) {
+        // Embed in description tag
+        const { data: currentCat } = await supabase.from('inventory_categories').select('description').eq('id', categoryId).single();
+        if (currentCat) {
+          const rawDesc = currentCat.description || '';
+          const cleanDesc = rawDesc.replace(/\s*<!--pos:.*?-->/g, '').trim();
+          const metaObj = {
+            image_url: imageUrl,
+            show_in_pos: catMetaMap[categoryId]?.show_in_pos ?? true
+          };
+          const newDesc = cleanDesc ? `${cleanDesc} <!--pos:${JSON.stringify(metaObj)}-->` : `<!--pos:${JSON.stringify(metaObj)}-->`;
+          await supabase.from('inventory_categories').update({ description: newDesc }).eq('id', categoryId);
+        }
+      }
     } catch (e) {
       console.warn('Could not update category image in DB:', e);
     }

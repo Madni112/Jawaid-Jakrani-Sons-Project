@@ -42,6 +42,56 @@ interface POSCatalogProps {
   onBack?: () => void;
 }
 
+// Helper to auto-compress and resize uploaded images for fast POS loading and quota safety
+const compressImageFile = (
+  file: File,
+  maxWidth = 800,
+  maxHeight = 600,
+  quality = 0.75
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onerror = () => {
+        resolve(event.target?.result as string);
+      };
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(event.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl);
+        } catch {
+          resolve(event.target?.result as string);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const navigate = useNavigate();
   const { userEmail } = useAuth();
@@ -110,7 +160,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
 
   // Global Ctrl + V listener when either modal is active
   useEffect(() => {
-    const handleGlobalPaste = (e: ClipboardEvent) => {
+    const handleGlobalPaste = async (e: ClipboardEvent) => {
       // Only handle if editingImageItem or isAddModalOpen is active
       if (!editingImageItem && !isAddModalOpen) return;
 
@@ -123,23 +173,22 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
           const file = item.getAsFile();
           if (file) {
             e.preventDefault();
-            if (file.size > 5 * 1024 * 1024) {
-              toast.error('Image size must be under 5MB');
+            if (file.size > 10 * 1024 * 1024) {
+              toast.error('Image size must be under 10MB');
               return;
             }
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              if (typeof event.target?.result === 'string') {
-                if (editingImageItem) {
-                  setImageUrlInput(event.target.result);
-                  toast.success('Image pasted from clipboard (Ctrl + V)!');
-                } else if (isAddModalOpen) {
-                  setNewImageUrl(event.target.result);
-                  toast.success('Image pasted from clipboard (Ctrl + V)!');
-                }
+            try {
+              const compressed = await compressImageFile(file);
+              if (editingImageItem) {
+                setImageUrlInput(compressed);
+                toast.success('Image pasted from clipboard (Ctrl + V)!');
+              } else if (isAddModalOpen) {
+                setNewImageUrl(compressed);
+                toast.success('Image pasted from clipboard (Ctrl + V)!');
               }
-            };
-            reader.readAsDataURL(file);
+            } catch {
+              toast.error('Could not process pasted image');
+            }
             return;
           }
         }
@@ -161,24 +210,23 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     e.stopPropagation();
     setIsDraggingEdit(false);
   };
-  const handleEditDrop = (e: React.DragEvent) => {
+  const handleEditDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingEdit(false);
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('image/')) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size must be under 5MB');
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Image size must be under 10MB');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (typeof event.target?.result === 'string') {
-          setImageUrlInput(event.target.result);
-          toast.success('Image dropped successfully!');
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file);
+        setImageUrlInput(compressed);
+        toast.success('Image dropped successfully!');
+      } catch {
+        toast.error('Could not process image');
+      }
     }
   };
 
@@ -193,24 +241,23 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     e.stopPropagation();
     setIsDraggingAdd(false);
   };
-  const handleAddDrop = (e: React.DragEvent) => {
+  const handleAddDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingAdd(false);
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('image/')) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size must be under 5MB');
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Image size must be under 10MB');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (typeof event.target?.result === 'string') {
-          setNewImageUrl(event.target.result);
-          toast.success('Image dropped successfully!');
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file);
+        setNewImageUrl(compressed);
+        toast.success('Image dropped successfully!');
+      } catch {
+        toast.error('Could not process image');
+      }
     }
   };
 
@@ -353,20 +400,19 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     }
   };
 
-  const handleAddModalFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddModalFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image size must be under 2MB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size must be under 10MB');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (typeof event.target?.result === 'string') {
-        setNewImageUrl(event.target.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageFile(file);
+      setNewImageUrl(compressed);
+    } catch {
+      toast.error('Could not process image');
+    }
   };
 
 
@@ -531,18 +577,19 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const handleSaveImage = async () => {
     if (!editingImageItem) return;
 
+    const trimmedUrl = imageUrlInput.trim();
     if (editingImageItem.type === 'product') {
       setProducts((prev) =>
-        prev.map((p) => (p.id === editingImageItem.id ? { ...p, image_url: imageUrlInput } : p))
+        prev.map((p) => (p.id === editingImageItem.id ? { ...p, image_url: trimmedUrl } : p))
       );
-      await posService.updateProductImage(editingImageItem.id, imageUrlInput);
+      await posService.updateProductImage(editingImageItem.id, trimmedUrl);
       toast.success('Product image updated');
     } else {
       setCategories((prev) =>
-        prev.map((c) => (c.id === editingImageItem.id ? { ...c, image_url: imageUrlInput } : c))
+        prev.map((c) => (c.id === editingImageItem.id ? { ...c, image_url: trimmedUrl } : c))
       );
-      await posService.updateCategoryImage(editingImageItem.id, imageUrlInput);
-      toast.success('Category image updated');
+      await posService.updateCategoryImage(editingImageItem.id, trimmedUrl);
+      toast.success('Category cover image updated');
     }
 
     setEditingImageItem(null);
@@ -550,23 +597,22 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     window.dispatchEvent(new Event('pos_catalog_updated'));
   };
 
-  // Handle Local File Upload (Base64 data URL)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle Local File Upload (Auto-compressed)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image size must be under 2MB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size must be under 10MB');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (typeof event.target?.result === 'string') {
-        setImageUrlInput(event.target.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageFile(file);
+      setImageUrlInput(compressed);
+    } catch {
+      toast.error('Could not process image');
+    }
   };
 
   return (
