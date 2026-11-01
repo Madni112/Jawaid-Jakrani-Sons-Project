@@ -37,7 +37,8 @@ import {
   LuArrowUpRight,
   LuHelpCircle,
   LuSparkles,
-  LuCalendar
+  LuCalendar,
+  LuCheckCircle2
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import { IoBarcodeOutline } from 'react-icons/io5';
