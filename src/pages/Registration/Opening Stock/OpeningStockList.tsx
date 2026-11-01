@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { useAuth } from '../../../Context/Auth';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
@@ -26,7 +26,7 @@ const OpeningStockList = () => {
     try {
       const [stocksRes, prodRes] = await Promise.all([
         supabase.from('opening_stocks').select('*').order('created_at', { ascending: false }),
-        supabase.from('products').select('id, product_name, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, category'),
+        fetchAllPages(supabase.from('products').select('id, product_name, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, category')),
       ]);
 
       if (stocksRes.error) throw stocksRes.error;

@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'react-hot-toast';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { useAuth } from '../../../Context/Auth';
 import Spinner from '../../../ui/Spinner';
 import { FiTrash2 } from 'react-icons/fi';
@@ -62,7 +62,7 @@ const AddGRN = () => {
         setMetadataLoading(true);
         const [venRes, prodRes, locRes, grnCountRes] = await Promise.all([
           supabase.from('vendors').select('vendor_name').order('vendor_name'),
-          supabase.from('products').select('id, product_name, uom, item_sr_no, category, pieces_per_box, pcs_per_box, pieces_per_packing, product_description').order('product_name'),
+          fetchAllPages(supabase.from('products').select('id, product_name, uom, item_sr_no, category, pieces_per_box, pcs_per_box, pieces_per_packing, product_description').order('product_name')),
           supabase.from('inventory_locations').select('name, location_type').order('name'),
           supabase.from('grn_receipts').select('*', { count: 'exact', head: true })
         ]);

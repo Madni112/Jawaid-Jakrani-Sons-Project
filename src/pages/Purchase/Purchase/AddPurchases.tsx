@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -126,7 +126,7 @@ const AddPurchases = () => {
         })).sort((a: any, b: any) => a.vendor_name.localeCompare(b.vendor_name));
 
         const { data: locData } = await supabase.from('inventory_locations').select('id, name').order('name', { ascending: true });
-        const { data: prodData } = await supabase.from('products').select('id, product_name, purchase_price, uom, item_sr_no, pieces_per_box, pcs_per_box, category, scenario_name, product_description');
+        const { data: prodData } = await fetchAllPages(supabase.from('products').select('id, product_name, purchase_price, uom, item_sr_no, pieces_per_box, pcs_per_box, category, scenario_name, product_description'));
         const { data: rawBankData } = await supabase.from('banks').select('*');
         const bankData = (rawBankData || []).map((b: any) => ({
           ...b,

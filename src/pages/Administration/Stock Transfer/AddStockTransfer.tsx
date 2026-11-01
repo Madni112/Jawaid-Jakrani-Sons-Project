@@ -3,7 +3,7 @@ import { getAvailableStock, fetchStockDataset } from '../../../utils/stockCalcul
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -57,7 +57,7 @@ const AddStockTransfer = () => {
       try {
         setMetadataLoading(true);
         const { data: locData } = await supabase.from('inventory_locations').select('id, name').order('name', { ascending: true });
-        const { data: prodData } = await supabase.from('products').select('id, product_name, item_sr_no, current_stock, uom');
+        const { data: prodData } = await fetchAllPages(supabase.from('products').select('id, product_name, item_sr_no, current_stock, uom'));
 
         if (locData) setLocations(locData);
         if (prodData) setProductList(prodData);

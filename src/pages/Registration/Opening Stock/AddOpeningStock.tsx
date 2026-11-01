@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { useAuth } from '../../../Context/Auth';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
@@ -44,7 +44,7 @@ const AddOpeningStock = () => {
                 const { data: locData } = await supabase.from('inventory_locations').select('*');
                 if (locData) setLocations(locData);
 
-                const { data: prodData } = await supabase.from('products').select('id, product_name, purchase_price, retail_price, mrp, item_sr_no, uom, current_stock, category, sub_sub_category, product_description, pieces_per_box, pcs_per_box, pieces_per_packing');
+                const { data: prodData } = await fetchAllPages(supabase.from('products').select('id, product_name, purchase_price, retail_price, mrp, item_sr_no, uom, current_stock, category, sub_sub_category, product_description, pieces_per_box, pcs_per_box, pieces_per_packing'));
                 if (prodData) setProducts(prodData);
             } catch (err: any) {
                 console.error('Metadata fetch error:', err.message);

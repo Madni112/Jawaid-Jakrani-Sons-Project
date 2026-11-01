@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -177,7 +177,7 @@ const AddPurchaseReturn = () => {
         setLocations(normalizedLocs);
 
         // 3. Fetch Products
-        const { data: prodData } = await supabase.from('products').select('*').order('product_name', { ascending: true });
+        const { data: prodData } = await fetchAllPages(supabase.from('products').select('*').order('product_name', { ascending: true }));
         setProductList(prodData || []);
 
         // Load the stock ledger snapshot once (reused for every row's availability check)

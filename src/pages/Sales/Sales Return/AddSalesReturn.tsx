@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -231,7 +231,7 @@ const AddSalesReturn = () => {
         setLocations(normalizedLocs.length > 0 ? normalizedLocs : [{ id: 1, name: 'Main Warehouse', code: 'MW' }]);
 
         // 3. Fetch Products
-        const { data: prodData } = await supabase.from('products').select('*').order('product_name', { ascending: true });
+        const { data: prodData } = await fetchAllPages(supabase.from('products').select('*').order('product_name', { ascending: true }));
         setProductList(prodData || []);
 
         // 4. Fetch Banks
