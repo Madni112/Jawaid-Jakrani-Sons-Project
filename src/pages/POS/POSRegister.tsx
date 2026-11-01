@@ -494,12 +494,12 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       {/* Report Navigation Tabs (Default Current Report placed FIRST!) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
         {[
-          { id: 'zreport', label: '📋 Daily Z-Report & Shift Summary', badge: 'Default' },
-          { id: 'category', label: '🏷️ Category-Wise Sales', badge: `${categoryStats.list.length} Cats` },
-          { id: 'top_items', label: '⚡ Top Fast-Movers', badge: `${topProductsStats.length} Items` },
-          { id: 'payments', label: '💳 Payment Breakdown', badge: 'Cash & Digital' },
-          { id: 'peak_hours', label: '📈 Peak Sales Trends', badge: 'Hourly' },
-          { id: 'petty_cash', label: '💰 Petty Cash & Movement', badge: 'Audit' }
+          { id: 'zreport', label: 'Daily Z-Report & Shift Summary', badge: 'Default' },
+          { id: 'category', label: 'Category-Wise Sales', badge: `${categoryStats.list.length} Cats` },
+          { id: 'top_items', label: 'Top Fast-Movers', badge: `${topProductsStats.length} Items` },
+          { id: 'payments', label: 'Payment Breakdown', badge: 'Cash & Digital' },
+          { id: 'peak_hours', label: 'Peak Sales Trends', badge: 'Hourly' },
+          { id: 'petty_cash', label: 'Petty Cash & Movement', badge: 'Audit' }
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           return (

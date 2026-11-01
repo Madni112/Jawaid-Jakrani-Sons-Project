@@ -1927,7 +1927,7 @@ export const POSTerminal: React.FC = () => {
                 }`}
                 style={drawerTab === 'open_day' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
               >
-                <span>🌅 Day Open</span>
+                <span>Day Open</span>
               </button>
               <button
                 type="button"
@@ -1939,7 +1939,7 @@ export const POSTerminal: React.FC = () => {
                 }`}
                 style={drawerTab === 'close_day' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
               >
-                <span>🌙 Day Close</span>
+                <span>Day Close</span>
               </button>
               <button
                 type="button"
@@ -1951,7 +1951,7 @@ export const POSTerminal: React.FC = () => {
                 }`}
                 style={drawerTab === 'movement' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
               >
-                <span>🔄 Cash In / Out</span>
+                <span>Cash In / Out</span>
               </button>
             </div>
 
