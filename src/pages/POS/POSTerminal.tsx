@@ -38,7 +38,8 @@ import {
   LuHelpCircle,
   LuSparkles,
   LuCalendar,
-  LuCheckCircle2
+  LuCheckCircle2,
+  LuBarChart3
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import { IoBarcodeOutline } from 'react-icons/io5';
@@ -743,8 +744,8 @@ export const POSTerminal: React.FC = () => {
               }
             >
               <div className="flex items-center gap-3">
-                <LuFileText size={17} className="text-indigo-500" />
-                <span>Daily Summary (Z-Report)</span>
+                <LuBarChart3 size={17} className="text-indigo-500" />
+                <span>Reports & Daily Summary</span>
               </div>
               {activeView === 'summary' && (
                 <span

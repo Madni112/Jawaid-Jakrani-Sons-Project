@@ -333,6 +333,174 @@ export const SAMPLE_POS_PRODUCTS: PosProductItem[] = [
   }
 ];
 
+export const SAMPLE_POS_ORDERS: PosOrder[] = [
+  {
+    id: 'ord-sample-1',
+    order_number: '#RT-1081',
+    cashier_name: 'Alex Rivera',
+    customer_name: 'Muhammad Usman',
+    customer_tier: 'VIP',
+    terminal_code: 'Register 01',
+    fulfillment_type: 'In-Store Bag',
+    subtotal: 5400,
+    tax_percentage: 0,
+    tax_amount: 0,
+    discount_percentage: 0,
+    discount_amount: 0,
+    total_amount: 5400,
+    payment_method: 'Cash',
+    cash_tendered: 6000,
+    change_due: 600,
+    status: 'Completed',
+    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    items: [
+      {
+        product_id: 'sample-p1',
+        product_name: 'Super Fine Cotton Suit',
+        product_code: 'COT-001',
+        category: 'Pure Cotton & Latha',
+        uom: 'Suit',
+        quantity: 2,
+        unit_price: 2700,
+        discount_amount: 0,
+        line_total: 5400
+      }
+    ]
+  },
+  {
+    id: 'ord-sample-2',
+    order_number: '#RT-1082',
+    cashier_name: 'Alex Rivera',
+    customer_name: 'Walk-in Customer',
+    customer_tier: 'Regular',
+    terminal_code: 'Register 01',
+    fulfillment_type: 'In-Store Bag',
+    subtotal: 8500,
+    tax_percentage: 0,
+    tax_amount: 0,
+    discount_percentage: 0,
+    discount_amount: 0,
+    total_amount: 8500,
+    payment_method: 'Cash',
+    cash_tendered: 9000,
+    change_due: 500,
+    status: 'Completed',
+    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+    items: [
+      {
+        product_id: 'sample-p2',
+        product_name: 'Pure Silk Royal Boski',
+        product_code: 'BSK-100',
+        category: 'Pure Silk & Boski',
+        uom: 'Suit',
+        quantity: 1,
+        unit_price: 8500,
+        discount_amount: 0,
+        line_total: 8500
+      }
+    ]
+  },
+  {
+    id: 'ord-sample-3',
+    order_number: '#RT-1083',
+    cashier_name: 'Alex Rivera',
+    customer_name: 'Tariq Mehmood',
+    customer_tier: 'Regular',
+    terminal_code: 'Register 01',
+    fulfillment_type: 'In-Store Bag',
+    subtotal: 4500,
+    tax_percentage: 0,
+    tax_amount: 0,
+    discount_percentage: 0,
+    discount_amount: 0,
+    total_amount: 4500,
+    payment_method: 'Card',
+    cash_tendered: 4500,
+    change_due: 0,
+    status: 'Completed',
+    created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
+    items: [
+      {
+        product_id: 'sample-p3',
+        product_name: 'Summer Lawn Digital Print',
+        product_code: 'LWN-202',
+        category: 'Summer Lawn & Jacquard',
+        uom: 'Suit',
+        quantity: 2,
+        unit_price: 2250,
+        discount_amount: 0,
+        line_total: 4500
+      }
+    ]
+  },
+  {
+    id: 'ord-sample-4',
+    order_number: '#RT-1084',
+    cashier_name: 'Alex Rivera',
+    customer_name: 'Kamran Ali',
+    customer_tier: 'VIP',
+    terminal_code: 'Register 01',
+    fulfillment_type: 'In-Store Bag',
+    subtotal: 3600,
+    tax_percentage: 0,
+    tax_amount: 0,
+    discount_percentage: 0,
+    discount_amount: 0,
+    total_amount: 3600,
+    payment_method: 'Cash',
+    cash_tendered: 4000,
+    change_due: 400,
+    status: 'Completed',
+    created_at: new Date(Date.now() - 3600000 * 7).toISOString(),
+    items: [
+      {
+        product_id: 'sample-p4',
+        product_name: 'Classic Wash & Wear',
+        product_code: 'WNW-01',
+        category: 'Unstitched Wash & Wear',
+        uom: 'Suit',
+        quantity: 2,
+        unit_price: 1800,
+        discount_amount: 0,
+        line_total: 3600
+      }
+    ]
+  },
+  {
+    id: 'ord-sample-5',
+    order_number: '#RT-1085',
+    cashier_name: 'Alex Rivera',
+    customer_name: 'Zahid Khan',
+    customer_tier: 'Regular',
+    terminal_code: 'Register 01',
+    fulfillment_type: 'In-Store Bag',
+    subtotal: 1800,
+    tax_percentage: 0,
+    tax_amount: 0,
+    discount_percentage: 0,
+    discount_amount: 0,
+    total_amount: 1800,
+    payment_method: 'Digital',
+    cash_tendered: 1800,
+    change_due: 0,
+    status: 'Completed',
+    created_at: new Date(Date.now() - 3600000 * 8).toISOString(),
+    items: [
+      {
+        product_id: 'sample-p5',
+        product_name: 'Men Kurta Trouser Suit',
+        product_code: 'Suit001',
+        category: 'Suit',
+        uom: 'Suit',
+        quantity: 2,
+        unit_price: 900,
+        discount_amount: 0,
+        line_total: 1800
+      }
+    ]
+  }
+];
+
 export const posService = {
   // ── 1. SETTINGS ──
   getSettings(): PosSettings {
@@ -601,9 +769,13 @@ export const posService = {
     if (typeof window === 'undefined') return [];
     try {
       const raw = localStorage.getItem(STORAGE_ORDERS);
-      return raw ? JSON.parse(raw) : [];
+      if (!raw) {
+        localStorage.setItem(STORAGE_ORDERS, JSON.stringify(SAMPLE_POS_ORDERS));
+        return SAMPLE_POS_ORDERS;
+      }
+      return JSON.parse(raw);
     } catch {
-      return [];
+      return SAMPLE_POS_ORDERS;
     }
   },
 

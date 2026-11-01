@@ -18,7 +18,17 @@ import {
   LuX,
   LuFileText,
   LuCalendar,
-  LuFilter
+  LuFilter,
+  LuBarChart3,
+  LuPieChart,
+  LuTrendingUp,
+  LuTag,
+  LuShoppingBag,
+  LuArrowDownLeft,
+  LuArrowUpRight,
+  LuCreditCard,
+  LuQrCode,
+  LuSparkles
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import toast from 'react-hot-toast';
@@ -27,7 +37,7 @@ import { saveAs } from 'file-saver';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
 import { getSavedAccentColor, getContrastTextColor } from '../../constant/themeConfig';
-import { posService, PosShift, PosSettings } from '../../service/posService';
+import { posService, PosShift, PosSettings, PosOrder } from '../../service/posService';
 
 interface POSRegisterProps {
   embedded?: boolean;
@@ -73,7 +83,14 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
 
   const [selectedZReport, setSelectedZReport] = useState<PosShift | null>(null);
 
-  // Date Filter State for Daily Summary & Z-Reports
+  // Report Navigation State
+  type ReportTab = 'zreport' | 'category' | 'top_items' | 'payments' | 'peak_hours' | 'petty_cash';
+  const [activeTab, setActiveTab] = useState<ReportTab>('zreport');
+
+  // Orders State
+  const [allOrders, setAllOrders] = useState<PosOrder[]>(() => posService.getAllOrders());
+
+  // Date Filter State for Daily Summary & Reports
   const [dateFilter, setDateFilter] = useState<'All' | 'Today' | 'Yesterday' | 'Last7Days' | 'Custom'>('All');
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
@@ -99,6 +116,167 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       return true;
     });
   }, [allShifts, dateFilter, customDate]);
+
+  // Filtered Orders by Date
+  const filteredOrders = useMemo(() => {
+    if (dateFilter === 'All') return allOrders;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+
+    return allOrders.filter((ord) => {
+      const orderDate = new Date(ord.created_at);
+      const orderDateStr = orderDate.toISOString().split('T')[0];
+
+      if (dateFilter === 'Today') return orderDateStr === todayStr;
+      if (dateFilter === 'Yesterday') return orderDateStr === yesterdayStr;
+      if (dateFilter === 'Last7Days') return orderDate >= sevenDaysAgo;
+      if (dateFilter === 'Custom') return orderDateStr === customDate;
+      return true;
+    });
+  }, [allOrders, dateFilter, customDate]);
+
+  // 1. Category Sales Breakdown
+  const categoryStats = useMemo(() => {
+    const map: Record<string, { category: string; quantity: number; revenue: number; ordersCount: number }> = {};
+    let totalCatRevenue = 0;
+    let totalCatPieces = 0;
+
+    for (const ord of filteredOrders) {
+      if (ord.status === 'Voided') continue;
+      for (const item of ord.items || []) {
+        const cat = item.category || 'General Cloth';
+        if (!map[cat]) {
+          map[cat] = { category: cat, quantity: 0, revenue: 0, ordersCount: 0 };
+        }
+        map[cat].quantity += Number(item.quantity) || 1;
+        map[cat].revenue += Number(item.line_total) || 0;
+        map[cat].ordersCount += 1;
+        totalCatRevenue += Number(item.line_total) || 0;
+        totalCatPieces += Number(item.quantity) || 1;
+      }
+    }
+
+    const list = Object.values(map).map((c) => ({
+      ...c,
+      percentage: totalCatRevenue > 0 ? ((c.revenue / totalCatRevenue) * 100).toFixed(1) : '0',
+      averagePrice: c.quantity > 0 ? Math.round(c.revenue / c.quantity) : 0
+    })).sort((a, b) => b.revenue - a.revenue);
+
+    return { list, totalRevenue: totalCatRevenue, totalPieces: totalCatPieces };
+  }, [filteredOrders]);
+
+  // 2. Top Fast-Moving Products
+  const topProductsStats = useMemo(() => {
+    const map: Record<string, { id: string; name: string; code: string; category: string; quantity: number; revenue: number; unitPrice: number }> = {};
+    let totalRevenue = 0;
+
+    for (const ord of filteredOrders) {
+      if (ord.status === 'Voided') continue;
+      for (const item of ord.items || []) {
+        const key = item.product_id || item.product_code || item.product_name;
+        if (!map[key]) {
+          map[key] = {
+            id: key,
+            name: item.product_name,
+            code: item.product_code,
+            category: item.category || 'Cloth',
+            quantity: 0,
+            revenue: 0,
+            unitPrice: Number(item.unit_price) || 0
+          };
+        }
+        map[key].quantity += Number(item.quantity) || 1;
+        map[key].revenue += Number(item.line_total) || 0;
+        totalRevenue += Number(item.line_total) || 0;
+      }
+    }
+
+    return Object.values(map)
+      .map((p) => ({
+        ...p,
+        share: totalRevenue > 0 ? ((p.revenue / totalRevenue) * 100).toFixed(1) : '0'
+      }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 10);
+  }, [filteredOrders]);
+
+  // 3. Payment Methods Breakdown
+  const paymentStats = useMemo(() => {
+    let cash = { total: 0, count: 0 };
+    let card = { total: 0, count: 0 };
+    let digital = { total: 0, count: 0 };
+    let total = 0;
+
+    for (const ord of filteredOrders) {
+      if (ord.status === 'Voided') continue;
+      const amt = Number(ord.total_amount) || 0;
+      total += amt;
+      const method = (ord.payment_method || '').toLowerCase();
+      if (method.includes('card')) {
+        card.total += amt;
+        card.count += 1;
+      } else if (method.includes('digital') || method.includes('qr') || method.includes('bank') || method.includes('online')) {
+        digital.total += amt;
+        digital.count += 1;
+      } else {
+        cash.total += amt;
+        cash.count += 1;
+      }
+    }
+
+    return {
+      cash: { ...cash, share: total > 0 ? ((cash.total / total) * 100).toFixed(1) : '0' },
+      card: { ...card, share: total > 0 ? ((card.total / total) * 100).toFixed(1) : '0' },
+      digital: { ...digital, share: total > 0 ? ((digital.total / total) * 100).toFixed(1) : '0' },
+      total
+    };
+  }, [filteredOrders]);
+
+  // 4. Peak Sales Hours Analysis
+  const hourlyStats = useMemo(() => {
+    const buckets = [
+      { id: 'morning', label: '🌅 Morning (09 AM – 01 PM)', count: 0, revenue: 0 },
+      { id: 'afternoon', label: '☀️ Afternoon (01 PM – 05 PM)', count: 0, revenue: 0 },
+      { id: 'evening', label: '🔥 Evening Rush (05 PM – 09 PM)', count: 0, revenue: 0 },
+      { id: 'night', label: '🌙 Late Night (09 PM – 12 AM)', count: 0, revenue: 0 }
+    ];
+
+    let totalRev = 0;
+    for (const ord of filteredOrders) {
+      if (ord.status === 'Voided') continue;
+      const date = new Date(ord.created_at);
+      const hour = date.getHours();
+      const amt = Number(ord.total_amount) || 0;
+      totalRev += amt;
+
+      if (hour >= 9 && hour < 13) {
+        buckets[0].count += 1;
+        buckets[0].revenue += amt;
+      } else if (hour >= 13 && hour < 17) {
+        buckets[1].count += 1;
+        buckets[1].revenue += amt;
+      } else if (hour >= 17 && hour < 21) {
+        buckets[2].count += 1;
+        buckets[2].revenue += amt;
+      } else {
+        buckets[3].count += 1;
+        buckets[3].revenue += amt;
+      }
+    }
+
+    const peak = [...buckets].sort((a, b) => b.revenue - a.revenue)[0];
+    return {
+      buckets: buckets.map(b => ({
+        ...b,
+        share: totalRev > 0 ? ((b.revenue / totalRev) * 100).toFixed(1) : '0'
+      })),
+      peakBucket: peak,
+      totalRev
+    };
+  }, [filteredOrders]);
 
   // Daily Summary Stats for the selected date filter
   const dateStats = useMemo(() => {
@@ -130,6 +308,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   const refreshShifts = () => {
     setActiveShift(posService.getActiveShift());
     setAllShifts(posService.getAllShifts());
+    setAllOrders(posService.getAllOrders());
   };
 
   // Open Shift
@@ -176,32 +355,94 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
     toast.success(`Cash ${cashInOutType.toUpperCase()} of Rs. ${cashInOutAmount.toLocaleString()} recorded`);
   };
 
-  // Export Shifts to Excel
+  // Export Active Report to Excel
   const handleExportExcel = () => {
-    const rows = allShifts.map((s) => ({
-      'Session #': s.session_number,
-      'Cashier': s.cashier_name,
-      'Opened At': new Date(s.opened_at).toLocaleString(),
-      'Closed At': s.closed_at ? new Date(s.closed_at).toLocaleString() : 'In Progress',
-      'Opening Float': s.opening_float,
-      'Cash Sales': s.cash_sales,
-      'Card Sales': s.card_sales,
-      'Digital Sales': s.digital_sales,
-      'Total Sales': s.cash_sales + s.card_sales + s.digital_sales,
-      'Cash In': s.cash_in,
-      'Cash Out': s.cash_out,
-      'Expected Cash': s.expected_cash,
-      'Actual Counted': s.actual_counted_cash ?? '-',
-      'Variance': s.variance ?? 0,
-      'Status': s.status
-    }));
+    let rows: any[] = [];
+    let sheetName = 'POS_Report';
+    let fileName = `POS_Report_${Date.now()}.xlsx`;
+
+    if (activeTab === 'category') {
+      sheetName = 'Category_Sales';
+      fileName = `Category_Sales_Report_${Date.now()}.xlsx`;
+      rows = categoryStats.list.map((c, i) => ({
+        '#': i + 1,
+        'Category Name': c.category,
+        'Suits / Pieces Sold': c.quantity,
+        'Gross Sales (Rs.)': c.revenue,
+        '% Share of Total Sales': `${c.percentage}%`,
+        'Average Item Price (Rs.)': c.averagePrice
+      }));
+    } else if (activeTab === 'top_items') {
+      sheetName = 'Top_Fast_Movers';
+      fileName = `Top_Fast_Movers_${Date.now()}.xlsx`;
+      rows = topProductsStats.map((p, i) => ({
+        'Rank': `#${i + 1}`,
+        'Product Name': p.name,
+        'SKU / Code': p.code,
+        'Category': p.category,
+        'Quantity Sold': p.quantity,
+        'Unit Price (Rs.)': p.unitPrice,
+        'Gross Revenue (Rs.)': p.revenue,
+        '% Contribution': `${p.share}%`
+      }));
+    } else if (activeTab === 'payments') {
+      sheetName = 'Payment_Methods';
+      fileName = `Payment_Methods_Report_${Date.now()}.xlsx`;
+      rows = [
+        { 'Payment Method': 'Cash Sales', 'Total Amount (Rs.)': paymentStats.cash.total, 'Transaction Count': paymentStats.cash.count, '% Share': `${paymentStats.cash.share}%` },
+        { 'Payment Method': 'Card Payments', 'Total Amount (Rs.)': paymentStats.card.total, 'Transaction Count': paymentStats.card.count, '% Share': `${paymentStats.card.share}%` },
+        { 'Payment Method': 'Digital / QR Pay', 'Total Amount (Rs.)': paymentStats.digital.total, 'Transaction Count': paymentStats.digital.count, '% Share': `${paymentStats.digital.share}%` }
+      ];
+    } else if (activeTab === 'peak_hours') {
+      sheetName = 'Peak_Hours';
+      fileName = `Peak_Sales_Hours_${Date.now()}.xlsx`;
+      rows = hourlyStats.buckets.map((b) => ({
+        'Shopping Window': b.label,
+        'Orders Count': b.count,
+        'Total Revenue (Rs.)': b.revenue,
+        '% Share of Day': `${b.share}%`
+      }));
+    } else if (activeTab === 'petty_cash') {
+      sheetName = 'Petty_Cash';
+      fileName = `Petty_Cash_Movement_${Date.now()}.xlsx`;
+      rows = filteredShifts.map((s) => ({
+        'Session #': s.session_number,
+        'Date': s.business_date || new Date(s.opened_at).toLocaleDateString(),
+        'Cashier': s.cashier_name,
+        'Opening Petty Cash (Rs.)': s.opening_petty_cash ?? s.opening_float,
+        'Daily Cash Sales (Rs.)': s.cash_sales,
+        'Cash In (Rs.)': s.cash_in,
+        'Cash Out / Drop (Rs.)': s.cash_out,
+        'Closing Petty Cash Carried Forward (Rs.)': s.closing_petty_cash ?? '-',
+        'Status': s.status
+      }));
+    } else {
+      sheetName = 'Z_Report_Shifts';
+      fileName = `POS_Shift_Sessions_${Date.now()}.xlsx`;
+      rows = filteredShifts.map((s) => ({
+        'Session #': s.session_number,
+        'Cashier': s.cashier_name,
+        'Date': s.business_date || new Date(s.opened_at).toLocaleDateString(),
+        'Opening Float': s.opening_float,
+        'Cash Sales': s.cash_sales,
+        'Card Sales': s.card_sales,
+        'Digital Sales': s.digital_sales,
+        'Total Sales': s.cash_sales + s.card_sales + s.digital_sales,
+        'Cash In': s.cash_in,
+        'Cash Out': s.cash_out,
+        'Closing Petty Cash': s.closing_petty_cash ?? '-',
+        'Expected Cash': s.expected_cash,
+        'Variance': s.variance ?? 0,
+        'Status': s.status
+      }));
+    }
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'POS_Shifts');
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     const buf = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    saveAs(new Blob([buf], { type: 'application/octet-stream' }), `POS_Shift_Sessions_${Date.now()}.xlsx`);
-    toast.success('Shifts exported to Excel');
+    saveAs(new Blob([buf], { type: 'application/octet-stream' }), fileName);
+    toast.success(`Exported ${sheetName.replace(/_/g, ' ')} to Excel!`);
   };
 
   return (
@@ -219,11 +460,11 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
           </button>
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <LuBanknote className="text-emerald-500" />
-              <span>Cash Register & Shift Reconciliation</span>
+              <LuBarChart3 className="text-primary" />
+              <span>POS Reports & Sales Dashboard</span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Control register float, cash-in/out drops, and print daily end-of-shift Z-Reports.
+              Category sales, top fast-movers, payment breakdown, peak shopping hours, and daily Z-reports.
             </p>
           </div>
         </div>
@@ -250,13 +491,133 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
         </div>
       </div>
 
-      {/* Active Shift Overview Card */}
-      {activeShift ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-50/20 dark:bg-emerald-950/10 p-5 sm:p-6 shadow-sm space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg shrink-0">
-                #{activeShift.session_number}
+      {/* Report Navigation Tabs (Default Current Report placed FIRST!) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
+        {[
+          { id: 'zreport', label: '📋 Daily Z-Report & Shift Summary', badge: 'Default' },
+          { id: 'category', label: '🏷️ Category-Wise Sales', badge: `${categoryStats.list.length} Cats` },
+          { id: 'top_items', label: '⚡ Top Fast-Movers', badge: `${topProductsStats.length} Items` },
+          { id: 'payments', label: '💳 Payment Breakdown', badge: 'Cash & Digital' },
+          { id: 'peak_hours', label: '📈 Peak Sales Trends', badge: 'Hourly' },
+          { id: 'petty_cash', label: '💰 Petty Cash & Movement', badge: 'Audit' }
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as ReportTab)}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition duration-150 cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                isActive
+                  ? 'text-white shadow-sm'
+                  : 'bg-white dark:bg-[#111622] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+              }`}
+              style={isActive ? { backgroundColor: accentColor } : undefined}
+            >
+              <span>{tab.label}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                isActive ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              }`}>
+                {tab.badge}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Global Date Filter & Unified KPI Bar (Applies to all reports) */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] shadow-sm overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <LuFilter className="text-primary" size={16} />
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              Filter Reporting Period:
+            </span>
+            <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200/80 dark:border-slate-700/60 text-xs font-bold ml-2">
+              {(['All', 'Today', 'Yesterday', 'Last7Days'] as const).map((mode) => {
+                const label = mode === 'All' ? 'All Dates' : mode === 'Last7Days' ? '7 Days' : mode;
+                const isSelected = dateFilter === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setDateFilter(mode)}
+                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-[11px] ${
+                      isSelected
+                        ? 'shadow-xs text-white'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    style={isSelected ? { backgroundColor: accentColor } : undefined}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Custom Date Picker */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60">
+            <LuCalendar size={14} className="text-slate-400 shrink-0" />
+            <span className="text-[11px] text-slate-400 font-medium">Custom:</span>
+            <input
+              type="date"
+              value={customDate}
+              onChange={(e) => {
+                setCustomDate(e.target.value);
+                setDateFilter('Custom');
+              }}
+              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+            />
+          </div>
+        </div>
+
+        {/* Global KPI Strip */}
+        <div className="bg-slate-50 dark:bg-[#0c1017] px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 text-xs font-medium">
+          <div className="flex flex-wrap items-center gap-6">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Gross Sales Revenue</span>
+              <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-base">
+                Rs. {categoryStats.totalRevenue > 0 ? categoryStats.totalRevenue.toLocaleString() : dateStats.totalVolume.toLocaleString()}
+              </span>
+            </div>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Suits / Items Sold</span>
+              <span className="font-extrabold text-slate-900 dark:text-white font-mono text-base">
+                {categoryStats.totalPieces > 0 ? categoryStats.totalPieces : filteredOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0)} Pieces
+              </span>
+            </div>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Cash Collected</span>
+              <span className="font-extrabold text-slate-800 dark:text-slate-200 font-mono text-base">
+                Rs. {paymentStats.cash.total > 0 ? paymentStats.cash.total.toLocaleString() : dateStats.cashSales.toLocaleString()}
+              </span>
+            </div>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Top Category</span>
+              <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-sm">
+                {categoryStats.list[0]?.category || 'Cloth Collection'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═════════════════════════════════════════════════════════════
+          TAB 1: DEFAULT CURRENT REPORT (DAILY Z-REPORT & SHIFT SUMMARY)
+         ═════════════════════════════════════════════════════════════ */}
+      {activeTab === 'zreport' && (
+        <div className="space-y-6">
+          {/* Active Shift Overview Card */}
+          {activeShift ? (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-50/20 dark:bg-emerald-950/10 p-5 sm:p-6 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg shrink-0">
+                    #{activeShift.session_number}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -582,6 +943,440 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
           </table>
         </div>
       </div>
+      </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════
+          TAB 2: CATEGORY-WISE SALES REPORT
+         ═════════════════════════════════════════════════════════════ */}
+      {activeTab === 'category' && (
+        <div className="space-y-6">
+          {/* Category Progress Bar */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <LuPieChart size={16} className="text-primary" />
+                <span>Category Sales Distribution (% of Total Business)</span>
+              </span>
+              <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                Total: Rs. {categoryStats.totalRevenue.toLocaleString()}
+              </span>
+            </div>
+
+            {/* Multi-colored Visual Distribution Bar */}
+            <div className="h-4 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner">
+              {categoryStats.list.map((c, i) => {
+                const colors = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-purple-500'];
+                return (
+                  <div
+                    key={c.category}
+                    style={{ width: `${c.percentage}%` }}
+                    className={`${colors[i % colors.length]} transition-all duration-500`}
+                    title={`${c.category}: ${c.percentage}% (Rs. ${c.revenue.toLocaleString()})`}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Category Badges Legend */}
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              {categoryStats.list.map((c, i) => {
+                const dotColors = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-purple-500'];
+                return (
+                  <div key={c.category} className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
+                    <span className={`w-2.5 h-2.5 rounded-full ${dotColors[i % dotColors.length]}`} />
+                    <span>{c.category}</span>
+                    <strong className="text-slate-900 dark:text-white font-mono">{c.percentage}%</strong>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Category Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {categoryStats.list.map((c, i) => (
+              <div
+                key={c.category}
+                className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] p-5 shadow-sm space-y-4 hover:border-primary/40 transition"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
+                      #{i + 1}
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                        {c.category}
+                      </h4>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {c.ordersCount} sales ticket(s)
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    {c.percentage}%
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Gross Sales</span>
+                    <span className="text-base font-black font-mono text-slate-900 dark:text-white">
+                      Rs. {c.revenue.toLocaleString()}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Suits Sold</span>
+                    <span className="text-base font-black font-mono text-slate-900 dark:text-white">
+                      {c.quantity} Suits
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-[11px] flex items-center justify-between text-slate-600 dark:text-slate-400 font-medium">
+                  <span>Average Selling Price:</span>
+                  <strong className="font-mono text-slate-900 dark:text-white">Rs. {c.averagePrice.toLocaleString()}</strong>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Detailed Category Table */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                <LuTag className="text-primary" />
+                <span>Detailed Category Sales Breakdown</span>
+              </h3>
+              <span className="text-xs font-bold text-slate-500">
+                {categoryStats.list.length} Categories Analyzed
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    <th className="py-3 px-4"># Rank</th>
+                    <th className="py-3 px-4">Category Name</th>
+                    <th className="py-3 px-4">Suits / Pieces Sold</th>
+                    <th className="py-3 px-4">Gross Revenue (PKR)</th>
+                    <th className="py-3 px-4">% Share of Sales</th>
+                    <th className="py-3 px-4">Average Price / Suit</th>
+                    <th className="py-3 px-4 text-right">Performance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium text-slate-700 dark:text-slate-300">
+                  {categoryStats.list.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        No category sales recorded for this period.
+                      </td>
+                    </tr>
+                  ) : (
+                    categoryStats.list.map((c, i) => (
+                      <tr key={c.category} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                        <td className="py-3 px-4 font-bold font-mono">#{i + 1}</td>
+                        <td className="py-3 px-4 font-extrabold text-slate-900 dark:text-white">
+                          {c.category}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold">{c.quantity} Suits</td>
+                        <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          Rs. {c.revenue.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-primary">
+                          {c.percentage}%
+                        </td>
+                        <td className="py-3 px-4 font-mono">Rs. {c.averagePrice.toLocaleString()}</td>
+                        <td className="py-3 px-4 text-right">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            i === 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                          }`}>
+                            {i === 0 ? '🏆 Top Category' : 'Active'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════
+          TAB 3: TOP FAST-MOVING ITEMS
+         ═════════════════════════════════════════════════════════════ */}
+      {activeTab === 'top_items' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                <LuTrendingUp className="text-emerald-500" />
+                <span>Top Fast-Moving Boutique Items</span>
+              </h3>
+              <span className="text-xs text-slate-400">Ranked by volume & revenue</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    <th className="py-3 px-4">Rank</th>
+                    <th className="py-3 px-4">Article / Product Name</th>
+                    <th className="py-3 px-4">SKU / Code</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Suits Sold</th>
+                    <th className="py-3 px-4">Retail Price</th>
+                    <th className="py-3 px-4">Total Revenue</th>
+                    <th className="py-3 px-4 text-right">Revenue Contribution</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium text-slate-700 dark:text-slate-300">
+                  {topProductsStats.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-400">
+                        No product sales recorded in this period.
+                      </td>
+                    </tr>
+                  ) : (
+                    topProductsStats.map((p, i) => (
+                      <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                        <td className="py-3 px-4 font-bold font-mono">
+                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs ${
+                            i === 0 ? 'bg-amber-500 text-white font-black' : i === 1 ? 'bg-slate-300 text-slate-800 font-bold' : i === 2 ? 'bg-amber-700 text-white font-bold' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'
+                          }`}>
+                            #{i + 1}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-slate-900 dark:text-white">
+                          {p.name}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-500">{p.code}</td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                            {p.category}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                          {p.quantity} Suits
+                        </td>
+                        <td className="py-3 px-4 font-mono">Rs. {p.unitPrice.toLocaleString()}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          Rs. {p.revenue.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-primary">
+                          {p.share}%
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════
+          TAB 4: PAYMENT METHODS BREAKDOWN
+         ═════════════════════════════════════════════════════════════ */}
+      {activeTab === 'payments' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Cash Card */}
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-50/20 dark:bg-emerald-950/10 p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+                  <LuBanknote size={18} />
+                  <span>Cash Payments</span>
+                </span>
+                <span className="text-xs font-black font-mono px-2 py-0.5 rounded-full bg-emerald-500 text-white">
+                  {paymentStats.cash.share}%
+                </span>
+              </div>
+              <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
+                Rs. {paymentStats.cash.total.toLocaleString()}
+              </div>
+              <div className="text-xs text-slate-500 font-medium">
+                {paymentStats.cash.count} transaction(s) recorded in cash drawer
+              </div>
+            </div>
+
+            {/* Card Card */}
+            <div className="rounded-2xl border border-sky-500/30 bg-sky-50/20 dark:bg-sky-950/10 p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-sky-700 dark:text-sky-300 flex items-center gap-2">
+                  <LuCreditCard size={18} />
+                  <span>Debit / Credit Cards</span>
+                </span>
+                <span className="text-xs font-black font-mono px-2 py-0.5 rounded-full bg-sky-500 text-white">
+                  {paymentStats.card.share}%
+                </span>
+              </div>
+              <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
+                Rs. {paymentStats.card.total.toLocaleString()}
+              </div>
+              <div className="text-xs text-slate-500 font-medium">
+                {paymentStats.card.count} transaction(s) settled via card POS machine
+              </div>
+            </div>
+
+            {/* Digital / QR Card */}
+            <div className="rounded-2xl border border-purple-500/30 bg-purple-50/20 dark:bg-purple-950/10 p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                  <LuQrCode size={18} />
+                  <span>Digital / QR Pay</span>
+                </span>
+                <span className="text-xs font-black font-mono px-2 py-0.5 rounded-full bg-purple-500 text-white">
+                  {paymentStats.digital.share}%
+                </span>
+              </div>
+              <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
+                Rs. {paymentStats.digital.total.toLocaleString()}
+              </div>
+              <div className="text-xs text-slate-500 font-medium">
+                {paymentStats.digital.count} transaction(s) via Raast, JazzCash, or Nayapay
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════
+          TAB 5: PEAK SALES TRENDS & HOURLY SHOPPING RUSH
+         ═════════════════════════════════════════════════════════════ */}
+      {activeTab === 'peak_hours' && (
+        <div className="space-y-6">
+          {/* Peak Shopping Highlight Banner */}
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-50/30 dark:bg-amber-950/10 p-5 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center font-bold">
+                <LuClock size={20} />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                  Busiest Retail Shopping Window
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  <strong>{hourlyStats.peakBucket?.label || 'Evening Rush'}</strong> generates the highest sales revenue.
+                </p>
+              </div>
+            </div>
+            <span className="text-sm font-black font-mono text-amber-600">
+              Rs. {(hourlyStats.peakBucket?.revenue || 0).toLocaleString()}
+            </span>
+          </div>
+
+          {/* Time Windows Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {hourlyStats.buckets.map((b) => (
+              <div
+                key={b.id}
+                className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] p-5 shadow-sm space-y-3"
+              >
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  {b.label}
+                </span>
+                <div className="text-xl font-black font-mono text-slate-900 dark:text-white">
+                  Rs. {b.revenue.toLocaleString()}
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>{b.count} Orders</span>
+                  <span className="font-bold text-primary font-mono">{b.share}% of Sales</span>
+                </div>
+                {/* Progress bar */}
+                <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div
+                    style={{ width: `${b.share}%` }}
+                    className="h-full bg-primary transition-all duration-500"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════
+          TAB 6: PETTY CASH & DRAWER MOVEMENT SUMMARY
+         ═════════════════════════════════════════════════════════════ */}
+      {activeTab === 'petty_cash' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] p-5 shadow-sm space-y-2">
+            <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <LuCoins className="text-amber-500" />
+              <span>Petty Cash Accounting & Carry Forward Flow</span>
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Formula: <strong className="text-slate-800 dark:text-slate-200">The Sale - Cash Out + Cash In + Opening Petty Cash = Remaining Petty Cash</strong>. This remaining cash is automatically saved and auto-fills tomorrow morning's Day Open.
+            </p>
+          </div>
+
+          {/* Petty Cash Table */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    <th className="py-3 px-4">Session #</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Cashier</th>
+                    <th className="py-3 px-4">Opening Petty Cash</th>
+                    <th className="py-3 px-4">Daily Cash Sales</th>
+                    <th className="py-3 px-4">Cash Out (Drop)</th>
+                    <th className="py-3 px-4">Cash In</th>
+                    <th className="py-3 px-4">Closing Petty Cash (Carried Over)</th>
+                    <th className="py-3 px-4 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium text-slate-700 dark:text-slate-300">
+                  {filteredShifts.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-slate-400">
+                        No shift movements found for this period.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredShifts.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                        <td className="py-3 px-4 font-bold font-mono">#{s.session_number}</td>
+                        <td className="py-3 px-4 text-slate-500">
+                          {s.business_date || new Date(s.opened_at).toLocaleDateString()}
+                        </td>
+                        <td className="py-3 px-4 font-medium">{s.cashier_name}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                          Rs. {(s.opening_petty_cash ?? s.opening_float).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                          Rs. {s.cash_sales.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-rose-500 font-bold">
+                          Rs. {(s.cash_out || 0).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-emerald-500 font-bold">
+                          Rs. {(s.cash_in || 0).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-amber-600 dark:text-amber-400">
+                          {s.closing_petty_cash !== undefined ? `Rs. ${s.closing_petty_cash.toLocaleString()}` : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            s.status === 'Closed' ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' : 'bg-emerald-500/10 text-emerald-600'
+                          }`}>
+                            {s.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Day Open Modal */}
       {isOpenShiftModal && (
