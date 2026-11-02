@@ -2267,18 +2267,14 @@ export const POSTerminal: React.FC = () => {
                 <div className="py-2.5 border-b border-dashed border-black space-y-1.5 text-[11px]">
                   <div className="flex justify-between font-bold pb-1 border-b border-dotted border-black/40">
                     <span className="w-1/2">Item</span>
-                    <span className="w-1/4 text-center">Qty</span>
+                    <span className="w-1/4 text-center">Rate</span>
                     <span className="w-1/4 text-right">Total</span>
                   </div>
 
                   {completedOrder.items.map((it, idx) => (
                     <div key={idx} className="flex justify-between text-[10px]">
-                      <span className="w-1/2 truncate font-semibold" title={it.product_name}>
-                        {it.product_name}
-                      </span>
-                      <span className="w-1/4 text-center font-mono">
-                        {it.quantity} x {it.unit_price}
-                      </span>
+                      <span className="w-1/2 truncate font-semibold" title={it.product_name}><span className="font-bold">{it.quantity} × </span>{it.product_name}</span>
+                      <span className="w-1/4 text-center font-mono">{it.unit_price.toLocaleString()}</span>
                       <span className="w-1/4 text-right font-bold font-mono">
                         {it.line_total.toLocaleString()}
                       </span>
