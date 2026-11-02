@@ -124,12 +124,21 @@ export const POSTerminal: React.FC = () => {
   const [activeShift, setActiveShift] = useState<PosShift | null>(() => posService.getActiveShift());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(posConfig.sound_effects_enabled);
 
+  const resolveInitialFulfillment = (config: PosSettings) => {
+    const def = config?.default_fulfillment;
+    if (!def || def === 'None' || def.toLowerCase() === 'unselected') return '';
+    return def;
+  };
+
   // Sync settings when changed in POS Settings Modal
   useEffect(() => {
     const handleSettingsUpdate = () => {
       const updated = posService.getSettings();
       setPosConfig(updated);
       setSoundEnabled(updated.sound_effects_enabled);
+      setCustomerName(updated.default_customer_name || 'Walk-in Customer');
+      setTaxPercent(updated.default_tax_rate || 0);
+      setFulfillmentType(resolveInitialFulfillment(updated));
     };
     window.addEventListener('pos_settings_updated', handleSettingsUpdate);
     return () => window.removeEventListener('pos_settings_updated', handleSettingsUpdate);
@@ -242,7 +251,7 @@ export const POSTerminal: React.FC = () => {
   });
   const [customerName, setCustomerName] = useState<string>(posConfig.default_customer_name || 'Walk-in Customer');
   const [customerTier, setCustomerTier] = useState<'VIP' | 'Regular' | 'Retail'>('VIP');
-  const [fulfillmentType, setFulfillmentType] = useState<string>('');
+  const [fulfillmentType, setFulfillmentType] = useState<string>(() => resolveInitialFulfillment(posConfig));
   const [isFulfillmentModalOpen, setIsFulfillmentModalOpen] = useState<boolean>(false);
   const [pendingOpenPaymentAfterFulfillment, setPendingOpenPaymentAfterFulfillment] = useState<boolean>(false);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
@@ -356,7 +365,11 @@ export const POSTerminal: React.FC = () => {
     setFulfillmentType(type);
     setIsFulfillmentModalOpen(false);
     playTone('success');
-    toast.success(`Packaging mode: ${type}`);
+    if (type) {
+      toast.success(`Packaging mode: ${type}`);
+    } else {
+      toast.success('Handover mode reset to Unselected');
+    }
     if (pendingOpenPaymentAfterFulfillment) {
       setPendingOpenPaymentAfterFulfillment(false);
       setCashTendered(grandTotal);
@@ -501,7 +514,7 @@ export const POSTerminal: React.FC = () => {
       playTone('delete');
       setCartItems([]);
       setDiscountPercent(0);
-      setFulfillmentType('');
+      setFulfillmentType(resolveInitialFulfillment(posConfig));
       toast.success('Order cart cleared');
     }
   };
@@ -563,7 +576,7 @@ export const POSTerminal: React.FC = () => {
     setHeldOrders(posService.getHeldOrders());
     setCartItems([]);
     setDiscountPercent(0);
-    setFulfillmentType('');
+    setFulfillmentType(resolveInitialFulfillment(posConfig));
     setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
     setIsHoldNoteModalOpen(false);
     playTone('notification');
@@ -670,7 +683,7 @@ export const POSTerminal: React.FC = () => {
       setCartItems([]);
       setTicketNumber(updatedShift ? posService.getNextOrderNumber(updatedShift.business_date) : '');
       setDiscountPercent(0);
-      setFulfillmentType('');
+      setFulfillmentType(resolveInitialFulfillment(posConfig));
     } catch (err) {
       console.error('Failed to complete sale:', err);
       toast.error('Failed to save POS order');
@@ -1038,7 +1051,7 @@ export const POSTerminal: React.FC = () => {
                 if (cartItems.length > 0 && !window.confirm('Start new fresh sale order? Current items will be reset.')) return;
                 setCartItems([]);
                 setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
-                setFulfillmentType('');
+                setFulfillmentType(resolveInitialFulfillment(posConfig));
                 toast.success('New sale order started');
               }}
               className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
@@ -2503,13 +2516,25 @@ export const POSTerminal: React.FC = () => {
                 <span className="font-mono bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-bold text-amber-600 dark:text-amber-400">[2] Takeaway</span>
                 <span className="font-mono bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-bold text-primary">[3] Delivery</span>
               </div>
-              <button
-                type="button"
-                onClick={handleCloseFulfillmentModal}
-                className="px-4 py-1.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
-              >
-                Close (Esc)
-              </button>
+              <div className="flex items-center gap-2">
+                {fulfillmentType && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectFulfillment('')}
+                    className="px-3 py-1.5 rounded-xl font-bold border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition cursor-pointer"
+                    title="Clear current packaging mode back to Unselected"
+                  >
+                    Clear (Unselected)
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCloseFulfillmentModal}
+                  className="px-4 py-1.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                >
+                  Close (Esc)
+                </button>
+              </div>
               </div>
             </div>
         </div>

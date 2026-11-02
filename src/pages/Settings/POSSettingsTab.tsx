@@ -15,7 +15,11 @@ import {
   LuCheck,
   LuX,
   LuSparkles,
-  LuPenLine
+  LuPenLine,
+  LuShoppingBag,
+  LuPackage,
+  LuTruck,
+  LuCircleSlash
 } from 'react-icons/lu';
 import { IoBarcodeOutline } from 'react-icons/io5';
 import toast from 'react-hot-toast';
@@ -346,7 +350,7 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
           <span>{isRTL ? 'بارکوڈ اسکینر اور چیک آؤٹ ڈیفالٹس' : 'Scanner Hardware & Checkout Defaults'}</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
               {isRTL ? 'ڈیفالٹ کسٹمر کا نام:' : 'Default Walk-in Customer:'}
@@ -358,21 +362,6 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
               placeholder="Walk-in Customer"
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-meta-4 py-2.5 px-3 text-xs font-medium text-black dark:text-white outline-none focus:border-primary"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              {isRTL ? 'ڈیفالٹ ڈلیوری / پیکنگ:' : 'Default Fulfillment Mode:'}
-            </label>
-            <select
-              value={posConfig.default_fulfillment}
-              onChange={e => setPosConfig(prev => ({ ...prev, default_fulfillment: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-meta-4 py-2.5 px-3 text-xs font-medium text-black dark:text-white outline-none focus:border-primary"
-            >
-              <option value="In-Store Bag">In-Store Bag</option>
-              <option value="Takeaway">Takeaway</option>
-              <option value="Counter Delivery">Counter Delivery</option>
-            </select>
           </div>
 
           <div>
@@ -391,9 +380,75 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-meta-4 py-2.5 px-3 text-xs font-mono font-bold text-black dark:text-white outline-none focus:border-primary"
             />
           </div>
+        </div>
 
+        {/* Default Fulfillment Mode (Pill Selector) */}
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+            {isRTL ? 'ڈیفالٹ ڈلیوری / پیکنگ:' : 'Default Fulfillment Mode:'}
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-0.5">
+            {[
+              { id: '', label: 'Unselected', hint: 'Manual pick on checkout', icon: LuCircleSlash },
+              { id: 'In-Store Bag', label: 'In-Store Bag', hint: 'Standard shopping bag', icon: LuShoppingBag },
+              { id: 'Takeaway', label: 'Takeaway', hint: 'Box / Suit cover', icon: LuPackage },
+              { id: 'Delivery', label: 'Delivery', hint: 'Rider / Courier dispatch', icon: LuTruck }
+            ].map(opt => {
+              const Icon = opt.icon;
+              const isSelected = (!opt.id && (!posConfig.default_fulfillment || posConfig.default_fulfillment === 'None' || posConfig.default_fulfillment.toLowerCase() === 'unselected')) ||
+                (posConfig.default_fulfillment || '').toLowerCase() === opt.id.toLowerCase();
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setPosConfig(prev => ({ ...prev, default_fulfillment: opt.id }))}
+                  className={`p-3 rounded-xl border-2 transition-all flex flex-col justify-between cursor-pointer text-left ${
+                    isSelected
+                      ? 'shadow-xs scale-[1.02]'
+                      : 'border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                  style={
+                    isSelected
+                      ? {
+                          backgroundColor: themeColor,
+                          color: getContrastTextColor(themeColor),
+                          borderColor: themeColor.toLowerCase() === '#ffffff' ? '#94a3b8' : themeColor
+                        }
+                      : undefined
+                  }
+                >
+                  <div className="flex items-center justify-between w-full mb-1.5">
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                        isSelected
+                          ? 'bg-black/10 dark:bg-white/15 text-current'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <Icon size={14} />
+                    </div>
+                    {isSelected && (
+                      <span className="w-2 h-2 rounded-full bg-current" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-black tracking-tight">{opt.label}</span>
+                    <span className="block text-[10px] opacity-75 font-medium mt-0.5 leading-tight">{opt.hint}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-2">
+            {isRTL
+              ? 'نئی سیل پر خودکار طور پر لاگو ہوگا یا "Unselected" رکھ کر کیشیئر کو ہر سیل پر منتخب کرنے دیں'
+              : 'Choose what new sales start with. Pick "Unselected" to require cashier to choose at checkout.'}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Toggle: Barcode Auto-Add */}
-          <div className="sm:col-span-1.5">
+          <div>
             <button
               type="button"
               onClick={() => setPosConfig(prev => ({ ...prev, barcode_auto_add: !prev.barcode_auto_add }))}
@@ -420,7 +475,7 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
           </div>
 
           {/* Toggle: Sound Effects */}
-          <div className="sm:col-span-1.5">
+          <div>
             <button
               type="button"
               onClick={() =>
