@@ -1062,7 +1062,7 @@ export const POSTerminal: React.FC = () => {
           </div>
 
           {/* Center: Live Barcode & Item Search Input */}
-          <form onSubmit={handleBarcodeSubmit} className="flex-1 max-w-xl relative">
+          <form onSubmit={handleBarcodeSubmit} className="flex-1 max-w-xl min-w-[170px] relative">
             <div className="relative">
               <LuSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-base" />
               <input
@@ -1070,8 +1070,8 @@ export const POSTerminal: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search items or scan barcode... [F2]"
-                className="w-full pl-10 pr-24 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700/80 focus:outline-none focus:ring-2 focus:ring-primary/40 text-slate-900 dark:text-white placeholder:text-slate-400 transition"
+                placeholder="Search items or scan... [F2]"
+                className="w-full pl-10 pr-20 sm:pr-24 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700/80 focus:outline-none focus:ring-2 focus:ring-primary/40 text-slate-900 dark:text-white placeholder:text-slate-400 transition"
               />
               <button
                 type="submit"
@@ -1083,7 +1083,8 @@ export const POSTerminal: React.FC = () => {
                 }}
               >
                 <IoBarcodeOutline size={13} />
-                <span>Scan [F2]</span>
+                <span className="hidden sm:inline">Scan [F2]</span>
+                <span className="sm:hidden">Scan</span>
               </button>
             </div>
           </form>
@@ -1631,73 +1632,78 @@ export const POSTerminal: React.FC = () => {
               </div>
 
               {/* Order Meta: Order Number & Fulfillment Handover Pill */}
-              <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/60 text-xs">
-                <div className="flex items-center gap-1 min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/60 text-xs">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Order:</span>
                   {activeShift && ticketNumber ? (
-                    <span className="font-mono font-black text-[11px] text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                    <span
+                      className="font-mono font-black text-[11px] text-slate-800 dark:text-slate-100 truncate max-w-[140px] sm:max-w-[190px]"
+                      title={ticketNumber}
+                    >
                       {ticketNumber}
                     </span>
                   ) : (
                     <span className="font-mono text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 whitespace-nowrap">
-                      Day Closed (No Order)
+                      Day Closed
                     </span>
                   )}
                 </div>
 
-                {activeShift ? (
-                  fulfillmentType ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsFulfillmentModalOpen(true)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-xs hover:border-primary/60 bg-white dark:bg-[#161D2B] border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 group active:scale-95"
-                      title="Click to change order handover mode"
-                    >
-                      {fulfillmentType === 'Delivery' ? (
-                        <span className="w-5 h-5 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
-                          <LuTruck size={12} />
+                <div className="shrink-0 ml-auto">
+                  {activeShift ? (
+                    fulfillmentType ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsFulfillmentModalOpen(true)}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-xl text-xs font-semibold border transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-xs hover:border-primary/60 bg-white dark:bg-[#161D2B] border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 group active:scale-95"
+                        title="Click to change order handover mode"
+                      >
+                        {fulfillmentType === 'Delivery' ? (
+                          <span className="w-4 h-4 rounded-md bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+                            <LuTruck size={11} />
+                          </span>
+                        ) : fulfillmentType === 'Takeaway' ? (
+                          <span className="w-4 h-4 rounded-md bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                            <LuPackage size={11} />
+                          </span>
+                        ) : (
+                          <span className="w-4 h-4 rounded-md bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                            <LuShoppingBag size={11} />
+                          </span>
+                        )}
+                        <span className="font-bold text-[11px] text-slate-800 dark:text-slate-100 truncate max-w-[80px]">
+                          {fulfillmentType}
                         </span>
-                      ) : fulfillmentType === 'Takeaway' ? (
-                        <span className="w-5 h-5 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                          <LuPackage size={12} />
+                        <span className="flex items-center gap-0.5 text-[9px] font-bold text-primary dark:text-primary-light bg-primary/10 px-1 py-0.5 rounded-md group-hover:bg-primary group-hover:text-white transition-colors">
+                          <LuArrowRightLeft size={8} />
+                          <span>Change</span>
                         </span>
-                      ) : (
-                        <span className="w-5 h-5 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-                          <LuShoppingBag size={12} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsFulfillmentModalOpen(true)}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-xl text-xs font-bold border border-amber-400 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all duration-150 cursor-pointer shadow-2xs group"
+                        title="Packaging not selected. Click to choose handover mode."
+                      >
+                        <LuShoppingBag size={12} className="text-amber-500 animate-bounce shrink-0" />
+                        <span className="text-[11px]">Handover</span>
+                        <span className="text-[9px] bg-amber-500 text-white font-extrabold px-1.5 py-0.5 rounded-md group-hover:scale-105 transition-transform shrink-0">
+                          Unselected
                         </span>
-                      )}
-                      <span className="font-bold text-slate-800 dark:text-slate-100">
-                        {fulfillmentType}
-                      </span>
-                      <span className="flex items-center gap-0.5 text-[10px] font-bold text-primary dark:text-primary-light bg-primary/10 px-1.5 py-0.5 rounded-md group-hover:bg-primary group-hover:text-white transition-colors ml-0.5">
-                        <LuArrowRightLeft size={9} />
-                        <span>Change</span>
-                      </span>
-                    </button>
+                      </button>
+                    )
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setIsFulfillmentModalOpen(true)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border border-amber-400 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all duration-150 cursor-pointer shadow-2xs group"
-                      title="Packaging not selected. Click to choose handover mode."
+                      onClick={handleOpenDrawerModal}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500 text-white hover:bg-amber-600 transition cursor-pointer"
                     >
-                      <LuShoppingBag size={13} className="text-amber-500 animate-bounce" />
-                      <span>Select Handover</span>
-                      <span className="text-[10px] bg-amber-500 text-white font-extrabold px-1.5 py-0.5 rounded-md group-hover:scale-105 transition-transform">
-                        Unselected
-                      </span>
+                      <LuUnlock size={11} />
+                      <span>Open Day</span>
                     </button>
-                  )
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleOpenDrawerModal}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500 text-white hover:bg-amber-600 transition cursor-pointer"
-                  >
-                    <LuUnlock size={11} />
-                    <span>Open Day</span>
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
