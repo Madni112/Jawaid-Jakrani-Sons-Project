@@ -757,7 +757,7 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                     id: 'card' as const,
                     title: 'Visual Card',
                     urduTitle: 'بڑی تصویر (اوپر)',
-                    subtitle: 'Photo on top + name below (Boutique Tile)',
+                    subtitle: 'Full-width picture on top + name below',
                     previewType: 'card'
                   },
                   {
@@ -876,50 +876,50 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                     <>
                       {/* Active All Items Card Example */}
                       <div
-                        className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[105px] h-[86px] shadow-sm border"
+                        className="rounded-2xl text-center flex flex-col items-center justify-between w-[115px] h-[105px] shadow-sm border overflow-hidden"
                         style={{
                           backgroundColor: themeColor,
                           color: contrastText,
                           borderColor: themeColor.toLowerCase() === '#ffffff' ? '#cbd5e1' : 'transparent'
                         }}
                       >
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-black/10 dark:bg-white/15">
-                          <LuLayers size={20} />
+                        <div className="w-full h-14 flex items-center justify-center bg-black/10 dark:bg-white/15">
+                          <LuLayers size={22} />
                         </div>
-                        <div className="w-full text-center mt-1">
+                        <div className="w-full px-2 py-1.5 text-center leading-tight">
                           <div className="flex items-center justify-center gap-1.5">
                             <span className="text-xs font-black truncate">All Items</span>
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/15">24</span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-black/15 dark:bg-white/20">24</span>
                           </div>
-                          <span className="text-[10px] opacity-80 block truncate">All Categories</span>
+                          <span className="text-[9px] opacity-75 font-medium block truncate mt-1">All Categories</span>
                         </div>
                       </div>
 
                       {/* Sample Category Big Card */}
-                      <div className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[105px] h-[86px] bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-sky-500/20 flex items-center justify-center text-2xl">
+                      <div className="rounded-2xl text-center flex flex-col items-center justify-between w-[115px] h-[105px] bg-white dark:bg-[#151c2e] border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden">
+                        <div className="w-full h-14 bg-gradient-to-br from-indigo-500/20 to-sky-500/20 flex items-center justify-center text-xl">
                           👔
                         </div>
-                        <div className="w-full text-center mt-1">
+                        <div className="w-full px-2 py-1.5 text-center leading-tight">
                           <div className="flex items-center justify-center gap-1.5">
                             <span className="text-xs font-black text-slate-900 dark:text-white truncate">Suit</span>
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">12</span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">12</span>
                           </div>
-                          <span className="text-[10px] text-slate-400 block truncate">Cotton • Suit</span>
+                          <span className="text-[9px] text-slate-400 font-medium block truncate mt-1">Cotton • Suit</span>
                         </div>
                       </div>
 
                       {/* Second Sample Big Card */}
-                      <div className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[105px] h-[86px] bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 flex items-center justify-center text-2xl">
+                      <div className="rounded-2xl text-center flex flex-col items-center justify-between w-[115px] h-[105px] bg-white dark:bg-[#151c2e] border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden">
+                        <div className="w-full h-14 bg-gradient-to-br from-amber-500/20 to-rose-500/20 flex items-center justify-center text-xl">
                           🧵
                         </div>
-                        <div className="w-full text-center mt-1">
+                        <div className="w-full px-2 py-1.5 text-center leading-tight">
                           <div className="flex items-center justify-center gap-1.5">
                             <span className="text-xs font-black text-slate-900 dark:text-white truncate">Pure Silk</span>
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">8</span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">8</span>
                           </div>
-                          <span className="text-[10px] text-slate-400 block truncate">Silk & Boski</span>
+                          <span className="text-[9px] text-slate-400 font-medium block truncate mt-1">Silk & Boski</span>
                         </div>
                       </div>
                     </>

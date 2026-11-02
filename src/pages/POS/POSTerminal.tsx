@@ -1380,10 +1380,10 @@ export const POSTerminal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedCategory('All')}
-                      className={`p-2 rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[105px] h-[86px] border ${
+                      className={`rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[115px] sm:w-[125px] h-[105px] border overflow-hidden ${
                         isAllSelected
-                          ? 'shadow-xs scale-[1.02]'
-                          : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                          ? 'shadow-sm scale-[1.02]'
+                          : 'bg-white dark:bg-[#151c2e] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                       style={
                         isAllSelected
@@ -1396,28 +1396,30 @@ export const POSTerminal: React.FC = () => {
                       }
                     >
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        className={`w-full h-14 flex items-center justify-center shrink-0 ${
                           isAllSelected
                             ? 'bg-black/10 dark:bg-white/15 text-current'
-                            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300'
                         }`}
                       >
-                        <LuLayers size={20} />
+                        <LuLayers size={22} />
                       </div>
-                      <div className="w-full text-center leading-tight">
-                        <div className="flex items-center justify-center gap-1">
+                      <div className="w-full px-2 py-1.5 text-center leading-tight">
+                        <div className="flex items-center justify-center gap-1.5">
                           <span className="text-xs font-black tracking-tight truncate">All Items</span>
                           <span
-                            className={`text-[9px] font-bold px-1 py-0.2 rounded-md shrink-0 ${
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
                               isAllSelected
-                                ? 'bg-black/10 dark:bg-white/15 text-current'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                                ? 'bg-black/15 dark:bg-white/20 text-current'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                             }`}
                           >
                             {totalItemCount}
                           </span>
                         </div>
-                        <span className="text-[9px] opacity-75 font-medium block truncate leading-none mt-0.5">All Categories</span>
+                        <span className="text-[9px] opacity-75 font-medium block truncate leading-none mt-1">
+                          All Categories
+                        </span>
                       </div>
                     </button>
                   );
@@ -1532,10 +1534,10 @@ export const POSTerminal: React.FC = () => {
                         key={cat.id}
                         type="button"
                         onClick={() => setSelectedCategory(cat.id)}
-                        className={`p-2 rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[105px] h-[86px] border ${
+                        className={`rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[115px] sm:w-[125px] h-[105px] border overflow-hidden ${
                           isSelected
-                            ? 'shadow-xs scale-[1.02]'
-                            : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                            ? 'shadow-sm scale-[1.02]'
+                            : 'bg-white dark:bg-[#151c2e] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                         style={
                           isSelected
@@ -1549,36 +1551,40 @@ export const POSTerminal: React.FC = () => {
                         title={cat.full_path || cat.name}
                       >
                         {cat.image_url ? (
-                          <img
-                            src={cat.image_url}
-                            alt={cat.name}
-                            className="w-10 h-10 rounded-xl object-cover shrink-0 border border-black/10 dark:border-white/10 shadow-2xs"
-                          />
+                          <div className="w-full h-14 bg-slate-100 dark:bg-slate-800 shrink-0 overflow-hidden relative">
+                            <img
+                              src={cat.image_url}
+                              alt={cat.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
                         ) : (
                           <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                            className={`w-full h-14 flex items-center justify-center shrink-0 ${
                               isSelected
                                 ? 'bg-black/10 dark:bg-white/15 text-current'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                                : 'bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400'
                             }`}
                           >
-                            <LuTag size={18} />
+                            <LuTag size={20} />
                           </div>
                         )}
-                        <div className="w-full text-center leading-tight">
-                          <div className="flex items-center justify-center gap-1">
-                            <span className="text-xs font-black tracking-tight truncate max-w-[70px]">{cat.name}</span>
+                        <div className="w-full px-2 py-1.5 text-center leading-tight">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="text-xs font-black tracking-tight truncate max-w-[85px]">{cat.name}</span>
                             <span
-                              className={`text-[9px] font-bold px-1 py-0.2 rounded-md shrink-0 ${
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
                                 isSelected
-                                  ? 'bg-black/10 dark:bg-white/15 text-current'
-                                  : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                                  ? 'bg-black/15 dark:bg-white/20 text-current'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                               }`}
                             >
                               {count}
                             </span>
                           </div>
-                          <span className="text-[9px] opacity-75 font-medium block truncate max-w-full leading-none mt-0.5">{subtitleText}</span>
+                          <span className="text-[9px] opacity-75 font-medium block truncate max-w-full leading-none mt-1">
+                            {subtitleText}
+                          </span>
                         </div>
                       </button>
                     );
