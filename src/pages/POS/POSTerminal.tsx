@@ -211,20 +211,20 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
     }
   };
 
-  const handleCardClick = () => {
+  const handleCardClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const orderId = order.id || order.order_number || order.ticket_number || '';
+    if (isSelectMode) {
+      onToggleSelect(orderId);
+      return;
+    }
     if (movedRef.current || Math.abs(offsetX) > 8) {
       return;
     }
     if (isSwiped) {
-      onSwipeChange(order.id, false);
+      onSwipeChange(orderId, false);
       return;
     }
-    // In multi-select mode: clicking anywhere selects that specific hold container!
-    if (isSelectMode) {
-      onToggleSelect(order.id);
-      return;
-    }
-    // In normal mode: clicking anywhere inside resumes the order!
     onResume(order);
   };
 
@@ -253,13 +253,13 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
           transform: isSelectMode ? 'none' : `translateX(${offsetX}px)`,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
+        onTouchStart={!isSelectMode ? handleTouchStart : undefined}
+        onTouchMove={!isSelectMode ? handleTouchMove : undefined}
+        onTouchEnd={!isSelectMode ? handleTouchEnd : undefined}
+        onMouseDown={!isSelectMode ? handleMouseDown : undefined}
+        onMouseMove={!isSelectMode ? handleMouseMove : undefined}
+        onMouseUp={!isSelectMode ? handleMouseUp : undefined}
+        onMouseLeave={!isSelectMode ? handleMouseLeave : undefined}
         onClick={handleCardClick}
         className={`relative z-10 p-4 rounded-2xl bg-white dark:bg-[#161D2B] border transition-all duration-150 shadow-xs space-y-2.5 cursor-pointer active:scale-[0.99] ${
           isSelectMode && isSelected
@@ -3351,11 +3351,13 @@ export const POSTerminal: React.FC = () => {
               ) : (
                 heldOrders.map((h) => {
                   const displayOrderNumber = h.order_number || h.ticket_number || 'Order';
+                  const orderId = h.id || displayOrderNumber;
+                  const isSelected = selectedHeldIds.includes(orderId);
                   return (
                     <SwipeableHeldOrderCard
-                      key={h.id}
-                      order={h}
-                      isSelected={selectedHeldIds.includes(h.id)}
+                      key={orderId}
+                      order={{ ...h, id: orderId }}
+                      isSelected={isSelected}
                       isSelectMode={isHeldSelectMode}
                       onToggleSelect={(id) => {
                         setSelectedHeldIds(prev =>
@@ -3372,14 +3374,14 @@ export const POSTerminal: React.FC = () => {
                           onConfirm: () => {
                             posService.removeHeldOrder(order.id);
                             setHeldOrders(posService.getHeldOrders());
-                            setSelectedHeldIds(prev => prev.filter(x => x !== order.id));
-                            if (swipedHeldId === order.id) setSwipedHeldId(null);
+                            setSelectedHeldIds(prev => prev.filter(x => x !== orderId));
+                            if (swipedHeldId === orderId) setSwipedHeldId(null);
                             playTone('delete');
                             toast.success(`Order ${displayOrderNumber} deleted`);
                           }
                         });
                       }}
-                      isSwiped={swipedHeldId === h.id}
+                      isSwiped={swipedHeldId === orderId}
                       onSwipeChange={(id, swiped) => {
                         setSwipedHeldId(swiped ? id : null);
                       }}
