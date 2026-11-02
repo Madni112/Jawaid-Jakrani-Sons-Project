@@ -757,7 +757,7 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                     id: 'card' as const,
                     title: 'Visual Card',
                     urduTitle: 'بڑی تصویر (اوپر)',
-                    subtitle: 'Extra large photo on top + name below',
+                    subtitle: 'Photo on top + name below (Boutique Tile)',
                     previewType: 'card'
                   },
                   {
@@ -876,15 +876,15 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                     <>
                       {/* Active All Items Card Example */}
                       <div
-                        className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[140px] h-[160px] shadow-sm border"
+                        className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[105px] h-[86px] shadow-sm border"
                         style={{
                           backgroundColor: themeColor,
                           color: contrastText,
                           borderColor: themeColor.toLowerCase() === '#ffffff' ? '#cbd5e1' : 'transparent'
                         }}
                       >
-                        <div className="w-full h-24 rounded-xl flex items-center justify-center bg-black/10 dark:bg-white/15">
-                          <LuLayers size={32} />
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-black/10 dark:bg-white/15">
+                          <LuLayers size={20} />
                         </div>
                         <div className="w-full text-center mt-1">
                           <div className="flex items-center justify-center gap-1.5">
@@ -896,8 +896,8 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                       </div>
 
                       {/* Sample Category Big Card */}
-                      <div className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[140px] h-[160px] bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs">
-                        <div className="w-full h-24 rounded-xl bg-gradient-to-br from-indigo-500/20 to-sky-500/20 flex items-center justify-center text-2xl">
+                      <div className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[105px] h-[86px] bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-sky-500/20 flex items-center justify-center text-2xl">
                           👔
                         </div>
                         <div className="w-full text-center mt-1">
@@ -910,8 +910,8 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                       </div>
 
                       {/* Second Sample Big Card */}
-                      <div className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[140px] h-[160px] bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs">
-                        <div className="w-full h-24 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 flex items-center justify-center text-2xl">
+                      <div className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[105px] h-[86px] bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 flex items-center justify-center text-2xl">
                           🧵
                         </div>
                         <div className="w-full text-center mt-1">
