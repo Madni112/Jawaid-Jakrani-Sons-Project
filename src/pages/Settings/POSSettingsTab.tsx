@@ -20,7 +20,8 @@ import {
   LuPackage,
   LuTruck,
   LuCircleSlash,
-  LuLayers
+  LuLayers,
+  LuPlus
 } from 'react-icons/lu';
 import { IoBarcodeOutline } from 'react-icons/io5';
 import toast from 'react-hot-toast';
@@ -983,6 +984,240 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700">12</span>
                           </div>
                           <span className="text-[10px] text-slate-400 block truncate">Cotton • Suit</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Product Card Size & Display Layout */}
+            <div className="pt-5 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {isRTL ? 'پروڈکٹ کارڈ سائز اور لے آؤٹ:' : 'Product Card Size & Layout:'}
+                </label>
+                <span className="text-[11px] font-semibold text-primary">
+                  {(posConfig.product_card_size || 'tall') === 'compact'
+                    ? (isRTL ? 'مختصر (2 لائنز سکرین پر فٹ)' : 'Compact (Fit 2 Rows)')
+                    : (isRTL ? 'مکمل بڑا فیشن کارڈ' : 'Showcase (Tall Card)')}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-3.5">
+                {isRTL
+                  ? 'منتخب کریں کہ پروڈکٹ کارڈ سکرین پر کتنا اونچا نظر آئے تاکہ بیک وقت 2 مکمل لائنز نظر آ سکیں۔'
+                  : 'Choose the product card size for the POS catalog grid. Select "Compact (Fit 2 Rows)" so 2 full rows fit comfortably on your screen without scrolling.'}
+              </p>
+
+              {/* 2 Options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                {[
+                  {
+                    id: 'tall' as const,
+                    title: 'Showcase (Tall)',
+                    urduTitle: 'مکمل فیشن کارڈ (بڑا)',
+                    subtitle: 'Current portrait photo (h-52 ~ 200px). Single row focus.',
+                    tag: 'Current View'
+                  },
+                  {
+                    id: 'compact' as const,
+                    title: 'Compact (Fit 2 Rows)',
+                    urduTitle: 'مختصر سائز (2 لائنز فٹ)',
+                    subtitle: 'Optimized height (h-28 ~ 100px). Fits 2 full rows on screen cleanly!',
+                    tag: 'Recommended'
+                  }
+                ].map(opt => {
+                  const isSelected = (posConfig.product_card_size || 'tall') === opt.id;
+                  return (
+                    <div
+                      key={opt.id}
+                      onClick={() => setPosConfig(prev => ({ ...prev, product_card_size: opt.id }))}
+                      className={`relative p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? 'border-primary bg-primary/5 dark:bg-primary/10 shadow-xs ring-2 ring-primary/20'
+                          : 'border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      {/* Top header badge */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isSelected
+                            ? 'bg-primary text-white'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                        }`}>
+                          {opt.tag}
+                        </span>
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                            isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300 dark:border-slate-600'
+                          }`}
+                        >
+                          {isSelected && <LuCheck size={11} />}
+                        </div>
+                      </div>
+
+                      {/* Mini visual mockup of card */}
+                      <div className="mb-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 flex justify-center">
+                        {opt.id === 'tall' ? (
+                          <div className="w-24 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1.5 shadow-2xs">
+                            <div className="w-full h-16 rounded bg-gradient-to-b from-sky-400/20 to-indigo-500/30 flex items-center justify-center text-xs mb-1">
+                              👔
+                            </div>
+                            <div className="h-2 w-14 bg-slate-200 dark:bg-slate-700 rounded mb-1" />
+                            <div className="h-1.5 w-10 bg-slate-100 dark:bg-slate-800 rounded mb-1" />
+                            <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-700">
+                              <div className="h-2 w-7 bg-primary/40 rounded" />
+                              <div className="w-3 h-3 rounded bg-primary/30" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <div className="w-20 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1 shadow-2xs">
+                              <div className="w-full h-8 rounded bg-gradient-to-b from-emerald-400/20 to-teal-500/30 flex items-center justify-center text-[10px] mb-1">
+                                👔
+                              </div>
+                              <div className="h-1.5 w-12 bg-slate-200 dark:bg-slate-700 rounded mb-0.5" />
+                              <div className="flex justify-between items-center pt-0.5 border-t border-slate-100 dark:border-slate-700">
+                                <div className="h-1.5 w-6 bg-primary/40 rounded" />
+                                <div className="w-2.5 h-2.5 rounded bg-primary/30" />
+                              </div>
+                            </div>
+                            <div className="w-20 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1 shadow-2xs">
+                              <div className="w-full h-8 rounded bg-gradient-to-b from-amber-400/20 to-rose-500/30 flex items-center justify-center text-[10px] mb-1">
+                                🧵
+                              </div>
+                              <div className="h-1.5 w-12 bg-slate-200 dark:bg-slate-700 rounded mb-0.5" />
+                              <div className="flex justify-between items-center pt-0.5 border-t border-slate-100 dark:border-slate-700">
+                                <div className="h-1.5 w-6 bg-primary/40 rounded" />
+                                <div className="w-2.5 h-2.5 rounded bg-primary/30" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Text info */}
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            {opt.title}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            • {opt.urduTitle}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                          {opt.subtitle}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Live Preview Container for Product Card */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <LuSparkles size={12} className="text-primary" />
+                    LIVE PRODUCT CARD PREVIEW (ON POS SCREEN):
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary">
+                    {(posConfig.product_card_size || 'tall') === 'compact' ? 'Compact: 2 Rows Fit' : 'Showcase: Tall Card'}
+                  </span>
+                </div>
+
+                <div className="flex items-start gap-3 overflow-x-auto py-1 no-scrollbar">
+                  {(posConfig.product_card_size || 'tall') === 'compact' ? (
+                    <>
+                      {/* Compact Sample Card 1 */}
+                      <div className="w-[140px] rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 p-2 shadow-xs shrink-0 flex flex-col justify-between">
+                        <div className="w-full h-20 rounded-xl bg-gradient-to-br from-indigo-500/20 to-sky-500/20 flex items-center justify-center text-2xl mb-1.5 relative">
+                          👔
+                          <span className="absolute bottom-1 left-1 px-1.5 py-0.2 rounded text-[8px] font-bold bg-black/60 text-white">Suit</span>
+                        </div>
+                        <div className="space-y-0.5 mb-1 text-left">
+                          <h4 className="font-bold text-[11px] text-slate-900 dark:text-white truncate">Suit Cotton Latha</h4>
+                          <p className="text-[9px] text-slate-400 font-medium truncate">Cotton • Suit</p>
+                          <div className="flex items-center justify-between text-[9px] text-slate-400">
+                            <span className="font-mono">P-1001</span>
+                            <span className="text-emerald-500 font-semibold">In Stock</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-xs font-extrabold text-slate-900 dark:text-white">Rs. 1,200</span>
+                          <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold">
+                            <LuPlus size={11} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Compact Sample Card 2 */}
+                      <div className="w-[140px] rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 p-2 shadow-xs shrink-0 flex flex-col justify-between">
+                        <div className="w-full h-20 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 flex items-center justify-center text-2xl mb-1.5 relative">
+                          🧵
+                          <span className="absolute bottom-1 left-1 px-1.5 py-0.2 rounded text-[8px] font-bold bg-black/60 text-white">Pure Silk</span>
+                        </div>
+                        <div className="space-y-0.5 mb-1 text-left">
+                          <h4 className="font-bold text-[11px] text-slate-900 dark:text-white truncate">Pure Silk Boski</h4>
+                          <p className="text-[9px] text-slate-400 font-medium truncate">Silk • Boski</p>
+                          <div className="flex items-center justify-between text-[9px] text-slate-400">
+                            <span className="font-mono">P-1002</span>
+                            <span className="text-emerald-500 font-semibold">In Stock</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-xs font-extrabold text-slate-900 dark:text-white">Rs. 3,500</span>
+                          <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold">
+                            <LuPlus size={11} />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Tall Sample Card 1 */}
+                      <div className="w-[150px] rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 p-2.5 shadow-xs shrink-0 flex flex-col justify-between">
+                        <div className="w-full h-36 rounded-xl bg-gradient-to-br from-indigo-500/20 to-sky-500/20 flex items-center justify-center text-3xl mb-2 relative">
+                          👔
+                          <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded text-[9px] font-bold bg-black/60 text-white">Suit</span>
+                        </div>
+                        <div className="space-y-1 mb-1.5 text-left">
+                          <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">Suit Cotton Latha</h4>
+                          <p className="text-[10px] text-slate-400 font-medium truncate">Cotton • Suit</p>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span className="font-mono">P-1001</span>
+                            <span className="text-emerald-500 font-semibold">In Stock</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-xs font-extrabold text-slate-900 dark:text-white">Rs. 1,200</span>
+                          <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold">
+                            <LuPlus size={13} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tall Sample Card 2 */}
+                      <div className="w-[150px] rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 p-2.5 shadow-xs shrink-0 flex flex-col justify-between">
+                        <div className="w-full h-36 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 flex items-center justify-center text-3xl mb-2 relative">
+                          🧵
+                          <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded text-[9px] font-bold bg-black/60 text-white">Pure Silk</span>
+                        </div>
+                        <div className="space-y-1 mb-1.5 text-left">
+                          <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">Pure Silk Boski</h4>
+                          <p className="text-[10px] text-slate-400 font-medium truncate">Silk • Boski</p>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span className="font-mono">P-1002</span>
+                            <span className="text-emerald-500 font-semibold">In Stock</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-xs font-extrabold text-slate-900 dark:text-white">Rs. 3,500</span>
+                          <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold">
+                            <LuPlus size={13} />
+                          </div>
                         </div>
                       </div>
                     </>

@@ -1737,92 +1737,106 @@ export const POSTerminal: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
-                  {filteredProducts.map((prod) => {
-                    const cartItem = cartItems.find((it) => it.product_id === prod.id);
-
+                (() => {
+                    const isCompactProduct = (posConfig.product_card_size || 'tall') === 'compact';
                     return (
-                      <div
-                        key={prod.id}
-                        onClick={() => handleAddToCart(prod)}
-                        className={`group relative rounded-2xl bg-white dark:bg-[#111622] border transition-all duration-200 p-3 flex flex-col justify-between cursor-pointer hover:shadow-lg hover:-translate-y-0.5 ${
-                          cartItem
-                            ? 'border-primary ring-2 ring-primary/20 dark:ring-primary/30'
-                            : 'border-slate-200 dark:border-slate-800/80 hover:border-primary/50'
-                        }`}
-                      >
-                        {/* Selected quantity badge */}
-                        {cartItem && (
-                          <div
-                            className="absolute top-2.5 right-2.5 z-10 w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center shadow-md animate-bounce"
-                            style={{
-                              backgroundColor: accentColor,
-                              color: contrastText,
-                              border: isAccentWhite ? '1px solid #cbd5e1' : undefined
-                            }}
-                          >
-                            {cartItem.quantity}
-                          </div>
-                        )}
+                      <div className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 ${isCompactProduct ? 'gap-2.5' : 'gap-3.5'}`}>
+                        {filteredProducts.map((prod) => {
+                          const cartItem = cartItems.find((it) => it.product_id === prod.id);
 
-                        {/* Product Image / Full Placeholder */}
-                        <div className="relative w-full h-48 sm:h-52 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 mb-2.5 shrink-0">
-                          {prod.image_url ? (
-                            <img
-                              src={prod.image_url}
-                              alt={prod.product_name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200/60 dark:from-slate-800/50 dark:to-slate-800/90 text-slate-300 dark:text-slate-600 group-hover:text-primary/70 transition-colors">
-                              <LuShoppingBag size={48} className="opacity-70 group-hover:scale-110 transition-transform duration-200" />
+                          return (
+                            <div
+                              key={prod.id}
+                              onClick={() => handleAddToCart(prod)}
+                              className={`group relative rounded-2xl bg-white dark:bg-[#111622] border transition-all duration-200 ${
+                                isCompactProduct ? 'p-2 sm:p-2.5' : 'p-3'
+                              } flex flex-col justify-between cursor-pointer hover:shadow-lg hover:-translate-y-0.5 ${
+                                cartItem
+                                  ? 'border-primary ring-2 ring-primary/20 dark:ring-primary/30'
+                                  : 'border-slate-200 dark:border-slate-800/80 hover:border-primary/50'
+                              }`}
+                            >
+                              {/* Selected quantity badge */}
+                              {cartItem && (
+                                <div
+                                  className={`absolute ${isCompactProduct ? 'top-1.5 right-1.5 w-5 h-5 text-[10px]' : 'top-2.5 right-2.5 w-6 h-6 text-xs'} z-10 rounded-full font-bold flex items-center justify-center shadow-md animate-bounce`}
+                                  style={{
+                                    backgroundColor: accentColor,
+                                    color: contrastText,
+                                    border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                                  }}
+                                >
+                                  {cartItem.quantity}
+                                </div>
+                              )}
+
+                              {/* Product Image / Full Placeholder */}
+                              <div className={`relative w-full ${
+                                isCompactProduct ? 'h-24 sm:h-28 mb-1.5' : 'h-48 sm:h-52 mb-2.5'
+                              } rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 shrink-0`}>
+                                {prod.image_url ? (
+                                  <img
+                                    src={prod.image_url}
+                                    alt={prod.product_name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200/60 dark:from-slate-800/50 dark:to-slate-800/90 text-slate-300 dark:text-slate-600 group-hover:text-primary/70 transition-colors">
+                                    <LuShoppingBag size={isCompactProduct ? 30 : 48} className="opacity-70 group-hover:scale-110 transition-transform duration-200" />
+                                  </div>
+                                )}
+
+                                {/* Category Badge */}
+                                <span className={`absolute ${isCompactProduct ? 'bottom-1 left-1 px-1.5 py-0.2 text-[9px]' : 'bottom-2 left-2 px-2 py-0.5 text-[10px]'} rounded-md font-bold bg-black/60 backdrop-blur-xs text-white`}>
+                                  {prod.category}
+                                </span>
+                              </div>
+
+                              {/* Product Title & Code */}
+                              <div className={isCompactProduct ? 'space-y-0.5 mb-1.5' : 'space-y-1 mb-2'}>
+                                <h4
+                                  className={`font-bold text-slate-900 dark:text-slate-100 line-clamp-1 group-hover:text-primary transition-colors ${
+                                    isCompactProduct ? 'text-[11px] sm:text-xs' : 'text-xs'
+                                  }`}
+                                  title={prod.product_name}
+                                >
+                                  {prod.product_name}
+                                </h4>
+                                {(() => {
+                                  const hierarchyParts = [prod.parent_category, prod.sub_category]
+                                    .filter(Boolean)
+                                    .map((s: any) => String(s).trim())
+                                    .filter((v, i, a) => a.indexOf(v) === i);
+                                  if (hierarchyParts.length === 0) return null;
+                                  const catLine = hierarchyParts.join(' • ');
+                                  return (
+                                    <p className={`${isCompactProduct ? 'text-[9px]' : 'text-[10px]'} text-slate-400 font-medium truncate`} title={catLine}>
+                                      {catLine}
+                                    </p>
+                                  );
+                                })()}
+                                <div className={`flex items-center justify-between text-slate-400 ${isCompactProduct ? 'text-[9px]' : 'text-[10px]'}`}>
+                                  <span className="font-mono">{prod.item_sr_no || 'SKU'}</span>
+                                  <span className="text-emerald-500 font-semibold">In Stock</span>
+                                </div>
+                              </div>
+
+                              {/* Price & Add Indicator */}
+                              <div className={`flex items-center justify-between ${isCompactProduct ? 'pt-1.5' : 'pt-2'} border-t border-slate-100 dark:border-slate-800/60`}>
+                                <span className={`${isCompactProduct ? 'text-xs' : 'text-xs sm:text-sm'} font-extrabold text-slate-900 dark:text-white`}>
+                                  Rs. {prod.retail_price.toLocaleString()}
+                                </span>
+                                <div className={`${isCompactProduct ? 'w-5 h-5 rounded-md text-[11px]' : 'w-6 h-6 rounded-lg text-xs'} bg-slate-100 dark:bg-slate-800 group-hover:bg-primary group-hover:text-white text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold transition`}>
+                                  <LuPlus size={isCompactProduct ? 11 : 13} />
+                                </div>
+                              </div>
                             </div>
-                          )}
-
-                          {/* Category Badge */}
-                          <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 backdrop-blur-xs text-white">
-                            {prod.category}
-                          </span>
-                        </div>
-
-                        {/* Product Title & Code */}
-                        <div className="space-y-1 mb-2">
-                          <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1 group-hover:text-primary transition-colors" title={prod.product_name}>
-                            {prod.product_name}
-                          </h4>
-                          {(() => {
-                            const hierarchyParts = [prod.parent_category, prod.sub_category]
-                              .filter(Boolean)
-                              .map((s: any) => String(s).trim())
-                              .filter((v, i, a) => a.indexOf(v) === i);
-                            if (hierarchyParts.length === 0) return null;
-                            const catLine = hierarchyParts.join(' • ');
-                            return (
-                              <p className="text-[10px] text-slate-400 font-medium truncate" title={catLine}>
-                                {catLine}
-                              </p>
-                            );
-                          })()}
-                          <div className="flex items-center justify-between text-[10px] text-slate-400">
-                            <span className="font-mono">{prod.item_sr_no || 'SKU'}</span>
-                            <span className="text-emerald-500 font-semibold">In Stock</span>
-                          </div>
-                        </div>
-
-                        {/* Price & Add Indicator */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60">
-                          <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-                            Rs. {prod.retail_price.toLocaleString()}
-                          </span>
-                          <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 group-hover:bg-primary group-hover:text-white text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs font-bold transition">
-                            <LuPlus size={13} />
-                          </div>
-                        </div>
+                          );
+                        })}
                       </div>
                     );
-                  })}
-                </div>
+                  })()
               )}
             </div>
 
