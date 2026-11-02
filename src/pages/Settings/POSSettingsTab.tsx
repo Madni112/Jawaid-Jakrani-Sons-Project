@@ -19,7 +19,8 @@ import {
   LuShoppingBag,
   LuPackage,
   LuTruck,
-  LuCircleSlash
+  LuCircleSlash,
+  LuLayers
 } from 'react-icons/lu';
 import { IoBarcodeOutline } from 'react-icons/io5';
 import toast from 'react-hot-toast';
