@@ -88,6 +88,20 @@ export const POSTerminal: React.FC = () => {
   // Profile dropdown and In-POS settings modal
   const [profileDropdownOpen, setProfileDropdownOpen] = useState<boolean>(false);
   const [isPosSettingsModalOpen, setIsPosSettingsModalOpen] = useState<boolean>(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    if (profileDropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [profileDropdownOpen]);
 
   // Dynamic Theme Accent
   const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
@@ -970,7 +984,7 @@ export const POSTerminal: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         
         {/* ── TOP POS NAVBAR ── */}
-        <header className="h-16 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 px-5 flex items-center justify-between shrink-0 gap-4 z-10">
+        <header className="h-16 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 px-5 flex items-center justify-between shrink-0 gap-4 z-40 relative">
           
           {/* Left: Terminal pill & Live clock */}
           <div className="flex items-center gap-4 shrink-0">
@@ -1109,10 +1123,13 @@ export const POSTerminal: React.FC = () => {
             </button>
 
             {/* Active Cashier Avatar, Name & Profile Dropdown */}
-            <ClickOutside onClick={() => setProfileDropdownOpen(false)} className="relative">
+            <div ref={profileDropdownRef} className="relative z-50 shrink-0">
               <button
                 type="button"
-                onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setProfileDropdownOpen((prev) => !prev);
+                }}
                 className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800 hover:opacity-90 transition cursor-pointer select-none text-left"
                 title="Cashier Profile & POS Settings"
               >
@@ -1149,9 +1166,13 @@ export const POSTerminal: React.FC = () => {
 
               {/* Profile Dropdown Menu */}
               {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2.5 w-64 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-2 z-50 animate-fadeIn space-y-1">
+                <div
+                  className="absolute right-0 top-full mt-2 w-72 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-2.5 animate-fadeIn space-y-1.5"
+                  style={{ zIndex: 99999 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {/* User Profile Info Card */}
-                  <div className="px-3 py-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800/80 mb-1">
+                  <div className="px-3.5 py-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800/80">
                     <p className="text-xs font-black text-slate-900 dark:text-white capitalize truncate" title={displayCashierName}>
                       {displayCashierName}
                     </p>
@@ -1186,9 +1207,9 @@ export const POSTerminal: React.FC = () => {
                       setProfileDropdownOpen(false);
                       setIsPosSettingsModalOpen(true);
                     }}
-                    className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                    className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                   >
-                    <LuSettings size={15} className="text-primary" />
+                    <LuSettings size={16} className="text-primary" />
                     <span>POS Settings</span>
                   </button>
 
@@ -1199,9 +1220,9 @@ export const POSTerminal: React.FC = () => {
                       setProfileDropdownOpen(false);
                       navigate('/');
                     }}
-                    className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                    className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                   >
-                    <LuArrowLeft size={15} className="text-slate-500" />
+                    <LuArrowLeft size={16} className="text-slate-500" />
                     <span>Exit to ERP</span>
                   </button>
 
@@ -1214,14 +1235,14 @@ export const POSTerminal: React.FC = () => {
                       setProfileDropdownOpen(false);
                       logout();
                     }}
-                    className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition cursor-pointer"
+                    className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition cursor-pointer"
                   >
-                    <LuLogOut size={15} />
+                    <LuLogOut size={16} />
                     <span>Log Out</span>
                   </button>
                 </div>
               )}
-            </ClickOutside>
+            </div>
           </div>
         </header>
 
