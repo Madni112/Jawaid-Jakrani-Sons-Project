@@ -200,15 +200,15 @@ const DropdownUser = () => {
               <span>{isRTL ? 'سیٹنگز' : 'Settings'}</span>
             </Link>
 
-                        {/* POS Settings Direct Shortcut */}
+                        {/* POS Terminal Direct Shortcut */}
             <Link
-              to="/settings?tab=pos_settings"
+              to="/pos/terminal"
               onClick={() => setDropdownOpen(false)}
               className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-meta-4/40 transition duration-150 ease-in-out cursor-pointer group"
             >
               <div className="flex items-center gap-3">
                 <LuStore size={17} className="text-primary shrink-0" />
-                <span>{isRTL ? 'پی او ایس سیٹنگز' : 'POS Settings'}</span>
+                <span>{isRTL ? 'پی او ایس ٹرمینل' : 'Point of Sale (POS)'}</span>
               </div>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                 POS

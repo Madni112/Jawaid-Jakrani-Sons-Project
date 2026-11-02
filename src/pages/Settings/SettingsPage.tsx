@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { POSSettingsTab } from './POSSettingsTab';
 import {
   LuUser,
   LuPalette,
@@ -161,14 +160,6 @@ const SETTINGS_TABS: TabItem[] = [
     description: 'Export records & complete ERP snapshots',
     urDescription: 'ریکارڈز اور مکمل بیک اپ اسنیپ شاٹس',
     icon: LuHardDrive,
-  },
-  {
-    id: 'pos_settings',
-    label: 'POS & Counter Settings',
-    urLabel: 'پی او ایس سیٹنگز',
-    description: 'Receipt layout, terminal defaults, scanners & taxes',
-    urDescription: 'رسید لے آؤٹ، ٹرمینل ڈیفالٹس، اسکینرز اور ٹیکس',
-    icon: LuStore,
   },
 ];
 
@@ -2866,7 +2857,6 @@ const SettingsPage: React.FC = () => {
               </div>
             </div>
           )}
-                  {activeTab === 'pos_settings' && <POSSettingsTab />}
         </main>
       </div>
     </div>
