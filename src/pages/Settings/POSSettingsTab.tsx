@@ -729,6 +729,124 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                 </span>
               </div>
             </div>
+
+            {/* Category Visual Style Selector */}
+            <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                  {isRTL ? 'کیٹیگری دکھانے کا انداز:' : 'Category Visual Style:'}
+                </label>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {isRTL
+                    ? 'منتخب کریں کہ ٹرمینل کے اوپری بار میں کیٹیگریز کس طرح دکھائی دیں'
+                    : 'Choose how category selector buttons appear in the POS top navigation bar.'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  {
+                    id: 'pill' as const,
+                    title: 'Compact Pill',
+                    urduTitle: 'سائیڈ تصویر (ڈیفالٹ)',
+                    subtitle: 'Small side photo + text & count',
+                    previewType: 'pill'
+                  },
+                  {
+                    id: 'card' as const,
+                    title: 'Visual Card',
+                    urduTitle: 'بڑی تصویر (اوپر)',
+                    subtitle: 'Big photo on top + name below',
+                    previewType: 'card'
+                  },
+                  {
+                    id: 'text' as const,
+                    title: 'Minimal Text',
+                    urduTitle: 'بغیر تصویر (صاف)',
+                    subtitle: 'Pure text & count badge (No photo)',
+                    previewType: 'text'
+                  }
+                ].map(opt => {
+                  const isSelected = (posConfig.category_display_style || 'pill') === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setPosConfig(prev => ({ ...prev, category_display_style: opt.id }))}
+                      className={`p-3 rounded-2xl border-2 transition-all flex flex-col justify-between cursor-pointer text-left ${
+                        isSelected
+                          ? 'shadow-xs scale-[1.02]'
+                          : 'border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}
+                      style={
+                        isSelected
+                          ? {
+                              backgroundColor: `${themeColor}12`,
+                              borderColor: themeColor,
+                              color: themeColor.toLowerCase() === '#ffffff' ? '#0f172a' : undefined
+                            }
+                          : undefined
+                      }
+                    >
+                      {/* Mini visual representation */}
+                      <div className="mb-2.5 w-full">
+                        {opt.previewType === 'pill' && (
+                          <div className="flex items-center gap-2 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs">
+                            <div className="w-6 h-6 rounded-md bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                              📷
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="h-2 w-12 bg-slate-300 dark:bg-slate-700 rounded-sm" />
+                              <div className="h-1.5 w-8 bg-slate-200 dark:bg-slate-800 rounded-sm mt-1" />
+                            </div>
+                            <span className="text-[9px] font-bold px-1 bg-slate-100 dark:bg-slate-800 rounded">5</span>
+                          </div>
+                        )}
+                        {opt.previewType === 'card' && (
+                          <div className="flex flex-col items-center p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs text-center">
+                            <div className="w-full h-7 rounded-md bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mb-1">
+                              📸 Big Pic
+                            </div>
+                            <div className="h-2 w-12 bg-slate-300 dark:bg-slate-700 rounded-sm" />
+                            <div className="h-1.5 w-6 bg-slate-200 dark:bg-slate-800 rounded-sm mt-1" />
+                          </div>
+                        )}
+                        {opt.previewType === 'text' && (
+                          <div className="flex items-center justify-between p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs">
+                            <div>
+                              <div className="h-2.5 w-14 bg-slate-300 dark:bg-slate-700 rounded-sm" />
+                              <div className="h-1.5 w-8 bg-slate-200 dark:bg-slate-800 rounded-sm mt-1" />
+                            </div>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">5</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between w-full">
+                        <div>
+                          <span className="text-xs font-black block tracking-tight">
+                            {isRTL ? opt.urduTitle : opt.title}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block mt-0.5 leading-tight font-medium">
+                            {opt.subtitle}
+                          </span>
+                        </div>
+                        {isSelected ? (
+                          <div
+                            className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1.5"
+                            style={{ backgroundColor: themeColor, color: contrastText }}
+                          >
+                            <LuCheck size={10} />
+                          </div>
+                        ) : (
+                          <div className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-600 shrink-0 ml-1.5" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}

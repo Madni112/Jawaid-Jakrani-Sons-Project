@@ -109,6 +109,7 @@ export interface PosSettings {
   barcode_auto_add: boolean;
   sound_effects_enabled: boolean;
   software_credit?: string;
+  category_display_style?: 'pill' | 'card' | 'text';
 }
 
 export interface PosProductItem {
@@ -212,7 +213,8 @@ export const DEFAULT_POS_SETTINGS: PosSettings = {
   default_tax_rate: 0,
   barcode_auto_add: true,
   sound_effects_enabled: true,
-  software_credit: 'Software Developed by: NHT ENTERPRISES - +92 312 8039911'
+  software_credit: 'Software Developed by: NHT ENTERPRISES - +92 312 8039911',
+  category_display_style: 'pill'
 };
 
 // Initial Sample Boutique Products matching the user's reference layout

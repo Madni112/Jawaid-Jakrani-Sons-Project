@@ -1367,54 +1367,147 @@ export const POSTerminal: React.FC = () => {
               </div>
             )}
 
-            {/* Category Filter Pills (with Category Image Avatar) */}
+            {/* Category Filter Pills (with Dynamic Display Style: pill | card | text) */}
             <div className="p-3 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 flex items-center gap-2.5 overflow-x-auto no-scrollbar shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedCategory('All')}
-                className={`px-3 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex items-center gap-2.5 min-w-[120px] border ${
-                  selectedCategory === 'All'
-                    ? 'shadow-xs scale-[1.02]'
-                    : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
-                }`}
-                style={
-                  selectedCategory === 'All'
-                    ? {
-                        backgroundColor: accentColor,
-                        color: contrastText,
-                        borderColor: isAccentWhite ? '#cbd5e1' : 'transparent'
+              {/* All Items Button */}
+              {(() => {
+                const catStyle = posConfig.category_display_style || 'pill';
+                const isAllSelected = selectedCategory === 'All';
+                const totalItemCount = products.filter((p) => p.show_in_pos !== false).length;
+
+                if (catStyle === 'card') {
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory('All')}
+                      className={`p-2 rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[110px] h-[115px] border ${
+                        isAllSelected
+                          ? 'shadow-xs scale-[1.02]'
+                          : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                      }`}
+                      style={
+                        isAllSelected
+                          ? {
+                              backgroundColor: accentColor,
+                              color: contrastText,
+                              borderColor: isAccentWhite ? '#cbd5e1' : 'transparent'
+                            }
+                          : undefined
                       }
-                    : undefined
+                    >
+                      <div
+                        className={`w-full h-14 rounded-xl flex items-center justify-center shrink-0 ${
+                          isAllSelected
+                            ? 'bg-black/10 dark:bg-white/15 text-current'
+                            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        <LuLayers size={22} />
+                      </div>
+                      <div className="w-full text-center mt-1">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs font-black tracking-tight truncate">All Items</span>
+                          <span
+                            className={`text-[9px] font-bold px-1 py-0.2 rounded-md shrink-0 ${
+                              isAllSelected
+                                ? 'bg-black/10 dark:bg-white/15 text-current'
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            }`}
+                          >
+                            {totalItemCount}
+                          </span>
+                        </div>
+                        <span className="text-[9px] opacity-75 font-medium block truncate">All Categories</span>
+                      </div>
+                    </button>
+                  );
                 }
-              >
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    selectedCategory === 'All'
-                      ? 'bg-black/10 dark:bg-white/15 text-current'
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  <LuLayers size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="text-xs font-black tracking-tight">All Items</span>
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
-                        selectedCategory === 'All'
+
+                if (catStyle === 'text') {
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory('All')}
+                      className={`px-3.5 py-2 rounded-xl text-left transition shrink-0 cursor-pointer flex items-center gap-2 border ${
+                        isAllSelected
+                          ? 'shadow-xs scale-[1.02]'
+                          : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                      }`}
+                      style={
+                        isAllSelected
+                          ? {
+                              backgroundColor: accentColor,
+                              color: contrastText,
+                              borderColor: isAccentWhite ? '#cbd5e1' : 'transparent'
+                            }
+                          : undefined
+                      }
+                    >
+                      <span className="text-xs font-black tracking-tight">All Items</span>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
+                          isAllSelected
+                            ? 'bg-black/10 dark:bg-white/15 text-current'
+                            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {totalItemCount}
+                      </span>
+                    </button>
+                  );
+                }
+
+                // Default: 'pill' (side thumbnail)
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory('All')}
+                    className={`px-3 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex items-center gap-2.5 min-w-[120px] border ${
+                      isAllSelected
+                        ? 'shadow-xs scale-[1.02]'
+                        : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                    }`}
+                    style={
+                      isAllSelected
+                        ? {
+                            backgroundColor: accentColor,
+                            color: contrastText,
+                            borderColor: isAccentWhite ? '#cbd5e1' : 'transparent'
+                          }
+                        : undefined
+                    }
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        isAllSelected
                           ? 'bg-black/10 dark:bg-white/15 text-current'
                           : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                       }`}
                     >
-                      {products.filter((p) => p.show_in_pos !== false).length}
-                    </span>
-                  </div>
-                  <span className="text-[10px] opacity-75 font-medium mt-0.5 block leading-tight">
-                    All Categories
-                  </span>
-                </div>
-              </button>
+                      <LuLayers size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-xs font-black tracking-tight">All Items</span>
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
+                            isAllSelected
+                              ? 'bg-black/10 dark:bg-white/15 text-current'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          {totalItemCount}
+                        </span>
+                      </div>
+                      <span className="text-[10px] opacity-75 font-medium mt-0.5 block leading-tight">
+                        All Categories
+                      </span>
+                    </div>
+                  </button>
+                );
+              })()}
 
+              {/* Filtered Categories */}
               {categories
                 .filter((c) => c.show_in_pos !== false)
                 .map((cat) => {
@@ -1426,13 +1519,108 @@ export const POSTerminal: React.FC = () => {
                 })
                 .filter(({ count, isSelected }) => count > 0 || isSelected)
                 .map(({ cat, count, isSelected }) => {
-                  // Hierarchy subtitle formatting without mentioning "Parent:" or "Sub:"
+                  const catStyle = posConfig.category_display_style || 'pill';
                   const hierarchyParts = [cat.parent_name, cat.sub_name]
                     .filter(Boolean)
                     .map((s) => String(s).trim())
                     .filter((v, i, a) => a.indexOf(v) === i && v.toLowerCase() !== cat.name.toLowerCase());
                   const subtitleText = hierarchyParts.length > 0 ? hierarchyParts.join(' • ') : 'Cloth Category';
 
+                  if (catStyle === 'card') {
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat.id)}
+                        className={`p-2 rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[110px] h-[115px] border ${
+                          isSelected
+                            ? 'shadow-xs scale-[1.02]'
+                            : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                        }`}
+                        style={
+                          isSelected
+                            ? {
+                                backgroundColor: accentColor,
+                                color: contrastText,
+                                borderColor: isAccentWhite ? '#cbd5e1' : 'transparent'
+                              }
+                            : undefined
+                        }
+                        title={cat.full_path || cat.name}
+                      >
+                        {cat.image_url ? (
+                          <img
+                            src={cat.image_url}
+                            alt={cat.name}
+                            className="w-full h-14 rounded-xl object-cover shrink-0 border border-black/10 dark:border-white/10 shadow-2xs"
+                          />
+                        ) : (
+                          <div
+                            className={`w-full h-14 rounded-xl flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? 'bg-black/10 dark:bg-white/15 text-current'
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            }`}
+                          >
+                            <LuTag size={20} />
+                          </div>
+                        )}
+                        <div className="w-full text-center mt-1">
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-xs font-black tracking-tight truncate max-w-[80px]">{cat.name}</span>
+                            <span
+                              className={`text-[9px] font-bold px-1 py-0.2 rounded-md shrink-0 ${
+                                isSelected
+                                  ? 'bg-black/10 dark:bg-white/15 text-current'
+                                  : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                              }`}
+                            >
+                              {count}
+                            </span>
+                          </div>
+                          <span className="text-[9px] opacity-75 font-medium block truncate max-w-full">{subtitleText}</span>
+                        </div>
+                      </button>
+                    );
+                  }
+
+                  if (catStyle === 'text') {
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat.id)}
+                        className={`px-3.5 py-2 rounded-xl text-left transition shrink-0 cursor-pointer flex items-center gap-2 border ${
+                          isSelected
+                            ? 'shadow-xs scale-[1.02]'
+                            : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
+                        }`}
+                        style={
+                          isSelected
+                            ? {
+                                backgroundColor: accentColor,
+                                color: contrastText,
+                                borderColor: isAccentWhite ? '#cbd5e1' : 'transparent'
+                              }
+                            : undefined
+                        }
+                        title={cat.full_path || cat.name}
+                      >
+                        <span className="text-xs font-black tracking-tight">{cat.name}</span>
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
+                            isSelected
+                              ? 'bg-black/10 dark:bg-white/15 text-current'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  }
+
+                  // Default: 'pill' (side thumbnail)
                   return (
                     <button
                       key={cat.id}
@@ -1486,7 +1674,7 @@ export const POSTerminal: React.FC = () => {
                             {count}
                           </span>
                         </div>
-                        <span className="text-[10px] opacity-75 font-medium mt-0.5 truncate block leading-tight">
+                        <span className="text-[10px] opacity-75 font-medium mt-0.5 block leading-tight truncate">
                           {subtitleText}
                         </span>
                       </div>
