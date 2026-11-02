@@ -76,6 +76,295 @@ import {
   PosSettings
 } from '../../service/posService';
 
+// ── SWIPEABLE HELD ORDER CARD COMPONENT ──
+interface SwipeableHeldOrderCardProps {
+  order: PosHeldOrder;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+  onResume: (order: PosHeldOrder) => void;
+  onDelete: (order: PosHeldOrder) => void;
+  isSwiped: boolean;
+  onSwipeChange: (id: string, swiped: boolean) => void;
+}
+
+const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
+  order,
+  isSelected,
+  onToggleSelect,
+  onResume,
+  onDelete,
+  isSwiped,
+  onSwipeChange
+}) => {
+  const [offsetX, setOffsetX] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const startXRef = React.useRef<number>(0);
+  const startYRef = React.useRef<number>(0);
+  const movedRef = React.useRef<boolean>(false);
+
+  React.useEffect(() => {
+    if (isSwiped) {
+      setOffsetX(-90);
+    } else {
+      setOffsetX(0);
+    }
+  }, [isSwiped]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startXRef.current = e.touches[0].clientX;
+    startYRef.current = e.touches[0].clientY;
+    movedRef.current = false;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const diffX = e.touches[0].clientX - startXRef.current;
+    const diffY = e.touches[0].clientY - startYRef.current;
+
+    // Detect horizontal swipe
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+      if (Math.abs(diffX) > 6) movedRef.current = true;
+      if (isSwiped) {
+        const val = Math.min(0, Math.max(-90, -90 + diffX));
+        setOffsetX(val);
+      } else {
+        if (diffX < 0) {
+          setOffsetX(Math.max(-90, diffX));
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    if (isSwiped) {
+      if (offsetX > -45) {
+        setOffsetX(0);
+        onSwipeChange(order.id, false);
+      } else {
+        setOffsetX(-90);
+      }
+    } else {
+      if (offsetX < -35) {
+        setOffsetX(-90);
+        onSwipeChange(order.id, true);
+      } else {
+        setOffsetX(0);
+      }
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    startXRef.current = e.clientX;
+    startYRef.current = e.clientY;
+    movedRef.current = false;
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const diffX = e.clientX - startXRef.current;
+    if (Math.abs(diffX) > 6) movedRef.current = true;
+    if (isSwiped) {
+      const val = Math.min(0, Math.max(-90, -90 + diffX));
+      setOffsetX(val);
+    } else {
+      if (diffX < 0) {
+        setOffsetX(Math.max(-90, diffX));
+      }
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (isSwiped) {
+      if (offsetX > -45) {
+        setOffsetX(0);
+        onSwipeChange(order.id, false);
+      } else {
+        setOffsetX(-90);
+      }
+    } else {
+      if (offsetX < -35) {
+        setOffsetX(-90);
+        onSwipeChange(order.id, true);
+      } else {
+        setOffsetX(0);
+      }
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      if (offsetX < -35) {
+        setOffsetX(-90);
+        onSwipeChange(order.id, true);
+      } else {
+        setOffsetX(isSwiped ? -90 : 0);
+      }
+    }
+  };
+
+  const handleCardClick = () => {
+    if (movedRef.current || Math.abs(offsetX) > 8) {
+      return;
+    }
+    if (isSwiped) {
+      onSwipeChange(order.id, false);
+      return;
+    }
+    onResume(order);
+  };
+
+  const displayOrderNumber = order.order_number || order.ticket_number || 'Order';
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl select-none group">
+      {/* Background Revealed on Swipe Left: Red Delete Button */}
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(order);
+        }}
+        className="absolute inset-y-0 right-0 w-[90px] bg-rose-600 hover:bg-rose-700 text-white flex flex-col items-center justify-center gap-1.5 cursor-pointer transition active:bg-rose-800 z-0 rounded-r-2xl font-bold shadow-inner"
+        title="Delete this held order"
+      >
+        <LuTrash2 size={22} className="animate-pulse" />
+        <span className="text-[11px] uppercase tracking-wider font-extrabold">Delete</span>
+      </div>
+
+      {/* Foreground Sliding Order Card */}
+      <div
+        style={{
+          transform: `translateX(${offsetX}px)`,
+          transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleCardClick}
+        className={`relative z-10 p-4 rounded-2xl bg-white dark:bg-[#161D2B] border transition-all duration-150 shadow-xs space-y-2.5 cursor-pointer active:scale-[0.99] ${
+          isSelected
+            ? 'border-primary ring-2 ring-primary/20 dark:ring-primary/40 bg-primary/5 dark:bg-primary/10'
+            : 'border-slate-200 dark:border-slate-800/90 hover:border-emerald-500/60 hover:shadow-md'
+        }`}
+      >
+        {/* Top Row: Checkbox, Order ID, Fulfillment, Time */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Selection Checkbox */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect(order.id);
+              }}
+              className={`w-5 h-5 rounded-md border flex items-center justify-center transition shrink-0 cursor-pointer ${
+                isSelected
+                  ? 'bg-primary border-primary text-white shadow-xs'
+                  : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 bg-white dark:bg-slate-800'
+              }`}
+              title={isSelected ? 'Deselect order' : 'Select order for multi-delete'}
+            >
+              {isSelected && <LuCheck size={13} className="stroke-[3]" />}
+            </div>
+
+            <span className="font-mono font-black text-xs text-slate-900 dark:text-white truncate">
+              {displayOrderNumber}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[11px] shrink-0">
+            {order.fulfillment_type && (
+              <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                {order.fulfillment_type}
+              </span>
+            )}
+            <span className="text-slate-400 font-medium">
+              {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        </div>
+
+        {/* Note / Tag */}
+        {order.note && (
+          <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-300/40 px-2.5 py-1 rounded-xl">
+            <LuTag size={12} className="shrink-0" />
+            <span className="font-semibold">{order.note}</span>
+          </div>
+        )}
+
+        {/* Customer & Items Meta */}
+        <div className="text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
+          <span className="font-bold truncate max-w-[200px]">
+            {order.customer_name || 'Walk-in Customer'}
+          </span>
+          <span className="text-slate-400 font-mono text-[11px]">
+            {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Items Preview Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+          {order.items?.slice(0, 4).map((it, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-[10px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[130px] shrink-0"
+              title={it.product_name}
+            >
+              <span className="font-bold text-slate-900 dark:text-white">{it.quantity}x</span>
+              <span className="truncate">{it.product_name}</span>
+            </div>
+          ))}
+          {(order.items?.length || 0) > 4 && (
+            <span className="text-[10px] text-slate-400 font-mono shrink-0">
+              +{(order.items?.length || 0) - 4} more
+            </span>
+          )}
+        </div>
+
+        {/* Bottom Total & Resume Indicator */}
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block leading-none mb-0.5">
+              Total
+            </span>
+            <span className="font-mono font-black text-sm text-slate-900 dark:text-white">
+              Rs. {order.subtotal.toLocaleString()}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Desktop swipe helper button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSwipeChange(order.id, !isSwiped);
+              }}
+              className="sm:opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition text-[11px] flex items-center gap-1 cursor-pointer"
+              title={isSwiped ? "Close delete" : "Swipe left to delete"}
+            >
+              <LuTrash2 size={13} />
+            </button>
+
+            {/* Click Anywhere / Tap to Resume Action Badge */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-800/60 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-emerald-600 transition shadow-2xs">
+              <LuRotateCcw size={12} />
+              <span>Tap to Resume</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const POSTerminal: React.FC = () => {
   const navigate = useNavigate();
   const { userEmail, businessName, currentUser, logout, userName } = useAuth();
@@ -263,6 +552,8 @@ export const POSTerminal: React.FC = () => {
   const [isHeldModalOpen, setIsHeldModalOpen] = useState<boolean>(false);
   const [isHoldNoteModalOpen, setIsHoldNoteModalOpen] = useState<boolean>(false);
   const [holdNoteInput, setHoldNoteInput] = useState<string>('');
+  const [selectedHeldIds, setSelectedHeldIds] = useState<string[]>([]);
+  const [swipedHeldId, setSwipedHeldId] = useState<string | null>(null);
 
   // Lock Terminal State
   const [isLocked, setIsLocked] = useState<boolean>(false);
@@ -2920,32 +3211,142 @@ export const POSTerminal: React.FC = () => {
             className="w-full max-w-lg bg-white dark:bg-[#111622] border-l border-slate-200 dark:border-slate-800 shadow-2xl h-full flex flex-col animate-slideLeft"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/50">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
-                  <LuPauseCircle size={20} />
+            {/* Header with Top Multi-Delete & Select Controls */}
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                    <LuPauseCircle size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                      Held Orders
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white">
+                        {heldOrders.length}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Safe Auto-Swap enabled • Switch without losing active items
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                    Held Orders
-                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white">
-                      {heldOrders.length}
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Safe Auto-Swap enabled • Switch without losing active items
-                  </p>
+
+                <div className="flex items-center gap-1.5">
+                  {/* Top Delete Button (Single or Multiple) */}
+                  {selectedHeldIds.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const count = selectedHeldIds.length;
+                        showConfirm({
+                          title: `Delete ${count} Held Order${count > 1 ? 's' : ''}`,
+                          message: `Are you sure you want to permanently delete the ${count} selected held order${count > 1 ? 's' : ''}?`,
+                          confirmLabel: `Delete ${count} Order${count > 1 ? 's' : ''}`,
+                          isDestructive: true,
+                          onConfirm: () => {
+                            selectedHeldIds.forEach(id => posService.removeHeldOrder(id));
+                            setHeldOrders(posService.getHeldOrders());
+                            setSelectedHeldIds([]);
+                            setSwipedHeldId(null);
+                            playTone('delete');
+                            toast.success(`${count} held order${count > 1 ? 's' : ''} deleted`);
+                          }
+                        });
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer animate-fadeIn"
+                      title="Delete selected held orders"
+                    >
+                      <LuTrash2 size={14} />
+                      <span>Delete ({selectedHeldIds.length})</span>
+                    </button>
+                  ) : heldOrders.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        showConfirm({
+                          title: 'Clear All Held Orders?',
+                          message: `Are you sure you want to delete all ${heldOrders.length} held orders?`,
+                          confirmLabel: 'Delete All',
+                          isDestructive: true,
+                          onConfirm: () => {
+                            heldOrders.forEach(h => posService.removeHeldOrder(h.id));
+                            setHeldOrders(posService.getHeldOrders());
+                            setSelectedHeldIds([]);
+                            setSwipedHeldId(null);
+                            playTone('delete');
+                            toast.success(`All ${heldOrders.length} held orders deleted`);
+                          }
+                        });
+                      }}
+                      className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                      title="Delete / Clear All Held Orders"
+                    >
+                      <LuTrash2 size={18} />
+                    </button>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsHeldModalOpen(false);
+                      setSelectedHeldIds([]);
+                      setSwipedHeldId(null);
+                    }}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800"
+                    title="Close (Esc)"
+                  >
+                    <LuX size={18} />
+                  </button>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsHeldModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800"
-                title="Close (Esc)"
-              >
-                <LuX size={18} />
-              </button>
+
+              {/* Sub-bar for Select All and Swipe Helper */}
+              {heldOrders.length > 0 && (
+                <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedHeldIds.length === heldOrders.length) {
+                          setSelectedHeldIds([]);
+                        } else {
+                          setSelectedHeldIds(heldOrders.map(h => h.id));
+                        }
+                      }}
+                      className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold cursor-pointer"
+                    >
+                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition ${
+                        selectedHeldIds.length === heldOrders.length && heldOrders.length > 0
+                          ? 'bg-primary border-primary text-white'
+                          : selectedHeldIds.length > 0
+                          ? 'bg-primary/20 border-primary text-primary'
+                          : 'border-slate-300 dark:border-slate-600'
+                      }`}>
+                        {selectedHeldIds.length === heldOrders.length && heldOrders.length > 0 ? (
+                          <LuCheck size={11} className="stroke-[3]" />
+                        ) : selectedHeldIds.length > 0 ? (
+                          <div className="w-1.5 h-1.5 bg-primary rounded-xs" />
+                        ) : null}
+                      </div>
+                      <span>
+                        {selectedHeldIds.length === heldOrders.length && heldOrders.length > 0
+                          ? 'Deselect All'
+                          : 'Select All'}
+                      </span>
+                    </button>
+
+                    {selectedHeldIds.length > 0 && (
+                      <span className="text-[11px] font-bold text-primary">
+                        ({selectedHeldIds.length} of {heldOrders.length} selected)
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Swipe left ➔ delete • Tap card to resume
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* List */}
@@ -2960,105 +3361,37 @@ export const POSTerminal: React.FC = () => {
                 heldOrders.map((h) => {
                   const displayOrderNumber = h.order_number || h.ticket_number || 'Order';
                   return (
-                    <div
+                    <SwipeableHeldOrderCard
                       key={h.id}
-                      className="p-4 rounded-2xl bg-white dark:bg-[#161D2B] border border-slate-200 dark:border-slate-800/90 hover:border-amber-500/50 transition-all shadow-xs space-y-2.5"
-                    >
-                      {/* Top Row: Order ID, Time, Packaging */}
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-black text-xs text-slate-900 dark:text-white">
-                          {displayOrderNumber}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-[11px]">
-                          {h.fulfillment_type && (
-                            <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                              {h.fulfillment_type}
-                            </span>
-                          )}
-                          <span className="text-slate-400 font-medium">
-                            {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Note / Tag */}
-                      {h.note && (
-                        <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-300/40 px-2.5 py-1 rounded-xl">
-                          <LuTag size={12} className="shrink-0" />
-                          <span className="font-semibold">{h.note}</span>
-                        </div>
-                      )}
-
-                      {/* Customer & Items Meta */}
-                      <div className="text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                        <span className="font-bold truncate max-w-[200px]">
-                          {h.customer_name || 'Walk-in Customer'}
-                        </span>
-                        <span className="text-slate-400 font-mono text-[11px]">
-                          {h.items?.length || 0} item{(h.items?.length || 0) !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-
-                      {/* Items Preview Chips */}
-                      <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                        {h.items?.slice(0, 4).map((it, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-[10px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[130px]"
-                            title={it.product_name}
-                          >
-                            <span className="font-bold text-slate-900 dark:text-white">{it.quantity}x</span>
-                            <span className="truncate">{it.product_name}</span>
-                          </div>
-                        ))}
-                        {(h.items?.length || 0) > 4 && (
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            +{(h.items?.length || 0) - 4} more
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Bottom Action Row */}
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Total</span>
-                          <span className="font-mono font-black text-sm text-slate-900 dark:text-white">
-                            Rs. {h.subtotal.toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              showConfirm({
-                                title: 'Delete Held Order',
-                                message: `Are you sure you want to permanently delete held order ${displayOrderNumber}?`,
-                                confirmLabel: 'Delete Order',
-                                isDestructive: true,
-                                onConfirm: () => {
-                                  posService.removeHeldOrder(h.id);
-                                  setHeldOrders(posService.getHeldOrders());
-                                  playTone('delete');
-                                  toast.success(`Order ${displayOrderNumber} deleted`);
-                                }
-                              });
-                            }}
-                            className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
-                            title="Delete Held Order"
-                          >
-                            <LuTrash2 size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleResumeHeldOrder(h)}
-                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
-                          >
-                            <LuRotateCcw size={13} />
-                            <span>Resume Order</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                      order={h}
+                      isSelected={selectedHeldIds.includes(h.id)}
+                      onToggleSelect={(id) => {
+                        setSelectedHeldIds(prev =>
+                          prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+                        );
+                      }}
+                      onResume={(order) => handleResumeHeldOrder(order)}
+                      onDelete={(order) => {
+                        showConfirm({
+                          title: 'Delete Held Order',
+                          message: `Are you sure you want to permanently delete held order ${displayOrderNumber}?`,
+                          confirmLabel: 'Delete Order',
+                          isDestructive: true,
+                          onConfirm: () => {
+                            posService.removeHeldOrder(order.id);
+                            setHeldOrders(posService.getHeldOrders());
+                            setSelectedHeldIds(prev => prev.filter(x => x !== order.id));
+                            if (swipedHeldId === order.id) setSwipedHeldId(null);
+                            playTone('delete');
+                            toast.success(`Order ${displayOrderNumber} deleted`);
+                          }
+                        });
+                      }}
+                      isSwiped={swipedHeldId === h.id}
+                      onSwipeChange={(id, swiped) => {
+                        setSwipedHeldId(swiped ? id : null);
+                      }}
+                    />
                   );
                 })
               )}
