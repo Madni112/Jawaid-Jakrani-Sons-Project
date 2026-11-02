@@ -756,7 +756,7 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                     id: 'card' as const,
                     title: 'Visual Card',
                     urduTitle: 'بڑی تصویر (اوپر)',
-                    subtitle: 'Big photo on top + name below',
+                    subtitle: 'Extra large photo on top + name below',
                     previewType: 'card'
                   },
                   {
@@ -788,36 +788,41 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                           : undefined
                       }
                     >
-                      {/* Mini visual representation */}
-                      <div className="mb-2.5 w-full">
+                      {/* Realistic Visual Example Inside Card */}
+                      <div className="mb-3 w-full">
                         {opt.previewType === 'pill' && (
                           <div className="flex items-center gap-2 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs">
-                            <div className="w-6 h-6 rounded-md bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-                              📷
+                            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm font-bold shrink-0">
+                              👔
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="h-2 w-12 bg-slate-300 dark:bg-slate-700 rounded-sm" />
-                              <div className="h-1.5 w-8 bg-slate-200 dark:bg-slate-800 rounded-sm mt-1" />
+                            <div className="flex-1 min-w-0 text-left">
+                              <span className="text-xs font-black text-slate-900 dark:text-white block leading-tight">Suit</span>
+                              <span className="text-[9px] text-slate-400 block leading-tight">Cotton</span>
                             </div>
-                            <span className="text-[9px] font-bold px-1 bg-slate-100 dark:bg-slate-800 rounded">5</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-md">5</span>
                           </div>
                         )}
+
                         {opt.previewType === 'card' && (
-                          <div className="flex flex-col items-center p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs text-center">
-                            <div className="w-full h-7 rounded-md bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary mb-1">
-                              📸 Big Pic
+                          <div className="flex flex-col items-center p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs text-center w-full">
+                            <div className="w-full h-14 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs mb-1.5 shadow-2xs">
+                              📸 Big Picture
                             </div>
-                            <div className="h-2 w-12 bg-slate-300 dark:bg-slate-700 rounded-sm" />
-                            <div className="h-1.5 w-6 bg-slate-200 dark:bg-slate-800 rounded-sm mt-1" />
+                            <div className="flex items-center justify-center gap-1.5 w-full">
+                              <span className="text-xs font-black text-slate-900 dark:text-white">Suit</span>
+                              <span className="text-[9px] font-bold px-1 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">5</span>
+                            </div>
+                            <span className="text-[9px] text-slate-400 block mt-0.5">Cotton • Suit</span>
                           </div>
                         )}
+
                         {opt.previewType === 'text' && (
-                          <div className="flex items-center justify-between p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs">
-                            <div>
-                              <div className="h-2.5 w-14 bg-slate-300 dark:bg-slate-700 rounded-sm" />
-                              <div className="h-1.5 w-8 bg-slate-200 dark:bg-slate-800 rounded-sm mt-1" />
+                          <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs w-full">
+                            <div className="text-left">
+                              <span className="text-xs font-black text-slate-900 dark:text-white block leading-tight">Suit</span>
+                              <span className="text-[9px] text-slate-400 block leading-tight">Cotton • Suit</span>
                             </div>
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">5</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-md">5</span>
                           </div>
                         )}
                       </div>
@@ -845,6 +850,143 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Live Interactive Category Bar Example */}
+              <div className="mt-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    {isRTL ? 'ٹرمینل میں لائیو نمونہ:' : 'Live Example in POS Terminal Bar:'}
+                  </span>
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                      backgroundColor: `${themeColor}20`,
+                      color: themeColor.toLowerCase() === '#ffffff' ? '#0f172a' : themeColor,
+                      border: `1px solid ${themeColor}`
+                    }}
+                  >
+                    {(posConfig.category_display_style || 'pill') === 'card' ? 'Visual Card (Big Pic)' : (posConfig.category_display_style || 'pill') === 'text' ? 'Minimal Text (No Pic)' : 'Compact Pill (Side Pic)'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 overflow-x-auto py-1 no-scrollbar">
+                  {(posConfig.category_display_style || 'pill') === 'card' ? (
+                    <>
+                      {/* Active All Items Card Example */}
+                      <div
+                        className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[140px] h-[160px] shadow-sm border"
+                        style={{
+                          backgroundColor: themeColor,
+                          color: contrastText,
+                          borderColor: themeColor.toLowerCase() === '#ffffff' ? '#cbd5e1' : 'transparent'
+                        }}
+                      >
+                        <div className="w-full h-24 rounded-xl flex items-center justify-center bg-black/10 dark:bg-white/15">
+                          <LuLayers size={32} />
+                        </div>
+                        <div className="w-full text-center mt-1">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="text-xs font-black truncate">All Items</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/15">24</span>
+                          </div>
+                          <span className="text-[10px] opacity-80 block truncate">All Categories</span>
+                        </div>
+                      </div>
+
+                      {/* Sample Category Big Card */}
+                      <div className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[140px] h-[160px] bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <div className="w-full h-24 rounded-xl bg-gradient-to-br from-indigo-500/20 to-sky-500/20 flex items-center justify-center text-2xl">
+                          👔
+                        </div>
+                        <div className="w-full text-center mt-1">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="text-xs font-black text-slate-900 dark:text-white truncate">Suit</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">12</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block truncate">Cotton • Suit</span>
+                        </div>
+                      </div>
+
+                      {/* Second Sample Big Card */}
+                      <div className="p-2.5 rounded-2xl text-center flex flex-col items-center justify-between w-[140px] h-[160px] bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <div className="w-full h-24 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 flex items-center justify-center text-2xl">
+                          🧵
+                        </div>
+                        <div className="w-full text-center mt-1">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="text-xs font-black text-slate-900 dark:text-white truncate">Pure Silk</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">8</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block truncate">Silk & Boski</span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (posConfig.category_display_style || 'pill') === 'text' ? (
+                    <>
+                      {/* Active Text Example */}
+                      <div
+                        className="px-4 py-2 rounded-xl text-left flex items-center gap-2 border shadow-xs"
+                        style={{
+                          backgroundColor: themeColor,
+                          color: contrastText,
+                          borderColor: themeColor.toLowerCase() === '#ffffff' ? '#cbd5e1' : 'transparent'
+                        }}
+                      >
+                        <span className="text-xs font-black">All Items</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/15">24</span>
+                      </div>
+
+                      {/* Inactive Text Examples */}
+                      <div className="px-4 py-2 rounded-xl text-left flex items-center gap-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-2xs">
+                        <span className="text-xs font-black">Suit</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700">12</span>
+                      </div>
+
+                      <div className="px-4 py-2 rounded-xl text-left flex items-center gap-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-2xs">
+                        <span className="text-xs font-black">Pure Silk</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700">8</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Active Pill Example */}
+                      <div
+                        className="px-3.5 py-2 rounded-xl text-left flex items-center gap-2.5 min-w-[130px] border shadow-xs"
+                        style={{
+                          backgroundColor: themeColor,
+                          color: contrastText,
+                          borderColor: themeColor.toLowerCase() === '#ffffff' ? '#cbd5e1' : 'transparent'
+                        }}
+                      >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-black/10 dark:bg-white/15">
+                          <LuLayers size={16} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-xs font-black">All Items</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/15">24</span>
+                          </div>
+                          <span className="text-[10px] opacity-80 block">All Categories</span>
+                        </div>
+                      </div>
+
+                      {/* Inactive Pill Examples */}
+                      <div className="px-3.5 py-2 rounded-xl text-left flex items-center gap-2.5 min-w-[130px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-2xs">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                          👔
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-xs font-black truncate">Suit</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700">12</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block truncate">Cotton • Suit</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -1380,7 +1380,7 @@ export const POSTerminal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedCategory('All')}
-                      className={`p-2 rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[110px] h-[115px] border ${
+                      className={`p-3 rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[145px] sm:w-[155px] min-h-[160px] sm:min-h-[170px] border ${
                         isAllSelected
                           ? 'shadow-xs scale-[1.02]'
                           : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
@@ -1396,19 +1396,19 @@ export const POSTerminal: React.FC = () => {
                       }
                     >
                       <div
-                        className={`w-full h-14 rounded-xl flex items-center justify-center shrink-0 ${
+                        className={`w-full h-24 sm:h-28 rounded-xl flex items-center justify-center shrink-0 ${
                           isAllSelected
                             ? 'bg-black/10 dark:bg-white/15 text-current'
                             : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                         }`}
                       >
-                        <LuLayers size={22} />
+                        <LuLayers size={34} />
                       </div>
-                      <div className="w-full text-center mt-1">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="text-xs font-black tracking-tight truncate">All Items</span>
+                      <div className="w-full text-center mt-1.5 space-y-0.5">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className="text-xs sm:text-sm font-black tracking-tight truncate">All Items</span>
                           <span
-                            className={`text-[9px] font-bold px-1 py-0.2 rounded-md shrink-0 ${
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${
                               isAllSelected
                                 ? 'bg-black/10 dark:bg-white/15 text-current'
                                 : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
@@ -1417,7 +1417,7 @@ export const POSTerminal: React.FC = () => {
                             {totalItemCount}
                           </span>
                         </div>
-                        <span className="text-[9px] opacity-75 font-medium block truncate">All Categories</span>
+                        <span className="text-[10px] opacity-80 font-medium block truncate">All Categories</span>
                       </div>
                     </button>
                   );
@@ -1532,7 +1532,7 @@ export const POSTerminal: React.FC = () => {
                         key={cat.id}
                         type="button"
                         onClick={() => setSelectedCategory(cat.id)}
-                        className={`p-2 rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[110px] h-[115px] border ${
+                        className={`p-3 rounded-2xl text-center transition shrink-0 cursor-pointer flex flex-col items-center justify-between w-[145px] sm:w-[155px] min-h-[160px] sm:min-h-[170px] border ${
                           isSelected
                             ? 'shadow-xs scale-[1.02]'
                             : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
@@ -1552,24 +1552,24 @@ export const POSTerminal: React.FC = () => {
                           <img
                             src={cat.image_url}
                             alt={cat.name}
-                            className="w-full h-14 rounded-xl object-cover shrink-0 border border-black/10 dark:border-white/10 shadow-2xs"
+                            className="w-full h-24 sm:h-28 rounded-xl object-cover shrink-0 border border-black/10 dark:border-white/10 shadow-xs"
                           />
                         ) : (
                           <div
-                            className={`w-full h-14 rounded-xl flex items-center justify-center shrink-0 ${
+                            className={`w-full h-24 sm:h-28 rounded-xl flex items-center justify-center shrink-0 ${
                               isSelected
                                 ? 'bg-black/10 dark:bg-white/15 text-current'
                                 : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                             }`}
                           >
-                            <LuTag size={20} />
+                            <LuTag size={30} />
                           </div>
                         )}
-                        <div className="w-full text-center mt-1">
-                          <div className="flex items-center justify-center gap-1">
-                            <span className="text-xs font-black tracking-tight truncate max-w-[80px]">{cat.name}</span>
+                        <div className="w-full text-center mt-1.5 space-y-0.5">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="text-xs sm:text-sm font-black tracking-tight truncate max-w-[105px]">{cat.name}</span>
                             <span
-                              className={`text-[9px] font-bold px-1 py-0.2 rounded-md shrink-0 ${
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${
                                 isSelected
                                   ? 'bg-black/10 dark:bg-white/15 text-current'
                                   : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
@@ -1578,7 +1578,7 @@ export const POSTerminal: React.FC = () => {
                               {count}
                             </span>
                           </div>
-                          <span className="text-[9px] opacity-75 font-medium block truncate max-w-full">{subtitleText}</span>
+                          <span className="text-[10px] opacity-80 font-medium block truncate max-w-full">{subtitleText}</span>
                         </div>
                       </button>
                     );
