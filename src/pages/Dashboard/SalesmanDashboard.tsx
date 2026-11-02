@@ -333,41 +333,42 @@ const SalesmanDashboard: React.FC = () => {
   return (
     <div className="space-y-6 pb-12">
       {/* 1. Header Banner */}
-      <GlassCard className="p-6 relative overflow-hidden bg-gradient-to-r from-emerald-700 via-teal-700 to-slate-900 text-white rounded-3xl shadow-xl">
-        <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+      <GlassCard className="p-6 relative overflow-hidden bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
+        <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-80 h-80 bg-gradient-to-bl from-slate-100 via-amber-50/20 to-transparent dark:from-slate-800/40 dark:via-transparent rounded-full blur-3xl pointer-events-none" />
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 z-10 relative">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 backdrop-blur-md text-sky-100 border border-white/20">
-                <MdPointOfSale className="mr-1 text-sm text-yellow-300" />
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+                <MdPointOfSale className="text-sm text-amber-600 dark:text-amber-400" />
                 Sales Terminal & Performance Dashboard
               </span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Live Synced
               </span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-xs">
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
               Welcome back, {displayName}!
             </h1>
-            <p className="text-sky-100 text-sm mt-1 max-w-xl">
+            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1 max-w-xl font-normal leading-relaxed">
               Track your daily sales performance, monitor warehouse dispatches, and check instant stock availability across A-39 and Shop.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {/* Salesman Filter for Admins */}
             {isAdminOrSuper && (
-              <div className="flex items-center bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 backdrop-blur-md">
-                <MdPerson className="text-sky-200 mr-2 text-base" />
+              <div className="flex items-center bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600 transition-all">
+                <MdPerson className="text-slate-400 dark:text-slate-500 mr-2 text-base" />
                 <select
                   value={selectedSalesman}
                   onChange={(e) => setSelectedSalesman(e.target.value)}
-                  className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer"
+                  className="bg-transparent text-slate-800 dark:text-slate-200 text-xs font-bold focus:outline-none cursor-pointer"
                 >
-                  <option value="ALL" className="text-slate-800">All Salesmen</option>
+                  <option value="ALL" className="text-slate-800 dark:text-slate-200 dark:bg-slate-800">All Salesmen</option>
                   {salesmanList.map((s) => (
-                    <option key={s} value={s} className="text-slate-800">
+                    <option key={s} value={s} className="text-slate-800 dark:text-slate-200 dark:bg-slate-800">
                       {s}
                     </option>
                   ))}
@@ -377,12 +378,12 @@ const SalesmanDashboard: React.FC = () => {
 
             {/* Salesman Filter for Merged Salesmen */}
             {isMergedSalesman && (
-              <div className="flex items-center bg-white/15 border border-white/30 rounded-xl px-3 py-1.5 backdrop-blur-md shadow-sm">
-                <MdPerson className="text-yellow-300 mr-2 text-base" />
+              <div className="flex items-center bg-amber-50/50 dark:bg-amber-950/30 border border-amber-300/80 dark:border-amber-700/60 rounded-xl px-3 py-1.5 shadow-2xs">
+                <MdPerson className="text-amber-600 dark:text-amber-400 mr-2 text-base" />
                 <select
                   value={selectedSalesman}
                   onChange={(e) => setSelectedSalesman(e.target.value)}
-                  className="bg-transparent text-white text-xs font-bold focus:outline-none cursor-pointer"
+                  className="bg-transparent text-amber-900 dark:text-amber-200 text-xs font-bold focus:outline-none cursor-pointer"
                 >
                   <option value="TEAM_ALL" className="text-slate-900 font-bold">
                     👥 Combined Team Sales ({1 + partnerSalesmen.length})
@@ -402,7 +403,7 @@ const SalesmanDashboard: React.FC = () => {
             <button
               onClick={loadDashboardData}
               title="Refresh Data"
-              className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl border border-white/20 transition-all text-white backdrop-blur-md shadow-sm"
+              className="p-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/80 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shadow-2xs hover:shadow-sm active:scale-95 cursor-pointer"
             >
               <MdRefresh className="text-lg" />
             </button>
