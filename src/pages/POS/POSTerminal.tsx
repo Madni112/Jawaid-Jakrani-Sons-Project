@@ -44,7 +44,8 @@ import {
   LuCheckCircle2,
   LuBarChart3,
   LuSettings,
-  LuLogOut
+  LuLogOut,
+  LuAlertTriangle
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import { IoBarcodeOutline } from 'react-icons/io5';
@@ -266,6 +267,51 @@ export const POSTerminal: React.FC = () => {
   // Lock Terminal State
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [lockPin, setLockPin] = useState<string>('');
+
+  // Center Confirmation Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const showConfirm = ({
+    title,
+    message,
+    confirmLabel = 'Confirm',
+    cancelLabel = 'Cancel',
+    isDestructive = true,
+    onConfirm
+  }: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+      isDestructive,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
 
   // Payment Modal State
   const [isPayModalOpen, setIsPayModalOpen] = useState<boolean>(false);
@@ -510,13 +556,19 @@ export const POSTerminal: React.FC = () => {
   // Clear Cart
   const handleClearCart = () => {
     if (cartItems.length === 0) return;
-    if (window.confirm('Clear all items on current order?')) {
-      playTone('delete');
-      setCartItems([]);
-      setDiscountPercent(0);
-      setFulfillmentType(resolveInitialFulfillment(posConfig));
-      toast.success('Order cart cleared');
-    }
+    showConfirm({
+      title: 'Clear Current Order',
+      message: 'Are you sure you want to remove all items from the current cart?',
+      confirmLabel: 'Clear Cart',
+      isDestructive: true,
+      onConfirm: () => {
+        playTone('delete');
+        setCartItems([]);
+        setDiscountPercent(0);
+        setFulfillmentType(resolveInitialFulfillment(posConfig));
+        toast.success('Order cart cleared');
+      }
+    });
   };
 
   // Barcode / Fast Input Submit
@@ -1048,11 +1100,24 @@ export const POSTerminal: React.FC = () => {
               type="button"
               onClick={() => {
                 if (!requireOpenDrawer()) return;
-                if (cartItems.length > 0 && !window.confirm('Start new fresh sale order? Current items will be reset.')) return;
-                setCartItems([]);
-                setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
-                setFulfillmentType(resolveInitialFulfillment(posConfig));
-                toast.success('New sale order started');
+                const startFresh = () => {
+                  setCartItems([]);
+                  setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
+                  setFulfillmentType(resolveInitialFulfillment(posConfig));
+                  toast.success('New sale order started');
+                };
+
+                if (cartItems.length > 0) {
+                  showConfirm({
+                    title: 'Start New Sale',
+                    message: 'Starting a new sale will clear current items in cart. Do you want to continue?',
+                    confirmLabel: 'Start New Sale',
+                    isDestructive: false,
+                    onConfirm: startFresh
+                  });
+                  return;
+                }
+                startFresh();
               }}
               className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
             >
@@ -2761,11 +2826,18 @@ export const POSTerminal: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              if (window.confirm(`Delete held order ${displayOrderNumber}?`)) {
-                                posService.removeHeldOrder(h.id);
-                                setHeldOrders(posService.getHeldOrders());
-                                toast.success(`Order ${displayOrderNumber} deleted`);
-                              }
+                              showConfirm({
+                                title: 'Delete Held Order',
+                                message: `Are you sure you want to permanently delete held order ${displayOrderNumber}?`,
+                                confirmLabel: 'Delete Order',
+                                isDestructive: true,
+                                onConfirm: () => {
+                                  posService.removeHeldOrder(h.id);
+                                  setHeldOrders(posService.getHeldOrders());
+                                  playTone('delete');
+                                  toast.success(`Order ${displayOrderNumber} deleted`);
+                                }
+                              });
                             }}
                             className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
                             title="Delete Held Order"
@@ -3278,6 +3350,62 @@ export const POSTerminal: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 sm:p-6 animate-fadeIn">
           <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 sm:p-7">
             <POSSettingsTab isModal onClose={() => setIsPosSettingsModalOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL: CENTERED CONFIRMATION POPUP (REPLACES NATIVE BROWSER CONFIRM)
+         ───────────────────────────────────────────────────────────── */}
+      {confirmDialog.isOpen && (
+        <div
+          className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 text-center animate-scaleIn space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className={`w-14 h-14 rounded-2xl mx-auto flex items-center justify-center ${
+                confirmDialog.isDestructive
+                  ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                  : 'bg-primary/10 text-primary border border-primary/20'
+              }`}
+            >
+              {confirmDialog.isDestructive ? <LuTrash2 size={26} /> : <LuAlertTriangle size={26} />}
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="font-black text-base text-slate-900 dark:text-white">
+                {confirmDialog.title}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                {confirmDialog.message}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer"
+              >
+                {confirmDialog.cancelLabel || 'Cancel'}
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmDialog.onConfirm}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wide text-white transition shadow-md cursor-pointer ${
+                  confirmDialog.isDestructive
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-primary hover:opacity-90'
+                }`}
+              >
+                {confirmDialog.confirmLabel || 'Confirm'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -58,6 +58,7 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
   const [statusFilter, setStatusFilter] = useState<string>(isReturnsOnly ? 'Completed' : (defaultStatus || 'All'));
   const [dateFilter, setDateFilter] = useState<'All' | 'Today' | 'Yesterday' | 'Last7Days' | 'Custom'>('All');
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [confirmRefundOrder, setConfirmRefundOrder] = useState<PosOrder | null>(null);
 
   // Modal for thermal receipt reprint
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
@@ -120,16 +121,7 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
       toast.error('This ticket is already refunded');
       return;
     }
-    if (window.confirm(`Issue full refund of Rs. ${order.total_amount.toLocaleString()} for ticket ${order.order_number}?`)) {
-      const updated = orders.map((o) =>
-        o.id === order.id ? { ...o, status: 'Refunded' as const } : o
-      );
-      setOrders(updated);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('uj_pos_orders_v1', JSON.stringify(updated));
-      }
-      toast.success(`Ticket ${order.order_number} marked as Refunded`);
-    }
+    setConfirmRefundOrder(order);
   };
 
   // Export to Excel
@@ -597,6 +589,60 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
                   <p className="text-[8px] text-slate-400">Reprinted Copy • Atelier POS</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Centered Refund Confirmation Modal */}
+      {confirmRefundOrder && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={() => setConfirmRefundOrder(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 text-center animate-scaleIn space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center bg-rose-500/10 text-rose-500 border border-rose-500/20">
+              <LuRotateCcw size={26} />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="font-black text-base text-slate-900 dark:text-white">
+                Issue Order Refund
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Issue full refund of <strong className="text-slate-800 dark:text-white font-mono">Rs. {confirmRefundOrder.total_amount.toLocaleString()}</strong> for ticket <strong className="text-slate-800 dark:text-white">{confirmRefundOrder.order_number}</strong>?
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRefundOrder(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = orders.map((o) =>
+                    o.id === confirmRefundOrder.id ? { ...o, status: 'Refunded' as const } : o
+                  );
+                  setOrders(updated);
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('uj_pos_orders_v1', JSON.stringify(updated));
+                  }
+                  toast.success(`Ticket ${confirmRefundOrder.order_number} marked as Refunded`);
+                  setConfirmRefundOrder(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wide text-white transition shadow-md cursor-pointer bg-rose-600 hover:bg-rose-700"
+              >
+                Confirm Refund
+              </button>
             </div>
           </div>
         </div>
