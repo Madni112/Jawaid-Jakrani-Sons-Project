@@ -197,7 +197,6 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
       'Ticket #': o.order_number,
       'Date & Time': new Date(o.created_at).toLocaleString(),
       'Customer': o.customer_name,
-      'Customer Tier': o.customer_tier,
       'Cashier': o.cashier_name,
       'Terminal': o.terminal_code,
       'Payment Tender': o.payment_method,
@@ -436,9 +435,6 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
                       <div className="font-bold text-slate-800 dark:text-slate-200">
                         {o.customer_name}
                       </div>
-                      <span className="text-[10px] text-amber-500 font-semibold">
-                        ★ {o.customer_tier}
-                      </span>
                     </td>
                     <td className="py-3 px-4 font-mono font-bold">
                       {o.items.length} items
