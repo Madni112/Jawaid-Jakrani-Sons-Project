@@ -49,6 +49,7 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
   }, []);
 
   const contrastText = getContrastTextColor(accentColor);
+  const isAccentWhite = accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff';
 
   const [posConfig] = useState<PosSettings>(() => posService.getSettings());
   const [orders, setOrders] = useState<PosOrder[]>(() => posService.getAllOrders());
@@ -196,8 +197,12 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
           <button
             type="button"
             onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
-            style={{ backgroundColor: accentColor }}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
+            style={{
+              backgroundColor: accentColor,
+              color: contrastText,
+              border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+            }}
           >
             <MdPointOfSale size={16} />
             <span>{embedded ? 'Back to Cashier Register' : 'Launch POS Terminal'}</span>
@@ -276,10 +281,18 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
                   onClick={() => setDateFilter(mode)}
                   className={`px-2 py-1 rounded-lg transition cursor-pointer text-[11px] ${
                     isSelected
-                      ? 'shadow-xs text-white'
+                      ? 'shadow-xs'
                       : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                   }`}
-                  style={isSelected ? { backgroundColor: accentColor } : undefined}
+                  style={
+                    isSelected
+                      ? {
+                          backgroundColor: accentColor,
+                          color: contrastText,
+                          border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                        }
+                      : undefined
+                  }
                 >
                   {label}
                 </button>

@@ -105,6 +105,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   }, []);
 
   const contrastText = getContrastTextColor(accentColor);
+  const isAccentWhite = accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff';
 
   // Active View Tab: 'products' | 'categories'
   const [activeTab, setActiveTab] = useState<'products' | 'categories'>('products');
@@ -670,8 +671,12 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
           <button
             type="button"
             onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
-            style={{ backgroundColor: accentColor }}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
+            style={{
+              backgroundColor: accentColor,
+              color: contrastText,
+              border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+            }}
           >
             <MdPointOfSale size={16} />
             <span>{embedded ? 'Back to Cashier Register' : 'Launch POS Terminal'}</span>
@@ -1110,8 +1115,12 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <LuPrinter size={14} />
                 <span>Print Sticker</span>
@@ -1234,8 +1243,12 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               <button
                 type="button"
                 onClick={handleSaveCustomBarcode}
-                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold text-white transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <LuSave size={15} />
                 <span>Save Barcode</span>
@@ -1378,8 +1391,12 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               <button
                 type="button"
                 onClick={handleSaveImage}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <LuSave size={14} />
                 <span>Save Image</span>
@@ -1895,8 +1912,12 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                 type="button"
                 disabled={isSavingProduct}
                 onClick={handleCreateProduct}
-                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold text-white transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <LuCheck size={16} />
                 <span>{isSavingProduct ? 'Saving...' : 'Save & Add to POS'}</span>

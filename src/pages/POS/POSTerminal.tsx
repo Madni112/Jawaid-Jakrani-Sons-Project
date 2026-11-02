@@ -57,6 +57,7 @@ import { POSSettingsTab } from '../Settings/POSSettingsTab';
 import {
   getSavedAccentColor,
   getContrastTextColor,
+  getSafeAccentTextColor,
   isDarkModeActive
 } from '../../constant/themeConfig';
 import { triggerFeedbackSound } from '../../utils/audioFeedback';
@@ -112,6 +113,11 @@ export const POSTerminal: React.FC = () => {
   }, []);
 
   const contrastText = getContrastTextColor(accentColor);
+  const safeAccentText = getSafeAccentTextColor(accentColor, isDark);
+  const isAccentWhite = accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff';
+  const activeSidebarBg = isAccentWhite
+    ? (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)')
+    : `${accentColor}18`;
 
   // POS Settings & Active Shift
   const [posConfig, setPosConfig] = useState<PosSettings>(() => posService.getSettings());
@@ -759,8 +765,8 @@ export const POSTerminal: React.FC = () => {
           <div className="p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/60">
             <div className="flex items-center gap-3">
               <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-md transition-all duration-300"
-                style={{ backgroundColor: accentColor }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-md transition-all duration-300 ${isAccentWhite ? 'border border-slate-300 dark:border-slate-700' : ''}`}
+                style={{ backgroundColor: accentColor, color: contrastText }}
               >
                 <MdPointOfSale size={22} />
               </div>
@@ -790,7 +796,7 @@ export const POSTerminal: React.FC = () => {
               }`}
               style={
                 activeView === 'register'
-                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  ? { backgroundColor: activeSidebarBg, color: safeAccentText }
                   : undefined
               }
             >
@@ -801,7 +807,7 @@ export const POSTerminal: React.FC = () => {
               {activeView === 'register' && (
                 <span
                   className="w-2 h-2 rounded-full animate-ping"
-                  style={{ backgroundColor: accentColor }}
+                  style={{ backgroundColor: safeAccentText }}
                 />
               )}
             </button>
@@ -832,7 +838,7 @@ export const POSTerminal: React.FC = () => {
               }`}
               style={
                 activeView === 'transactions'
-                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  ? { backgroundColor: activeSidebarBg, color: safeAccentText }
                   : undefined
               }
             >
@@ -843,7 +849,7 @@ export const POSTerminal: React.FC = () => {
               {activeView === 'transactions' && (
                 <span
                   className="w-2 h-2 rounded-full animate-ping"
-                  style={{ backgroundColor: accentColor }}
+                  style={{ backgroundColor: safeAccentText }}
                 />
               )}
             </button>
@@ -872,7 +878,7 @@ export const POSTerminal: React.FC = () => {
               }`}
               style={
                 activeView === 'catalog'
-                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  ? { backgroundColor: activeSidebarBg, color: safeAccentText }
                   : undefined
               }
             >
@@ -883,7 +889,7 @@ export const POSTerminal: React.FC = () => {
               {activeView === 'catalog' && (
                 <span
                   className="w-2 h-2 rounded-full animate-ping"
-                  style={{ backgroundColor: accentColor }}
+                  style={{ backgroundColor: safeAccentText }}
                 />
               )}
             </button>
@@ -898,7 +904,7 @@ export const POSTerminal: React.FC = () => {
               }`}
               style={
                 activeView === 'returns'
-                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  ? { backgroundColor: activeSidebarBg, color: safeAccentText }
                   : undefined
               }
             >
@@ -909,7 +915,7 @@ export const POSTerminal: React.FC = () => {
               {activeView === 'returns' && (
                 <span
                   className="w-2 h-2 rounded-full animate-ping"
-                  style={{ backgroundColor: accentColor }}
+                  style={{ backgroundColor: safeAccentText }}
                 />
               )}
             </button>
@@ -924,7 +930,7 @@ export const POSTerminal: React.FC = () => {
               }`}
               style={
                 activeView === 'summary'
-                  ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                  ? { backgroundColor: activeSidebarBg, color: safeAccentText }
                   : undefined
               }
             >
@@ -935,7 +941,7 @@ export const POSTerminal: React.FC = () => {
               {activeView === 'summary' && (
                 <span
                   className="w-2 h-2 rounded-full animate-ping"
-                  style={{ backgroundColor: accentColor }}
+                  style={{ backgroundColor: safeAccentText }}
                 />
               )}
             </button>
@@ -1012,8 +1018,12 @@ export const POSTerminal: React.FC = () => {
                   setActiveView('register');
                   loadCatalog();
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs text-white transition shadow-sm cursor-pointer hover:opacity-90"
-                style={{ backgroundColor: accentColor }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition shadow-sm cursor-pointer hover:opacity-90"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <LuArrowLeft size={14} />
                 <span>Back to Register</span>
@@ -1052,8 +1062,12 @@ export const POSTerminal: React.FC = () => {
               />
               <button
                 type="submit"
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg text-[10px] font-bold text-white transition flex items-center gap-1 shadow-2xs"
-                style={{ backgroundColor: accentColor }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1 shadow-2xs"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <IoBarcodeOutline size={13} />
                 <span>Scan [F2]</span>
@@ -1137,7 +1151,8 @@ export const POSTerminal: React.FC = () => {
                   className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-xs shrink-0"
                   style={{
                     backgroundColor: accentColor,
-                    color: contrastText
+                    color: contrastText,
+                    border: isAccentWhite ? '1px solid #cbd5e1' : undefined
                   }}
                 >
                   {displayCashierName.slice(0, 2).toUpperCase()}
@@ -1280,19 +1295,23 @@ export const POSTerminal: React.FC = () => {
                 onClick={() => setSelectedCategory('All')}
                 className={`px-3 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex items-center gap-2.5 min-w-[120px] border ${
                   selectedCategory === 'All'
-                    ? 'shadow-xs border-transparent scale-[1.02]'
+                    ? 'shadow-xs scale-[1.02]'
                     : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
                 }`}
                 style={
                   selectedCategory === 'All'
-                    ? { backgroundColor: accentColor, color: contrastText }
+                    ? {
+                        backgroundColor: accentColor,
+                        color: contrastText,
+                        borderColor: isAccentWhite ? '#cbd5e1' : 'transparent'
+                      }
                     : undefined
                 }
               >
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                     selectedCategory === 'All'
-                      ? 'bg-black/15 text-white'
+                      ? 'bg-black/10 dark:bg-white/15 text-current'
                       : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}
                 >
@@ -1304,7 +1323,7 @@ export const POSTerminal: React.FC = () => {
                     <span
                       className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
                         selectedCategory === 'All'
-                          ? 'bg-black/20 text-white'
+                          ? 'bg-black/10 dark:bg-white/15 text-current'
                           : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                       }`}
                     >
@@ -1342,12 +1361,16 @@ export const POSTerminal: React.FC = () => {
                       onClick={() => setSelectedCategory(cat.id)}
                       className={`px-3 py-1.5 rounded-xl text-left transition shrink-0 cursor-pointer flex items-center gap-2.5 min-w-[130px] max-w-[250px] border ${
                         isSelected
-                          ? 'shadow-xs border-transparent scale-[1.02]'
+                          ? 'shadow-xs scale-[1.02]'
                           : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/60'
                       }`}
                       style={
                         isSelected
-                          ? { backgroundColor: accentColor, color: contrastText }
+                          ? {
+                              backgroundColor: accentColor,
+                              color: contrastText,
+                              borderColor: isAccentWhite ? '#cbd5e1' : 'transparent'
+                            }
                           : undefined
                       }
                       title={cat.full_path || cat.name}
@@ -1362,7 +1385,7 @@ export const POSTerminal: React.FC = () => {
                         <div
                           className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                             isSelected
-                              ? 'bg-black/15 text-white'
+                              ? 'bg-black/10 dark:bg-white/15 text-current'
                               : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                           }`}
                         >
@@ -1377,7 +1400,7 @@ export const POSTerminal: React.FC = () => {
                           <span
                             className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 ${
                               isSelected
-                                ? 'bg-black/20 text-white'
+                                ? 'bg-black/10 dark:bg-white/15 text-current'
                                 : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                             }`}
                           >
@@ -1430,8 +1453,12 @@ export const POSTerminal: React.FC = () => {
                       setSelectedCategory('All');
                       setSearchQuery('');
                     }}
-                    className="mt-4 px-4 py-2 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer"
-                    style={{ backgroundColor: accentColor }}
+                    className="mt-4 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                    style={{
+                      backgroundColor: accentColor,
+                      color: contrastText,
+                      border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                    }}
                   >
                     Reset Filter
                   </button>
@@ -1457,7 +1484,8 @@ export const POSTerminal: React.FC = () => {
                             className="absolute top-2.5 right-2.5 z-10 w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center shadow-md animate-bounce"
                             style={{
                               backgroundColor: accentColor,
-                              color: contrastText
+                              color: contrastText,
+                              border: isAccentWhite ? '1px solid #cbd5e1' : undefined
                             }}
                           >
                             {cartItem.quantity}
@@ -1839,7 +1867,8 @@ export const POSTerminal: React.FC = () => {
                     className="w-full py-3.5 rounded-xl font-extrabold text-sm uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-95 active:scale-98"
                     style={{
                       backgroundColor: accentColor,
-                      color: contrastText
+                      color: contrastText,
+                      border: isAccentWhite ? '1px solid #cbd5e1' : undefined
                     }}
                   >
                     <MdPointOfSale size={18} />
@@ -1952,7 +1981,12 @@ export const POSTerminal: React.FC = () => {
                       }`}
                       style={
                         isSelected
-                          ? { backgroundColor: `${accentColor}18`, color: accentColor }
+                          ? {
+                              backgroundColor: isAccentWhite
+                                ? (isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(15, 23, 42, 0.08)')
+                                : `${accentColor}18`,
+                              color: safeAccentText
+                            }
                           : undefined
                       }
                     >
@@ -2038,8 +2072,12 @@ export const POSTerminal: React.FC = () => {
                 type="button"
                 disabled={isProcessingSale}
                 onClick={handleCompleteOrder}
-                className="flex-1 py-3 rounded-xl font-extrabold text-xs uppercase tracking-wide text-white transition flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-3 rounded-xl font-extrabold text-xs uppercase tracking-wide transition flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <LuCheck size={16} />
                 <span>
@@ -2762,7 +2800,7 @@ export const POSTerminal: React.FC = () => {
                     ? 'bg-white dark:bg-[#111622] text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
-                style={drawerTab === 'open_day' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
+                style={drawerTab === 'open_day' ? { borderBottom: `2px solid ${safeAccentText}` } : undefined}
               >
                 <span>Day Open</span>
               </button>
@@ -2774,7 +2812,7 @@ export const POSTerminal: React.FC = () => {
                     ? 'bg-white dark:bg-[#111622] text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
-                style={drawerTab === 'close_day' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
+                style={drawerTab === 'close_day' ? { borderBottom: `2px solid ${safeAccentText}` } : undefined}
               >
                 <span>Day Close</span>
               </button>
@@ -2786,7 +2824,7 @@ export const POSTerminal: React.FC = () => {
                     ? 'bg-white dark:bg-[#111622] text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
-                style={drawerTab === 'movement' ? { borderBottom: `2px solid ${accentColor}` } : undefined}
+                style={drawerTab === 'movement' ? { borderBottom: `2px solid ${safeAccentText}` } : undefined}
               >
                 <span>Cash In / Out</span>
               </button>
@@ -2814,8 +2852,12 @@ export const POSTerminal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setDrawerTab('close_day')}
-                        className="mt-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition shadow-xs cursor-pointer"
-                        style={{ backgroundColor: accentColor }}
+                        className="mt-2 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                        style={{
+                          backgroundColor: accentColor,
+                          color: contrastText,
+                          border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                        }}
                       >
                         Proceed to Day Close ➔
                       </button>
@@ -2905,8 +2947,12 @@ export const POSTerminal: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleOpenDaySubmit}
-                        className="w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition shadow-sm cursor-pointer hover:opacity-90"
-                        style={{ backgroundColor: accentColor }}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-sm cursor-pointer hover:opacity-90"
+                        style={{
+                          backgroundColor: accentColor,
+                          color: contrastText,
+                          border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                        }}
                       >
                         Confirm & Open Day (Rs. {(dayOpenPettyCash + dayOpenCashIn - dayOpenCashOut).toLocaleString()})
                       </button>
@@ -2929,8 +2975,12 @@ export const POSTerminal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setDrawerTab('open_day')}
-                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white transition shadow-xs cursor-pointer"
-                        style={{ backgroundColor: accentColor }}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                        style={{
+                          backgroundColor: accentColor,
+                          color: contrastText,
+                          border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                        }}
                       >
                         Go to Day Open ➔
                       </button>
@@ -3129,8 +3179,12 @@ export const POSTerminal: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleDrawerMovement}
-                    className="w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition shadow-sm cursor-pointer"
-                    style={{ backgroundColor: accentColor }}
+                    className="w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-sm cursor-pointer"
+                    style={{
+                      backgroundColor: accentColor,
+                      color: contrastText,
+                      border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                    }}
                   >
                     Record Cash {drawerMovementType.toUpperCase()}
                   </button>
@@ -3148,8 +3202,11 @@ export const POSTerminal: React.FC = () => {
         <div className="fixed inset-0 z-9999 flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md text-white p-6 animate-fadeIn">
           <div className="text-center space-y-4 max-w-sm w-full">
             <div
-              className="w-20 h-20 rounded-3xl mx-auto flex items-center justify-center font-bold text-white shadow-2xl animate-pulse"
-              style={{ backgroundColor: accentColor }}
+              className={`w-20 h-20 rounded-3xl mx-auto flex items-center justify-center font-bold shadow-2xl animate-pulse ${isAccentWhite ? 'border border-slate-300' : ''}`}
+              style={{
+                backgroundColor: accentColor,
+                color: contrastText
+              }}
             >
               <LuLock size={38} />
             </div>
@@ -3168,8 +3225,12 @@ export const POSTerminal: React.FC = () => {
               <button
                 type="button"
                 onClick={handleUnlock}
-                className="w-full py-3.5 rounded-xl font-extrabold text-xs uppercase tracking-wider text-white transition flex items-center justify-center gap-2 shadow-lg cursor-pointer hover:opacity-90"
-                style={{ backgroundColor: accentColor }}
+                className="w-full py-3.5 rounded-xl font-extrabold text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg cursor-pointer hover:opacity-90"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <LuUnlock size={16} />
                 <span>Unlock Terminal Session</span>

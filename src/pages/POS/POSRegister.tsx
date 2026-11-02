@@ -57,6 +57,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   }, []);
 
   const contrastText = getContrastTextColor(accentColor);
+  const isAccentWhite = accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff';
 
   const [posConfig] = useState<PosSettings>(() => posService.getSettings());
   const [activeShift, setActiveShift] = useState<PosShift | null>(() => posService.getActiveShift());
@@ -493,8 +494,12 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
           <button
             type="button"
             onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
-            style={{ backgroundColor: accentColor }}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
+            style={{
+              backgroundColor: accentColor,
+              color: contrastText,
+              border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+            }}
           >
             <MdPointOfSale size={16} />
             <span>{embedded ? 'Back to Cashier Register' : 'Launch POS Terminal'}</span>
@@ -520,14 +525,22 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               onClick={() => setActiveTab(tab.id as ReportTab)}
               className={`px-4 py-2.5 rounded-xl font-bold text-xs transition duration-150 cursor-pointer whitespace-nowrap flex items-center gap-2 ${
                 isActive
-                  ? 'text-white shadow-sm'
+                  ? 'shadow-sm'
                   : 'bg-white dark:bg-[#111622] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
               }`}
-              style={isActive ? { backgroundColor: accentColor } : undefined}
+              style={
+                isActive
+                  ? {
+                      backgroundColor: accentColor,
+                      color: contrastText,
+                      border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                    }
+                  : undefined
+              }
             >
               <span>{tab.label}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                isActive ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                isActive ? 'bg-black/10 dark:bg-white/15 text-current' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
               }`}>
                 {tab.badge}
               </span>
@@ -555,10 +568,18 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                     onClick={() => setDateFilter(mode)}
                     className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-[11px] ${
                       isSelected
-                        ? 'shadow-xs text-white'
+                        ? 'shadow-xs'
                         : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                     }`}
-                    style={isSelected ? { backgroundColor: accentColor } : undefined}
+                    style={
+                      isSelected
+                        ? {
+                            backgroundColor: accentColor,
+                            color: contrastText,
+                            border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                          }
+                        : undefined
+                    }
                   >
                     {label}
                   </button>
@@ -760,8 +781,12 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
           <button
             type="button"
             onClick={() => setIsOpenShiftModal(true)}
-            className="px-6 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider text-white transition shadow-md cursor-pointer hover:opacity-90"
-            style={{ backgroundColor: accentColor }}
+            className="px-6 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition shadow-md cursor-pointer hover:opacity-90"
+            style={{
+              backgroundColor: accentColor,
+              color: contrastText,
+              border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+            }}
           >
             Start New Register Shift
           </button>
@@ -795,10 +820,18 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                     onClick={() => setDateFilter(mode)}
                     className={`px-2.5 py-1 rounded-lg transition cursor-pointer text-[11px] ${
                       isSelected
-                        ? 'shadow-xs text-white'
+                        ? 'shadow-xs'
                         : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                     }`}
-                    style={isSelected ? { backgroundColor: accentColor } : undefined}
+                    style={
+                      isSelected
+                        ? {
+                            backgroundColor: accentColor,
+                            color: contrastText,
+                            border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                          }
+                        : undefined
+                    }
                   >
                     {label}
                   </button>
@@ -1699,8 +1732,12 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               <button
                 type="button"
                 onClick={handleRecordMovement}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 Save
               </button>
@@ -1809,8 +1846,12 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                style={{ backgroundColor: accentColor }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
               >
                 <LuPrinter size={14} />
                 <span>Print Z-Report</span>
