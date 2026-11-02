@@ -15,6 +15,8 @@ import {
   LuArrowLeft,
   LuX,
   LuCheck,
+  LuMinus,
+  LuPlus,
   LuFilter,
   LuClock,
   LuStore
@@ -59,6 +61,23 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
   const [dateFilter, setDateFilter] = useState<'All' | 'Today' | 'Yesterday' | 'Last7Days' | 'Custom'>('All');
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [confirmRefundOrder, setConfirmRefundOrder] = useState<PosOrder | null>(null);
+  const [refundItems, setRefundItems] = useState<{
+    product_id: string;
+    product_name: string;
+    unit_price: number;
+    original_qty: number;
+    return_qty: number;
+    selected: boolean;
+  }[]>([]);
+  const [refundReason, setRefundReason] = useState<string>('Customer Return');
+  const [refundPaymentMethod, setRefundPaymentMethod] = useState<'Cash' | 'Original'>('Cash');
+
+  // Computed refund totals
+  const selectedRefundItems = refundItems.filter(it => it.selected && it.return_qty > 0);
+  const totalRefundAmount = selectedRefundItems.reduce((sum, it) => sum + (it.return_qty * it.unit_price), 0);
+  const totalOriginalItemsCount = refundItems.reduce((sum, it) => sum + it.original_qty, 0);
+  const totalReturnedCount = selectedRefundItems.reduce((sum, it) => sum + it.return_qty, 0);
+  const isFullRefund = totalReturnedCount >= totalOriginalItemsCount && totalOriginalItemsCount > 0;
 
   // Modal for thermal receipt reprint
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
@@ -118,10 +137,58 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
   // Process Return / Refund
   const handleRefundOrder = (order: PosOrder) => {
     if (order.status === 'Refunded') {
-      toast.error('This ticket is already refunded');
+      toast.error('This ticket is already fully refunded');
       return;
     }
+    const initialItems = (order.items || []).map((it) => ({
+      product_id: it.product_id,
+      product_name: it.product_name,
+      unit_price: it.unit_price,
+      original_qty: it.quantity,
+      return_qty: it.quantity,
+      selected: true
+    }));
+    setRefundItems(initialItems);
+    setRefundReason('Customer Return');
+    setRefundPaymentMethod('Cash');
     setConfirmRefundOrder(order);
+  };
+
+  const handleExecuteRefund = () => {
+    if (!confirmRefundOrder || totalRefundAmount <= 0) return;
+
+    const remainingTotal = Math.max(0, confirmRefundOrder.total_amount - totalRefundAmount);
+    const newStatus = isFullRefund ? ('Refunded' as const) : ('Partially Refunded' as const);
+
+    const updated = orders.map((o) => {
+      if (o.id !== confirmRefundOrder.id) return o;
+      return {
+        ...o,
+        status: newStatus,
+        total_amount: remainingTotal,
+        notes: (o.notes ? o.notes + ' | ' : '') + `Refunded Rs. ${totalRefundAmount.toLocaleString()} (${totalReturnedCount} item${totalReturnedCount > 1 ? 's' : ''}) - ${refundReason}`
+      };
+    });
+
+    setOrders(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('uj_pos_orders_v1', JSON.stringify(updated));
+    }
+
+    // Deduct cash from active drawer shift if paying cash
+    if (refundPaymentMethod === 'Cash') {
+      const activeShift = posService.getActiveShift();
+      if (activeShift) {
+        posService.recordCashMovement(activeShift.id, 'out', totalRefundAmount);
+      }
+    }
+
+    toast.success(
+      isFullRefund
+        ? `Ticket ${confirmRefundOrder.order_number} fully refunded (Rs. ${totalRefundAmount.toLocaleString()})`
+        : `Partial refund of Rs. ${totalRefundAmount.toLocaleString()} issued for ${confirmRefundOrder.order_number}`
+    );
+    setConfirmRefundOrder(null);
   };
 
   // Export to Excel
@@ -591,55 +658,220 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
         </div>
       )}
 
-      {/* Centered Refund Confirmation Modal */}
+      {/* Centered Item-Level & Full Refund Modal */}
       {confirmRefundOrder && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
           onClick={() => setConfirmRefundOrder(null)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 text-center animate-scaleIn space-y-4"
+            className="w-full max-w-xl rounded-3xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 animate-scaleIn flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center bg-rose-500/10 text-rose-500 border border-rose-500/20">
-              <LuRotateCcw size={26} />
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="font-black text-base text-slate-900 dark:text-white">
-                Issue Order Refund
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Issue full refund of <strong className="text-slate-800 dark:text-white font-mono">Rs. {confirmRefundOrder.total_amount.toLocaleString()}</strong> for ticket <strong className="text-slate-800 dark:text-white">{confirmRefundOrder.order_number}</strong>?
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5 pt-2">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-rose-500/10 text-rose-500 border border-rose-500/20">
+                  <LuRotateCcw size={20} />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    Issue Return & Refund
+                    <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      {confirmRefundOrder.order_number}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {confirmRefundOrder.customer_name} • {new Date(confirmRefundOrder.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setConfirmRefundOrder(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
               >
-                Cancel
+                <LuX size={18} />
               </button>
+            </div>
 
+            {/* Sub-header Controls: Select All toggle & Refund Mode Badge */}
+            <div className="py-2.5 flex items-center justify-between text-xs border-b border-slate-100 dark:border-slate-800/80">
               <button
                 type="button"
                 onClick={() => {
-                  const updated = orders.map((o) =>
-                    o.id === confirmRefundOrder.id ? { ...o, status: 'Refunded' as const } : o
-                  );
-                  setOrders(updated);
-                  if (typeof window !== 'undefined') {
-                    localStorage.setItem('uj_pos_orders_v1', JSON.stringify(updated));
-                  }
-                  toast.success(`Ticket ${confirmRefundOrder.order_number} marked as Refunded`);
-                  setConfirmRefundOrder(null);
+                  const allSelected = refundItems.every(i => i.selected);
+                  setRefundItems(prev => prev.map(i => ({ ...i, selected: !allSelected })));
                 }}
-                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wide text-white transition shadow-md cursor-pointer bg-rose-600 hover:bg-rose-700"
+                className="flex items-center gap-1.5 font-bold text-primary hover:underline cursor-pointer"
               >
-                Confirm Refund
+                <span>
+                  {refundItems.every(i => i.selected) ? 'Deselect All' : 'Select All Items'}
+                </span>
               </button>
+              <div className="flex items-center gap-2 text-[11px]">
+                <span className={`px-2.5 py-0.5 rounded-full font-bold ${
+                  isFullRefund
+                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                }`}>
+                  {isFullRefund ? 'Full Order Refund' : 'Specific Item(s) Refund'}
+                </span>
+              </div>
+            </div>
+
+            {/* Scrollable Item List */}
+            <div className="flex-1 overflow-y-auto py-3 space-y-2.5 max-h-[340px] pr-1">
+              {refundItems.map((item, idx) => {
+                return (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                      item.selected
+                        ? 'border-primary/50 bg-primary/5 dark:bg-primary/10 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 opacity-60'
+                    }`}
+                  >
+                    {/* Checkbox & Name */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRefundItems(prev =>
+                            prev.map((it, i) => i === idx ? { ...it, selected: !it.selected } : it)
+                          );
+                        }}
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition shrink-0 cursor-pointer ${
+                          item.selected
+                            ? 'bg-primary border-primary text-white shadow-xs'
+                            : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                        }`}
+                      >
+                        {item.selected && <LuCheck size={13} className="stroke-[3]" />}
+                      </button>
+
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                          {item.product_name}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 font-medium">
+                          Rate: Rs. {item.unit_price.toLocaleString()} • Sold: {item.original_qty}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quantity Selector [-] Qty [+] */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-800">
+                        <button
+                          type="button"
+                          disabled={!item.selected || item.return_qty <= 1}
+                          onClick={() => {
+                            setRefundItems(prev =>
+                              prev.map((it, i) =>
+                                i === idx ? { ...it, return_qty: Math.max(1, it.return_qty - 1) } : it
+                              )
+                            );
+                          }}
+                          className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                        >
+                          <LuMinus size={12} />
+                        </button>
+                        <span className="w-8 text-center text-xs font-bold text-slate-900 dark:text-white">
+                          {item.return_qty}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={!item.selected || item.return_qty >= item.original_qty}
+                          onClick={() => {
+                            setRefundItems(prev =>
+                              prev.map((it, i) =>
+                                i === idx ? { ...it, return_qty: Math.min(it.original_qty, it.return_qty + 1) } : it
+                              )
+                            );
+                          }}
+                          className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                        >
+                          <LuPlus size={12} />
+                        </button>
+                      </div>
+
+                      {/* Refund line subtotal */}
+                      <span className="w-24 text-right font-mono font-black text-xs text-slate-900 dark:text-white">
+                        Rs. {(item.selected ? item.return_qty * item.unit_price : 0).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Return Reason & Method */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Reason for Return
+                </label>
+                <select
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none cursor-pointer"
+                >
+                  <option value="Customer Return">Customer Return</option>
+                  <option value="Size / Color Exchange">Size / Color Exchange</option>
+                  <option value="Defective / Damaged">Defective / Damaged</option>
+                  <option value="Wrong Item Dispatched">Wrong Item Dispatched</option>
+                  <option value="Customer Changed Mind">Customer Changed Mind</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Refund Payout Method
+                </label>
+                <select
+                  value={refundPaymentMethod}
+                  onChange={(e) => setRefundPaymentMethod(e.target.value as any)}
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none cursor-pointer"
+                >
+                  <option value="Cash">Cash Out (Drawer Float)</option>
+                  <option value="Original">Original Tender ({confirmRefundOrder.payment_method})</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Total Refund Summary & Actions */}
+            <div className="pt-4 mt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block leading-none mb-1">
+                  Total Refund Amount
+                </span>
+                <span className="font-mono font-black text-lg text-rose-600 dark:text-rose-400">
+                  Rs. {totalRefundAmount.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  ({totalReturnedCount} of {totalOriginalItemsCount} items selected)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmRefundOrder(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={totalRefundAmount <= 0}
+                  onClick={handleExecuteRefund}
+                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wide text-white transition shadow-md cursor-pointer bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Refund Rs. {totalRefundAmount.toLocaleString()}
+                </button>
+              </div>
             </div>
           </div>
         </div>
