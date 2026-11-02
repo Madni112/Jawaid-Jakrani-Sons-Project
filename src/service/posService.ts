@@ -1187,6 +1187,38 @@ export const posService = {
     }
   },
 
+    async createCategory(categoryName: string): Promise<PosCategoryItem> {
+    const clean = categoryName.trim();
+    const id = `cat-${Date.now()}`;
+    const newCat: PosCategoryItem = {
+      id,
+      name: clean,
+      full_path: clean,
+      product_count: 0,
+      show_in_pos: true
+    };
+
+    const catMetaMap = getStoredCategoryMeta();
+    catMetaMap[id] = { show_in_pos: true };
+    saveStoredCategoryMeta(catMetaMap);
+
+    try {
+      const { data, error } = await supabase.from('inventory_categories').insert([{
+        name: clean,
+        show_in_pos: true
+      }]).select().single();
+      if (!error && data) {
+        newCat.id = String(data.id);
+        catMetaMap[newCat.id] = { show_in_pos: true };
+        saveStoredCategoryMeta(catMetaMap);
+      }
+    } catch (e) {
+      console.warn('Could not insert into inventory_categories in DB:', e);
+    }
+
+    return newCat;
+  },
+
   // ── Fetch Master ERP Products ──
   async getErpProducts(): Promise<PosProductItem[]> {
     const metaMap = getStoredProductMeta();

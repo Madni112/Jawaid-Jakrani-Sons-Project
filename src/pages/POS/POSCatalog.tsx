@@ -30,6 +30,8 @@ import { IoBarcodeOutline } from 'react-icons/io5';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
+import ClickOutside from '../../components/ClickOutside';
+import { fetchAllUomsSafe } from '../../service/uomService';
 import { getSavedAccentColor, getContrastTextColor } from '../../constant/themeConfig';
 import {
   posService,
@@ -135,6 +137,14 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const [newCustomCategory, setNewCustomCategory] = useState<string>('');
   const [newRetailPrice, setNewRetailPrice] = useState<number>(0);
   const [newUom, setNewUom] = useState<string>('PCS');
+  // Category & UOM Combobox Searchable & Addable States
+  const [categorySearch, setCategorySearch] = useState<string>('');
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState<boolean>(false);
+  const [uomSearch, setUomSearch] = useState<string>('');
+  const [isUomDropdownOpen, setIsUomDropdownOpen] = useState<boolean>(false);
+  const [uomList, setUomList] = useState<string[]>([
+    'PCS', 'Meter', 'Suit', 'Yard', 'Thaan', 'Gaz', 'Pack', 'Roll', 'Box', 'Dozen', 'KG', 'Gram', 'Set', 'Pair'
+  ]);
   const [newBarcode, setNewBarcode] = useState<string>('');
   const [newLockBarcode, setNewLockBarcode] = useState<boolean>(true);
   const [newImageUrl, setNewImageUrl] = useState<string>('');
@@ -354,6 +364,81 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     }
   };
 
+
+  // ── Searchable & Addable Category and UOM Helpers ──
+  const allCategoryNames = useMemo(() => {
+    const set = new Set<string>();
+    categories.forEach(c => {
+      if (c.name && c.name.trim()) set.add(c.name.trim());
+    });
+    ['Pure Cotton & Latha', 'Pure Silk & Boski', 'Suit', 'Apparel', 'Accessories', 'Audio & Tech', 'Home', 'Summer Lawn & Jacquard', 'Unstitched Wash & Wear'].forEach(n => set.add(n));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [categories]);
+
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) return allCategoryNames;
+    return allCategoryNames.filter(c => c.toLowerCase().includes(q));
+  }, [allCategoryNames, categorySearch]);
+
+  const isExactCategoryMatch = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) return true;
+    return allCategoryNames.some(c => c.toLowerCase() === q);
+  }, [allCategoryNames, categorySearch]);
+
+  const handleSelectCategory = (catName: string) => {
+    setNewCategory(catName);
+    setCategorySearch('');
+    setIsCategoryDropdownOpen(false);
+  };
+
+  const handleAddNewCategory = async (nameToAdd?: string) => {
+    const name = (nameToAdd || categorySearch).trim();
+    if (!name) return;
+    setNewCategory(name);
+    setCategorySearch('');
+    setIsCategoryDropdownOpen(false);
+
+    setCategories(prev => {
+      if (prev.some(c => c.name.toLowerCase() === name.toLowerCase())) return prev;
+      return [{ id: `cat-${Date.now()}`, name, full_path: name, product_count: 0, show_in_pos: true }, ...prev];
+    });
+
+    try {
+      await posService.createCategory(name);
+    } catch (e) {
+      console.warn('Error saving category to DB:', e);
+    }
+    toast.success(`Category "${name}" added!`);
+  };
+
+  const filteredUoms = useMemo(() => {
+    const q = uomSearch.trim().toLowerCase();
+    if (!q) return uomList;
+    return uomList.filter(u => u.toLowerCase().includes(q));
+  }, [uomList, uomSearch]);
+
+  const isExactUomMatch = useMemo(() => {
+    const q = uomSearch.trim().toLowerCase();
+    if (!q) return true;
+    return uomList.some(u => u.toLowerCase() === q);
+  }, [uomList, uomSearch]);
+
+  const handleSelectUom = (u: string) => {
+    setNewUom(u);
+    setUomSearch('');
+    setIsUomDropdownOpen(false);
+  };
+
+  const handleAddCustomUom = () => {
+    const custom = uomSearch.trim();
+    if (!custom) return;
+    setNewUom(custom);
+    setUomList(prev => prev.includes(custom) ? prev : [...prev, custom]);
+    setUomSearch('');
+    setIsUomDropdownOpen(false);
+  };
 
   const handleCreateProduct = async () => {
     if (!newProductName.trim()) {
