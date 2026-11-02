@@ -80,6 +80,7 @@ import {
 interface SwipeableHeldOrderCardProps {
   order: PosHeldOrder;
   isSelected: boolean;
+  isSelectMode: boolean;
   onToggleSelect: (id: string) => void;
   onResume: (order: PosHeldOrder) => void;
   onDelete: (order: PosHeldOrder) => void;
@@ -90,6 +91,7 @@ interface SwipeableHeldOrderCardProps {
 const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
   order,
   isSelected,
+  isSelectMode,
   onToggleSelect,
   onResume,
   onDelete,
@@ -103,14 +105,15 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
   const movedRef = React.useRef<boolean>(false);
 
   React.useEffect(() => {
-    if (isSwiped) {
+    if (isSwiped && !isSelectMode) {
       setOffsetX(-90);
     } else {
       setOffsetX(0);
     }
-  }, [isSwiped]);
+  }, [isSwiped, isSelectMode]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (isSelectMode) return;
     startXRef.current = e.touches[0].clientX;
     startYRef.current = e.touches[0].clientY;
     movedRef.current = false;
@@ -118,10 +121,10 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (isSelectMode) return;
     const diffX = e.touches[0].clientX - startXRef.current;
     const diffY = e.touches[0].clientY - startYRef.current;
 
-    // Detect horizontal swipe
     if (Math.abs(diffX) > Math.abs(diffY)) {
       if (Math.abs(diffX) > 6) movedRef.current = true;
       if (isSwiped) {
@@ -136,6 +139,7 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
   };
 
   const handleTouchEnd = () => {
+    if (isSelectMode) return;
     setIsDragging(false);
     if (isSwiped) {
       if (offsetX > -45) {
@@ -155,6 +159,7 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (isSelectMode) return;
     startXRef.current = e.clientX;
     startYRef.current = e.clientY;
     movedRef.current = false;
@@ -162,7 +167,7 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
+    if (isSelectMode || !isDragging) return;
     const diffX = e.clientX - startXRef.current;
     if (Math.abs(diffX) > 6) movedRef.current = true;
     if (isSwiped) {
@@ -176,7 +181,7 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
   };
 
   const handleMouseUp = () => {
-    if (!isDragging) return;
+    if (isSelectMode || !isDragging) return;
     setIsDragging(false);
     if (isSwiped) {
       if (offsetX > -45) {
@@ -196,14 +201,13 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
   };
 
   const handleMouseLeave = () => {
-    if (isDragging) {
-      setIsDragging(false);
-      if (offsetX < -35) {
-        setOffsetX(-90);
-        onSwipeChange(order.id, true);
-      } else {
-        setOffsetX(isSwiped ? -90 : 0);
-      }
+    if (isSelectMode || !isDragging) return;
+    setIsDragging(false);
+    if (offsetX < -35) {
+      setOffsetX(-90);
+      onSwipeChange(order.id, true);
+    } else {
+      setOffsetX(isSwiped ? -90 : 0);
     }
   };
 
@@ -215,6 +219,12 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
       onSwipeChange(order.id, false);
       return;
     }
+    // In multi-select mode: clicking anywhere selects that specific hold container!
+    if (isSelectMode) {
+      onToggleSelect(order.id);
+      return;
+    }
+    // In normal mode: clicking anywhere inside resumes the order!
     onResume(order);
   };
 
@@ -222,23 +232,25 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
 
   return (
     <div className="relative overflow-hidden rounded-2xl select-none group">
-      {/* Background Revealed on Swipe Left: Red Delete Button */}
-      <div
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(order);
-        }}
-        className="absolute inset-y-0 right-0 w-[90px] bg-rose-600 hover:bg-rose-700 text-white flex flex-col items-center justify-center gap-1.5 cursor-pointer transition active:bg-rose-800 z-0 rounded-r-2xl font-bold shadow-inner"
-        title="Delete this held order"
-      >
-        <LuTrash2 size={22} className="animate-pulse" />
-        <span className="text-[11px] uppercase tracking-wider font-extrabold">Delete</span>
-      </div>
+      {/* Background Revealed on Swipe Left: Red Delete Button (normal mode only) */}
+      {!isSelectMode && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(order);
+          }}
+          className="absolute inset-y-0 right-0 w-[90px] bg-rose-600 hover:bg-rose-700 text-white flex flex-col items-center justify-center gap-1.5 cursor-pointer transition active:bg-rose-800 z-0 rounded-r-2xl font-bold shadow-inner"
+          title="Delete this held order"
+        >
+          <LuTrash2 size={22} className="animate-pulse" />
+          <span className="text-[11px] uppercase tracking-wider font-extrabold">Delete</span>
+        </div>
+      )}
 
       {/* Foreground Sliding Order Card */}
       <div
         style={{
-          transform: `translateX(${offsetX}px)`,
+          transform: isSelectMode ? 'none' : `translateX(${offsetX}px)`,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
         onTouchStart={handleTouchStart}
@@ -250,29 +262,28 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
         onMouseLeave={handleMouseLeave}
         onClick={handleCardClick}
         className={`relative z-10 p-4 rounded-2xl bg-white dark:bg-[#161D2B] border transition-all duration-150 shadow-xs space-y-2.5 cursor-pointer active:scale-[0.99] ${
-          isSelected
+          isSelectMode && isSelected
             ? 'border-primary ring-2 ring-primary/20 dark:ring-primary/40 bg-primary/5 dark:bg-primary/10'
+            : isSelectMode
+            ? 'border-slate-200 dark:border-slate-800/90 hover:border-primary/50'
             : 'border-slate-200 dark:border-slate-800/90 hover:border-emerald-500/60 hover:shadow-md'
         }`}
       >
-        {/* Top Row: Checkbox, Order ID, Fulfillment, Time */}
+        {/* Top Row: Tickmark (only in select mode), Order ID, Fulfillment, Time */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
-            {/* Selection Checkbox */}
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSelect(order.id);
-              }}
-              className={`w-5 h-5 rounded-md border flex items-center justify-center transition shrink-0 cursor-pointer ${
-                isSelected
-                  ? 'bg-primary border-primary text-white shadow-xs'
-                  : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 bg-white dark:bg-slate-800'
-              }`}
-              title={isSelected ? 'Deselect order' : 'Select order for multi-delete'}
-            >
-              {isSelected && <LuCheck size={13} className="stroke-[3]" />}
-            </div>
+            {/* Tickmark / Checkbox ONLY in select mode */}
+            {isSelectMode && (
+              <div
+                className={`w-5 h-5 rounded-md border flex items-center justify-center transition shrink-0 ${
+                  isSelected
+                    ? 'bg-primary border-primary text-white shadow-xs'
+                    : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                }`}
+              >
+                {isSelected && <LuCheck size={13} className="stroke-[3]" />}
+              </div>
+            )}
 
             <span className="font-mono font-black text-xs text-slate-900 dark:text-white truncate">
               {displayOrderNumber}
@@ -328,7 +339,7 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
           )}
         </div>
 
-        {/* Bottom Total & Resume Indicator */}
+        {/* Bottom Total (Clean - NO resume button, NO delete button) */}
         <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block leading-none mb-0.5">
@@ -338,27 +349,11 @@ const SwipeableHeldOrderCard: React.FC<SwipeableHeldOrderCardProps> = ({
               Rs. {order.subtotal.toLocaleString()}
             </span>
           </div>
-
-          <div className="flex items-center gap-2">
-            {/* Desktop swipe helper button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSwipeChange(order.id, !isSwiped);
-              }}
-              className="sm:opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition text-[11px] flex items-center gap-1 cursor-pointer"
-              title={isSwiped ? "Close delete" : "Swipe left to delete"}
-            >
-              <LuTrash2 size={13} />
-            </button>
-
-            {/* Click Anywhere / Tap to Resume Action Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-800/60 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-emerald-600 transition shadow-2xs">
-              <LuRotateCcw size={12} />
-              <span>Tap to Resume</span>
-            </div>
-          </div>
+          {isSelectMode && (
+            <span className="text-[10px] font-semibold text-slate-400">
+              {isSelected ? 'Selected' : 'Tap to select'}
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -553,6 +548,7 @@ export const POSTerminal: React.FC = () => {
   const [isHoldNoteModalOpen, setIsHoldNoteModalOpen] = useState<boolean>(false);
   const [holdNoteInput, setHoldNoteInput] = useState<string>('');
   const [selectedHeldIds, setSelectedHeldIds] = useState<string[]>([]);
+  const [isHeldSelectMode, setIsHeldSelectMode] = useState<boolean>(false);
   const [swipedHeldId, setSwipedHeldId] = useState<string | null>(null);
 
   // Lock Terminal State
@@ -3232,54 +3228,54 @@ export const POSTerminal: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  {/* Top Delete Button (Single or Multiple) */}
-                  {selectedHeldIds.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const count = selectedHeldIds.length;
-                        showConfirm({
-                          title: `Delete ${count} Held Order${count > 1 ? 's' : ''}`,
-                          message: `Are you sure you want to permanently delete the ${count} selected held order${count > 1 ? 's' : ''}?`,
-                          confirmLabel: `Delete ${count} Order${count > 1 ? 's' : ''}`,
-                          isDestructive: true,
-                          onConfirm: () => {
-                            selectedHeldIds.forEach(id => posService.removeHeldOrder(id));
-                            setHeldOrders(posService.getHeldOrders());
-                            setSelectedHeldIds([]);
-                            setSwipedHeldId(null);
-                            playTone('delete');
-                            toast.success(`${count} held order${count > 1 ? 's' : ''} deleted`);
-                          }
-                        });
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer animate-fadeIn"
-                      title="Delete selected held orders"
-                    >
-                      <LuTrash2 size={14} />
-                      <span>Delete ({selectedHeldIds.length})</span>
-                    </button>
+                  {/* Top Clear / Multi-Select Button */}
+                  {isHeldSelectMode ? (
+                    <div className="flex items-center gap-1.5">
+                      {selectedHeldIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const count = selectedHeldIds.length;
+                            showConfirm({
+                              title: `Delete ${count} Held Order${count > 1 ? 's' : ''}`,
+                              message: `Are you sure you want to permanently delete the ${count} selected held order${count > 1 ? 's' : ''}?`,
+                              confirmLabel: `Delete ${count} Order${count > 1 ? 's' : ''}`,
+                              isDestructive: true,
+                              onConfirm: () => {
+                                selectedHeldIds.forEach(id => posService.removeHeldOrder(id));
+                                setHeldOrders(posService.getHeldOrders());
+                                setSelectedHeldIds([]);
+                                setIsHeldSelectMode(false);
+                                setSwipedHeldId(null);
+                                playTone('delete');
+                                toast.success(`${count} held order${count > 1 ? 's' : ''} deleted`);
+                              }
+                            });
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer animate-fadeIn"
+                        >
+                          <LuTrash2 size={14} />
+                          <span>Delete ({selectedHeldIds.length})</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsHeldSelectMode(false);
+                          setSelectedHeldIds([]);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   ) : heldOrders.length > 0 ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        showConfirm({
-                          title: 'Clear All Held Orders?',
-                          message: `Are you sure you want to delete all ${heldOrders.length} held orders?`,
-                          confirmLabel: 'Delete All',
-                          isDestructive: true,
-                          onConfirm: () => {
-                            heldOrders.forEach(h => posService.removeHeldOrder(h.id));
-                            setHeldOrders(posService.getHeldOrders());
-                            setSelectedHeldIds([]);
-                            setSwipedHeldId(null);
-                            playTone('delete');
-                            toast.success(`All ${heldOrders.length} held orders deleted`);
-                          }
-                        });
-                      }}
+                      onClick={() => setIsHeldSelectMode(true)}
                       className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
-                      title="Delete / Clear All Held Orders"
+                      title="Select multiple orders to delete"
                     >
                       <LuTrash2 size={18} />
                     </button>
@@ -3289,6 +3285,7 @@ export const POSTerminal: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setIsHeldModalOpen(false);
+                      setIsHeldSelectMode(false);
                       setSelectedHeldIds([]);
                       setSwipedHeldId(null);
                     }}
@@ -3300,50 +3297,44 @@ export const POSTerminal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Sub-bar for Select All and Swipe Helper */}
-              {heldOrders.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selectedHeldIds.length === heldOrders.length) {
-                          setSelectedHeldIds([]);
-                        } else {
-                          setSelectedHeldIds(heldOrders.map(h => h.id));
-                        }
-                      }}
-                      className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold cursor-pointer"
-                    >
-                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition ${
-                        selectedHeldIds.length === heldOrders.length && heldOrders.length > 0
-                          ? 'bg-primary border-primary text-white'
-                          : selectedHeldIds.length > 0
-                          ? 'bg-primary/20 border-primary text-primary'
-                          : 'border-slate-300 dark:border-slate-600'
-                      }`}>
-                        {selectedHeldIds.length === heldOrders.length && heldOrders.length > 0 ? (
-                          <LuCheck size={11} className="stroke-[3]" />
-                        ) : selectedHeldIds.length > 0 ? (
-                          <div className="w-1.5 h-1.5 bg-primary rounded-xs" />
-                        ) : null}
-                      </div>
-                      <span>
-                        {selectedHeldIds.length === heldOrders.length && heldOrders.length > 0
-                          ? 'Deselect All'
-                          : 'Select All'}
-                      </span>
-                    </button>
+              {/* Sub-bar for Select All ONLY when isHeldSelectMode is true */}
+              {isHeldSelectMode && heldOrders.length > 0 && (
+                <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs animate-fadeIn">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedHeldIds.length === heldOrders.length) {
+                        setSelectedHeldIds([]);
+                      } else {
+                        setSelectedHeldIds(heldOrders.map(h => h.id));
+                      }
+                    }}
+                    className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold cursor-pointer"
+                  >
+                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition ${
+                      selectedHeldIds.length === heldOrders.length && heldOrders.length > 0
+                        ? 'bg-primary border-primary text-white'
+                        : selectedHeldIds.length > 0
+                        ? 'bg-primary/20 border-primary text-primary'
+                        : 'border-slate-300 dark:border-slate-600'
+                    }`}>
+                      {selectedHeldIds.length === heldOrders.length && heldOrders.length > 0 ? (
+                        <LuCheck size={11} className="stroke-[3]" />
+                      ) : selectedHeldIds.length > 0 ? (
+                        <div className="w-1.5 h-1.5 bg-primary rounded-xs" />
+                      ) : null}
+                    </div>
+                    <span>
+                      {selectedHeldIds.length === heldOrders.length && heldOrders.length > 0
+                        ? 'Deselect All'
+                        : 'Select All'}
+                    </span>
+                  </button>
 
-                    {selectedHeldIds.length > 0 && (
-                      <span className="text-[11px] font-bold text-primary">
-                        ({selectedHeldIds.length} of {heldOrders.length} selected)
-                      </span>
-                    )}
-                  </div>
-
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    Swipe left ➔ delete • Tap card to resume
+                  <span className="text-[11px] text-primary font-bold">
+                    {selectedHeldIds.length > 0
+                      ? `${selectedHeldIds.length} of ${heldOrders.length} selected`
+                      : 'Tap any order container to select'}
                   </span>
                 </div>
               )}
@@ -3365,6 +3356,7 @@ export const POSTerminal: React.FC = () => {
                       key={h.id}
                       order={h}
                       isSelected={selectedHeldIds.includes(h.id)}
+                      isSelectMode={isHeldSelectMode}
                       onToggleSelect={(id) => {
                         setSelectedHeldIds(prev =>
                           prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
