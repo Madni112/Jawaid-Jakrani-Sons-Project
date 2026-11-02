@@ -2336,7 +2336,7 @@ export const POSTerminal: React.FC = () => {
                   <p className="text-[9px] leading-tight text-slate-600">
                     {posConfig.footer_message}
                   </p>
-                  <p className="text-[8px] text-slate-400">Powered by Atelier POS Terminal</p>
+                  <p className="text-[8px] text-slate-400 font-medium">{posConfig.software_credit || "Software Developed by: NHT ENTERPRISES - +92 312 8039911"}</p>
                 </div>
               </div>
             </div>

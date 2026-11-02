@@ -586,7 +586,8 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
                   <p className="text-[9px] leading-tight text-slate-600">
                     {posConfig.footer_message}
                   </p>
-                  <p className="text-[8px] text-slate-400">Reprinted Copy • Atelier POS</p>
+                  <p className="text-[8px] text-slate-400 font-medium">{posConfig.software_credit || "Software Developed by: NHT ENTERPRISES - +92 312 8039911"}</p>
+                  <p className="text-[7.5px] text-slate-400">Reprinted Copy</p>
                 </div>
               </div>
             </div>

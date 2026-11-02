@@ -108,6 +108,7 @@ export interface PosSettings {
   default_tax_rate: number;
   barcode_auto_add: boolean;
   sound_effects_enabled: boolean;
+  software_credit?: string;
 }
 
 export interface PosProductItem {
@@ -210,7 +211,8 @@ export const DEFAULT_POS_SETTINGS: PosSettings = {
   default_customer_name: 'Walk-in Customer',
   default_tax_rate: 0,
   barcode_auto_add: true,
-  sound_effects_enabled: true
+  sound_effects_enabled: true,
+  software_credit: 'Software Developed by: NHT ENTERPRISES - +92 312 8039911'
 };
 
 // Initial Sample Boutique Products matching the user's reference layout

@@ -402,6 +402,19 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                 placeholder="e.g. Thank you for shopping with us! Exchange allowed within 7 days with original receipt."
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-meta-4 py-2.5 px-3 text-xs font-medium text-black dark:text-white outline-none focus:border-primary"
               />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                {isRTL ? 'سافٹ ویئر ڈویلپر کریڈٹ (رسید فوٹر):' : 'Software Developer / Company Credit (Receipt Footer):'}
+              </label>
+              <input
+                type="text"
+                value={posConfig.software_credit !== undefined ? posConfig.software_credit : 'Software Developed by: NHT ENTERPRISES - +92 312 8039911'}
+                onChange={e => setPosConfig(prev => ({ ...prev, software_credit: e.target.value }))}
+                placeholder="Software Developed by: NHT ENTERPRISES - +92 312 8039911"
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-meta-4 py-2.5 px-3 text-xs font-medium text-black dark:text-white outline-none focus:border-primary"
+              />
               <p className="text-[11px] text-slate-400 mt-1">
                 {isRTL
                   ? 'یہ پیغام تھرمل رسید کے آخر میں پرنٹ ہوگا'
