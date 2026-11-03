@@ -38,7 +38,8 @@ import { getSavedAccentColor, getContrastTextColor } from '../../constant/themeC
 import {
   posService,
   PosProductItem,
-  PosCategoryItem
+  PosCategoryItem,
+  PosTerminalCounter
 } from '../../service/posService';
 
 interface POSCatalogProps {
@@ -123,6 +124,15 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [visibilityFilter, setVisibilityFilter] = useState<'All' | 'Visible' | 'Hidden'>('All');
+  const [counterFilter, setCounterFilter] = useState<string>('All');
+  const [terminals, setTerminals] = useState<PosTerminalCounter[]>([]);
+  const [editingCountersItem, setEditingCountersItem] = useState<{
+    id: string;
+    type: 'product' | 'category';
+    name: string;
+    currentCounters: string[];
+  } | null>(null);
+  const [tempSelectedCounters, setTempSelectedCounters] = useState<string[]>(['all']);
 
   // ERP Product List Import Modal State
   const [isErpImportModalOpen, setIsErpImportModalOpen] = useState<boolean>(false);
@@ -567,6 +577,8 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
         posService.getProducts(),
         posService.getCategories()
       ]);
+      const terms = posService.getTerminals();
+      setTerminals(terms);
       setProducts(prods);
       setCategories(cats);
     } catch (err) {
@@ -591,6 +603,8 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
       // Visibility filter
       if (visibilityFilter === 'Visible' && p.show_in_pos === false) return false;
       if (visibilityFilter === 'Hidden' && p.show_in_pos !== false) return false;
+      // Counter filter
+      if (counterFilter !== 'All' && !posService.isProductVisibleOnCounter(p, counterFilter)) return false;
       // Search
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
@@ -622,6 +636,34 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     await posService.updateCategoryVisibility(categoryId, nextVal);
     toast.success(nextVal ? 'Category enabled in POS' : 'Category hidden from POS');
     window.dispatchEvent(new Event('pos_catalog_updated'));
+  };
+
+  // Open Counter Assignment Modal
+  const handleOpenCounterAssign = (id: string, type: 'product' | 'category', name: string, currentCounters?: string[]) => {
+    const counters = (currentCounters && currentCounters.length > 0) ? [...currentCounters] : ['all'];
+    setEditingCountersItem({ id, type, name, currentCounters: counters });
+    setTempSelectedCounters(counters);
+  };
+
+  // Save Counter Assignment
+  const handleSaveCounterAssign = () => {
+    if (!editingCountersItem) return;
+    const countersToSave = tempSelectedCounters.length === 0 ? ['all'] : tempSelectedCounters;
+
+    if (editingCountersItem.type === 'product') {
+      posService.updateProductCounterVisibility(editingCountersItem.id, countersToSave);
+      setProducts((prev) =>
+        prev.map((p) => (p.id === editingCountersItem.id ? { ...p, visible_counters: countersToSave } : p))
+      );
+      toast.success(`Updated counter visibility for "${editingCountersItem.name}"`);
+    } else {
+      posService.updateCategoryCounterVisibility(editingCountersItem.id, countersToSave);
+      setCategories((prev) =>
+        prev.map((c) => (c.id === editingCountersItem.id ? { ...c, visible_counters: countersToSave } : c))
+      );
+      toast.success(`Updated counter visibility for "${editingCountersItem.name}"`);
+    }
+    setEditingCountersItem(null);
   };
 
   // Open Custom Barcode Modal
@@ -894,6 +936,20 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                 <option value="Hidden">Hidden Only</option>
               </select>
 
+              <select
+                value={counterFilter}
+                onChange={(e) => setCounterFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 focus:outline-none cursor-pointer"
+                title="Filter catalog by assigned counter"
+              >
+                <option value="All">All Counters (Overview)</option>
+                {terminals.map((t) => (
+                  <option key={t.id} value={t.slug}>
+                    {t.name} (Counter #{t.counter_number || 1})
+                  </option>
+                ))}
+              </select>
+
               <button
                 type="button"
                 onClick={() => {
@@ -1093,6 +1149,35 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                             >
                               {isVisible ? <LuEye size={16} /> : <LuEyeOff size={16} />}
                             </button>
+
+                            {/* Counter Visibility Badge */}
+                            {(() => {
+                              const vc = p.visible_counters || ['all'];
+                              const isAll = vc.includes('all') || vc.length === 0;
+                              let label = '🌐 All Counters';
+                              if (!isAll) {
+                                if (vc.length === 1) {
+                                  const t = terminals.find((term) => term.slug === vc[0] || term.name === vc[0]);
+                                  label = `🏷️ ${t ? t.name : vc[0]}`;
+                                } else {
+                                  label = `🏷️ ${vc.length} Counters`;
+                                }
+                              }
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCounterAssign(p.id, 'product', p.product_name, p.visible_counters)}
+                                  className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition flex items-center justify-center gap-1 mx-auto cursor-pointer ${
+                                    isAll
+                                      ? 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                      : 'bg-primary/10 hover:bg-primary/20 text-primary border-primary/25'
+                                  }`}
+                                  title="Click to assign which counters sell this product"
+                                >
+                                  <span>{label}</span>
+                                </button>
+                              );
+                            })()}
                           </td>
 
                           {/* Actions */}
@@ -1205,25 +1290,189 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                     </span>
                   </div>
 
-                  {/* Toggle Visibility */}
-                  <button
-                    type="button"
-                    onClick={() => handleToggleCategoryVisibility(cat.id, isVisible)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
-                      isVisible
-                        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
-                        : 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800 dark:border-slate-700'
-                    }`}
-                  >
-                    {isVisible ? <LuEye size={13} /> : <LuEyeOff size={13} />}
-                    <span>{isVisible ? 'POS Active' : 'Hidden'}</span>
-                  </button>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    {/* Toggle Visibility */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCategoryVisibility(cat.id, isVisible)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
+                        isVisible
+                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
+                          : 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800 dark:border-slate-700'
+                      }`}
+                    >
+                      {isVisible ? <LuEye size={13} /> : <LuEyeOff size={13} />}
+                      <span>{isVisible ? 'POS Active' : 'Hidden'}</span>
+                    </button>
+
+                    {/* Category Counter Assignment Badge */}
+                    {(() => {
+                      const vc = cat.visible_counters || ['all'];
+                      const isAll = vc.includes('all') || vc.length === 0;
+                      let label = '🌐 All Counters';
+                      if (!isAll) {
+                        if (vc.length === 1) {
+                          const t = terminals.find((term) => term.slug === vc[0] || term.name === vc[0]);
+                          label = `🏷️ ${t ? t.name : vc[0]}`;
+                        } else {
+                          label = `🏷️ ${vc.length} Counters`;
+                        }
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCounterAssign(cat.id, 'category', cat.name, cat.visible_counters)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition flex items-center gap-1 cursor-pointer ${
+                            isAll
+                              ? 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                              : 'bg-primary/10 hover:bg-primary/20 text-primary border-primary/25'
+                          }`}
+                          title="Click to assign which counters show this category"
+                        >
+                          <span>{label}</span>
+                        </button>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             );
           })}
           </div>
         </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL: ASSIGN COUNTER VISIBILITY
+         ───────────────────────────────────────────────────────────── */}
+      {editingCountersItem && createPortal(
+        <div
+          onClick={() => setEditingCountersItem(null)}
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 animate-scaleUp"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <LuStore size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Assign Counter Visibility
+                  </h3>
+                  <p className="text-[11px] text-slate-400 truncate max-w-[280px]">
+                    {editingCountersItem.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCountersItem(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Choose which counters can sell this {editingCountersItem.type}:
+              </p>
+
+              {/* All Counters Option */}
+              <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={tempSelectedCounters.includes('all')}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setTempSelectedCounters(['all']);
+                    } else {
+                      setTempSelectedCounters([]);
+                    }
+                  }}
+                  className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                />
+                <div>
+                  <span className="font-bold text-xs text-slate-900 dark:text-white block">
+                    🌐 All Counters (Store-wide)
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    Visible across all checkout terminals
+                  </span>
+                </div>
+              </label>
+
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Or Specific Registers / Counters:
+                </span>
+                {terminals.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No specific counters configured yet</p>
+                ) : (
+                  terminals.map((t) => {
+                    const isChecked = !tempSelectedCounters.includes('all') && tempSelectedCounters.includes(t.slug);
+                    return (
+                      <label
+                        key={t.id}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border transition cursor-pointer ${
+                          isChecked
+                            ? 'bg-primary/5 border-primary/30 text-primary'
+                            : 'border-slate-200 dark:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                const next = tempSelectedCounters.filter((c) => c !== 'all');
+                                setTempSelectedCounters([...next, t.slug]);
+                              } else {
+                                const next = tempSelectedCounters.filter((c) => c !== t.slug);
+                                setTempSelectedCounters(next.length === 0 ? ['all'] : next);
+                              }
+                            }}
+                            className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                          <div>
+                            <span className="text-xs font-bold block">{t.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">/{t.slug} • Counter #{t.counter_number || 1}</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-bold">
+                          {t.location || 'Store Floor'}
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingCountersItem(null)}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCounterAssign}
+                className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs transition cursor-pointer shadow-sm"
+              >
+                Apply Counters
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ─────────────────────────────────────────────────────────────
