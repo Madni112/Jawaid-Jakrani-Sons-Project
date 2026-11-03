@@ -436,11 +436,11 @@ export const POSTerminalsManager: React.FC = () => {
       {isModalOpen && (
         <div
           onClick={() => setIsModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-4 overflow-y-auto animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 sm:p-4 overflow-y-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scaleUp my-auto"
+            className="w-full max-w-lg max-h-[90vh] rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scaleUp"
           >
             {/* Modal Header */}
             <div className="p-4 pb-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#111622]">
@@ -502,9 +502,9 @@ export const POSTerminalsManager: React.FC = () => {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSave} className="flex flex-col">
+            <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
               {/* Form Body */}
-              <div className="p-4 space-y-3.5">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5">
                 {modalTab === 'settings' ? (
                   /* TAB 1: COUNTER SETTINGS & SECURITY */
                   <div className="space-y-3">
@@ -750,7 +750,7 @@ export const POSTerminalsManager: React.FC = () => {
       {isChangePassModalOpen && (
         <div
           onClick={() => setIsChangePassModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
