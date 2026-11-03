@@ -23,7 +23,8 @@ import {
   LuSave,
   LuPencil,
   LuUnlock,
-  LuScan
+  LuScan,
+  LuChevronDown
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
 import { IoBarcodeOutline } from 'react-icons/io5';
@@ -128,6 +129,22 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const [loadingErp, setLoadingErp] = useState<boolean>(false);
   const [erpSearchQuery, setErpSearchQuery] = useState<string>('');
   const [selectedErpIds, setSelectedErpIds] = useState<Set<string>>(new Set());
+
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const uomDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+      if (uomDropdownRef.current && !uomDropdownRef.current.contains(e.target as Node)) {
+        setIsUomDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Add Product Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -1776,47 +1793,84 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Category:
+                {/* Category Combobox (Searchable & Addable) */}
+                <div className="space-y-1 relative" ref={categoryDropdownRef}>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                    <span>Category <span className="text-rose-500">*</span>:</span>
+                    {newCategory && (
+                      <span className="text-[10px] text-primary font-medium truncate max-w-[130px]">
+                        {newCategory}
+                      </span>
+                    )}
                   </label>
-                  <select
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                    <option value="Pure Cotton & Latha">Pure Cotton & Latha</option>
-                    <option value="Pure Silk & Boski">Pure Silk & Boski</option>
-                    <option value="Suit">Suit</option>
-                    <option value="Apparel">Apparel</option>
-                    <option value="Accessories">Accessories</option>
-                    <option value="Audio & Tech">Audio & Tech</option>
-                    <option value="Home">Home</option>
-                    <option value="__CUSTOM__">+ New Custom Category</option>
-                  </select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCategoryDropdownOpen(prev => !prev);
+                        setIsUomDropdownOpen(false);
+                      }}
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary flex items-center justify-between gap-1 text-left"
+                    >
+                      <span className="truncate">{newCategory || 'Select or add category...'}</span>
+                      <LuChevronDown className={`text-slate-400 text-sm transition-transform duration-200 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180 text-primary' : ''}`} />
+                    </button>
+
+                    {isCategoryDropdownOpen && (
+                      <div className="absolute z-50 top-full mt-1.5 left-0 w-full min-w-[220px] bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden animate-fadeIn">
+                        <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                          <div className="relative flex items-center">
+                            <LuSearch className="absolute left-2.5 text-slate-400 text-xs" />
+                            <input
+                              type="text"
+                              value={categorySearch}
+                              onChange={(e) => setCategorySearch(e.target.value)}
+                              placeholder="Search or add category..."
+                              autoFocus
+                              className="w-full pl-7 pr-2 py-1.5 text-xs rounded-lg bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="max-h-48 overflow-y-auto p-1 space-y-0.5">
+                          {filteredCategories.length > 0 ? (
+                            filteredCategories.map((cat) => (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => handleSelectCategory(cat)}
+                                className={`w-full px-2.5 py-1.5 text-xs rounded-lg text-left flex items-center justify-between transition-colors ${
+                                  newCategory === cat
+                                    ? 'bg-primary/10 text-primary font-bold'
+                                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
+                              >
+                                <span className="truncate">{cat}</span>
+                                {newCategory === cat && <LuCheck className="text-primary text-xs" />}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-xs text-slate-400 text-center">
+                              No matching category found
+                            </div>
+                          )}
+
+                          {categorySearch.trim() && !isExactCategoryMatch && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddNewCategory()}
+                              className="w-full px-2.5 py-2 text-xs rounded-lg text-left flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-bold border-t border-slate-100 dark:border-slate-800 transition-colors mt-1"
+                            >
+                              <LuPlus className="text-sm flex-shrink-0" />
+                              <span className="truncate">Add &quot;{categorySearch.trim()}&quot; as new</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              {/* If Custom Category Selected */}
-              {newCategory === '__CUSTOM__' && (
-                <div className="space-y-1 animate-fadeIn">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    New Category Name:
-                  </label>
-                  <input
-                    type="text"
-                    value={newCustomCategory}
-                    onChange={(e) => setNewCustomCategory(e.target.value)}
-                    placeholder="e.g. Unstitched Fabric"
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              )}
 
               {/* Retail Price & UOM */}
               <div className="grid grid-cols-2 gap-3">
@@ -1833,23 +1887,82 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Unit of Measure (UOM):
+                {/* UOM Combobox (Searchable & Addable) */}
+                <div className="space-y-1 relative" ref={uomDropdownRef}>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                    <span>Unit of Measure (UOM):</span>
+                    {newUom && (
+                      <span className="text-[10px] text-primary font-medium truncate max-w-[90px]">
+                        {newUom}
+                      </span>
+                    )}
                   </label>
-                  <select
-                    value={newUom}
-                    onChange={(e) => setNewUom(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
-                  >
-                    <option value="PCS">PCS (Pieces)</option>
-                    <option value="Meter">Meter</option>
-                    <option value="Suit">Suit</option>
-                    <option value="Pack">Pack</option>
-                    <option value="Yard">Yard</option>
-                    <option value="Roll">Roll</option>
-                    <option value="Box">Box</option>
-                  </select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUomDropdownOpen(prev => !prev);
+                        setIsCategoryDropdownOpen(false);
+                      }}
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary flex items-center justify-between gap-1 text-left"
+                    >
+                      <span className="truncate">{newUom || 'Select UOM...'}</span>
+                      <LuChevronDown className={`text-slate-400 text-sm transition-transform duration-200 flex-shrink-0 ${isUomDropdownOpen ? 'rotate-180 text-primary' : ''}`} />
+                    </button>
+
+                    {isUomDropdownOpen && (
+                      <div className="absolute z-50 top-full mt-1.5 left-0 w-full min-w-[180px] bg-white dark:bg-[#1E293B] border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden animate-fadeIn">
+                        <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                          <div className="relative flex items-center">
+                            <LuSearch className="absolute left-2.5 text-slate-400 text-xs" />
+                            <input
+                              type="text"
+                              value={uomSearch}
+                              onChange={(e) => setUomSearch(e.target.value)}
+                              placeholder="Search or add UOM..."
+                              autoFocus
+                              className="w-full pl-7 pr-2 py-1.5 text-xs rounded-lg bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="max-h-48 overflow-y-auto p-1 space-y-0.5">
+                          {filteredUoms.length > 0 ? (
+                            filteredUoms.map((u) => (
+                              <button
+                                key={u}
+                                type="button"
+                                onClick={() => handleSelectUom(u)}
+                                className={`w-full px-2.5 py-1.5 text-xs rounded-lg text-left flex items-center justify-between transition-colors ${
+                                  newUom === u
+                                    ? 'bg-primary/10 text-primary font-bold'
+                                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
+                              >
+                                <span className="truncate">{u}</span>
+                                {newUom === u && <LuCheck className="text-primary text-xs" />}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-xs text-slate-400 text-center">
+                              No matching UOM found
+                            </div>
+                          )}
+
+                          {uomSearch.trim() && !isExactUomMatch && (
+                            <button
+                              type="button"
+                              onClick={handleAddCustomUom}
+                              className="w-full px-2.5 py-2 text-xs rounded-lg text-left flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-bold border-t border-slate-100 dark:border-slate-800 transition-colors mt-1"
+                            >
+                              <LuPlus className="text-sm flex-shrink-0" />
+                              <span className="truncate">Add &quot;{uomSearch.trim()}&quot;</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
