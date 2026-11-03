@@ -13,6 +13,8 @@ import {
   LuCheck,
   LuStore,
   LuSettings,
+  LuEye,
+  LuEyeOff,
   LuX
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
@@ -41,6 +43,12 @@ export const POSTerminalsManager: React.FC = () => {
   const [confirmPassInput, setConfirmPassInput] = useState('');
 
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+
+  // Secure View PINs Modal State
+  const [viewingPinsTerminal, setViewingPinsTerminal] = useState<PosTerminalCounter | null>(null);
+  const [revealedPins, setRevealedPins] = useState<Record<string, boolean>>({});
+  const [copiedPinId, setCopiedPinId] = useState<string | null>(null);
+  const [showEditPins, setShowEditPins] = useState<Record<string, boolean>>({});
 
   const loadTerminals = () => {
     setTerminals(posService.getTerminals());
@@ -362,11 +370,27 @@ export const POSTerminalsManager: React.FC = () => {
                 </div>
 
                 {/* Assigned Cashiers List */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Assigned Cashiers ({term.assigned_cashiers?.length || 0})
-                  </span>
-                  <div className="space-y-1 max-h-36 overflow-y-auto">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Assigned Cashiers ({term.assigned_cashiers?.length || 0})
+                    </span>
+                    {term.assigned_cashiers && term.assigned_cashiers.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setViewingPinsTerminal(term);
+                          setRevealedPins({});
+                        }}
+                        className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                        title="View secret cashier PINs in a secure popup"
+                      >
+                        <LuKey size={12} />
+                        <span>View PINs</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-0.5">
                     {term.assigned_cashiers && term.assigned_cashiers.length > 0 ? (
                       term.assigned_cashiers.map((cashier) => (
                         <div
@@ -384,8 +408,8 @@ export const POSTerminalsManager: React.FC = () => {
                               {cashier.name}
                             </span>
                           </div>
-                          <span className="font-mono font-bold text-[11px] text-slate-400 bg-white dark:bg-slate-700/60 px-1.5 py-0.5 rounded border border-slate-200/80 dark:border-slate-700/60">
-                            PIN: {cashier.pin_code}
+                          <span className="capitalize font-semibold text-[10px] text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-700/60 px-2 py-0.5 rounded-md border border-slate-200/80 dark:border-slate-700/60">
+                            {cashier.role || 'Cashier'}
                           </span>
                         </div>
                       ))
@@ -429,6 +453,25 @@ export const POSTerminalsManager: React.FC = () => {
             </div>
           );
         })}
+
+        {/* Add Another Counter Action Card */}
+        <div
+          onClick={openCreateModal}
+          className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-primary/60 dark:hover:border-primary/60 bg-white/50 dark:bg-[#111622]/40 hover:bg-primary/5 p-6 transition cursor-pointer flex flex-col items-center justify-center text-center min-h-[300px] group shadow-2xs"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition flex items-center justify-center text-xl mb-3 shadow-xs">
+            <LuPlus size={22} />
+          </div>
+          <h4 className="font-black text-sm text-slate-900 dark:text-white">
+            Add Another POS Counter
+          </h4>
+          <p className="text-xs text-slate-400 mt-1 max-w-[240px] leading-relaxed">
+            Configure an additional checkout register, tablet station, or department counter.
+          </p>
+          <span className="mt-4 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:bg-primary group-hover:text-white group-hover:border-primary transition">
+            + New Counter
+          </span>
+        </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -674,11 +717,11 @@ export const POSTerminalsManager: React.FC = () => {
                             </div>
 
                             {/* PIN */}
-                            <div className="w-24 shrink-0">
+                            <div className="w-28 shrink-0">
                               <div className="flex items-center gap-1 bg-white dark:bg-[#111622] px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
                                 <span className="text-[10px] text-slate-400 font-bold uppercase">PIN:</span>
                                 <input
-                                  type="text"
+                                  type={showEditPins[cashier.id] ? 'text' : 'password'}
                                   maxLength={6}
                                   required
                                   value={cashier.pin_code}
@@ -686,6 +729,14 @@ export const POSTerminalsManager: React.FC = () => {
                                   placeholder="1234"
                                   className="w-full text-xs font-mono font-bold bg-transparent text-slate-900 dark:text-white focus:outline-none"
                                 />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEditPins((prev) => ({ ...prev, [cashier.id]: !prev[cashier.id] }))}
+                                  className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer shrink-0 p-0.5"
+                                  title={showEditPins[cashier.id] ? 'Hide PIN' : 'Reveal PIN'}
+                                >
+                                  {showEditPins[cashier.id] ? <LuEyeOff size={13} /> : <LuEye size={13} />}
+                                </button>
                               </div>
                             </div>
 
@@ -839,6 +890,153 @@ export const POSTerminalsManager: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+      document.body)}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 3: VIEW CASHIER SECURITY PINS
+         ───────────────────────────────────────────────────────────── */}
+      {viewingPinsTerminal && createPortal(
+        <div
+          onClick={() => setViewingPinsTerminal(null)}
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 animate-scaleUp"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <LuKey size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Cashier Security PINs
+                  </h3>
+                  <p className="text-[11px] text-slate-400 truncate max-w-[260px]">
+                    {viewingPinsTerminal.name} (Counter #{viewingPinsTerminal.counter_number || 1})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingPinsTerminal(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            {/* Sub-bar with toggle all */}
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                Staff Quick PINs for this counter:
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const allCashiers = viewingPinsTerminal.assigned_cashiers || [];
+                  const areAllRevealed = allCashiers.every((c) => revealedPins[c.id]);
+                  const nextState: Record<string, boolean> = {};
+                  allCashiers.forEach((c) => {
+                    nextState[c.id] = !areAllRevealed;
+                  });
+                  setRevealedPins(nextState);
+                }}
+                className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <LuEye size={13} />
+                <span>
+                  {(viewingPinsTerminal.assigned_cashiers || []).every((c) => revealedPins[c.id])
+                    ? 'Hide All'
+                    : 'Reveal All'}
+                </span>
+              </button>
+            </div>
+
+            {/* Cashiers List with Masked PINs */}
+            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+              {viewingPinsTerminal.assigned_cashiers && viewingPinsTerminal.assigned_cashiers.length > 0 ? (
+                viewingPinsTerminal.assigned_cashiers.map((cashier) => {
+                  const isRevealed = !!revealedPins[cashier.id];
+                  const isCopied = copiedPinId === cashier.id;
+
+                  return (
+                    <div
+                      key={cashier.id}
+                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="w-8 h-8 rounded-lg text-white font-bold text-xs flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: cashier.avatar_color || '#3b82f6' }}
+                        >
+                          {cashier.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                            {cashier.name}
+                          </h4>
+                          <span className="capitalize text-[10px] text-slate-400 font-medium">
+                            {cashier.role || 'Cashier'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* PIN Pill */}
+                        <div className="font-mono text-xs font-black tracking-widest bg-white dark:bg-[#111622] px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white min-w-[64px] text-center">
+                          {isRevealed ? cashier.pin_code : '••••'}
+                        </div>
+
+                        {/* Toggle Eye Button */}
+                        <button
+                          type="button"
+                          onClick={() => setRevealedPins((prev) => ({ ...prev, [cashier.id]: !prev[cashier.id] }))}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                          title={isRevealed ? 'Hide PIN' : 'Reveal PIN'}
+                        >
+                          {isRevealed ? <LuEyeOff size={15} /> : <LuEye size={15} />}
+                        </button>
+
+                        {/* Copy PIN Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(cashier.pin_code);
+                            setCopiedPinId(cashier.id);
+                            toast.success(`Copied PIN for ${cashier.name}`);
+                            setTimeout(() => setCopiedPinId(null), 2000);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                          title="Copy PIN"
+                        >
+                          {isCopied ? <LuCheck size={15} className="text-emerald-500" /> : <LuCopy size={15} />}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-6 text-center text-slate-400 text-xs">
+                  No cashiers assigned to this counter.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingPinsTerminal(null)}
+                className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>,
       document.body)}
