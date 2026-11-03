@@ -57,7 +57,7 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
   const [orders, setOrders] = useState<PosOrder[]>(() => posService.getAllOrders());
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [methodFilter, setMethodFilter] = useState<string>('All');
-  const [statusFilter, setStatusFilter] = useState<string>(isReturnsOnly ? 'Completed' : (defaultStatus || 'All'));
+  const [statusFilter, setStatusFilter] = useState<string>(defaultStatus || 'All');
   const [dateFilter, setDateFilter] = useState<'All' | 'Today' | 'Yesterday' | 'Last7Days' | 'Custom'>('All');
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [confirmRefundOrder, setConfirmRefundOrder] = useState<PosOrder | null>(null);
@@ -99,10 +99,19 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
 
     return orders.filter((o) => {
-      if (methodFilter !== 'All' && o.payment_method.toLowerCase() !== methodFilter.toLowerCase()) {
-        return false;
+      if (isReturnsOnly) {
+        const isReturn = o.status === 'Refunded' || o.status === 'Partially Refunded';
+        if (!isReturn) return false;
+        if (statusFilter !== 'All' && o.status.toLowerCase() !== statusFilter.toLowerCase()) {
+          return false;
+        }
+      } else {
+        if (statusFilter !== 'All' && o.status.toLowerCase() !== statusFilter.toLowerCase()) {
+          return false;
+        }
       }
-      if (statusFilter !== 'All' && o.status.toLowerCase() !== statusFilter.toLowerCase()) {
+
+      if (methodFilter !== 'All' && o.payment_method.toLowerCase() !== methodFilter.toLowerCase()) {
         return false;
       }
       const orderDate = new Date(o.created_at);
@@ -125,14 +134,41 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
 
   // Financial Stats
   const stats = useMemo(() => {
+    if (isReturnsOnly) {
+      const returnOrders = filteredOrders;
+      const totalRefundValue = returnOrders.reduce((sum, o) => {
+        const match = (o.notes || '').match(/Refunded Rs\.\s*([\d,]+)/i);
+        if (match) {
+          const parsed = parseFloat(match[1].replace(/,/g, ''));
+          if (parsed > 0) return sum + parsed;
+        }
+        return sum + (o.subtotal || o.total_amount || 0);
+      }, 0);
+
+      const cashReturns = returnOrders.filter(o => o.payment_method === 'Cash').reduce((sum, o) => {
+        const match = (o.notes || '').match(/Refunded Rs\.\s*([\d,]+)/i);
+        if (match) {
+          const parsed = parseFloat(match[1].replace(/,/g, ''));
+          if (parsed > 0) return sum + parsed;
+        }
+        return sum + (o.subtotal || o.total_amount || 0);
+      }, 0);
+
+      const cardReturns = Math.max(0, totalRefundValue - cashReturns);
+      const totalCount = returnOrders.length;
+      const avgRefund = totalCount > 0 ? Math.round(totalRefundValue / totalCount) : 0;
+
+      return { totalRev: totalRefundValue, cashTotal: cashReturns, cardTotal: cardReturns, digitalTotal: 0, avgTicket: avgRefund, count: totalCount };
+    }
+
     const totalRev = filteredOrders.reduce((sum, o) => sum + (o.status === 'Completed' ? o.total_amount : 0), 0);
     const cashTotal = filteredOrders.filter((o) => o.payment_method === 'Cash' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
     const cardTotal = filteredOrders.filter((o) => o.payment_method === 'Card' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
     const digitalTotal = filteredOrders.filter((o) => o.payment_method === 'Digital' && o.status === 'Completed').reduce((sum, o) => sum + o.total_amount, 0);
     const completedCount = filteredOrders.filter((o) => o.status === 'Completed').length;
     const avgTicket = completedCount > 0 ? Math.round(totalRev / completedCount) : 0;
-    return { totalRev, cashTotal, cardTotal, digitalTotal, avgTicket };
-  }, [filteredOrders]);
+    return { totalRev, cashTotal, cardTotal, digitalTotal, avgTicket, count: completedCount };
+  }, [filteredOrders, isReturnsOnly]);
 
   // Process Return / Refund
   const handleRefundOrder = (order: PosOrder) => {
@@ -233,11 +269,13 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
           </button>
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <LuReceipt className="text-sky-500" />
-              <span>{isReturnsOnly ? 'Returns & Refunds Processing' : 'POS Transactions & Thermal Receipts'}</span>
+              {isReturnsOnly ? <LuRotateCcw className="text-rose-500" /> : <LuReceipt className="text-sky-500" />}
+              <span>{isReturnsOnly ? 'Returns & Refund Ledger' : 'POS Transactions & Thermal Receipts'}</span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Review transaction logs, reprint thermal receipts, and process customer returns.
+              {isReturnsOnly
+                ? 'Audit history of refunded orders, returned items, and customer cash/card refunds.'
+                : 'Review transaction logs, reprint thermal receipts, and process customer returns.'}
             </p>
           </div>
         </div>
@@ -271,45 +309,51 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
       {/* Financial KPIs Banner */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="p-4 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Total POS Revenue
+          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500">
+            {isReturnsOnly ? 'Total Refunded Value' : 'Total POS Revenue'}
           </span>
           <div className="text-xl font-black font-mono text-slate-900 dark:text-white mt-1">
             Rs. {stats.totalRev.toLocaleString()}
           </div>
           <span className="text-[11px] text-slate-400 mt-1 block">
-            {orders.length} tickets completed
+            {stats.count} {isReturnsOnly ? 'refunded orders' : 'tickets completed'}
           </span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">
-            Cash Tenders
+            {isReturnsOnly ? 'Cash Refunded' : 'Cash Tenders'}
           </span>
           <div className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1">
             Rs. {stats.cashTotal.toLocaleString()}
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Physical drawer cash</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">
+            {isReturnsOnly ? 'Drawer cash outflow' : 'Physical drawer cash'}
+          </span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-[10px] font-bold uppercase tracking-wider text-sky-500">
-            Card (POS) Sales
+            {isReturnsOnly ? 'Card / Digital Reversals' : 'Card (POS) Sales'}
           </span>
           <div className="text-xl font-black font-mono text-sky-600 dark:text-sky-400 mt-1">
             Rs. {stats.cardTotal.toLocaleString()}
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Credit/Debit machine</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">
+            {isReturnsOnly ? 'Electronic reversals' : 'Credit/Debit machine'}
+          </span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-[10px] font-bold uppercase tracking-wider text-purple-500">
-            Average Ticket Size
+            {isReturnsOnly ? 'Average Refund Size' : 'Average Ticket Size'}
           </span>
           <div className="text-xl font-black font-mono text-purple-600 dark:text-purple-400 mt-1">
             Rs. {stats.avgTicket.toLocaleString()}
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Per counter receipt</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">
+            {isReturnsOnly ? 'Per return claim' : 'Per counter receipt'}
+          </span>
         </div>
       </div>
 
@@ -384,15 +428,28 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
             <option value="Split">Split</option>
           </select>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 focus:outline-none cursor-pointer"
-          >
-            <option value="All">All Statuses</option>
-            <option value="Completed">Completed</option>
-            <option value="Refunded">Refunded</option>
-          </select>
+          {isReturnsOnly ? (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Return Types</option>
+              <option value="Refunded">Fully Refunded</option>
+              <option value="Partially Refunded">Partially Refunded</option>
+            </select>
+          ) : (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Statuses</option>
+              <option value="Completed">Completed</option>
+              <option value="Refunded">Refunded</option>
+              <option value="Partially Refunded">Partially Refunded</option>
+            </select>
+          )}
         </div>
       </div>
 
@@ -415,8 +472,18 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
-                    No transactions match the selected filters.
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <LuRotateCcw size={32} className="text-slate-300 dark:text-slate-600" />
+                      <span className="font-bold text-sm text-slate-700 dark:text-slate-200">
+                        {isReturnsOnly ? 'No returns or refunds recorded yet' : 'No transactions match the selected filters.'}
+                      </span>
+                      <span className="text-xs text-slate-400 max-w-sm">
+                        {isReturnsOnly
+                          ? 'When a refund is processed from the Transactions page, the refunded ticket will appear here in this return ledger.'
+                          : 'Try adjusting your search query, date filter, or payment tender.'}
+                      </span>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -435,6 +502,11 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
                       <div className="font-bold text-slate-800 dark:text-slate-200">
                         {o.customer_name}
                       </div>
+                      {o.notes && (
+                        <div className="text-[10px] text-rose-500 dark:text-rose-400 font-medium mt-0.5 max-w-xs truncate" title={o.notes}>
+                          {o.notes}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4 font-mono font-bold">
                       {o.items.length} items
@@ -467,15 +539,17 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
                           <LuPrinter size={14} />
                         </button>
 
-                        <button
-                          type="button"
-                          disabled={o.status === 'Refunded'}
-                          onClick={() => handleRefundOrder(o)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 transition cursor-pointer disabled:opacity-30"
-                          title="Process Return & Refund"
-                        >
-                          <LuRotateCcw size={14} />
-                        </button>
+                        {!isReturnsOnly && (
+                          <button
+                            type="button"
+                            disabled={o.status === 'Refunded'}
+                            onClick={() => handleRefundOrder(o)}
+                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 transition cursor-pointer disabled:opacity-30"
+                            title="Process Return & Refund"
+                          >
+                            <LuRotateCcw size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
