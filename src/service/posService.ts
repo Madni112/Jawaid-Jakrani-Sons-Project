@@ -121,6 +121,7 @@ export interface PosProductItem {
   barcode_locked?: boolean;
   category: string;
   sub_category?: string;
+  sub_sub_category?: string;
   parent_category?: string;
   retail_price: number;
   purchase_price?: number;
@@ -1007,6 +1008,19 @@ export const posService = {
     return this.getPosProducts();
   },
 
+  async getRawInventoryCategories(): Promise<{ id: number | string; name: string; parent_id: number | string | null }[]> {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_categories')
+        .select('id, name, parent_id')
+        .order('name');
+      if (!error && data) return data;
+    } catch (e) {
+      console.warn('Could not fetch raw categories:', e);
+    }
+    return [];
+  },
+
   async getCategories(): Promise<PosCategoryItem[]> {
     const catMetaMap = getStoredCategoryMeta();
 
@@ -1361,6 +1375,9 @@ export const posService = {
       product_name: productData.product_name,
       item_sr_no: productData.item_sr_no || `SKU-${Date.now().toString().slice(-6)}`,
       category: productData.category || 'Apparel',
+      sub_category: productData.sub_category || '',
+      sub_sub_category: productData.sub_sub_category || '',
+      parent_category: productData.parent_category || productData.category || 'Apparel',
       retail_price: Number(productData.retail_price) || 0,
       uom: productData.uom || 'PCS',
       image_url: productData.image_url,
@@ -1376,6 +1393,9 @@ export const posService = {
         product_name: newProduct.product_name,
         item_sr_no: newProduct.item_sr_no,
         category: newProduct.category,
+        sub_category: newProduct.sub_category,
+        sub_sub_category: newProduct.sub_sub_category,
+        parent_category: newProduct.parent_category,
         retail_price: newProduct.retail_price,
         sales_price: newProduct.retail_price,
         uom: newProduct.uom,

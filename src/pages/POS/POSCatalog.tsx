@@ -156,6 +156,9 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [newProductName, setNewProductName] = useState<string>('');
   const [newItemCode, setNewItemCode] = useState<string>('');
+  const [rawDbCategories, setRawDbCategories] = useState<{ id: number | string; name: string; parent_id: number | string | null }[]>([]);
+  const [newParentCategory, setNewParentCategory] = useState<string>('Pure Cotton & Latha');
+  const [newSubCategory, setNewSubCategory] = useState<string>('');
   const [newCategory, setNewCategory] = useState<string>('Pure Cotton & Latha');
   const [newCustomCategory, setNewCustomCategory] = useState<string>('');
   const [newRetailPrice, setNewRetailPrice] = useState<number>(0);
@@ -501,14 +504,19 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
 
     try {
       setIsSavingProduct(true);
-      const cat = newCategory === '__CUSTOM__' ? (newCustomCategory.trim() || 'General') : newCategory;
+      const parentCat = newParentCategory.trim() || newCategory.trim() || 'General';
+      const subCat = newSubCategory.trim();
+      const childCat = newCategory === '__CUSTOM__' ? (newCustomCategory.trim() || 'General') : newCategory.trim() || parentCat;
       const sku = newItemCode.trim() || `SKU-${Date.now().toString().slice(-6)}`;
-      const barcodeToSave = newBarcode.trim() || posService.generateUniqueBarcode({ id: sku, category: cat });
+      const barcodeToSave = newBarcode.trim() || posService.generateUniqueBarcode({ id: sku, category: parentCat });
 
       const created = await posService.createProduct({
         product_name: newProductName.trim(),
         item_sr_no: sku,
-        category: cat,
+        category: parentCat,
+        sub_category: subCat,
+        sub_sub_category: childCat,
+        parent_category: parentCat,
         retail_price: newRetailPrice,
         uom: newUom,
         image_url: newImageUrl.trim() || undefined,
