@@ -645,6 +645,7 @@ export const POSTerminal: React.FC = () => {
 
   // Stale (Unclosed Previous Day) Shift Detection
   const [staleShift, setStaleShift] = useState<PosShift | null>(() => posService.getStaleShift());
+  const [selectedZReport, setSelectedZReport] = useState<PosShift | null>(null);
   const [isStaleShiftModalOpen, setIsStaleShiftModalOpen] = useState<boolean>(() => Boolean(posService.getStaleShift()));
 
   useEffect(() => {
@@ -1147,6 +1148,7 @@ export const POSTerminal: React.FC = () => {
       setIsDrawerModalOpen(false);
       playTone('success');
       toast.success(`Day closed! Remaining Petty Cash: Rs. ${(closed.closing_petty_cash || 0).toLocaleString()} saved for next day.`);
+      setSelectedZReport(closed);
 
       const todayDateStr = posService.getTodayDateStr();
       const closedDate = posService.getShiftBusinessDate(closed);
@@ -3613,6 +3615,124 @@ export const POSTerminal: React.FC = () => {
                 className="w-full py-2 px-4 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <span>Quick Auto-Close & Open Today (Rs. {(staleShift.expected_cash || 0).toLocaleString()} Forward)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL: DAILY Z-REPORT SLIP (AFTER DAY CLOSE)
+         ───────────────────────────────────────────────────────────── */}
+      {selectedZReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 animate-scaleUp">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                <LuFileText className="text-primary" />
+                <span>Daily Z-Report Slip #{selectedZReport.session_number}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelectedZReport(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            {/* Thermal Print Receipt */}
+            <div className="bg-white text-black p-4 rounded-sm font-mono text-xs space-y-2 border border-slate-300 shadow-sm">
+              <div className="text-center space-y-0.5 pb-2 border-b border-dashed border-black">
+                <h4 className="font-extrabold text-sm uppercase">{posConfig.store_title || 'Uzair Jibran Cloth'}</h4>
+                <p className="text-[10px]">DAILY Z-REPORT • CASHIER CLOSE</p>
+                <p className="text-[10px]">Terminal: {selectedZReport.terminal_code}</p>
+                <p className="text-[10px]">Cashier: {selectedZReport.cashier_name}</p>
+              </div>
+
+              <div className="py-2 border-b border-dashed border-black space-y-1 text-[11px]">
+                <div className="flex justify-between">
+                  <span>Session:</span>
+                  <span className="font-bold">#{selectedZReport.session_number}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Business Date:</span>
+                  <span className="font-bold">{selectedZReport.business_date || new Date(selectedZReport.opened_at).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Opened:</span>
+                  <span>{new Date(selectedZReport.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Closed:</span>
+                  <span>{selectedZReport.closed_at ? new Date(selectedZReport.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Open'}</span>
+                </div>
+              </div>
+
+              {/* Financial Tenders with Card Sales highlighted */}
+              <div className="py-2 border-b border-dashed border-black space-y-1 text-[11px]">
+                <div className="flex justify-between">
+                  <span>Opening Float:</span>
+                  <span>Rs. {(selectedZReport.opening_float || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Cash Sales:</span>
+                  <span>Rs. {(selectedZReport.cash_sales || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-bold bg-slate-100 px-1 py-0.5 rounded">
+                  <span>Card (POS) Sales:</span>
+                  <span>Rs. {(selectedZReport.card_sales || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Digital / QR Sales:</span>
+                  <span>Rs. {(selectedZReport.digital_sales || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Cash In / Out:</span>
+                  <span>+{(selectedZReport.cash_in || 0).toLocaleString()} / -{(selectedZReport.cash_out || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-bold pt-1 border-t border-dotted border-black">
+                  <span>TOTAL SALES VOLUME:</span>
+                  <span>Rs. {((selectedZReport.cash_sales || 0) + (selectedZReport.card_sales || 0) + (selectedZReport.digital_sales || 0)).toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Reconciliation Balance */}
+              <div className="py-2 space-y-1 text-[11px]">
+                <div className="flex justify-between">
+                  <span>Expected Drawer Cash:</span>
+                  <span>Rs. {(selectedZReport.expected_cash || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Closing Petty Cash (Rolled):</span>
+                  <span className="font-bold">Rs. {(selectedZReport.closing_petty_cash || 0).toLocaleString()}</span>
+                </div>
+                {selectedZReport.closing_notes && (
+                  <div className="text-[10px] text-slate-600 pt-1 border-t border-dotted border-black">
+                    Notes: {selectedZReport.closing_notes}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedZReport(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 transition cursor-pointer"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.print();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <LuPrinter size={14} />
+                <span>Print Z-Report</span>
               </button>
             </div>
           </div>
