@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   LuBanknote,
+  LuStore,
   LuClock,
   LuUser,
   LuLock,
@@ -37,7 +38,7 @@ import { saveAs } from 'file-saver';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
 import { getSavedAccentColor, getContrastTextColor } from '../../constant/themeConfig';
-import { posService, PosShift, PosSettings, PosOrder } from '../../service/posService';
+import { posService, PosShift, PosSettings, PosOrder, PosTerminalCounter } from '../../service/posService';
 
 interface POSRegisterProps {
   embedded?: boolean;
@@ -111,10 +112,12 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   const loggedInCashier = posService.getLoggedInCashier(currentTerminalSlug);
   const currentCashierName = loggedInCashier?.name || userEmail?.split('@')[0] || 'Alex Rivera';
 
-  // Filtered Shifts by Date
-  const filteredShifts = useMemo(() => {
-    if (dateFilter === 'All') return allShifts;
+  // Counter Filter State & Terminals List
+  const [selectedCounter, setSelectedCounter] = useState<string>('All');
+  const [terminalsList] = useState<PosTerminalCounter[]>(() => posService.getTerminals());
 
+  // Filtered Shifts by Date AND Counter
+  const filteredShifts = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
@@ -124,13 +127,80 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       const shiftDate = new Date(s.opened_at);
       const shiftDateStr = shiftDate.toISOString().split('T')[0];
 
+      if (dateFilter === 'Today' && shiftDateStr !== todayStr) return false;
+      if (dateFilter === 'Yesterday' && shiftDateStr !== yesterdayStr) return false;
+      if (dateFilter === 'Last7Days' && shiftDate < sevenDaysAgo) return false;
+      if (dateFilter === 'Custom' && shiftDateStr !== customDate) return false;
+
+      // Filter by Counter
+      if (selectedCounter !== 'All') {
+        const shiftTerm = (s.terminal_code || 'Register 01').toLowerCase();
+        const targetTerm = selectedCounter.toLowerCase();
+        if (shiftTerm !== targetTerm && !shiftTerm.includes(targetTerm) && !targetTerm.includes(shiftTerm)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [allShifts, dateFilter, customDate, selectedCounter]);
+
+  // Counter-Wise Sales Breakdown for the current date filter
+  const { counterBreakdown, overallCounterTotal, overallShiftsCount } = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+
+    const dateMatchedShifts = allShifts.filter((s) => {
+      const shiftDate = new Date(s.opened_at);
+      const shiftDateStr = shiftDate.toISOString().split('T')[0];
+
       if (dateFilter === 'Today') return shiftDateStr === todayStr;
       if (dateFilter === 'Yesterday') return shiftDateStr === yesterdayStr;
       if (dateFilter === 'Last7Days') return shiftDate >= sevenDaysAgo;
       if (dateFilter === 'Custom') return shiftDateStr === customDate;
       return true;
     });
-  }, [allShifts, dateFilter, customDate]);
+
+    const map: Record<string, { counterName: string; shiftsCount: number; totalSales: number; cashSales: number; cardSales: number }> = {};
+
+    terminalsList.forEach((t) => {
+      map[t.name] = {
+        counterName: t.name,
+        shiftsCount: 0,
+        totalSales: 0,
+        cashSales: 0,
+        cardSales: 0
+      };
+    });
+
+    let overallTotal = 0;
+    dateMatchedShifts.forEach((s) => {
+      const termKey = s.terminal_code || 'Register 01';
+      if (!map[termKey]) {
+        map[termKey] = {
+          counterName: termKey,
+          shiftsCount: 0,
+          totalSales: 0,
+          cashSales: 0,
+          cardSales: 0
+        };
+      }
+      const shiftVolume = (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
+      map[termKey].shiftsCount += 1;
+      map[termKey].totalSales += shiftVolume;
+      map[termKey].cashSales += (s.cash_sales || 0);
+      map[termKey].cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
+      overallTotal += shiftVolume;
+    });
+
+    return {
+      counterBreakdown: Object.values(map),
+      overallCounterTotal: overallTotal,
+      overallShiftsCount: dateMatchedShifts.length
+    };
+  }, [allShifts, dateFilter, customDate, terminalsList]);
 
   // Filtered Orders by Date
   const filteredOrders = useMemo(() => {
@@ -423,6 +493,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       rows = filteredShifts.map((s) => ({
         'Session #': s.session_number,
         'Date': s.business_date || new Date(s.opened_at).toLocaleDateString(),
+        'Counter': s.terminal_code || 'Register 01',
         'Cashier': s.cashier_name,
         'Opening Petty Cash (Rs.)': s.opening_petty_cash ?? s.opening_float,
         'Daily Cash Sales (Rs.)': s.cash_sales,
@@ -831,20 +902,37 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
 
       {/* Shifts History & Daily Z-Report Section */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] shadow-sm overflow-hidden">
-        {/* Section Header with Date Filter */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Section Header with Date and Counter Filters */}
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
               <LuClock className="text-primary" />
               <span>Shift Reconciliation & Daily Z-Report History</span>
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Filter by date to view and reprint official daily register close summaries.
+              Filter by date and counter to view register performance and reprint official daily close summaries.
             </p>
           </div>
 
-          {/* Date Filter Controls */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Filter Controls (Counter Selector + Date Range) */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Counter Filter Dropdown */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60">
+              <LuStore size={14} className="text-primary shrink-0" />
+              <select
+                value={selectedCounter}
+                onChange={(e) => setSelectedCounter(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+              >
+                <option value="All">All Counters (Store Overall)</option>
+                {terminalsList.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200/80 dark:border-slate-700/60 text-xs font-bold">
               {(['All', 'Today', 'Yesterday', 'Last7Days'] as const).map((mode) => {
                 const label = mode === 'All' ? 'All Dates' : mode === 'Last7Days' ? '7 Days' : mode;
@@ -891,6 +979,86 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
           </div>
         </div>
 
+        {/* Counter Performance Breakdown Cards */}
+        <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0c1017]/50">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+              <LuStore className="text-primary" size={14} />
+              <span>Counter Performance Breakdown ({dateFilter === 'All' ? 'All Dates' : dateFilter === 'Today' ? "Today" : dateFilter})</span>
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium">
+              Click any counter to filter sessions below
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Overall Store Total Card */}
+            <button
+              type="button"
+              onClick={() => setSelectedCounter('All')}
+              className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                selectedCounter === 'All'
+                  ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                  : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                  🏬 All Counters
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
+                  Store Total
+                </span>
+              </div>
+              <div className="mt-2.5">
+                <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                  Rs. {overallCounterTotal.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                  {overallShiftsCount} {overallShiftsCount === 1 ? 'shift' : 'shifts'} across all registers
+                </div>
+              </div>
+            </button>
+
+            {/* Individual Counter Cards */}
+            {counterBreakdown.map((cb) => {
+              const isSelected = selectedCounter.toLowerCase() === cb.counterName.toLowerCase();
+              const percent = overallCounterTotal > 0 ? ((cb.totalSales / overallCounterTotal) * 100).toFixed(0) : '0';
+
+              return (
+                <button
+                  key={cb.counterName}
+                  type="button"
+                  onClick={() => setSelectedCounter(cb.counterName)}
+                  className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                      : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate pr-2">
+                      {cb.counterName}
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                      {percent}% Share
+                    </span>
+                  </div>
+                  <div className="mt-2.5">
+                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                      Rs. {cb.totalSales.toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 font-medium flex items-center justify-between">
+                      <span>{cb.shiftsCount} {cb.shiftsCount === 1 ? 'shift' : 'shifts'}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Rs. {cb.cashSales.toLocaleString()} cash</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Date Filter Summary KPI Strip */}
         <div className="bg-slate-50 dark:bg-[#0c1017] px-4 py-3 border-b border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs font-medium">
           <div className="flex flex-wrap items-center gap-4 sm:gap-6">
@@ -923,13 +1091,16 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
             </div>
           </div>
 
-          {dateFilter !== 'All' && (
+          {(dateFilter !== 'All' || selectedCounter !== 'All') && (
             <button
               type="button"
-              onClick={() => setDateFilter('All')}
+              onClick={() => {
+                setDateFilter('All');
+                setSelectedCounter('All');
+              }}
               className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
             >
-              Reset to All Dates
+              Reset to All Counters & Dates
             </button>
           )}
         </div>
@@ -939,6 +1110,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="py-3 px-4">Session #</th>
+                <th className="py-3 px-4">Counter</th>
                 <th className="py-3 px-4">Cashier</th>
                 <th className="py-3 px-4">Time Span</th>
                 <th className="py-3 px-4">Opening Float</th>
@@ -952,7 +1124,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
               {filteredShifts.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-slate-400">
+                  <td colSpan={10} className="py-10 text-center text-slate-400">
                     <LuCalendar className="mx-auto text-2xl mb-2 opacity-40" />
                     <p className="font-bold text-sm text-slate-600 dark:text-slate-300">No shift sessions found for this date.</p>
                     <p className="text-xs text-slate-400 mt-1">Try selecting another date or click "All Dates".</p>
@@ -967,6 +1139,12 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                   <tr key={s.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
                     <td className="py-3 px-4 font-mono font-bold text-primary">
                       #{s.session_number}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                        <LuStore size={11} />
+                        <span>{s.terminal_code || 'Register 01'}</span>
+                      </span>
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">
                       {s.cashier_name}
