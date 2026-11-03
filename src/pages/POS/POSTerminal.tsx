@@ -3861,12 +3861,12 @@ export const POSTerminal: React.FC = () => {
                       </div>
 
                       {/* Day Sales & Opening Stats */}
-                      <div className="grid grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                             Opening Petty Cash
                           </span>
-                          <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block">
+                          <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block truncate">
                             Rs. {(activeShift.opening_petty_cash ?? activeShift.opening_float).toLocaleString()}
                           </span>
                         </div>
@@ -3874,8 +3874,16 @@ export const POSTerminal: React.FC = () => {
                           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
                             Today's Cash Sales
                           </span>
-                          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block truncate">
                             Rs. {(activeShift.cash_sales || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
+                            Card (POS) Sales
+                          </span>
+                          <span className="text-sm font-black font-mono text-indigo-600 dark:text-indigo-400 mt-0.5 block truncate">
+                            Rs. {(activeShift.card_sales || 0).toLocaleString()}
                           </span>
                         </div>
                       </div>
