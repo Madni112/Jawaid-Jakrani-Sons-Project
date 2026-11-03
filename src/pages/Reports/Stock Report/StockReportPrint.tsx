@@ -388,7 +388,7 @@ const StockReportPrint = () => {
                     prodQuery = prodQuery.or(`category.in.(${leafList}),sub_sub_category.in.(${leafList})`);
                 }
 
-                const { data: baseProducts, error: prodError } = await prodQuery;
+                const { data: baseProducts, error: prodError } = await fetchAllPages(prodQuery);
                 if (prodError) throw prodError;
 
                 // 2. Fetch raw tables for Tab 3 (Multi-location Breakdown) and Tab 8 (Location Ledger)
