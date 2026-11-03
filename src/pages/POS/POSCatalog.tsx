@@ -786,36 +786,6 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
             <span>Get from ERP Product List</span>
           </button>
 
-          {/* Button: Add Category */}
-          <button
-            type="button"
-            onClick={() => {
-              setNewCategoryModalName('');
-              setIsAddCategoryModalOpen(true);
-            }}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 bg-purple-600 hover:bg-purple-700"
-            title="Create a new category for POS & Catalog"
-          >
-            <LuPlus size={16} />
-            <span>+ Add Category</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setNewProductName('');
-              setNewItemCode(`SKU-${Date.now().toString().slice(-5)}`);
-              setNewBarcode(posService.generateUniqueBarcode({ id: String(Date.now()) }));
-              setNewRetailPrice(0);
-              setNewImageUrl('');
-              setIsAddModalOpen(true);
-            }}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
-          >
-            <LuPlus size={16} />
-            <span>+ Add Product to POS</span>
-          </button>
-
           <button
             type="button"
             onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
@@ -892,7 +862,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
             </div>
 
             {/* Category Dropdown & Visibility Filter */}
-            <div className="flex items-center gap-2.5 w-full md:w-auto">
+            <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap">
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -915,6 +885,22 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                 <option value="Visible">Visible on POS Only</option>
                 <option value="Hidden">Hidden Only</option>
               </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNewProductName('');
+                  setNewItemCode(`SKU-${Date.now().toString().slice(-5)}`);
+                  setNewBarcode(posService.generateUniqueBarcode({ id: String(Date.now()) }));
+                  setNewRetailPrice(0);
+                  setNewImageUrl('');
+                  setIsAddModalOpen(true);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 bg-emerald-600 hover:bg-emerald-700 shrink-0"
+              >
+                <LuPlus size={15} />
+                <span>Add Product to POS</span>
+              </button>
             </div>
           </div>
 
@@ -1150,7 +1136,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               className="px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 bg-purple-600 hover:bg-purple-700 shrink-0"
             >
               <LuPlus size={15} />
-              <span>+ Add New Category</span>
+              <span>Add Category</span>
             </button>
           </div>
 
