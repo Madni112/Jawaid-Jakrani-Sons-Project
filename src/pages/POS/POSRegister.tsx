@@ -112,8 +112,11 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   const loggedInCashier = posService.getLoggedInCashier(currentTerminalSlug);
   const currentCashierName = loggedInCashier?.name || userEmail?.split('@')[0] || 'Alex Rivera';
 
-  // Counter Filter State & Terminals List
+  // Counter & Cashier Filter State & View Mode
   const [selectedCounter, setSelectedCounter] = useState<string>('All');
+  const [selectedCashierFilter, setSelectedCashierFilter] = useState<string>('All');
+  const [breakdownView, setBreakdownView] = useState<'counter' | 'cashier'>('counter');
+  const [isDailyConsolidatedModalOpen, setIsDailyConsolidatedModalOpen] = useState(false);
   const [terminalsList] = useState<PosTerminalCounter[]>(() => posService.getTerminals());
 
   // Helper to normalize counter names by stripping extra notes e.g. "Register 01 (Main Counter)" -> "register 01"
@@ -156,9 +159,16 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
         }
       }
 
+      // Filter by Cashier
+      if (selectedCashierFilter !== 'All') {
+        if ((s.cashier_name || '').toLowerCase() !== selectedCashierFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [allShifts, dateFilter, customDate, selectedCounter, terminalsList]);
+  }, [allShifts, dateFilter, customDate, selectedCounter, selectedCashierFilter, terminalsList]);
 
   // Counter-Wise Sales Breakdown for the current date filter
   const { counterBreakdown, overallCounterTotal, overallShiftsCount } = useMemo(() => {
@@ -216,6 +226,52 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       overallShiftsCount: dateMatchedShifts.length
     };
   }, [allShifts, dateFilter, customDate, terminalsList]);
+
+  // Cashier-Wise Sales Breakdown for the current date filter
+  const { cashierBreakdown, overallCashierTotal } = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+
+    const dateMatchedShifts = allShifts.filter((s) => {
+      const shiftDate = new Date(s.opened_at);
+      const shiftDateStr = shiftDate.toISOString().split('T')[0];
+
+      if (dateFilter === 'Today') return shiftDateStr === todayStr;
+      if (dateFilter === 'Yesterday') return shiftDateStr === yesterdayStr;
+      if (dateFilter === 'Last7Days') return shiftDate >= sevenDaysAgo;
+      if (dateFilter === 'Custom') return shiftDateStr === customDate;
+      return true;
+    });
+
+    const map: Record<string, { cashierName: string; shiftsCount: number; totalSales: number; cashSales: number; cardSales: number }> = {};
+
+    let overallTotal = 0;
+    dateMatchedShifts.forEach((s) => {
+      const name = s.cashier_name || 'Cashier';
+      if (!map[name]) {
+        map[name] = {
+          cashierName: name,
+          shiftsCount: 0,
+          totalSales: 0,
+          cashSales: 0,
+          cardSales: 0
+        };
+      }
+      const shiftVolume = (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
+      map[name].shiftsCount += 1;
+      map[name].totalSales += shiftVolume;
+      map[name].cashSales += (s.cash_sales || 0);
+      map[name].cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
+      overallTotal += shiftVolume;
+    });
+
+    return {
+      cashierBreakdown: Object.values(map),
+      overallCashierTotal: overallTotal
+    };
+  }, [allShifts, dateFilter, customDate]);
 
   // Filtered Orders by Date
   const filteredOrders = useMemo(() => {
@@ -929,24 +985,17 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
             </p>
           </div>
 
-          {/* Filter Controls (Counter Selector + Date Range) */}
+          {/* Filter Controls: Date Range & Print Report Button */}
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Counter Filter Dropdown */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60">
-              <LuStore size={14} className="text-primary shrink-0" />
-              <select
-                value={selectedCounter}
-                onChange={(e) => setSelectedCounter(e.target.value)}
-                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
-              >
-                <option value="All">All Counters (Store Overall)</option>
-                {terminalsList.map((t) => (
-                  <option key={t.id} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsDailyConsolidatedModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-[#111622] hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+              title="Print Consolidated Daily Report with Counter & Cashier breakdown"
+            >
+              <LuPrinter size={14} className="text-primary" />
+              <span>Print Daily Summary</span>
+            </button>
 
             <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200/80 dark:border-slate-700/60 text-xs font-bold">
               {(['All', 'Today', 'Yesterday', 'Last7Days'] as const).map((mode) => {
@@ -994,84 +1043,192 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
           </div>
         </div>
 
-        {/* Counter Performance Breakdown Cards */}
+        {/* Performance Breakdown Section (Toggle between Counter and Cashier) */}
         <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0c1017]/50">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-              <LuStore className="text-primary" size={14} />
-              <span>Counter Performance Breakdown ({dateFilter === 'All' ? 'All Dates' : dateFilter === 'Today' ? "Today" : dateFilter})</span>
-            </span>
-            <span className="text-[10px] text-slate-400 font-medium">
-              Click any counter to filter sessions below
-            </span>
-          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                {breakdownView === 'counter' ? <LuStore className="text-primary" size={14} /> : <LuUser className="text-primary" size={14} />}
+                <span>Sales Breakdown ({dateFilter === 'All' ? 'All Dates' : dateFilter === 'Today' ? "Today" : dateFilter})</span>
+              </span>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Overall Store Total Card */}
-            <button
-              type="button"
-              onClick={() => setSelectedCounter('All')}
-              className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
-                selectedCounter === 'All'
-                  ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
-                  : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                  🏬 All Counters
-                </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
-                  Store Total
-                </span>
-              </div>
-              <div className="mt-2.5">
-                <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
-                  Rs. {overallCounterTotal.toLocaleString()}
-                </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
-                  {overallShiftsCount} {overallShiftsCount === 1 ? 'shift' : 'shifts'} across all registers
-                </div>
-              </div>
-            </button>
-
-            {/* Individual Counter Cards */}
-            {counterBreakdown.map((cb) => {
-              const isSelected = selectedCounter.toLowerCase() === cb.counterName.toLowerCase();
-              const percent = overallCounterTotal > 0 ? ((cb.totalSales / overallCounterTotal) * 100).toFixed(0) : '0';
-
-              return (
+              {/* View Toggle: By Counter vs By Cashier */}
+              <div className="inline-flex items-center rounded-xl bg-slate-200/70 dark:bg-slate-800/80 p-0.5 text-[11px] font-bold">
                 <button
-                  key={cb.counterName}
                   type="button"
-                  onClick={() => setSelectedCounter(cb.counterName)}
-                  className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
-                    isSelected
-                      ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
-                      : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                  onClick={() => {
+                    setBreakdownView('counter');
+                    setSelectedCashierFilter('All');
+                  }}
+                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                    breakdownView === 'counter'
+                      ? 'bg-white dark:bg-[#111622] text-primary shadow-xs font-black'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate pr-2">
-                      {cb.counterName}
-                    </span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
-                      {percent}% Share
-                    </span>
-                  </div>
-                  <div className="mt-2.5">
-                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
-                      Rs. {cb.totalSales.toLocaleString()}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5 font-medium flex items-center justify-between">
-                      <span>{cb.shiftsCount} {cb.shiftsCount === 1 ? 'shift' : 'shifts'}</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Rs. {cb.cashSales.toLocaleString()} cash</span>
-                    </div>
-                  </div>
+                  <LuStore size={12} />
+                  <span>By Counter</span>
                 </button>
-              );
-            })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBreakdownView('cashier');
+                    setSelectedCounter('All');
+                  }}
+                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                    breakdownView === 'cashier'
+                      ? 'bg-white dark:bg-[#111622] text-primary shadow-xs font-black'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                  }`}
+                >
+                  <LuUser size={12} />
+                  <span>By Cashier</span>
+                </button>
+              </div>
+            </div>
+
+            <span className="text-[10px] text-slate-400 font-medium">
+              Click any card to filter sessions below
+            </span>
           </div>
+
+          {/* Cards for Counter View */}
+          {breakdownView === 'counter' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Overall Store Total Card */}
+              <button
+                type="button"
+                onClick={() => setSelectedCounter('All')}
+                className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                  selectedCounter === 'All'
+                    ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                    : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                    🏬 All Counters
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
+                    Store Total
+                  </span>
+                </div>
+                <div className="mt-2.5">
+                  <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                    Rs. {overallCounterTotal.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                    {overallShiftsCount} {overallShiftsCount === 1 ? 'shift' : 'shifts'} across all registers
+                  </div>
+                </div>
+              </button>
+
+              {/* Individual Counter Cards */}
+              {counterBreakdown.map((cb) => {
+                const isSelected = selectedCounter.toLowerCase() === cb.counterName.toLowerCase();
+                const percent = overallCounterTotal > 0 ? ((cb.totalSales / overallCounterTotal) * 100).toFixed(0) : '0';
+
+                return (
+                  <button
+                    key={cb.counterName}
+                    type="button"
+                    onClick={() => setSelectedCounter(cb.counterName)}
+                    className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                        : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate pr-2">
+                        {cb.counterName}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                        {percent}% Share
+                      </span>
+                    </div>
+                    <div className="mt-2.5">
+                      <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                        Rs. {cb.totalSales.toLocaleString()}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium flex items-center justify-between">
+                        <span>{cb.shiftsCount} {cb.shiftsCount === 1 ? 'shift' : 'shifts'}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Rs. {cb.cashSales.toLocaleString()} cash</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            /* Cards for Cashier View */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Overall Staff Card */}
+              <button
+                type="button"
+                onClick={() => setSelectedCashierFilter('All')}
+                className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                  selectedCashierFilter === 'All'
+                    ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                    : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                    👥 All Cashiers
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
+                    All Staff
+                  </span>
+                </div>
+                <div className="mt-2.5">
+                  <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                    Rs. {overallCashierTotal.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                    {cashierBreakdown.length} active cashiers
+                  </div>
+                </div>
+              </button>
+
+              {/* Individual Cashier Cards */}
+              {cashierBreakdown.map((cb) => {
+                const isSelected = selectedCashierFilter.toLowerCase() === cb.cashierName.toLowerCase();
+                const percent = overallCashierTotal > 0 ? ((cb.totalSales / overallCashierTotal) * 100).toFixed(0) : '0';
+
+                return (
+                  <button
+                    key={cb.cashierName}
+                    type="button"
+                    onClick={() => setSelectedCashierFilter(cb.cashierName)}
+                    className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                        : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate pr-2 capitalize">
+                        👤 {cb.cashierName}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shrink-0">
+                        {percent}% Share
+                      </span>
+                    </div>
+                    <div className="mt-2.5">
+                      <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                        Rs. {cb.totalSales.toLocaleString()}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium flex items-center justify-between">
+                        <span>{cb.shiftsCount} {cb.shiftsCount === 1 ? 'shift' : 'shifts'}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Rs. {cb.cashSales.toLocaleString()} cash</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Date Filter Summary KPI Strip */}
@@ -1106,16 +1263,17 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
             </div>
           </div>
 
-          {(dateFilter !== 'All' || selectedCounter !== 'All') && (
+          {(dateFilter !== 'All' || selectedCounter !== 'All' || selectedCashierFilter !== 'All') && (
             <button
               type="button"
               onClick={() => {
                 setDateFilter('All');
                 setSelectedCounter('All');
+                setSelectedCashierFilter('All');
               }}
               className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
             >
-              Reset to All Counters & Dates
+              Reset All Filters
             </button>
           )}
         </div>
