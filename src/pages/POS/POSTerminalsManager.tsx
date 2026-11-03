@@ -434,10 +434,16 @@ export const POSTerminalsManager: React.FC = () => {
           MODAL 1: CREATE / EDIT POS TERMINAL & CASHIERS
          ───────────────────────────────────────────────────────────── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-hidden animate-fadeIn">
-          <div className="w-full max-w-xl h-[530px] max-h-[85vh] rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scaleUp">
-            {/* Modal Header (Fixed at top) */}
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#111622]">
+        <div
+          onClick={() => setIsModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-4 overflow-y-auto animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scaleUp my-auto"
+          >
+            {/* Modal Header */}
+            <div className="p-4 pb-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#111622]">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
                   <MdPointOfSale size={20} />
@@ -496,12 +502,12 @@ export const POSTerminalsManager: React.FC = () => {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <form onSubmit={handleSave} className="flex flex-col">
               {/* Form Body */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+              <div className="p-4 space-y-3.5">
                 {modalTab === 'settings' ? (
                   /* TAB 1: COUNTER SETTINGS & SECURITY */
-                  <div className="space-y-3.5">
+                  <div className="space-y-3">
                     {/* Basic Counter Info */}
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -627,7 +633,7 @@ export const POSTerminalsManager: React.FC = () => {
                       </button>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                       {cashiers.length === 0 ? (
                         <div className="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
                           <LuUsers className="mx-auto text-2xl text-slate-400 opacity-60" />
@@ -644,7 +650,7 @@ export const POSTerminalsManager: React.FC = () => {
                         cashiers.map((cashier) => (
                           <div
                             key={cashier.id}
-                            className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 flex items-center gap-2"
+                            className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 flex items-center gap-2"
                           >
                             {/* Avatar Badge */}
                             <div
@@ -712,7 +718,7 @@ export const POSTerminalsManager: React.FC = () => {
                 )}
               </div>
 
-              {/* Submit Buttons (Fixed at bottom) */}
+              {/* Submit Buttons */}
               <div className="p-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111622]/90 flex items-center justify-between shrink-0">
                 <span className="text-[11px] font-mono text-slate-400">
                   /{slug || 'pos'} • {cashiers.length} Cashiers
@@ -742,8 +748,14 @@ export const POSTerminalsManager: React.FC = () => {
           MODAL 2: CHANGE UNIFIED MANAGER OVERRIDE PASSWORD
          ───────────────────────────────────────────────────────────── */}
       {isChangePassModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111622] border border-amber-500/40 p-5 shadow-2xl space-y-4 animate-scaleUp">
+        <div
+          onClick={() => setIsChangePassModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111622] border border-amber-500/40 p-5 shadow-2xl space-y-4 animate-scaleUp"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
