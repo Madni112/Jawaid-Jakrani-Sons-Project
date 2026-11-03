@@ -690,17 +690,7 @@ export const POSTerminal: React.FC = () => {
       playTone('success');
       toast.success(`Previous shift for ${sDate || 'old date'} successfully closed!`);
 
-      // Prompt to open today's day session
-      setTimeout(() => {
-        setDrawerTab('open_day');
-        setDayOpenDate(todayDateStr);
-        const lookup = posService.getPettyCashForDate(todayDateStr);
-        setDayOpenPettyCash(lookup.amount);
-        setPettyCashSource(lookup.isFound ? `Auto-filled from ${lookup.foundDate} close` : 'Manual start / First day');
-        setDayOpenCashIn(0);
-        setDayOpenCashOut(0);
-        setIsDrawerModalOpen(true);
-      }, 350);
+      setSelectedZReport(closed);
     } catch (e: any) {
       toast.error(e?.message || 'Failed to auto-close previous shift');
     }
@@ -1150,20 +1140,6 @@ export const POSTerminal: React.FC = () => {
       toast.success(`Day closed! Remaining Petty Cash: Rs. ${(closed.closing_petty_cash || 0).toLocaleString()} saved for next day.`);
       setSelectedZReport(closed);
 
-      const todayDateStr = posService.getTodayDateStr();
-      const closedDate = posService.getShiftBusinessDate(closed);
-      if (closedDate && closedDate < todayDateStr) {
-        setTimeout(() => {
-          setDrawerTab('open_day');
-          setDayOpenDate(todayDateStr);
-          const lookup = posService.getPettyCashForDate(todayDateStr);
-          setDayOpenPettyCash(lookup.amount);
-          setPettyCashSource(lookup.isFound ? `Auto-filled from ${lookup.foundDate} close` : 'Manual start / First day');
-          setDayOpenCashIn(0);
-          setDayOpenCashOut(0);
-          setIsDrawerModalOpen(true);
-        }, 400);
-      }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to close day');
     }
@@ -3716,23 +3692,36 @@ export const POSTerminal: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setSelectedZReport(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 transition cursor-pointer"
-              >
-                Dismiss
-              </button>
+            <div className="flex flex-col gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedZReport(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  Dismiss
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.print();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <LuPrinter size={14} />
+                  <span>Print Z-Report</span>
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => {
-                  window.print();
+                  setSelectedZReport(null);
+                  handleOpenDrawerModal();
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
               >
-                <LuPrinter size={14} />
-                <span>Print Z-Report</span>
+                <span>Start Today's Day Session ➔</span>
               </button>
             </div>
           </div>
