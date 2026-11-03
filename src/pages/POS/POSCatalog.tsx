@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import {
@@ -1165,8 +1166,8 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
       {/* ─────────────────────────────────────────────────────────────
           MODAL: BARCODE STICKER PRINT PREVIEW
          ───────────────────────────────────────────────────────────── */}
-      {printingProduct && printingProduct.barcode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+      {printingProduct && printingProduct.barcode && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 text-center">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -1229,14 +1230,15 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ─────────────────────────────────────────────────────────────
           MODAL: CUSTOM BARCODE & SCANNER SETUP
          ───────────────────────────────────────────────────────────── */}
-      {editingBarcodeItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+      {editingBarcodeItem && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
@@ -1357,14 +1359,15 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ─────────────────────────────────────────────────────────────
           MODAL: IMAGE UPLOAD / URL MODAL
          ───────────────────────────────────────────────────────────── */}
-      {editingImageItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+      {editingImageItem && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -1505,15 +1508,16 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       
       {/* ─────────────────────────────────────────────────────────────
           MODAL: GET PRODUCTS FROM ERP MASTER PRODUCT LIST
          ───────────────────────────────────────────────────────────── */}
-      {isErpImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+      {isErpImportModalOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="w-full max-w-4xl rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
             
             {/* Modal Header */}
@@ -1722,16 +1726,18 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
 {/* ─────────────────────────────────────────────────────────────
           MODAL: ADD NEW PRODUCT TO POS & DATABASE
          ───────────────────────────────────────────────────────────── */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+      {isAddModalOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 animate-fadeIn">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            {/* Modal Sticky Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-4 shrink-0 bg-white dark:bg-[#111622]">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
                   <LuPlus size={18} />
@@ -1754,7 +1760,8 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               </button>
             </div>
 
-            <div className="space-y-3.5">
+            {/* Modal Scrollable Body */}
+            <div className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1">
               {/* Product Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -2097,12 +2104,12 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               </label>
             </div>
 
-            {/* Modal Actions */}
-            <div className="flex items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            {/* Modal Actions (Sticky Footer) */}
+            <div className="flex items-center gap-2 p-4 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-slate-50/60 dark:bg-[#111622]">
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -2122,7 +2129,8 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
