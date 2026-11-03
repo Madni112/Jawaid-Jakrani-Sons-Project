@@ -147,6 +147,11 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Add Category Modal State
+  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState<boolean>(false);
+  const [newCategoryModalName, setNewCategoryModalName] = useState<string>('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState<boolean>(false);
+
   // Add Product Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [newProductName, setNewProductName] = useState<string>('');
@@ -409,6 +414,32 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
     setNewCategory(catName);
     setCategorySearch('');
     setIsCategoryDropdownOpen(false);
+  };
+
+  const handleCreateCategoryFromModal = async () => {
+    const name = newCategoryModalName.trim();
+    if (!name) {
+      toast.error('Please enter a category name');
+      return;
+    }
+    setIsCreatingCategory(true);
+    try {
+      const created = await posService.createCategory(name);
+      setCategories((prev) => {
+        const exists = prev.some((c) => c.name.toLowerCase() === name.toLowerCase());
+        if (exists) return prev;
+        return [...prev, created];
+      });
+      toast.success(`Category "${name}" created and enabled on POS!`);
+      setNewCategoryModalName('');
+      setIsAddCategoryModalOpen(false);
+      window.dispatchEvent(new Event('pos_catalog_updated'));
+    } catch (err) {
+      console.error('Failed to create category:', err);
+      toast.error('Failed to create category');
+    } finally {
+      setIsCreatingCategory(false);
+    }
   };
 
   const handleAddNewCategory = async (nameToAdd?: string) => {
@@ -755,6 +786,20 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
             <span>Get from ERP Product List</span>
           </button>
 
+          {/* Button: Add Category */}
+          <button
+            type="button"
+            onClick={() => {
+              setNewCategoryModalName('');
+              setIsAddCategoryModalOpen(true);
+            }}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 bg-purple-600 hover:bg-purple-700"
+            title="Create a new category for POS & Catalog"
+          >
+            <LuPlus size={16} />
+            <span>+ Add Category</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -1086,7 +1131,30 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
           TAB 2: CATEGORIES MANAGEMENT
          ───────────────────────────────────────────────────────────── */}
       {activeTab === 'categories' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                Category Management & Visibility
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Click any category cover to upload photo or toggle visibility on POS.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setNewCategoryModalName('');
+                setIsAddCategoryModalOpen(true);
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 bg-purple-600 hover:bg-purple-700 shrink-0"
+            >
+              <LuPlus size={15} />
+              <span>+ Add New Category</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {categories.map((cat) => {
             const isVisible = cat.show_in_pos !== false;
             const itemCount = products.filter((p) => p.category.toLowerCase() === cat.name.toLowerCase()).length;
@@ -1160,7 +1228,85 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
               </div>
             );
           })}
+          </div>
         </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL: ADD NEW CATEGORY
+         ───────────────────────────────────────────────────────────── */}
+      {isAddCategoryModalOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                  <LuPlus size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Add New Category
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Saves to ERP category master list and POS catalog.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddCategoryModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Category Name <span className="text-rose-500">*</span>:
+                </label>
+                <input
+                  type="text"
+                  value={newCategoryModalName}
+                  onChange={(e) => setNewCategoryModalName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCreateCategoryFromModal();
+                    }
+                  }}
+                  autoFocus
+                  placeholder="e.g. Lawn Embroidered, Boski, Silk..."
+                  className="w-full px-3 py-2.5 text-xs rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <p className="text-[11px] text-slate-400">
+                This category will be immediately active and available when assigning or creating products in POS and ERP.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsAddCategoryModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isCreatingCategory || !newCategoryModalName.trim()}
+                onClick={handleCreateCategoryFromModal}
+                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold text-white transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50 bg-purple-600 hover:bg-purple-700"
+              >
+                <LuCheck size={16} />
+                <span>{isCreatingCategory ? 'Saving...' : 'Create Category'}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ─────────────────────────────────────────────────────────────
