@@ -1807,6 +1807,51 @@ export const posService = {
     } catch (e) {
       console.warn('Could not unlock barcode in DB:', e);
     }
+  },
+
+  // ── 7. COUNTER-WISE VISIBILITY ──
+  isProductVisibleOnCounter(product: PosProductItem, counterSlugOrName?: string): boolean {
+    if (!counterSlugOrName || counterSlugOrName.toLowerCase() === 'all') return true;
+    const counters = product.visible_counters;
+    if (!counters || counters.length === 0 || counters.includes('all') || counters.includes('All')) {
+      return true;
+    }
+    const target = counterSlugOrName.toLowerCase().trim();
+    return counters.some(c => {
+      const cl = c.toLowerCase().trim();
+      return cl === 'all' || cl === target || this.matchesTerminal(cl, target);
+    });
+  },
+
+  isCategoryVisibleOnCounter(category: PosCategoryItem, counterSlugOrName?: string): boolean {
+    if (!counterSlugOrName || counterSlugOrName.toLowerCase() === 'all') return true;
+    const counters = category.visible_counters;
+    if (!counters || counters.length === 0 || counters.includes('all') || counters.includes('All')) {
+      return true;
+    }
+    const target = counterSlugOrName.toLowerCase().trim();
+    return counters.some(c => {
+      const cl = c.toLowerCase().trim();
+      return cl === 'all' || cl === target || this.matchesTerminal(cl, target);
+    });
+  },
+
+  updateProductCounterVisibility(productId: string, visibleCounters: string[]) {
+    const metaMap = getStoredProductMeta();
+    metaMap[productId] = {
+      ...(metaMap[productId] || { show_in_pos: true }),
+      visible_counters: visibleCounters
+    };
+    saveStoredProductMeta(metaMap);
+  },
+
+  updateCategoryCounterVisibility(categoryId: string, visibleCounters: string[]) {
+    const metaMap = getStoredCategoryMeta();
+    metaMap[categoryId] = {
+      ...(metaMap[categoryId] || { show_in_pos: true }),
+      visible_counters: visibleCounters
+    };
+    saveStoredCategoryMeta(metaMap);
   }
 };
 
