@@ -441,7 +441,7 @@ export const POSTerminalsManager: React.FC = () => {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+            className="w-[70vw] h-[70vh] rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scaleUp"
           >
             {/* Modal Header */}
             <div className="p-4 pb-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#111622]">
@@ -634,7 +634,7 @@ export const POSTerminalsManager: React.FC = () => {
                       </button>
                     </div>
 
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                    <div className="space-y-2 overflow-y-auto pr-1">
                       {cashiers.length === 0 ? (
                         <div className="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
                           <LuUsers className="mx-auto text-2xl text-slate-400 opacity-60" />
