@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   LuPlus,
   LuExternalLink,
@@ -433,10 +434,10 @@ export const POSTerminalsManager: React.FC = () => {
       {/* ─────────────────────────────────────────────────────────────
           MODAL 1: CREATE / EDIT POS TERMINAL & CASHIERS
          ───────────────────────────────────────────────────────────── */}
-      {isModalOpen && (
+      {isModalOpen && createPortal(
         <div
           onClick={() => setIsModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4"
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -741,16 +742,16 @@ export const POSTerminalsManager: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+      document.body)}
 
       {/* ─────────────────────────────────────────────────────────────
           MODAL 2: CHANGE UNIFIED MANAGER OVERRIDE PASSWORD
          ───────────────────────────────────────────────────────────── */}
-      {isChangePassModalOpen && (
+      {isChangePassModalOpen && createPortal(
         <div
           onClick={() => setIsChangePassModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -839,8 +840,8 @@ export const POSTerminalsManager: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+      document.body)}
     </div>
   );
 };
