@@ -653,10 +653,26 @@ export const posService = {
     }
   },
 
-  verifyManagerOverride(slug: string, enteredPass: string): boolean {
-    const terminal = this.getTerminalBySlug(slug);
+  getGlobalManagerPassword(): string {
+    if (typeof window === 'undefined') return '7788';
+    try {
+      return localStorage.getItem('uj_pos_global_manager_password') || '7788';
+    } catch {
+      return '7788';
+    }
+  },
+
+  setGlobalManagerPassword(newPass: string): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('uj_pos_global_manager_password', newPass.trim());
+    }
+  },
+
+  verifyManagerOverride(_slug?: string, enteredPass?: string): boolean {
+    if (!enteredPass) return false;
     const pass = enteredPass.trim();
-    if (terminal?.manager_override_password && terminal.manager_override_password.trim() === pass) {
+    const globalPass = this.getGlobalManagerPassword().trim();
+    if (pass === globalPass) {
       return true;
     }
     if (pass === '7788' || pass === 'admin' || pass === 'admin123') {

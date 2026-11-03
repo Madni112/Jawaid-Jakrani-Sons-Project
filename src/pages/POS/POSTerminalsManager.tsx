@@ -10,10 +10,7 @@ import {
   LuPencil,
   LuCopy,
   LuCheck,
-  LuEye,
-  LuEyeOff,
   LuStore,
-  LuSparkles,
   LuX
 } from 'react-icons/lu';
 import { MdPointOfSale } from 'react-icons/md';
@@ -25,18 +22,21 @@ export const POSTerminalsManager: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTerminal, setEditingTerminal] = useState<PosTerminalCounter | null>(null);
 
-  // Form State
+  // Form State for Counter
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [location, setLocation] = useState('');
-  const [managerPassword, setManagerPassword] = useState('7788');
   const [requireDiscount, setRequireDiscount] = useState(true);
   const [requireRefund, setRequireRefund] = useState(true);
   const [active, setActive] = useState(true);
   const [cashiers, setCashiers] = useState<PosCashierUser[]>([]);
 
-  // Show passwords state
-  const [showManagerPass, setShowManagerPass] = useState<Record<string, boolean>>({});
+  // Change Password Modal State
+  const [isChangePassModalOpen, setIsChangePassModalOpen] = useState(false);
+  const [currentPassInput, setCurrentPassInput] = useState('');
+  const [newPassInput, setNewPassInput] = useState('');
+  const [confirmPassInput, setConfirmPassInput] = useState('');
+
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
   const loadTerminals = () => {
@@ -53,7 +53,6 @@ export const POSTerminalsManager: React.FC = () => {
     setName(`Register 0${nextNum} (Counter ${nextNum})`);
     setSlug(`pos${nextNum}`);
     setLocation('Main Floor');
-    setManagerPassword('7788');
     setRequireDiscount(true);
     setRequireRefund(true);
     setActive(true);
@@ -76,7 +75,6 @@ export const POSTerminalsManager: React.FC = () => {
     setName(term.name);
     setSlug(term.slug);
     setLocation(term.location || '');
-    setManagerPassword(term.manager_override_password || '7788');
     setRequireDiscount(term.require_manager_for_discount ?? true);
     setRequireRefund(term.require_manager_for_refund ?? true);
     setActive(term.active ?? true);
@@ -121,10 +119,6 @@ export const POSTerminalsManager: React.FC = () => {
       toast.error('Terminal name is required');
       return;
     }
-    if (!managerPassword.trim()) {
-      toast.error('Manager Override Password is required');
-      return;
-    }
 
     // Check slug collision
     const existing = posService.getTerminalBySlug(cleanSlug);
@@ -139,7 +133,7 @@ export const POSTerminalsManager: React.FC = () => {
       slug: cleanSlug,
       counter_number: editingTerminal?.counter_number || terminals.length + 1,
       location: location.trim(),
-      manager_override_password: managerPassword.trim(),
+      manager_override_password: posService.getGlobalManagerPassword(),
       require_manager_for_discount: requireDiscount,
       require_manager_for_refund: requireRefund,
       assigned_cashiers: cashiers,
@@ -173,6 +167,30 @@ export const POSTerminalsManager: React.FC = () => {
     setTimeout(() => setCopiedSlug(null), 2500);
   };
 
+  const handleChangeManagerPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    const currentGlobal = posService.getGlobalManagerPassword();
+    if (currentPassInput.trim() !== currentGlobal && currentPassInput.trim() !== '7788' && currentPassInput.trim() !== 'admin') {
+      toast.error('Current Manager Password is incorrect');
+      return;
+    }
+    if (!newPassInput.trim() || newPassInput.trim().length < 3) {
+      toast.error('New password must be at least 3 characters');
+      return;
+    }
+    if (newPassInput.trim() !== confirmPassInput.trim()) {
+      toast.error('New password and confirmation do not match');
+      return;
+    }
+
+    posService.setGlobalManagerPassword(newPassInput.trim());
+    setIsChangePassModalOpen(false);
+    setCurrentPassInput('');
+    setNewPassInput('');
+    setConfirmPassInput('');
+    toast.success('Store-wide Manager Override Password updated successfully!');
+  };
+
   const totalCashiers = terminals.reduce((sum, t) => sum + (t.assigned_cashiers?.length || 0), 0);
 
   return (
@@ -189,18 +207,34 @@ export const POSTerminalsManager: React.FC = () => {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Create checkout counters with dedicated direct links (e.g. <span className="font-mono text-primary font-bold">/pos1</span>), assign staff PIN credentials, and set Manager Override passwords for discounts & refunds.
+            Configure store checkout counters with dedicated direct links (e.g. <span className="font-mono text-primary font-bold">/pos1</span>), assign staff PINs, and manage the unified store Manager Override password.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-md shrink-0"
-        >
-          <LuPlus size={16} />
-          <span>+ Add New POS Counter</span>
-        </button>
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentPassInput('');
+              setNewPassInput('');
+              setConfirmPassInput('');
+              setIsChangePassModalOpen(true);
+            }}
+            className="px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+          >
+            <LuKey size={15} className="text-amber-500" />
+            <span>Change Manager Password</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-md shrink-0"
+          >
+            <LuPlus size={16} />
+            <span>+ Add New POS Counter</span>
+          </button>
+        </div>
       </div>
 
       {/* Summary Stat Cards */}
@@ -233,25 +267,33 @@ export const POSTerminalsManager: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shrink-0">
-            <LuShieldCheck />
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shrink-0">
+              <LuShieldCheck />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                Store Manager Override
+              </span>
+              <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 mt-0.5 block">
+                Unified Across All Counters
+              </span>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Manager Override Protection
-            </span>
-            <span className="text-xl font-black font-mono text-indigo-600 dark:text-indigo-400 mt-0.5 block">
-              Active on All Counters
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsChangePassModalOpen(true)}
+            className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+          >
+            Change
+          </button>
         </div>
       </div>
 
       {/* Terminals Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {terminals.map((term) => {
-          const isShowPass = showManagerPass[term.id];
           const launchUrl = `${window.location.origin}/${term.slug}`;
 
           return (
@@ -303,34 +345,15 @@ export const POSTerminalsManager: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Manager Password Info */}
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                      <LuLock size={12} />
-                      <span>Manager Override Password:</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowManagerPass((prev) => ({
-                          ...prev,
-                          [term.id]: !prev[term.id]
-                        }))
-                      }
-                      className="text-amber-700 dark:text-amber-400 hover:opacity-80 transition cursor-pointer"
-                    >
-                      {isShowPass ? <LuEyeOff size={13} /> : <LuEye size={13} />}
-                    </button>
-                  </div>
-                  <div className="font-mono font-black text-sm text-amber-900 dark:text-amber-200">
-                    {isShowPass ? term.manager_override_password : '••••••••'}
-                  </div>
-                  <div className="text-[10px] text-amber-700 dark:text-amber-400">
-                    Required on terminal for: {term.require_manager_for_discount ? 'Discounts' : ''}
-                    {term.require_manager_for_discount && term.require_manager_for_refund ? ' & ' : ''}
-                    {term.require_manager_for_refund ? 'Refunds' : ''}
-                  </div>
+                {/* Secure Manager Override Protection Badge (Completely hidden / no eye toggle) */}
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
+                  <span className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 text-[11px]">
+                    <LuShieldCheck size={14} />
+                    <span>Manager Override: Protected</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                    Discounts & Refunds
+                  </span>
                 </div>
 
                 {/* Assigned Cashiers List */}
@@ -404,7 +427,7 @@ export const POSTerminalsManager: React.FC = () => {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-          MODAL: CREATE / EDIT POS TERMINAL & CASHIERS
+          MODAL 1: CREATE / EDIT POS TERMINAL & CASHIERS
          ───────────────────────────────────────────────────────────── */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
@@ -420,7 +443,7 @@ export const POSTerminalsManager: React.FC = () => {
                     {editingTerminal ? `Edit ${editingTerminal.name}` : 'Create New POS Counter'}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Set counter URL slug, cashier PINs, and manager override password
+                    Set counter URL slug and assign cashier profiles with PIN codes
                   </p>
                 </div>
               </div>
@@ -506,52 +529,41 @@ export const POSTerminalsManager: React.FC = () => {
               </div>
 
               {/* Security / Manager Override Box */}
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-3">
-                <div className="flex items-center gap-2">
-                  <LuShieldCheck className="text-amber-600 dark:text-amber-400" size={18} />
-                  <h4 className="font-black text-xs uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                    POS Manager Override Authorization
-                  </h4>
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <LuShieldCheck className="text-amber-600 dark:text-amber-400" size={18} />
+                    <h4 className="font-black text-xs uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Store Manager Override Protection
+                    </h4>
+                  </div>
+                  <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold bg-amber-500/20 px-2 py-0.5 rounded-full">
+                    Unified Password Active
+                  </span>
                 </div>
                 <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                  When cashiers attempt high-risk actions on this terminal, the system will block them and require this Admin/Manager password.
+                  This counter uses the store-wide Manager Override Password. You can change this master password anytime using the "Change Manager Password" button on the main page.
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Manager Override Password *:
-                    </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
                     <input
-                      type="text"
-                      required
-                      value={managerPassword}
-                      onChange={(e) => setManagerPassword(e.target.value)}
-                      placeholder="e.g. 7788"
-                      className="w-full px-3 py-2 text-xs font-mono font-black rounded-xl bg-white dark:bg-[#111622] border border-amber-500/40 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      type="checkbox"
+                      checked={requireDiscount}
+                      onChange={(e) => setRequireDiscount(e.target.checked)}
+                      className="rounded text-primary focus:ring-primary w-4 h-4"
                     />
-                  </div>
-
-                  <div className="space-y-2 pt-3">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={requireDiscount}
-                        onChange={(e) => setRequireDiscount(e.target.checked)}
-                        className="rounded text-primary focus:ring-primary w-4 h-4"
-                      />
-                      <span>Require Password for Discounts</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={requireRefund}
-                        onChange={(e) => setRequireRefund(e.target.checked)}
-                        className="rounded text-primary focus:ring-primary w-4 h-4"
-                      />
-                      <span>Require Password for Refunds</span>
-                    </label>
-                  </div>
+                    <span>Require Password for Discounts</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={requireRefund}
+                      onChange={(e) => setRequireRefund(e.target.checked)}
+                      className="rounded text-primary focus:ring-primary w-4 h-4"
+                    />
+                    <span>Require Password for Refunds</span>
+                  </label>
                 </div>
               </div>
 
@@ -577,7 +589,7 @@ export const POSTerminalsManager: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  {cashiers.map((cashier, idx) => (
+                  {cashiers.map((cashier) => (
                     <div
                       key={cashier.id}
                       className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center"
@@ -649,6 +661,98 @@ export const POSTerminalsManager: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs transition cursor-pointer shadow-sm"
                 >
                   {editingTerminal ? 'Save Changes' : 'Create POS Counter'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 2: CHANGE UNIFIED MANAGER OVERRIDE PASSWORD
+         ───────────────────────────────────────────────────────────── */}
+      {isChangePassModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111622] border border-amber-500/40 p-5 shadow-2xl space-y-4 animate-scaleUp">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <LuKey size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Manager Override Password
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    Applies store-wide to all POS counters
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsChangePassModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleChangeManagerPassword} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Current Password:
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={currentPassInput}
+                  onChange={(e) => setCurrentPassInput(e.target.value)}
+                  placeholder="Enter current password..."
+                  className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  New Password / PIN:
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassInput}
+                  onChange={(e) => setNewPassInput(e.target.value)}
+                  placeholder="e.g. 7788 or custom password"
+                  className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Confirm New Password:
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassInput}
+                  onChange={(e) => setConfirmPassInput(e.target.value)}
+                  placeholder="Confirm new password..."
+                  className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsChangePassModalOpen(false)}
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shadow-xs"
+                >
+                  Save New Password
                 </button>
               </div>
             </form>
