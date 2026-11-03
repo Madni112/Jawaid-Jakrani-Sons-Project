@@ -34,7 +34,6 @@ import {
   LuQrCode,
   LuSparkles
 } from 'react-icons/lu';
-import { MdPointOfSale } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -752,20 +751,6 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
           >
             <LuFileSpreadsheet size={15} />
             <span>Export Excel</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { if (onBack) onBack(); else navigate('/pos/terminal'); }}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
-            style={{
-              backgroundColor: accentColor,
-              color: contrastText,
-              border: isAccentWhite ? '1px solid #cbd5e1' : undefined
-            }}
-          >
-            <MdPointOfSale size={16} />
-            <span>{embedded ? 'Back to Cashier Register' : 'Launch POS Terminal'}</span>
           </button>
         </div>
       </div>
