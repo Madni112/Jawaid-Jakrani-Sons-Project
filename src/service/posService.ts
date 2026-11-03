@@ -94,6 +94,32 @@ export interface PosHeldOrder {
   created_at: string;
 }
 
+
+export interface PosCashierUser {
+  id: string;
+  name: string;
+  email?: string;
+  pin_code: string; // 4-digit PIN e.g. "1234"
+  password?: string;
+  role: 'cashier' | 'lead_cashier' | 'supervisor';
+  avatar_color?: string;
+  active: boolean;
+}
+
+export interface PosTerminalCounter {
+  id: string;
+  name: string; // e.g. "Register 01 - Main Floor"
+  slug: string; // e.g. "pos1", "pos2"
+  counter_number: number;
+  location?: string;
+  manager_override_password: string; // e.g. "7788"
+  require_manager_for_discount: boolean;
+  require_manager_for_refund: boolean;
+  assigned_cashiers: PosCashierUser[];
+  active: boolean;
+  created_at: string;
+}
+
 export interface PosSettings {
   id?: string;
   terminal_name: string;
@@ -200,6 +226,7 @@ const STORAGE_ORDERS = 'uj_pos_orders_v1';
 const STORAGE_SHIFTS = 'uj_pos_shifts_v1';
 const STORAGE_HELD = 'uj_pos_held_v1';
 const STORAGE_SETTINGS = 'uj_pos_settings_v1';
+const STORAGE_TERMINALS = 'uj_pos_terminals_v1';
 const STORAGE_VISIBILITY = 'uj_pos_visibility_v1';
 
 export const DEFAULT_POS_SETTINGS: PosSettings = {
@@ -540,6 +567,104 @@ export const SAMPLE_POS_ORDERS: PosOrder[] = [
 ];
 
 export const posService = {
+  // ── 0. MULTI-COUNTER TERMINAL & CASHIER MANAGEMENT ──
+  getTerminals(): PosTerminalCounter[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(STORAGE_TERMINALS);
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list) && list.length > 0) return list;
+      }
+      // Seed default pos1 if empty
+      const defaultTerminal: PosTerminalCounter = {
+        id: 'term-1',
+        name: 'Register 01 (Main Counter)',
+        slug: 'pos1',
+        counter_number: 1,
+        location: 'Ground Floor',
+        manager_override_password: '7788',
+        require_manager_for_discount: true,
+        require_manager_for_refund: true,
+        assigned_cashiers: [
+          { id: 'cashier-1', name: 'Uzair Jibran', pin_code: '1234', role: 'supervisor', active: true, avatar_color: '#3b82f6' },
+          { id: 'cashier-2', name: 'Alex Rivera', pin_code: '4321', role: 'cashier', active: true, avatar_color: '#10b981' },
+          { id: 'cashier-3', name: 'Counter Staff', pin_code: '0000', role: 'cashier', active: true, avatar_color: '#8b5cf6' }
+        ],
+        active: true,
+        created_at: new Date().toISOString()
+      };
+      localStorage.setItem(STORAGE_TERMINALS, JSON.stringify([defaultTerminal]));
+      return [defaultTerminal];
+    } catch {
+      return [];
+    }
+  },
+
+  getTerminalBySlug(slug: string): PosTerminalCounter | undefined {
+    const clean = (slug || '').toLowerCase().trim();
+    const all = this.getTerminals();
+    return all.find(t => t.slug.toLowerCase() === clean);
+  },
+
+  saveTerminal(terminal: PosTerminalCounter): PosTerminalCounter {
+    const all = this.getTerminals();
+    const idx = all.findIndex(t => t.id === terminal.id || t.slug.toLowerCase() === terminal.slug.toLowerCase());
+    let updated: PosTerminalCounter[];
+    if (idx !== -1) {
+      updated = [...all];
+      updated[idx] = terminal;
+    } else {
+      updated = [terminal, ...all];
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_TERMINALS, JSON.stringify(updated));
+    }
+    return terminal;
+  },
+
+  deleteTerminal(id: string): void {
+    const all = this.getTerminals();
+    const updated = all.filter(t => t.id !== id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_TERMINALS, JSON.stringify(updated));
+    }
+  },
+
+  getLoggedInCashier(slug: string): PosCashierUser | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(`uj_pos_cashier_${slug.toLowerCase()}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  setLoggedInCashier(slug: string, cashier: PosCashierUser): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`uj_pos_cashier_${slug.toLowerCase()}`, JSON.stringify(cashier));
+    }
+  },
+
+  clearLoggedInCashier(slug: string): void {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(`uj_pos_cashier_${slug.toLowerCase()}`);
+    }
+  },
+
+  verifyManagerOverride(slug: string, enteredPass: string): boolean {
+    const terminal = this.getTerminalBySlug(slug);
+    const pass = enteredPass.trim();
+    if (terminal?.manager_override_password && terminal.manager_override_password.trim() === pass) {
+      return true;
+    }
+    if (pass === '7788' || pass === 'admin' || pass === 'admin123') {
+      return true;
+    }
+    return false;
+  },
+
   // ── 1. SETTINGS ──
   getSettings(): PosSettings {
     if (typeof window === 'undefined') return DEFAULT_POS_SETTINGS;

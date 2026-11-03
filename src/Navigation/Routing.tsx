@@ -9,6 +9,8 @@ import Dashboard from '../pages/Dashboard/Dashboard';
 import NotFound from '../pages/Error/NotFound';
 import SettingsPage from '../pages/Settings/SettingsPage';
 import POSTerminal from '../pages/POS/POSTerminal';
+import POSTerminalsManager from '../pages/POS/POSTerminalsManager';
+import POSLogin from '../pages/POS/POSLogin';
 import { useAuth } from '../Context/Auth';
 
 /**
@@ -132,7 +134,35 @@ function Navigation() {
       <Route path="/Administration/Roles" element={<DeveloperDashboard />} />
       <Route path="/Administration/Users" element={<DeveloperDashboard />} />
 
-      {/* 3.8. DEDICATED ATELIER POS TERMINAL */}
+      {/* 3.7. POS TERMINALS & COUNTER MANAGEMENT (ERP ADMIN) */}
+      <Route
+        path="/pos/terminals"
+        element={
+          <AppRouteGuard>
+            <DefaultLayout>
+              <POSTerminalsManager />
+            </DefaultLayout>
+          </AppRouteGuard>
+        }
+      />
+
+      {/* 3.8. DEDICATED ATELIER POS TERMINAL & LOGIN (e.g. /pos1, /pos1/terminal) */}
+      <Route
+        path="/:posSlug/terminal"
+        element={
+          <AppRouteGuard>
+            <POSTerminal />
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/pos/:posSlug/terminal"
+        element={
+          <AppRouteGuard>
+            <POSTerminal />
+          </AppRouteGuard>
+        }
+      />
       <Route
         path="/pos/terminal"
         element={
@@ -142,8 +172,12 @@ function Navigation() {
         }
       />
       <Route
+        path="/pos/:posSlug"
+        element={<POSLogin />}
+      />
+      <Route
         path="/pos"
-        element={<Navigate to="/pos/terminal" replace />}
+        element={<Navigate to="/pos1" replace />}
       />
 
       {/* 4. SETTINGS & PREFERENCES */}
@@ -179,6 +213,9 @@ function Navigation() {
       <Route path="/tenant=:slug" element={<Navigate to="/dashboard" replace />} />
       <Route path="/tenant-:slug/*" element={<LegacyTenantRedirect />} />
       <Route path="/tenant-:slug" element={<Navigate to="/dashboard" replace />} />
+
+      {/* 5.5. DYNAMIC POS COUNTER DIRECT URL (e.g. /pos1, /pos2) */}
+      <Route path="/:posSlug" element={<POSLogin />} />
 
       {/* 6. 404 NOT FOUND */}
       <Route

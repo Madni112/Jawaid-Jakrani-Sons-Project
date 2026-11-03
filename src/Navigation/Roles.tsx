@@ -105,6 +105,7 @@ import AddQuotation from '../pages/CRM/Quotations/AddQuotation';
 import PrintQuotation from '../pages/CRM/Quotations/PrintQuotation';
 import FollowUps from '../pages/CRM/FollowUps';
 import POSTerminal from '../pages/POS/POSTerminal';
+import POSTerminalsManager from '../pages/POS/POSTerminalsManager';
 import POSOrders from '../pages/POS/POSOrders';
 import POSRegister from '../pages/POS/POSRegister';
 import POSCatalog from '../pages/POS/POSCatalog';
@@ -135,9 +136,9 @@ export const adminRoutes = [
     icon: MdPointOfSale,
     children: [
       {
-        path: '/pos/terminal',
-        component: <POSTerminal />,
-        label: 'Register Terminal',
+        path: '/pos/terminals',
+        component: <POSTerminalsManager />,
+        label: 'Register Terminals & Counters',
         icon: MdPointOfSale,
       },
       {

@@ -193,6 +193,14 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
   const handleExecuteRefund = () => {
     if (!confirmRefundOrder || totalRefundAmount <= 0) return;
 
+    // 🔒 Manager Override Password Check for Customer Refund
+    const managerPass = prompt('🔒 Manager Authorization Required:\nEnter POS Admin / Manager Password to approve refund:');
+    if (managerPass === null) return; // Cashier cancelled
+    if (!posService.verifyManagerOverride('pos1', managerPass)) {
+      toast.error('Invalid Manager Password. Refund not authorized.', { icon: '🔒' });
+      return;
+    }
+
     const remainingTotal = Math.max(0, confirmRefundOrder.total_amount - totalRefundAmount);
     const newStatus = isFullRefund ? ('Refunded' as const) : ('Partially Refunded' as const);
 
