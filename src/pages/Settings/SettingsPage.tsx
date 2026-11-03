@@ -48,7 +48,7 @@ import {
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import { getBrandConfig } from '../../utils/brand';
 import useColorMode from '../../hooks/useColorMode';
@@ -70,8 +70,10 @@ import {
 } from '../../constant/themeConfig';
 import {
   fetchSystemMasterConfig,
+  saveSystemMasterConfig,
   canUserBackup,
   canUserEditCreditLimit,
+  isNegativeStockAllowed,
   SystemMasterConfig,
 } from '../../utils/systemPermissions';
 import {
@@ -115,6 +117,12 @@ const SETTINGS_TABS: TabItem[] = [
     label: 'Theme & Appearance',
     description: 'Accent colors, sidebar styles & mode',
     icon: LuPalette,
+  },
+  {
+    id: 'stock_control',
+    label: 'Inventory & Stock Governance',
+    description: 'Negative stock allowance & billing guards',
+    icon: LuPackage,
   },
   {
     id: 'credit_limits',
@@ -368,6 +376,69 @@ const SettingsPage: React.FC = () => {
 
   // System Master Permissions State
   const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(null);
+  // Negative Stock Settings & Correction Modal State
+  const [savingStockPolicy, setSavingStockPolicy] = useState(false);
+  const [checkingStockViolations, setCheckingStockViolations] = useState(false);
+  const [showStockCorrectionModal, setShowStockCorrectionModal] = useState(false);
+  const [negativeProductsList, setNegativeProductsList] = useState<any[]>([]);
+
+  // Toggle or Update Negative Stock Policy
+  const handleToggleNegativeStock = async () => {
+    if (!systemConfig) return;
+    const currentAllowed = systemConfig.allow_negative_stock !== false;
+    const nextAllowed = !currentAllowed;
+
+    // If user is trying to TURN ON STRICT MODE (i.e. Disallow negative stock, nextAllowed === false)
+    if (!nextAllowed) {
+      setCheckingStockViolations(true);
+      try {
+        const { data: allProds, error } = await fetchAllPages(
+          supabase.from('products').select('id, product_name, item_sr_no, current_stock, category, uom, retail_price')
+        );
+        if (error) throw error;
+
+        const violated = (allProds || []).filter((p: any) => Number(p.current_stock || 0) < 0);
+        if (violated.length > 0) {
+          setNegativeProductsList(violated);
+          setShowStockCorrectionModal(true);
+          triggerFeedbackSound('error', userEmail);
+          setCheckingStockViolations(false);
+          return; // Block enabling strict mode!
+        }
+      } catch (err: any) {
+        toast.error('Failed to verify inventory health: ' + err.message);
+        setCheckingStockViolations(false);
+        return;
+      }
+      setCheckingStockViolations(false);
+    }
+
+    // Save updated configuration
+    try {
+      setSavingStockPolicy(true);
+      const updatedConfig: SystemMasterConfig = {
+        ...systemConfig,
+        allow_negative_stock: nextAllowed,
+      };
+      const res = await saveSystemMasterConfig(updatedConfig);
+      if (res.success) {
+        setSystemConfig(updatedConfig);
+        triggerFeedbackSound('success', userEmail);
+        if (nextAllowed) {
+          toast.success('Negative stock allowed: Sales invoices can proceed even if stock is 0.');
+        } else {
+          toast.success('Strict Stock Protection Active: Billing items with insufficient stock is blocked.');
+        }
+      } else {
+        toast.error('Failed to update stock policy: ' + (res.error || 'Unknown error'));
+      }
+    } catch (err: any) {
+      toast.error('Error saving stock policy: ' + err.message);
+    } finally {
+      setSavingStockPolicy(false);
+    }
+  };
+
 
   // Customer Credit Limits State
   const [customers, setCustomers] = useState<any[]>([]);
@@ -1929,6 +2000,178 @@ const SettingsPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* TAB: INVENTORY & STOCK GOVERNANCE */}
+          {activeTab === 'stock_control' && (() => {
+            const isNegativeAllowed = isNegativeStockAllowed(systemConfig);
+
+            return (
+              <div className="space-y-6">
+                {/* Hero Header Card */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-2xl shrink-0">
+                        <LuPackage />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                          Inventory & Stock Governance
+                          <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                            isNegativeAllowed
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400'
+                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
+                          }`}>
+                            {isNegativeAllowed ? 'Negative Stock Permitted' : 'Strict Non-Negative Enforced'}
+                          </span>
+                        </h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          Configure whether POS and commercial sales invoices can bill items beyond available warehouse stock.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Setting Toggle Card */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+                    <div className="space-y-1.5 max-w-2xl">
+                      <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
+                        <LuSlidersHorizontal className="text-primary text-base" />
+                        <span>Allow Product Stock to Go Negative</span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        When <strong className="text-slate-700 dark:text-slate-200">Enabled</strong> (minus allowed): Salesmen can issue bills even if stock has not yet been inwarded via purchase bills or opening stock.
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        When <strong className="text-slate-700 dark:text-slate-200">Disabled</strong> (strict mode): Sales Invoices and Delivery Challans are strictly blocked from proceeding if requested quantity exceeds available physical inventory.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={savingStockPolicy || checkingStockViolations}
+                        onClick={handleToggleNegativeStock}
+                        className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 ${
+                          isNegativeAllowed ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'
+                        }`}
+                      >
+                        <span className="sr-only">Toggle Negative Stock</span>
+                        <span
+                          className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out flex items-center justify-center text-xs ${
+                            isNegativeAllowed ? 'translate-x-6 text-amber-600' : 'translate-x-0 text-slate-400'
+                          }`}
+                        >
+                          {isNegativeAllowed ? <LuCheck size={14} className="stroke-[3]" /> : <LuXCircle size={14} />}
+                        </span>
+                      </button>
+                      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        {checkingStockViolations
+                          ? 'Checking health...'
+                          : savingStockPolicy
+                          ? 'Saving...'
+                          : isNegativeAllowed
+                          ? 'Minus Allowed'
+                          : 'Strict (No Minus)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Operational Policy Guide */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div className={`p-4 rounded-xl border ${
+                      isNegativeAllowed
+                        ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-950/20'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 opacity-60'
+                    }`}>
+                      <div className="flex items-center gap-2 font-bold text-xs text-amber-800 dark:text-amber-300 mb-1">
+                        <LuAlertTriangle size={15} />
+                        <span>Mode A: Allow Negative (Fast Sales)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
+                        Suitable for high-velocity counter sales where goods arrive in the showroom and are sold immediately before the accounting staff enters the supplier invoice. Physical stock will show negative numbers until purchase bills are posted.
+                      </p>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border ${
+                      !isNegativeAllowed
+                        ? 'border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/20'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 opacity-60'
+                    }`}>
+                      <div className="flex items-center gap-2 font-bold text-xs text-emerald-800 dark:text-emerald-300 mb-1">
+                        <LuShieldCheck size={15} />
+                        <span>Mode B: Disallow Negative (Strict Audit)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
+                        Guarantees stock assets never drop below zero. Requires all products to be properly inwarded through Opening Stock or Supplier Inward Challans before salesmen can bill them.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stock Correction Warning Modal */}
+                {showStockCorrectionModal && (
+                  <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-boxdark rounded-2xl shadow-2xl border border-red-300 dark:border-red-800 w-full max-w-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200">
+                      <div className="flex items-start gap-4 pb-4 border-b border-stroke dark:border-strokedark">
+                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl shrink-0">
+                          <LuAlertTriangle />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                            Stock Correction Required Before Enabling
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Strict stock protection cannot be turned ON because <strong>{negativeProductsList.length}</strong> product(s) currently have negative inventory in your system.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="py-4 space-y-2">
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Please add Opening Stock or Inward Purchases for these products to restore them to zero or above:
+                        </p>
+                        <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                          {negativeProductsList.map((p, idx) => (
+                            <div key={p.id || idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                              <div>
+                                <span className="font-bold text-slate-900 dark:text-white block">{p.product_name}</span>
+                                <span className="text-[11px] text-slate-400 font-mono">SKU: {p.item_sr_no || 'N/A'} | Category: {p.category || 'Standard'}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="inline-block px-2.5 py-1 rounded-md bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-400 font-mono font-bold text-xs">
+                                  {Number(p.current_stock || 0).toLocaleString()} {p.uom || 'units'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-stroke dark:border-strokedark flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowStockCorrectionModal(false)}
+                          className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
+                        >
+                          Dismiss & Keep Minus Allowed
+                        </button>
+                        <a
+                          href="/Inventory/OpeningStock/List"
+                          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-md"
+                        >
+                          <LuPackage size={14} />
+                          <span>Go to Opening Stock Correction</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* TAB 3: CUSTOMER CREDIT LIMITS */}
           {activeTab === 'credit_limits' && (() => {

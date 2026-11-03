@@ -12,6 +12,7 @@ import { useAuth } from '../../../Context/Auth';
 import { logActivity } from '../../../service/auditLogger';
 import { triggerFeedbackSound } from '../../../utils/audioFeedback';
 import { fetchCustomerCreditLimits } from '../../../utils/creditLimitUtils';
+import { fetchSystemMasterConfig, isNegativeStockAllowed } from '../../../utils/systemPermissions';
 
 // Helper to identify Tile products strictly based on parent category
 const isTileProduct = (p: any) => {
@@ -346,6 +347,7 @@ const NewInvoice = () => {
   const [pendingFormValues, setPendingFormValues] = useState<any>(null);
   const [isOpeningCustomerModal, setIsOpeningCustomerModal] = useState<boolean>(false);
   const [serverToday, setServerToday] = useState<Date | null>(null);
+  const [systemNegativeStockAllowed, setSystemNegativeStockAllowed] = useState<boolean>(true);
 
   useEffect(() => {
     // Fetch server date so validation is not based on user's local clock
@@ -415,6 +417,7 @@ const NewInvoice = () => {
 
         if (bnk) setBanksList(bnk);
         fetchCustomerCreditLimits().then(setCustomerCreditLimitsMap).catch(() => {});
+        fetchSystemMasterConfig().then(cfg => setSystemNegativeStockAllowed(isNegativeStockAllowed(cfg))).catch(() => {});
       } catch (err: any) {
         toast.error('Failed to aggregate core infrastructure registries: ' + err.message);
       } finally {
@@ -1265,7 +1268,7 @@ const NewInvoice = () => {
         const priorUsed = consumedInInvoice[itemKey] || 0;
         const availableForRow = Math.max(0, maxAllowed - priorUsed);
 
-        if (!bypassNegativeCheck && Number(item.qty) > availableForRow) {
+        if (!systemNegativeStockAllowed && Number(item.qty) > availableForRow) {
           toast.error(`Insufficient stock for ${item.itemName} (Row #${i + 1}). Max Available: ${availableForRow.toLocaleString()}, Requested: ${Number(item.qty).toLocaleString()}`);
           setLoading(false);
           return;
@@ -1301,7 +1304,7 @@ const NewInvoice = () => {
         const priorUsed = consumedInInvoice[itemKey] || 0;
         const availableForRowPcs = Math.max(0, maxAllowedPcs - priorUsed);
 
-        if (!bypassNegativeCheck && reqPcs > availableForRowPcs) {
+        if (!systemNegativeStockAllowed && reqPcs > availableForRowPcs) {
           const avBoxes = Math.floor(availableForRowPcs / pcsPerBox);
           const avLoose = availableForRowPcs % pcsPerBox;
           toast.error(`Insufficient tile stock for ${tItem.itemName} (Tile Row #${i + 1}). Max Available: ${avBoxes} Boxes${avLoose > 0 ? ` + ${avLoose} Pcs` : ''} (${availableForRowPcs} Pcs total).`);
