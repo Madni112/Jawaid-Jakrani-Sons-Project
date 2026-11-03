@@ -2280,7 +2280,27 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
 
             {/* Thermal Print Slip Preview */}
             <div className="flex-1 overflow-y-auto p-4">
-              <div className="bg-white text-black p-4 rounded-sm font-mono text-xs space-y-2.5 border border-slate-300 shadow-sm">
+              <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                  body * {
+                    visibility: hidden !important;
+                  }
+                  #printable-merged-slip, #printable-merged-slip * {
+                    visibility: visible !important;
+                  }
+                  #printable-merged-slip {
+                    position: absolute !important;
+                    left: 0 !important;
+                    top: 0 !important;
+                    width: 78mm !important;
+                    margin: 0 !important;
+                    padding: 8px !important;
+                    background: white !important;
+                    color: black !important;
+                  }
+                }
+              `}} />
+              <div id="printable-merged-slip" className="bg-white text-black p-4 rounded-sm font-mono text-xs space-y-2.5 border border-slate-300 shadow-sm print:border-none print:shadow-none print:p-0">
                 {/* Store Header */}
                 <div className="text-center space-y-0.5 pb-2 border-b border-dashed border-black">
                   <h4 className="font-extrabold text-sm uppercase">{posConfig.store_title}</h4>
@@ -2298,57 +2318,71 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                 </div>
 
                 {/* SCENARIO 1: TARGETED SPECIFIC CASHIER */}
-                {selectedCashierFilter !== 'All' ? (
-                  <div className="space-y-2">
-                    <div className="py-1.5 border-b border-dashed border-black space-y-1 text-[11px]">
-                      <div className="flex justify-between">
-                        <span className="font-bold">TARGETED CASHIER:</span>
-                        <span className="font-extrabold uppercase">{selectedCashierFilter}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Assigned Counter:</span>
-                        <span className="font-bold">{selectedCounter === 'All' ? resolveTerminalName(filteredShifts[0]?.terminal_code) : selectedCounter}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Sessions Worked:</span>
-                        <span>{filteredShifts.length} Shifts</span>
-                      </div>
-                    </div>
+                {selectedCashierFilter !== 'All' ? (() => {
+                  const targetedTerminal = terminalsList.find((t) =>
+                    (t.assigned_cashiers || []).some((c: any) => normCashierName(c.name) === normCashierName(selectedCashierFilter))
+                  ) || (filteredShifts.length > 0 ? terminalsList.find(t => cleanCounterKey(t.name) === cleanCounterKey(filteredShifts[0].terminal_code)) : null) || terminalsList[0];
 
-                    {/* Financials for Targeted Cashier */}
-                    <div className="py-1.5 border-b border-dashed border-black space-y-1 text-[11px]">
-                      <div className="flex justify-between font-bold text-xs pt-0.5">
-                        <span>TOTAL CASHIER SALES:</span>
-                        <span>Rs. {dateStats.totalVolume.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>• Cash Collected:</span>
-                        <span>Rs. {dateStats.cashSales.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>• Card / Digital:</span>
-                        <span>Rs. {(dateStats.cardSales + dateStats.digitalSales).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>• Cash Variance:</span>
-                        <span>{dateStats.totalVariance >= 0 ? `+${dateStats.totalVariance}` : dateStats.totalVariance}</span>
-                      </div>
-                    </div>
-
-                    {/* Itemized Sessions list for this cashier */}
-                    <div className="py-1 text-[10px] space-y-1">
-                      <p className="font-bold uppercase tracking-wider text-[10px] pb-0.5 border-b border-dotted border-black/40">
-                        CASHIER SESSIONS BREAKDOWN
-                      </p>
-                      {filteredShifts.map((s) => (
-                        <div key={s.id} className="flex justify-between">
-                          <span>#{s.session_number} ({new Date(s.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
-                          <span className="font-bold">Rs. {(s.cash_sales + s.card_sales + s.digital_sales).toLocaleString()}</span>
+                  return (
+                    <div className="space-y-2">
+                      <div className="py-1.5 border-b border-dashed border-black space-y-1 text-[11px]">
+                        <div className="flex justify-between">
+                          <span className="font-bold">TARGETED CASHIER:</span>
+                          <span className="font-extrabold uppercase">{selectedCashierFilter}</span>
                         </div>
-                      ))}
+                        <div className="flex justify-between">
+                          <span>Counter Number:</span>
+                          <span className="font-extrabold font-mono">Counter #{targetedTerminal?.counter_number || 1}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Counter Name:</span>
+                          <span className="font-bold">{targetedTerminal?.name || (selectedCounter !== 'All' ? selectedCounter : resolveTerminalName(filteredShifts[0]?.terminal_code))}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Sessions Worked:</span>
+                          <span>{filteredShifts.length} Shifts</span>
+                        </div>
+                      </div>
+
+                      {/* Financials for Targeted Cashier */}
+                      <div className="py-1.5 border-b border-dashed border-black space-y-1 text-[11px]">
+                        <div className="flex justify-between font-bold text-xs pt-0.5">
+                          <span>TOTAL CASHIER SALES:</span>
+                          <span>Rs. {dateStats.totalVolume.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>• Cash Collected:</span>
+                          <span>Rs. {dateStats.cashSales.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>• Card / Digital:</span>
+                          <span>Rs. {(dateStats.cardSales + dateStats.digitalSales).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>• Cash Variance:</span>
+                          <span>{dateStats.totalVariance >= 0 ? `+${dateStats.totalVariance}` : dateStats.totalVariance}</span>
+                        </div>
+                      </div>
+
+                      {/* Itemized Sessions list for this cashier */}
+                      <div className="py-1 text-[10px] space-y-1">
+                        <p className="font-bold uppercase tracking-wider text-[10px] pb-0.5 border-b border-dotted border-black/40">
+                          CASHIER SESSIONS BREAKDOWN
+                        </p>
+                        {filteredShifts.length === 0 ? (
+                          <p className="text-slate-500 italic py-1">No shifts recorded for this cashier in selected date.</p>
+                        ) : (
+                          filteredShifts.map((s) => (
+                            <div key={s.id} className="flex justify-between">
+                              <span>#{s.session_number} ({new Date(s.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
+                              <span className="font-bold">Rs. {(s.cash_sales + s.card_sales + s.digital_sales).toLocaleString()}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ) : (
+                  );
+                })() : (
                   /* SCENARIO 2: ALL CASHIERS - COUNTER-WISE & IN EVERY COUNTER CASHIER-WISE */
                   <div className="space-y-2.5">
                     {/* Overall Summary Box */}
@@ -2462,7 +2496,27 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
             </div>
 
             {/* Thermal Print Receipt */}
-            <div className="bg-white text-black p-4 rounded-sm font-mono text-xs space-y-2 border border-slate-300 shadow-sm">
+            <style dangerouslySetInnerHTML={{ __html: `
+              @media print {
+                body * {
+                  visibility: hidden !important;
+                }
+                #printable-zreport-slip, #printable-zreport-slip * {
+                  visibility: visible !important;
+                }
+                #printable-zreport-slip {
+                  position: absolute !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 78mm !important;
+                  margin: 0 !important;
+                  padding: 8px !important;
+                  background: white !important;
+                  color: black !important;
+                }
+              }
+            `}} />
+            <div id="printable-zreport-slip" className="bg-white text-black p-4 rounded-sm font-mono text-xs space-y-2 border border-slate-300 shadow-sm print:border-none print:shadow-none print:p-0">
               <div className="text-center space-y-0.5 pb-2 border-b border-dashed border-black">
                 <h4 className="font-extrabold text-sm uppercase">{posConfig.store_title}</h4>
                 <p className="text-[10px]">DAILY Z-REPORT • CASHIER CLOSE</p>
