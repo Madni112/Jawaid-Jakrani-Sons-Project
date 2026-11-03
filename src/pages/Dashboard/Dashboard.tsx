@@ -35,6 +35,7 @@ import {
   MdShowChart,
   MdBarChart
 } from 'react-icons/md';
+import GlassCard from '../../ui/GlassCard';
 import StatCard from '../../ui/StatCard';
 import ActionCard from '../../ui/ActionCard';
 import { QtyBadge } from '../../utils/QtyBadge';
@@ -747,19 +748,37 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
       {/* Role Dashboard Switcher for Admins */}
       <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />
 
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <div>
-          <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Executive Management Dashboard</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Real-time fiscal monitoring, procurement velocity & operational intelligence</p>
-        </div>
-        <div className="flex items-center gap-3 font-mono text-xs">
-          <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 shadow-sm flex items-center gap-1.5">
-            <MdCalendarToday className="text-emerald-600" />
-            <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+      {/* Top Header Banner */}
+      <GlassCard className="p-6 relative overflow-hidden bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
+        <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-80 h-80 bg-gradient-to-bl from-emerald-100/40 via-teal-50/20 to-transparent dark:from-emerald-950/20 dark:via-transparent rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 z-10 relative">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+                <MdAssessment className="text-sm text-emerald-600 dark:text-emerald-400" />
+                Executive Suite
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Fiscal Intelligence Live
+              </span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+              Executive Management Dashboard
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1 max-w-xl font-normal leading-relaxed">
+              Real-time fiscal monitoring, procurement velocity, cash-flow ledger & operational intelligence.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 font-mono text-xs">
+            <div className="bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-slate-700 dark:text-slate-300 shadow-2xs flex items-center gap-1.5">
+              <MdCalendarToday className="text-emerald-600 dark:text-emerald-400" />
+              <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </GlassCard>
 
       {/* --- TOP ACTION TILES GRID --- */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
