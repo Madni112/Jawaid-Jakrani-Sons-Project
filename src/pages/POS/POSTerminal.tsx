@@ -556,6 +556,7 @@ export const POSTerminal: React.FC = () => {
 
     const filtered = products.filter((p) => {
       if (p.show_in_pos === false) return false;
+      if (!posService.isProductVisibleOnCounter(p, currentTerminalSlug)) return false;
       const matchCat =
         selectedCategory === 'All' ||
         (activeCat ? isProductInCategory(p, activeCat) : p.category.toLowerCase() === selectedCategory.toLowerCase());
@@ -573,7 +574,7 @@ export const POSTerminal: React.FC = () => {
       const timeB = b.created_at ? new Date(b.created_at).getTime() : Number(b.id) || 0;
       return sortByDate === 'newest' ? timeB - timeA : timeA - timeB;
     });
-  }, [products, categories, selectedCategory, searchQuery, sortByDate]);
+  }, [products, categories, selectedCategory, searchQuery, sortByDate, currentTerminalSlug]);
 
   // Current Ticket / Cart State
   const [cartItems, setCartItems] = useState<PosOrderItem[]>([]);
@@ -1812,7 +1813,7 @@ export const POSTerminal: React.FC = () => {
               {(() => {
                 const catStyle = posConfig.category_display_style || 'pill';
                 const isAllSelected = selectedCategory === 'All';
-                const totalItemCount = products.filter((p) => p.show_in_pos !== false).length;
+                const totalItemCount = products.filter((p) => p.show_in_pos !== false && posService.isProductVisibleOnCounter(p, currentTerminalSlug)).length;
 
                 if (catStyle === 'card') {
                   return (
@@ -1950,10 +1951,10 @@ export const POSTerminal: React.FC = () => {
 
               {/* Filtered Categories */}
               {categories
-                .filter((c) => c.show_in_pos !== false)
+                .filter((c) => c.show_in_pos !== false && posService.isCategoryVisibleOnCounter(c, currentTerminalSlug))
                 .map((cat) => {
                   const count = products.filter(
-                    (p) => p.show_in_pos !== false && isProductInCategory(p, cat)
+                    (p) => p.show_in_pos !== false && posService.isProductVisibleOnCounter(p, currentTerminalSlug) && isProductInCategory(p, cat)
                   ).length;
                   const isSelected = selectedCategory === cat.id || selectedCategory.toLowerCase() === cat.name.toLowerCase();
                   return { cat, count, isSelected };

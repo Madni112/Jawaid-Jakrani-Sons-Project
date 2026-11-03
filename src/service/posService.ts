@@ -157,6 +157,7 @@ export interface PosProductItem {
   uom: string;
   image_url?: string;
   show_in_pos: boolean;
+  visible_counters?: string[];
   created_at?: string;
 }
 
@@ -169,6 +170,7 @@ export interface PosCategoryItem {
   image_url?: string;
   icon_name?: string;
   show_in_pos: boolean;
+  visible_counters?: string[];
   item_count?: number;
 }
 
@@ -181,11 +183,13 @@ interface PosProductMeta {
   image_url?: string;
   barcode?: string;
   barcode_locked?: boolean;
+  visible_counters?: string[];
 }
 
 export interface PosCategoryMeta {
   image_url?: string;
   show_in_pos?: boolean;
+  visible_counters?: string[];
 }
 
 const STORAGE_CATEGORY_META = 'uj_pos_category_meta_v1';
@@ -1274,7 +1278,8 @@ export const posService = {
             full_path: [parentName, subName, c.name].filter(Boolean).join(' › '),
             image_url: finalImg,
             icon_name: c.icon_name,
-            show_in_pos: finalShow
+            show_in_pos: finalShow,
+            visible_counters: localMeta.visible_counters || ['all']
           };
         });
 
@@ -1452,6 +1457,7 @@ export const posService = {
             uom: p.uom || 'PCS',
             image_url: meta.image_url,
             show_in_pos: meta.show_in_pos ?? true,
+            visible_counters: meta.visible_counters || ['all'],
             created_at: p.created_at || meta.created_at || undefined
           };
         });

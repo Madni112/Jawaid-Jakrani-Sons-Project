@@ -600,7 +600,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
         (p.barcode && p.barcode.toLowerCase().includes(q))
       );
     });
-  }, [products, selectedCategory, visibilityFilter, searchQuery]);
+  }, [products, selectedCategory, visibilityFilter, counterFilter, searchQuery]);
 
   // Toggle Single Product Visibility
   const handleToggleProductVisibility = async (productId: string, currentVal: boolean) => {
@@ -922,7 +922,7 @@ export const POSCatalog: React.FC<POSCatalogProps> = ({ embedded, onBack }) => {
                     <th className="py-3 px-4">Category</th>
                     <th className="py-3 px-4">Retail Price</th>
                     <th className="py-3 px-4">Barcode & Lock Status</th>
-                    <th className="py-3 px-4 text-center">POS Visible</th>
+                    <th className="py-3 px-4 text-center">POS Visible & Counters</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
