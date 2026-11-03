@@ -38,10 +38,13 @@ export interface PosOrder {
   payment_method: 'Cash' | 'Card' | 'Digital' | 'Split' | string;
   cash_tendered: number;
   change_due: number;
-  status: 'Completed' | 'Voided' | 'Refunded';
+  status: 'Completed' | 'Voided' | 'Refunded' | 'Partially Refunded';
   notes?: string;
   items: PosOrderItem[];
   created_at: string;
+  refunded_at?: string;
+  refund_amount?: number;
+  refund_reason?: string;
 }
 
 export interface PosShift {
@@ -589,6 +592,46 @@ export const posService = {
     }
   },
 
+  getTodayDateStr(): string {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+
+  getShiftBusinessDate(shift: PosShift): string {
+    if (!shift) return '';
+    if (shift.business_date) {
+      const match = shift.business_date.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (match) {
+        return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+      }
+    }
+    if (shift.opened_at) {
+      const d = new Date(shift.opened_at);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+    return '';
+  },
+
+  getStaleShift(): PosShift | null {
+    const active = this.getActiveShift();
+    if (!active) return null;
+    const todayStr = this.getTodayDateStr();
+    const shiftDate = this.getShiftBusinessDate(active);
+    if (shiftDate && shiftDate < todayStr) {
+      return active;
+    }
+    return null;
+  },
+
+
   getLastClosingPettyCash(): number {
     return this.getPettyCashForDate(new Date().toISOString().split('T')[0]).amount;
   },
@@ -837,7 +880,8 @@ export const posService = {
   formatDatePrefix(date?: Date | string): string {
     if (!date) {
       const shift = this.getActiveShift();
-      if (shift && shift.business_date) {
+      const stale = this.getStaleShift();
+      if (shift && shift.business_date && !stale) {
         return this.formatDatePrefix(shift.business_date);
       }
       const d = new Date();

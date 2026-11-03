@@ -643,6 +643,68 @@ export const POSTerminal: React.FC = () => {
   const [drawerAmount, setDrawerAmount] = useState<number>(0);
   const [drawerReason, setDrawerReason] = useState<string>('');
 
+  // Stale (Unclosed Previous Day) Shift Detection
+  const [staleShift, setStaleShift] = useState<PosShift | null>(() => posService.getStaleShift());
+  const [isStaleShiftModalOpen, setIsStaleShiftModalOpen] = useState<boolean>(() => Boolean(posService.getStaleShift()));
+
+  useEffect(() => {
+    const stale = posService.getStaleShift();
+    setStaleShift(stale);
+    if (stale) {
+      setIsStaleShiftModalOpen(true);
+    }
+  }, [activeShift]);
+
+  // Open Drawer Modal on Day Close tab for the stale shift
+  const handleOpenCloseForStaleShift = () => {
+    if (!staleShift) return;
+    setIsStaleShiftModalOpen(false);
+    setDrawerTab('close_day');
+    const sDate = posService.getShiftBusinessDate(staleShift);
+    setDayCloseDate(sDate || new Date().toISOString().split('T')[0]);
+    setDayCloseCashOut(0);
+    setDayCloseCashIn(0);
+    setDayCloseNotes('Closed from overdue shift prompt');
+    setIsDrawerModalOpen(true);
+  };
+
+  // Quick One-Click Auto-Close for Stale Shift
+  const handleQuickAutoCloseStaleShift = async () => {
+    if (!staleShift) return;
+    try {
+      const todayDateStr = posService.getTodayDateStr();
+      const sDate = posService.getShiftBusinessDate(staleShift);
+      const closed = await posService.closeDayShift({
+        shiftId: staleShift.id,
+        cashOut: 0,
+        cashIn: 0,
+        closingNotes: `Auto-closed on ${todayDateStr} when opening new day session.`,
+        actualCountedCash: staleShift.expected_cash
+      });
+      setActiveShift(null);
+      setStaleShift(null);
+      setIsStaleShiftModalOpen(false);
+      setTicketNumber('');
+      setCartItems([]);
+      playTone('success');
+      toast.success(`Previous shift for ${sDate || 'old date'} successfully closed!`);
+
+      // Prompt to open today's day session
+      setTimeout(() => {
+        setDrawerTab('open_day');
+        setDayOpenDate(todayDateStr);
+        const lookup = posService.getPettyCashForDate(todayDateStr);
+        setDayOpenPettyCash(lookup.amount);
+        setPettyCashSource(lookup.isFound ? `Auto-filled from ${lookup.foundDate} close` : 'Manual start / First day');
+        setDayOpenCashIn(0);
+        setDayOpenCashOut(0);
+        setIsDrawerModalOpen(true);
+      }, 350);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to auto-close previous shift');
+    }
+  };
+
   const handleOpenDrawerModal = () => {
     const shift = posService.getActiveShift();
     setActiveShift(shift);
@@ -767,6 +829,18 @@ export const POSTerminal: React.FC = () => {
 
   // Guard check: Cash Drawer & Day session must be open before any sale activity
   const requireOpenDrawer = (): boolean => {
+    const stale = posService.getStaleShift();
+    if (stale) {
+      playTone('warning');
+      const shiftDate = posService.getShiftBusinessDate(stale);
+      toast.error(`Shift from ${shiftDate || 'previous day'} is still open. Please close old day shift first!`, {
+        id: 'stale-shift-guard',
+        duration: 4500,
+        icon: '⚠️'
+      });
+      setIsStaleShiftModalOpen(true);
+      return false;
+    }
     if (!activeShift) {
       playTone('warning');
       toast.error('Please open the drawer first! Business day is closed.', {
@@ -1066,11 +1140,28 @@ export const POSTerminal: React.FC = () => {
         closingNotes: dayCloseNotes
       });
       setActiveShift(null);
+      setStaleShift(null);
+      setIsStaleShiftModalOpen(false);
       setTicketNumber('');
       setCartItems([]);
       setIsDrawerModalOpen(false);
       playTone('success');
       toast.success(`Day closed! Remaining Petty Cash: Rs. ${(closed.closing_petty_cash || 0).toLocaleString()} saved for next day.`);
+
+      const todayDateStr = posService.getTodayDateStr();
+      const closedDate = posService.getShiftBusinessDate(closed);
+      if (closedDate && closedDate < todayDateStr) {
+        setTimeout(() => {
+          setDrawerTab('open_day');
+          setDayOpenDate(todayDateStr);
+          const lookup = posService.getPettyCashForDate(todayDateStr);
+          setDayOpenPettyCash(lookup.amount);
+          setPettyCashSource(lookup.isFound ? `Auto-filled from ${lookup.foundDate} close` : 'Manual start / First day');
+          setDayOpenCashIn(0);
+          setDayOpenCashOut(0);
+          setIsDrawerModalOpen(true);
+        }, 400);
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to close day');
     }
@@ -1626,6 +1717,39 @@ export const POSTerminal: React.FC = () => {
             </div>
           </div>
         </header>
+
+        {/* ── STALE SHIFT WARNING BANNER ── */}
+        {staleShift && (
+          <div className="bg-amber-500/15 border-b border-amber-500/30 px-5 py-2.5 flex items-center justify-between gap-4 text-xs shrink-0 animate-fadeIn">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <LuAlertTriangle className="text-amber-500 shrink-0 text-base" />
+              <div className="truncate">
+                <span className="font-extrabold text-amber-900 dark:text-amber-200">
+                  Unclosed Previous Shift:
+                </span>{' '}
+                <span className="text-amber-800 dark:text-amber-300">
+                  Shift #{staleShift.session_number} for {posService.getShiftBusinessDate(staleShift) || 'previous day'} is still open. Please close it before ringing up today's sales.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleOpenCloseForStaleShift}
+                className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shadow-xs"
+              >
+                Close Old Shift
+              </button>
+              <button
+                type="button"
+                onClick={handleQuickAutoCloseStaleShift}
+                className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs transition cursor-pointer"
+              >
+                Auto-Close
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── WORKSPACE BODY: (Center Catalog + Right Cart OR Embedded POS Sub-Pages) ── */}
         <div className="flex-1 flex overflow-hidden min-h-0">
@@ -3389,6 +3513,107 @@ export const POSTerminal: React.FC = () => {
                   );
                 })
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL: UNCLOSED PREVIOUS DAY SHIFT DETECTED
+         ───────────────────────────────────────────────────────────── */}
+      {isStaleShiftModalOpen && staleShift && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#111622] border border-amber-500/40 shadow-2xl overflow-hidden flex flex-col animate-scaleUp">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-start gap-3.5 bg-amber-500/10">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <LuAlertTriangle size={22} className="animate-pulse" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white leading-tight">
+                    Previous Day Shift Not Closed
+                  </h3>
+                </div>
+                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 font-medium leading-relaxed">
+                  The register was not closed for <strong className="font-bold">{posService.getShiftBusinessDate(staleShift)}</strong>. Retail accounting requires closing the previous day's shift before ringing up new sales today.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStaleShiftModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+                title="Dismiss (Sales will remain blocked until closed)"
+              >
+                <LuX size={18} />
+              </button>
+            </div>
+
+            {/* Shift Details Summary */}
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Unclosed Date
+                  </span>
+                  <span className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5 block font-mono">
+                    {posService.getShiftBusinessDate(staleShift)}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Shift Session
+                  </span>
+                  <span className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5 block">
+                    Shift #{staleShift.session_number}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Drawer Expected
+                  </span>
+                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block font-mono">
+                    Rs. {(staleShift.expected_cash || 0).toLocaleString()}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Cash Sales
+                  </span>
+                  <span className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5 block font-mono">
+                    Rs. {(staleShift.cash_sales || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-700 dark:text-blue-300">
+                💡 <strong>Tip:</strong> Choose <em>Close Shift with Cash Counts</em> to count drawer cash & enter notes, or <em>Quick Auto-Close</em> to balance with zero discrepancy and start today immediately.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleOpenCloseForStaleShift}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                style={{
+                  backgroundColor: accentColor,
+                  color: contrastText,
+                  border: isAccentWhite ? '1px solid #cbd5e1' : undefined
+                }}
+              >
+                <LuBanknote size={15} />
+                <span>Close Shift with Cash Counts & Z-Report</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleQuickAutoCloseStaleShift}
+                className="w-full py-2 px-4 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>Quick Auto-Close & Open Today (Rs. {(staleShift.expected_cash || 0).toLocaleString()} Forward)</span>
+              </button>
             </div>
           </div>
         </div>

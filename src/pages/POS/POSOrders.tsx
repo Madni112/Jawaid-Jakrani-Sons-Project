@@ -202,7 +202,10 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
         ...o,
         status: newStatus,
         total_amount: remainingTotal,
-        notes: (o.notes ? o.notes + ' | ' : '') + `Refunded Rs. ${totalRefundAmount.toLocaleString()} (${totalReturnedCount} item${totalReturnedCount > 1 ? 's' : ''}) - ${refundReason}`
+        refunded_at: new Date().toISOString(),
+        refund_amount: (o.refund_amount || 0) + totalRefundAmount,
+        refund_reason: refundReason,
+        notes: (o.notes ? o.notes + ' | ' : '') + `Refunded Rs. ${totalRefundAmount.toLocaleString()} (${totalReturnedCount} item${totalReturnedCount > 1 ? 's' : ''}) on ${new Date().toLocaleDateString()} - ${refundReason}`
       };
     });
 
@@ -231,7 +234,9 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
   const handleExportExcel = () => {
     const data = filteredOrders.map((o) => ({
       'Ticket #': o.order_number,
-      'Date & Time': new Date(o.created_at).toLocaleString(),
+      'Sold Date': new Date(o.created_at).toLocaleString(),
+      'Refunded Date': o.refunded_at ? new Date(o.refunded_at).toLocaleString() : 'N/A',
+      'Refund Reason': o.refund_reason || 'N/A',
       'Customer': o.customer_name,
       'Cashier': o.cashier_name,
       'Terminal': o.terminal_code,
@@ -492,11 +497,34 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
                     <td className="py-3 px-4 font-mono font-bold text-primary">
                       {o.order_number}
                     </td>
-                    <td className="py-3 px-4 text-slate-400 text-[11px]">
-                      <div>{new Date(o.created_at).toLocaleDateString()}</div>
-                      <div className="font-mono">
-                        {new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
+                    <td className="py-3 px-4 text-[11px]">
+                      {o.refunded_at ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                              Refunded
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
+                              {new Date(o.refunded_at).toLocaleDateString()}
+                            </span>
+                            <span className="font-mono text-[10px] text-slate-400">
+                              {new Date(o.refunded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-slate-400 text-[10px]">
+                            <span className="font-semibold uppercase tracking-wider text-[9px]">Sold:</span>
+                            <span>{new Date(o.created_at).toLocaleDateString()}</span>
+                            <span className="font-mono">{new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-slate-400">
+                          <div>{new Date(o.created_at).toLocaleDateString()}</div>
+                          <div className="font-mono">
+                            {new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <div className="font-bold text-slate-800 dark:text-slate-200">

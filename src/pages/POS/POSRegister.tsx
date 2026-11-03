@@ -656,9 +656,17 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                   <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
                     Current Active Shift
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white">
-                    OPEN
-                  </span>
+                  {(() => {
+                    const stale = posService.getStaleShift();
+                    const isStale = Boolean(stale && stale.id === activeShift.id);
+                    return (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold text-white ${
+                        isStale ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'
+                      }`}>
+                        {isStale ? 'OVERDUE (FROM PREVIOUS DAY)' : 'OPEN'}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Opened {new Date(activeShift.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} by <strong className="text-slate-700 dark:text-slate-300">{activeShift.cashier_name}</strong>
@@ -705,6 +713,31 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               </button>
             </div>
           </div>
+
+          {(() => {
+            const stale = posService.getStaleShift();
+            if (!stale || stale.id !== activeShift.id) return null;
+            return (
+              <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs font-medium flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <LuAlertTriangle className="text-amber-500 shrink-0 text-lg" />
+                  <span>
+                    This shift belongs to a previous date (<strong>{posService.getShiftBusinessDate(stale)}</strong>) and was not closed. Please close this shift and generate the Z-Report so today's transactions remain accurate.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActualCountedCash(activeShift.expected_cash);
+                    setIsCloseShiftModal(true);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shrink-0 cursor-pointer shadow-xs"
+                >
+                  Close Shift Now
+                </button>
+              </div>
+            );
+          })()}
 
           {/* Shift Financial Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 pt-2">
