@@ -454,7 +454,7 @@ export const POSTerminal: React.FC = () => {
 
   // POS Settings & Active Shift
   const [posConfig, setPosConfig] = useState<PosSettings>(() => posService.getSettings());
-  const [activeShift, setActiveShift] = useState<PosShift | null>(() => posService.getActiveShift());
+  const [activeShift, setActiveShift] = useState<PosShift | null>(() => posService.getActiveShift(currentCounterConfig?.name || posConfig.terminal_name));
   const [soundEnabled, setSoundEnabled] = useState<boolean>(posConfig.sound_effects_enabled);
 
   const resolveInitialFulfillment = (config: PosSettings) => {
@@ -579,7 +579,7 @@ export const POSTerminal: React.FC = () => {
   // Current Ticket / Cart State
   const [cartItems, setCartItems] = useState<PosOrderItem[]>([]);
   const [ticketNumber, setTicketNumber] = useState<string>(() => {
-    const shift = posService.getActiveShift();
+    const shift = posService.getActiveShift(currentCounterConfig?.name || posConfig.terminal_name);
     if (!shift) return '';
     return posService.getNextOrderNumber(shift.business_date);
   });
@@ -666,6 +666,9 @@ export const POSTerminal: React.FC = () => {
 
   // Day Open State
   const [dayOpenDate, setDayOpenDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const existingSessionForDate = useMemo(() => {
+    return posService.getExistingClosedShiftForDate(dayOpenDate, currentCounterConfig?.name || posConfig.terminal_name);
+  }, [dayOpenDate, currentCounterConfig, posConfig.terminal_name, isDrawerModalOpen, activeShift]);
   const [dayOpenPettyCash, setDayOpenPettyCash] = useState<number>(() => posService.getLastClosingPettyCash());
   const [dayOpenCashIn, setDayOpenCashIn] = useState<number>(0);
   const [dayOpenCashOut, setDayOpenCashOut] = useState<number>(0);
@@ -693,7 +696,7 @@ export const POSTerminal: React.FC = () => {
   const [drawerReason, setDrawerReason] = useState<string>('');
 
   // Stale (Unclosed Previous Day) Shift Detection
-  const [staleShift, setStaleShift] = useState<PosShift | null>(() => posService.getStaleShift());
+  const [staleShift, setStaleShift] = useState<PosShift | null>(() => posService.getStaleShift(currentCounterConfig?.name || posConfig.terminal_name));
   const [selectedZReport, setSelectedZReport] = useState<PosShift | null>(null);
   const [isStaleShiftModalOpen, setIsStaleShiftModalOpen] = useState<boolean>(() => Boolean(posService.getStaleShift()));
 
@@ -1131,7 +1134,7 @@ export const POSTerminal: React.FC = () => {
       setIsReceiptModalOpen(true);
 
       // Refresh Shift & Cart
-      const updatedShift = posService.getActiveShift();
+      const updatedShift = posService.getActiveShift(currentCounterConfig?.name || posConfig.terminal_name);
       setActiveShift(updatedShift);
       setCartItems([]);
       setTicketNumber(updatedShift ? posService.getNextOrderNumber(updatedShift.business_date) : '');
@@ -1148,19 +1151,24 @@ export const POSTerminal: React.FC = () => {
   // Open Day Submit
   const handleOpenDaySubmit = async () => {
     try {
+      const isResuming = Boolean(existingSessionForDate);
       const shift = await posService.openDayShift({
         businessDate: dayOpenDate,
         cashierName: displayCashierName,
         openingPettyCash: dayOpenPettyCash,
         cashIn: dayOpenCashIn,
         cashOut: dayOpenCashOut,
-        terminalCode: posConfig.terminal_name
+        terminalCode: currentCounterConfig?.name || posConfig.terminal_name
       });
       setActiveShift(shift);
       setTicketNumber(posService.getNextOrderNumber(shift.business_date));
       setIsDrawerModalOpen(false);
       playTone('success');
-      toast.success(`Day opened for ${dayOpenDate}! Opening Balance: Rs. ${shift.opening_float.toLocaleString()}`);
+      if (isResuming) {
+        toast.success(`Session #${shift.session_number} reopened & resumed for ${dayOpenDate}!`);
+      } else {
+        toast.success(`Day opened for ${dayOpenDate}! Opening Balance: Rs. ${shift.opening_float.toLocaleString()}`);
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to open day');
     }
@@ -1205,7 +1213,7 @@ export const POSTerminal: React.FC = () => {
       return;
     }
     posService.recordCashMovement(activeShift.id, drawerMovementType, drawerAmount);
-    setActiveShift(posService.getActiveShift());
+    setActiveShift(posService.getActiveShift(currentCounterConfig?.name || posConfig.terminal_name));
     setIsDrawerModalOpen(false);
     setDrawerAmount(0);
     setDrawerReason('');
@@ -2655,7 +2663,7 @@ export const POSTerminal: React.FC = () => {
 
           {activeView === 'summary' && (
             <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0B0F17] min-w-0 p-3 sm:p-5">
-              <POSRegister embedded onBack={() => { setActiveView('register'); setActiveShift(posService.getActiveShift()); }} />
+              <POSRegister embedded onBack={() => { setActiveView('register'); setActiveShift(posService.getActiveShift(currentCounterConfig?.name || posConfig.terminal_name)); }} />
             </div>
           )}
         </div>
@@ -4021,6 +4029,23 @@ export const POSTerminal: React.FC = () => {
                         </div>
                       </div>
 
+                      {existingSessionForDate && (
+                        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                              <LuHistory size={15} />
+                              <span>Session #{existingSessionForDate.session_number} Exists for {dayOpenDate}</span>
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-800 dark:text-blue-200">
+                              Closed Session
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                            This counter already has <strong>Session #{existingSessionForDate.session_number}</strong> on this date with <strong>Rs. {((existingSessionForDate.cash_sales || 0) + (existingSessionForDate.card_sales || 0) + (existingSessionForDate.digital_sales || 0)).toLocaleString()}</strong> total sales. Reopening will resume Session #{existingSessionForDate.session_number} so all transactions stay consolidated.
+                          </p>
+                        </div>
+                      )}
+
                       {/* Submit */}
                       <button
                         type="button"
@@ -4032,7 +4057,9 @@ export const POSTerminal: React.FC = () => {
                           border: isAccentWhite ? '1px solid #cbd5e1' : undefined
                         }}
                       >
-                        Confirm & Open Day (Rs. {(dayOpenPettyCash + dayOpenCashIn - dayOpenCashOut).toLocaleString()})
+                        {existingSessionForDate
+                          ? `Resume Session #${existingSessionForDate.session_number} (${dayOpenDate})`
+                          : `Confirm & Open Day (Rs. ${(dayOpenPettyCash + dayOpenCashIn - dayOpenCashOut).toLocaleString()})`}
                       </button>
                     </>
                   )}

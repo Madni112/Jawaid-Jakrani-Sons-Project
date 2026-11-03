@@ -716,11 +716,31 @@ export const posService = {
   },
 
   // ── 2. SHIFTS / CASH REGISTER ──
-  getActiveShift(): PosShift | null {
+  matchesTerminal(shiftTerminal?: string, targetTerminal?: string): boolean {
+    if (!shiftTerminal || !targetTerminal) return true;
+    const s1 = shiftTerminal.toLowerCase().trim();
+    const s2 = targetTerminal.toLowerCase().trim();
+    if (s1 === s2) return true;
+    const clean = (s: string) => s.toLowerCase().replace(/\s*\(.*?\)/g, '').replace(/[^a-z0-9]/g, '');
+    const c1 = clean(shiftTerminal);
+    const c2 = clean(targetTerminal);
+    if (c1 === c2) return true;
+    const num1 = shiftTerminal.match(/\d+/)?.[0];
+    const num2 = targetTerminal.match(/\d+/)?.[0];
+    if (num1 && num2 && parseInt(num1, 10) === parseInt(num2, 10)) {
+      return true;
+    }
+    return c1.includes(c2) || c2.includes(c1);
+  },
+
+  getActiveShift(terminalCode?: string): PosShift | null {
     if (typeof window === 'undefined') return null;
     try {
       const raw = localStorage.getItem(STORAGE_SHIFTS);
       const list: PosShift[] = raw ? JSON.parse(raw) : [];
+      if (terminalCode) {
+        return list.find(s => s.status === 'Open' && this.matchesTerminal(s.terminal_code, terminalCode)) || null;
+      }
       return list.find(s => s.status === 'Open') || null;
     } catch {
       return null;
@@ -765,8 +785,8 @@ export const posService = {
     return '';
   },
 
-  getStaleShift(): PosShift | null {
-    const active = this.getActiveShift();
+  getStaleShift(terminalCode?: string): PosShift | null {
+    const active = this.getActiveShift(terminalCode);
     if (!active) return null;
     const todayStr = this.getTodayDateStr();
     const shiftDate = this.getShiftBusinessDate(active);
@@ -774,6 +794,49 @@ export const posService = {
       return active;
     }
     return null;
+  },
+
+  getExistingClosedShiftForDate(businessDate: string, terminalCode?: string): PosShift | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const all = this.getAllShifts();
+      return all.find(s => {
+        if (s.status === 'Open') return false;
+        const sDate = this.getShiftBusinessDate(s);
+        const matchesDate = sDate === businessDate;
+        const matchesTerm = terminalCode ? this.matchesTerminal(s.terminal_code, terminalCode) : true;
+        return matchesDate && matchesTerm;
+      }) || null;
+    } catch {
+      return null;
+    }
+  },
+
+  async reopenShift(shiftId: string, cashierName?: string): Promise<PosShift> {
+    const all = this.getAllShifts();
+    const existingIndex = all.findIndex(s => s.id === shiftId);
+    if (existingIndex === -1) throw new Error('Shift not found to reopen');
+    const existing = all[existingIndex];
+
+    const reopened: PosShift = {
+      ...existing,
+      status: 'Open',
+      cashier_name: cashierName || existing.cashier_name,
+      closed_at: undefined,
+      actual_counted_cash: undefined,
+      variance: undefined
+    };
+
+    all[existingIndex] = reopened;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(all));
+    }
+    try {
+      await supabase.from('pos_shifts').update(reopened).eq('id', shiftId);
+    } catch (e) {
+      console.warn('Could not update reopened shift in Supabase:', e);
+    }
+    return reopened;
   },
 
 
@@ -833,11 +896,52 @@ export const posService = {
     cashIn: number;
     cashOut?: number;
     terminalCode?: string;
+    resumeShiftId?: string;
   }): Promise<PosShift> {
-    const existing = this.getActiveShift();
-    if (existing) return existing;
-
+    const termCode = params.terminalCode || 'Register 01';
     const all = this.getAllShifts();
+
+    // 1. If explicit resumeShiftId is passed, resume it
+    if (params.resumeShiftId) {
+      return this.reopenShift(params.resumeShiftId, params.cashierName);
+    }
+
+    // 2. Check if there is an already open shift for this terminal
+    const existingOpen = this.getActiveShift(termCode);
+    if (existingOpen) return existingOpen;
+
+    // 3. User Requirement: If a day session was already closed for this date and counter, reopen/resume that old session!
+    const closedShiftForDate = all.find(s => {
+      const sDate = this.getShiftBusinessDate(s);
+      return sDate === params.businessDate && this.matchesTerminal(s.terminal_code, termCode);
+    });
+
+    if (closedShiftForDate) {
+      const addedCashIn = Number(params.cashIn) || 0;
+      const reopenedShift: PosShift = {
+        ...closedShiftForDate,
+        status: 'Open',
+        cashier_name: params.cashierName || closedShiftForDate.cashier_name,
+        closed_at: undefined,
+        actual_counted_cash: undefined,
+        variance: undefined,
+        cash_in: (closedShiftForDate.cash_in || 0) + addedCashIn,
+        expected_cash: (closedShiftForDate.expected_cash || closedShiftForDate.opening_float) + addedCashIn,
+      };
+
+      const updated = all.map(s => s.id === closedShiftForDate.id ? reopenedShift : s);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
+      }
+      try {
+        await supabase.from('pos_shifts').update(reopenedShift).eq('id', closedShiftForDate.id);
+      } catch (e) {
+        console.warn('Could not update reopened shift in Supabase:', e);
+      }
+      return reopenedShift;
+    }
+
+    // 4. Otherwise create a brand new shift session
     const nextSessionNum = all.length > 0 ? Math.max(...all.map(s => s.session_number || 400)) + 1 : 401;
 
     const openingPetty = Number(params.openingPettyCash) || 0;
@@ -847,7 +951,7 @@ export const posService = {
 
     const newShift: PosShift = {
       id: `shift-${Date.now()}`,
-      terminal_code: params.terminalCode || 'Register 01',
+      terminal_code: termCode,
       cashier_name: params.cashierName,
       session_number: nextSessionNum,
       opened_at: new Date().toISOString(),
@@ -1096,7 +1200,9 @@ export const posService = {
     };
 
     // Update active shift sales tallies
-    const activeShift = this.getActiveShift();
+    const activeShift = orderPayload.shift_id
+      ? this.getAllShifts().find(s => s.id === orderPayload.shift_id && s.status === 'Open') || this.getActiveShift(orderPayload.terminal_code)
+      : this.getActiveShift(orderPayload.terminal_code);
     if (activeShift) {
       if (fullOrder.payment_method === 'Cash') {
         activeShift.cash_sales = (Number(activeShift.cash_sales) || 0) + Number(fullOrder.total_amount);
