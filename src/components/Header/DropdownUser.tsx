@@ -202,7 +202,7 @@ const DropdownUser = () => {
 
                         {/* POS Terminal Direct Shortcut */}
             <Link
-              to="/pos/terminal"
+              to="/pos1"
               onClick={() => setDropdownOpen(false)}
               className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-meta-4/40 transition duration-150 ease-in-out cursor-pointer group"
             >

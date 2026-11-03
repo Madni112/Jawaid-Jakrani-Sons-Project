@@ -165,11 +165,7 @@ function Navigation() {
       />
       <Route
         path="/pos/terminal"
-        element={
-          <AppRouteGuard>
-            <POSTerminal />
-          </AppRouteGuard>
-        }
+        element={<Navigate to="/pos1" replace />}
       />
       <Route
         path="/pos/:posSlug"
