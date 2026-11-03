@@ -116,6 +116,22 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   const [selectedCounter, setSelectedCounter] = useState<string>('All');
   const [terminalsList] = useState<PosTerminalCounter[]>(() => posService.getTerminals());
 
+  // Helper to normalize counter names by stripping extra notes e.g. "Register 01 (Main Counter)" -> "register 01"
+  const cleanCounterKey = (name?: string) => (name || '').toLowerCase().replace(/\s*\(.*?\)/g, '').trim();
+
+  // Helper to match any shift terminal_code to a configured terminal name
+  const resolveTerminalName = (shiftTermCode?: string): string => {
+    if (!shiftTermCode) return terminalsList[0]?.name || 'Register 01';
+    const targetClean = cleanCounterKey(shiftTermCode);
+    const matched = terminalsList.find(t => 
+      cleanCounterKey(t.name) === targetClean ||
+      t.slug.toLowerCase() === shiftTermCode.toLowerCase() ||
+      t.name.toLowerCase().includes(shiftTermCode.toLowerCase()) ||
+      shiftTermCode.toLowerCase().includes(t.name.toLowerCase())
+    );
+    return matched ? matched.name : shiftTermCode;
+  };
+
   // Filtered Shifts by Date AND Counter
   const filteredShifts = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -132,18 +148,17 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       if (dateFilter === 'Last7Days' && shiftDate < sevenDaysAgo) return false;
       if (dateFilter === 'Custom' && shiftDateStr !== customDate) return false;
 
-      // Filter by Counter
+      // Filter by Counter (normalized)
       if (selectedCounter !== 'All') {
-        const shiftTerm = (s.terminal_code || 'Register 01').toLowerCase();
-        const targetTerm = selectedCounter.toLowerCase();
-        if (shiftTerm !== targetTerm && !shiftTerm.includes(targetTerm) && !targetTerm.includes(shiftTerm)) {
+        const canonicalName = resolveTerminalName(s.terminal_code);
+        if (cleanCounterKey(canonicalName) !== cleanCounterKey(selectedCounter)) {
           return false;
         }
       }
 
       return true;
     });
-  }, [allShifts, dateFilter, customDate, selectedCounter]);
+  }, [allShifts, dateFilter, customDate, selectedCounter, terminalsList]);
 
   // Counter-Wise Sales Breakdown for the current date filter
   const { counterBreakdown, overallCounterTotal, overallShiftsCount } = useMemo(() => {
@@ -177,10 +192,10 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
 
     let overallTotal = 0;
     dateMatchedShifts.forEach((s) => {
-      const termKey = s.terminal_code || 'Register 01';
-      if (!map[termKey]) {
-        map[termKey] = {
-          counterName: termKey,
+      const canonicalName = resolveTerminalName(s.terminal_code);
+      if (!map[canonicalName]) {
+        map[canonicalName] = {
+          counterName: canonicalName,
           shiftsCount: 0,
           totalSales: 0,
           cashSales: 0,
@@ -188,10 +203,10 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
         };
       }
       const shiftVolume = (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
-      map[termKey].shiftsCount += 1;
-      map[termKey].totalSales += shiftVolume;
-      map[termKey].cashSales += (s.cash_sales || 0);
-      map[termKey].cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
+      map[canonicalName].shiftsCount += 1;
+      map[canonicalName].totalSales += shiftVolume;
+      map[canonicalName].cashSales += (s.cash_sales || 0);
+      map[canonicalName].cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
       overallTotal += shiftVolume;
     });
 
@@ -1143,7 +1158,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
                         <LuStore size={11} />
-                        <span>{s.terminal_code || 'Register 01'}</span>
+                        <span>{resolveTerminalName(s.terminal_code)}</span>
                       </span>
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">
