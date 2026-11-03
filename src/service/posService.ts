@@ -402,7 +402,199 @@ export const SAMPLE_POS_PRODUCTS: PosProductItem[] = [
   }
 ];
 
+export const DEMO_CLOTH_PRODUCTS: PosProductItem[] = [
+  {
+    id: 'demo-prod-101',
+    product_name: 'Luxury Embroidered Lawn 3-Piece',
+    item_sr_no: 'LWN-101',
+    barcode: '890200000001',
+    barcode_locked: true,
+    category: 'Summer Lawn & Jacquard',
+    retail_price: 4500,
+    uom: 'Suit',
+    image_url: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=500&q=80',
+    show_in_pos: true,
+    visible_counters: ['all']
+  },
+  {
+    id: 'demo-prod-102',
+    product_name: 'Classic Wash & Wear Unstitched Suit',
+    item_sr_no: 'WNW-202',
+    barcode: '890200000002',
+    barcode_locked: true,
+    category: 'Unstitched Wash & Wear',
+    retail_price: 2800,
+    uom: 'Suit',
+    image_url: 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=500&q=80',
+    show_in_pos: true,
+    visible_counters: ['all']
+  },
+  {
+    id: 'demo-prod-103',
+    product_name: 'Royal Boski Silk Gents Suit',
+    item_sr_no: 'BSK-303',
+    barcode: '890200000003',
+    barcode_locked: true,
+    category: 'Pure Silk & Boski',
+    retail_price: 7500,
+    uom: 'Suit',
+    image_url: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=500&q=80',
+    show_in_pos: true,
+    visible_counters: ['all']
+  },
+  {
+    id: 'demo-prod-104',
+    product_name: 'Super Fine Egyptian Cotton Latha',
+    item_sr_no: 'COT-404',
+    barcode: '890200000004',
+    barcode_locked: true,
+    category: 'Pure Cotton & Latha',
+    retail_price: 3600,
+    uom: 'Suit',
+    image_url: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&q=80',
+    show_in_pos: true,
+    visible_counters: ['all']
+  }
+];
+
+export const DEMO_ORDERS_NOV_1: PosOrder[] = [
+  {
+    id: 'ord-nov1-005',
+    order_number: 'Order-01-11-2026-005',
+    shift_id: 'shift-1793540103336',
+    cashier_id: 'cashier-3',
+    cashier_name: 'Uzair Jibran',
+    customer_id: 'cust-walkin',
+    customer_name: 'Bilal Ahmed',
+    customer_tier: 'Regular',
+    terminal_code: 'Counter 01 (Main Counter)',
+    fulfillment_type: 'In-Store Bag',
+    subtotal: 5600,
+    tax_percentage: 0,
+    tax_amount: 0,
+    discount_percentage: 10.71,
+    discount_amount: 600,
+    total_amount: 5000,
+    payment_method: 'Cash',
+    cash_tendered: 5000,
+    change_due: 0,
+    status: 'Partially Refunded',
+    refunded_at: '2026-11-01T18:30:00.000Z',
+    refund_amount: 2500,
+    refund_reason: 'Customer exchanged 1 suit for alternate fabric shade',
+    notes: 'Manager approved discount Rs. 600 | Refunded Rs. 2,500 (1 item) on 01-11-2026 - Customer exchanged 1 suit for alternate fabric shade',
+    items: [
+      {
+        product_id: 'demo-prod-102',
+        product_name: 'Classic Wash & Wear Unstitched Suit',
+        product_code: 'WNW-202',
+        barcode: '890200000002',
+        category: 'Unstitched Wash & Wear',
+        uom: 'Suit',
+        quantity: 2,
+        unit_price: 2800,
+        discount_amount: 600,
+        line_total: 5000,
+        image_url: 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=500&q=80'
+      }
+    ],
+    created_at: '2026-11-01T18:10:00.000Z'
+  },
+  {
+    id: 'ord-nov1-004',
+    order_number: 'Order-01-11-2026-004',
+    shift_id: 'shift-1793540103336',
+    cashier_id: 'cashier-2',
+    cashier_name: 'Jibran',
+    customer_id: 'cust-reg-1',
+    customer_name: 'Dr. Tariq Mehmood',
+    customer_tier: 'VIP',
+    terminal_code: 'Counter 01 (Main Counter)',
+    fulfillment_type: 'In-Store Bag',
+    subtotal: 11100,
+    tax_percentage: 0,
+    tax_amount: 0,
+    discount_percentage: 0,
+    discount_amount: 0,
+    total_amount: 11100,
+    payment_method: 'Card',
+    cash_tendered: 11100,
+    change_due: 0,
+    status: 'Completed',
+    notes: 'Paid via Bank Card POS Terminal',
+    items: [
+      {
+        product_id: 'demo-prod-103',
+        product_name: 'Royal Boski Silk Gents Suit',
+        product_code: 'BSK-303',
+        barcode: '890200000003',
+        category: 'Pure Silk & Boski',
+        uom: 'Suit',
+        quantity: 1,
+        unit_price: 7500,
+        discount_amount: 0,
+        line_total: 7500,
+        image_url: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=500&q=80'
+      },
+      {
+        product_id: 'demo-prod-104',
+        product_name: 'Super Fine Egyptian Cotton Latha',
+        product_code: 'COT-404',
+        barcode: '890200000004',
+        category: 'Pure Cotton & Latha',
+        uom: 'Suit',
+        quantity: 1,
+        unit_price: 3600,
+        discount_amount: 0,
+        line_total: 3600,
+        image_url: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&q=80'
+      }
+    ],
+    created_at: '2026-11-01T17:45:00.000Z'
+  },
+  {
+    id: 'ord-nov1-003',
+    order_number: 'Order-01-11-2026-003',
+    shift_id: 'shift-1793540103336',
+    cashier_id: 'cashier-1',
+    cashier_name: 'Uzair',
+    customer_id: 'cust-walkin',
+    customer_name: 'Walk-in Customer',
+    customer_tier: 'Retail',
+    terminal_code: 'Counter 01 (Main Counter)',
+    fulfillment_type: 'In-Store Bag',
+    subtotal: 9000,
+    tax_percentage: 0,
+    tax_amount: 0,
+    discount_percentage: 10,
+    discount_amount: 900,
+    total_amount: 8100,
+    payment_method: 'Cash',
+    cash_tendered: 9000,
+    change_due: 900,
+    status: 'Completed',
+    notes: 'Supervisor 10% seasonal discount applied',
+    items: [
+      {
+        product_id: 'demo-prod-101',
+        product_name: 'Luxury Embroidered Lawn 3-Piece',
+        product_code: 'LWN-101',
+        barcode: '890200000001',
+        category: 'Summer Lawn & Jacquard',
+        uom: 'Suit',
+        quantity: 2,
+        unit_price: 4500,
+        discount_amount: 900,
+        line_total: 8100,
+        image_url: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=500&q=80'
+      }
+    ],
+    created_at: '2026-11-01T17:15:00.000Z'
+  }
+];
+
 export const SAMPLE_POS_ORDERS: PosOrder[] = [
+  ...DEMO_ORDERS_NOV_1,
   {
     id: 'ord-sample-1',
     order_number: '#RT-1081',
@@ -1176,11 +1368,17 @@ export const posService = {
     if (typeof window === 'undefined') return [];
     try {
       const raw = localStorage.getItem(STORAGE_ORDERS);
-      if (!raw) {
-        localStorage.setItem(STORAGE_ORDERS, JSON.stringify(SAMPLE_POS_ORDERS));
-        return SAMPLE_POS_ORDERS;
+      let list: PosOrder[] = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(list) || list.length === 0) {
+        list = [...SAMPLE_POS_ORDERS];
       }
-      return JSON.parse(raw);
+      // Ensure Nov 1 demo orders exist in the orders list
+      DEMO_ORDERS_NOV_1.forEach(demo => {
+        if (!list.some(o => o.order_number === demo.order_number)) {
+          list.unshift(demo);
+        }
+      });
+      return list;
     } catch {
       return SAMPLE_POS_ORDERS;
     }
@@ -1625,18 +1823,19 @@ export const posService = {
       }
     }
 
+    const allCustom = [...localCustom, ...DEMO_CLOTH_PRODUCTS];
     if (erpList.length > 0) {
       const existingIds = new Set(erpList.map(p => p.id));
       const existingCodes = new Set(erpList.map(p => p.item_sr_no?.toLowerCase()).filter(Boolean));
-      const unmerged = localCustom.filter(p => !existingIds.has(p.id) && (!p.item_sr_no || !existingCodes.has(p.item_sr_no.toLowerCase())));
+      const unmerged = allCustom.filter(p => !existingIds.has(p.id) && (!p.item_sr_no || !existingCodes.has(p.item_sr_no.toLowerCase())));
       return [...unmerged, ...erpList];
     }
 
-    if (localCustom.length > 0) {
-      return localCustom;
+    if (allCustom.length > 0) {
+      return allCustom;
     }
 
-    return SAMPLE_POS_PRODUCTS;
+    return [...DEMO_CLOTH_PRODUCTS, ...SAMPLE_POS_PRODUCTS];
   },
 
   async setProductsPosVisibility(enabledIds: string[], allTargetIds: string[]) {
