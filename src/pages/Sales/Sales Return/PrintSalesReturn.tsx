@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -67,7 +67,7 @@ const PrintSalesReturn: React.FC = () => {
         setLoading(true);
         const [returnRes, prodsRes] = await Promise.all([
           supabase.from('sales_returns').select('*').eq('id', id).single(),
-          supabase.from('products').select('id, product_name, item_sr_no, category, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, scenario_name, retail_price, sales_price')
+          fetchAllPages(supabase.from('products').select('id, product_name, item_sr_no, category, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, scenario_name, retail_price, sales_price'))
         ]);
 
         if (returnRes.error) throw returnRes.error;

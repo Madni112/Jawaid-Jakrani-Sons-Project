@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -63,24 +63,18 @@ const SalesReport = () => {
             try {
                 setLoading(true);
                 const [custRes, smRes, transRes, catRes, binRes, prodRes, locRes, invRes, uomRes] = await Promise.all([
-                    supabase.from('customers').select('*'),
+                    supabase.from('customers').select('id, customerName, customer_code, customerCode'),
                     supabase.from('salesmen').select('id, name'),
                     supabase.from('logistics_transportation').select('id, name'),
                     supabase.from('inventory_categories').select('id, name, parent_id'),
                     supabase.from('inventory_surface_finishes').select('id, name'),
-                    supabase.from('products').select('id, product_name'),
+                    fetchAllPages(supabase.from('products').select('id, product_name')),
                     supabase.from('inventory_locations').select('id, name'),
                     supabase.from('sales_invoices').select('id, total_amount, customer_name').order('id', { ascending: false }),
-                    supabase.from('inventory_uom').select('*').eq('is_active', true)
+                    supabase.from('inventory_uom').select('id, short_code, full_name').eq('tenant_id', tenantId || 'bashir').eq('is_active', true)
                 ]);
 
-                if (custRes.data) {
-                    setCustomers(custRes.data.map((c: any) => ({
-                        ...c,
-                        customerName: c.customerName || c.customername || c.name || '',
-                        customer_code: c.customer_code || c.customerCode || c.customercode || ''
-                    })));
-                }
+                if (custRes.data) setCustomers(custRes.data);
                 if (smRes.data) setSalesmen(smRes.data);
                 if (transRes.data) setTransportFleet(transRes.data);
                 if (catRes.data) setCategories(catRes.data);

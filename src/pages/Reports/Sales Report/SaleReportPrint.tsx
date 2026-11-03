@@ -108,7 +108,7 @@ const SaleReportPrint = () => {
 
         // Fetch products and customers lookup for UOM, codes & ledger page nos
         const [prodRes, custRes] = await Promise.all([
-          supabase.from('products').select('*'),
+          fetchAllPages(supabase.from('products').select('*')),
           supabase.from('customers').select('id, customerName, customername, customer_code, customerCode, page_no, pageNo')
         ]);
         const prodData = prodRes.data;

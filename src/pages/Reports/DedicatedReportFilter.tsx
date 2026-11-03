@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import Spinner from '../../ui/Spinner';
 import SearchableMultiSelect from '../../components/SearchableMultiSelect';
@@ -634,26 +634,19 @@ const DedicatedReportFilter: React.FC = () => {
           invRes,
           uomRes
         ] = await Promise.allSettled([
-          supabase.from('customers').select('*'),
+          supabase.from('customers').select('id, customerName, registrationType, customer_code, customerCode'),
           supabase.from('vendors').select('id, vendor_name, name'),
           supabase.from('salesmen').select('id, name'),
           supabase.from('logistics_transportation').select('id, name'),
           supabase.from('inventory_categories').select('id, name, parent_id'),
           supabase.from('inventory_surface_finishes').select('id, name'),
-          supabase.from('products').select('id, product_name'),
+          fetchAllPages(supabase.from('products').select('id, product_name')),
           supabase.from('inventory_locations').select('id, name'),
           supabase.from('sales_invoices').select('id, total_amount, customer_name, invoice_no').order('id', { ascending: false }),
-          supabase.from('inventory_uom').select('*').eq('is_active', true)
+          supabase.from('inventory_uom').select('id, short_code, full_name').eq('tenant_id', tenantId || 'bashir').eq('is_active', true)
         ]);
 
-        if (custRes.status === 'fulfilled' && custRes.value.data) {
-          setCustomers(custRes.value.data.map((c: any) => ({
-            ...c,
-            customerName: c.customerName || c.customername || c.name || '',
-            registrationType: c.registrationType || c.registrationtype || 'Retail / General',
-            customer_code: c.customer_code || c.customerCode || c.customercode || ''
-          })));
-        }
+        if (custRes.status === 'fulfilled' && custRes.value.data) setCustomers(custRes.value.data);
         if (suppRes.status === 'fulfilled' && suppRes.value.data) setSuppliers(suppRes.value.data);
         if (smRes.status === 'fulfilled' && smRes.value.data) setSalesmen(smRes.value.data);
         if (transRes.status === 'fulfilled' && transRes.value.data) setTransports(transRes.value.data);
