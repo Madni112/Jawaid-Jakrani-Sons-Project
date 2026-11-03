@@ -116,7 +116,6 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   const [selectedCounter, setSelectedCounter] = useState<string>('All');
   const [selectedCashierFilter, setSelectedCashierFilter] = useState<string>('All');
   const [breakdownView, setBreakdownView] = useState<'counter' | 'cashier'>('counter');
-  const [isDailyConsolidatedModalOpen, setIsDailyConsolidatedModalOpen] = useState(false);
   const [terminalsList] = useState<PosTerminalCounter[]>(() => posService.getTerminals());
 
   // Helper to normalize counter names by stripping extra notes e.g. "Register 01 (Main Counter)" -> "register 01"
@@ -987,15 +986,6 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
 
           {/* Filter Controls: Date Range & Print Report Button */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => setIsDailyConsolidatedModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-[#111622] hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
-              title="Print Consolidated Daily Report with Counter & Cashier breakdown"
-            >
-              <LuPrinter size={14} className="text-primary" />
-              <span>Print Daily Summary</span>
-            </button>
 
             <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200/80 dark:border-slate-700/60 text-xs font-bold">
               {(['All', 'Today', 'Yesterday', 'Last7Days'] as const).map((mode) => {
@@ -2158,8 +2148,8 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
               <div className="text-center space-y-0.5 pb-2 border-b border-dashed border-black">
                 <h4 className="font-extrabold text-sm uppercase">{posConfig.store_title}</h4>
                 <p className="text-[10px]">DAILY Z-REPORT • CASHIER CLOSE</p>
-                <p className="text-[10px]">Terminal: {selectedZReport.terminal_code}</p>
-                <p className="text-[10px]">Cashier: {selectedZReport.cashier_name}</p>
+                <p className="text-[10px]">Terminal: {resolveTerminalName(selectedZReport.terminal_code)}</p>
+                <p className="text-[10px] font-bold">Cashier: {selectedZReport.cashier_name}</p>
               </div>
 
               <div className="py-2 border-b border-dashed border-black space-y-1 text-[11px]">
