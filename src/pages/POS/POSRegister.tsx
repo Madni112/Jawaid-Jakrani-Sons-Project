@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   LuBanknote,
   LuStore,
+  LuChevronDown,
+  LuCheck,
+  LuSearch,
   LuClock,
   LuUser,
   LuLock,
@@ -112,14 +115,44 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   const loggedInCashier = posService.getLoggedInCashier(currentTerminalSlug);
   const currentCashierName = loggedInCashier?.name || userEmail?.split('@')[0] || 'Alex Rivera';
 
-  // Counter & Cashier Filter State & View Mode
+  // Counter & Cashier Filter State
   const [selectedCounter, setSelectedCounter] = useState<string>('All');
   const [selectedCashierFilter, setSelectedCashierFilter] = useState<string>('All');
-  const [breakdownView, setBreakdownView] = useState<'counter' | 'cashier'>('counter');
   const [terminalsList] = useState<PosTerminalCounter[]>(() => posService.getTerminals());
 
-  // Helper to normalize counter names by stripping extra notes e.g. "Register 01 (Main Counter)" -> "register 01"
+  // Searchable Counter Dropdown State
+  const [isCounterDropdownOpen, setIsCounterDropdownOpen] = useState(false);
+  const [counterSearchQuery, setCounterSearchQuery] = useState('');
+  const counterDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (counterDropdownRef.current && !counterDropdownRef.current.contains(e.target as Node)) {
+        setIsCounterDropdownOpen(false);
+      }
+    };
+    if (isCounterDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isCounterDropdownOpen]);
+
+  // Filtered terminals for the searchable dropdown list
+  const filteredTerminalsList = useMemo(() => {
+    if (!counterSearchQuery.trim()) return terminalsList;
+    const q = counterSearchQuery.toLowerCase();
+    return terminalsList.filter(t => 
+      t.name.toLowerCase().includes(q) || 
+      t.slug.toLowerCase().includes(q) || 
+      (t.location && t.location.toLowerCase().includes(q))
+    );
+  }, [terminalsList, counterSearchQuery]);
+
+  // Helper to normalize counter names e.g. "Register 01 (Main Counter)" -> "register 01"
   const cleanCounterKey = (name?: string) => (name || '').toLowerCase().replace(/\s*\(.*?\)/g, '').trim();
+
+  // Helper to normalize cashier names e.g. "Uzair Jibran" vs "uzairjibran"
+  const normCashierName = (name?: string) => (name || '').toLowerCase().replace(/[\s._-]+/g, '');
 
   // Helper to match any shift terminal_code to a configured terminal name
   const resolveTerminalName = (shiftTermCode?: string): string => {
@@ -134,7 +167,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
     return matched ? matched.name : shiftTermCode;
   };
 
-  // Filtered Shifts by Date AND Counter
+  // Filtered Shifts by Date, Selected Counter, and Selected Cashier
   const filteredShifts = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000);
@@ -158,9 +191,9 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
         }
       }
 
-      // Filter by Cashier
+      // Filter by Cashier (normalized so "Uzair Jibran" matches "uzairjibran")
       if (selectedCashierFilter !== 'All') {
-        if ((s.cashier_name || '').toLowerCase() !== selectedCashierFilter.toLowerCase()) {
+        if (normCashierName(s.cashier_name) !== normCashierName(selectedCashierFilter)) {
           return false;
         }
       }
@@ -169,108 +202,108 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
     });
   }, [allShifts, dateFilter, customDate, selectedCounter, selectedCashierFilter, terminalsList]);
 
-  // Counter-Wise Sales Breakdown for the current date filter
-  const { counterBreakdown, overallCounterTotal, overallShiftsCount } = useMemo(() => {
+  // Cashier Performance Cards: Dynamically scoped to Selected Counter & Date Filter
+  const { cashierCards, scopeTotalSales, scopeShiftsCount } = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
 
-    const dateMatchedShifts = allShifts.filter((s) => {
+    // Shifts matching Date AND selected Counter
+    const scopedShifts = allShifts.filter((s) => {
       const shiftDate = new Date(s.opened_at);
       const shiftDateStr = shiftDate.toISOString().split('T')[0];
 
-      if (dateFilter === 'Today') return shiftDateStr === todayStr;
-      if (dateFilter === 'Yesterday') return shiftDateStr === yesterdayStr;
-      if (dateFilter === 'Last7Days') return shiftDate >= sevenDaysAgo;
-      if (dateFilter === 'Custom') return shiftDateStr === customDate;
+      if (dateFilter === 'Today' && shiftDateStr !== todayStr) return false;
+      if (dateFilter === 'Yesterday' && shiftDateStr !== yesterdayStr) return false;
+      if (dateFilter === 'Last7Days' && shiftDate < sevenDaysAgo) return false;
+      if (dateFilter === 'Custom' && shiftDateStr !== customDate) return false;
+
+      if (selectedCounter !== 'All') {
+        const canonicalName = resolveTerminalName(s.terminal_code);
+        if (cleanCounterKey(canonicalName) !== cleanCounterKey(selectedCounter)) {
+          return false;
+        }
+      }
       return true;
     });
 
-    const map: Record<string, { counterName: string; shiftsCount: number; totalSales: number; cashSales: number; cardSales: number }> = {};
-
-    terminalsList.forEach((t) => {
-      map[t.name] = {
-        counterName: t.name,
-        shiftsCount: 0,
-        totalSales: 0,
-        cashSales: 0,
-        cardSales: 0
-      };
+    let totalVolume = 0;
+    scopedShifts.forEach((s) => {
+      totalVolume += (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
     });
 
-    let overallTotal = 0;
-    dateMatchedShifts.forEach((s) => {
-      const canonicalName = resolveTerminalName(s.terminal_code);
-      if (!map[canonicalName]) {
-        map[canonicalName] = {
-          counterName: canonicalName,
+    // Determine which cashiers to display:
+    // If specific counter is selected -> show that counter's assigned cashiers (e.g. 3 cashiers)
+    // If All Counters selected -> show all cashiers across all counters
+    const map = new Map<string, { cashierName: string; role?: string; avatarColor?: string; shiftsCount: number; totalSales: number; cashSales: number; cardSales: number }>();
+
+    if (selectedCounter !== 'All') {
+      const activeTerm = terminalsList.find(t => cleanCounterKey(t.name) === cleanCounterKey(selectedCounter));
+      (activeTerm?.assigned_cashiers || []).forEach(c => {
+        const normKey = normCashierName(c.name);
+        map.set(normKey, {
+          cashierName: c.name,
+          role: c.role,
+          avatarColor: c.avatar_color,
           shiftsCount: 0,
           totalSales: 0,
           cashSales: 0,
           cardSales: 0
-        };
-      }
-      const shiftVolume = (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
-      map[canonicalName].shiftsCount += 1;
-      map[canonicalName].totalSales += shiftVolume;
-      map[canonicalName].cashSales += (s.cash_sales || 0);
-      map[canonicalName].cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
-      overallTotal += shiftVolume;
-    });
+        });
+      });
+    } else {
+      terminalsList.forEach(t => {
+        (t.assigned_cashiers || []).forEach(c => {
+          const normKey = normCashierName(c.name);
+          if (!map.has(normKey)) {
+            map.set(normKey, {
+              cashierName: c.name,
+              role: c.role,
+              avatarColor: c.avatar_color,
+              shiftsCount: 0,
+              totalSales: 0,
+              cashSales: 0,
+              cardSales: 0
+            });
+          }
+        });
+      });
+    }
 
-    return {
-      counterBreakdown: Object.values(map),
-      overallCounterTotal: overallTotal,
-      overallShiftsCount: dateMatchedShifts.length
-    };
-  }, [allShifts, dateFilter, customDate, terminalsList]);
-
-  // Cashier-Wise Sales Breakdown for the current date filter
-  const { cashierBreakdown, overallCashierTotal } = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
-
-    const dateMatchedShifts = allShifts.filter((s) => {
-      const shiftDate = new Date(s.opened_at);
-      const shiftDateStr = shiftDate.toISOString().split('T')[0];
-
-      if (dateFilter === 'Today') return shiftDateStr === todayStr;
-      if (dateFilter === 'Yesterday') return shiftDateStr === yesterdayStr;
-      if (dateFilter === 'Last7Days') return shiftDate >= sevenDaysAgo;
-      if (dateFilter === 'Custom') return shiftDateStr === customDate;
-      return true;
-    });
-
-    const map: Record<string, { cashierName: string; shiftsCount: number; totalSales: number; cashSales: number; cardSales: number }> = {};
-
-    let overallTotal = 0;
-    dateMatchedShifts.forEach((s) => {
-      const name = s.cashier_name || 'Cashier';
-      if (!map[name]) {
-        map[name] = {
-          cashierName: name,
+    // Also include any cashier from shifts that ran on this counter (or store)
+    scopedShifts.forEach(s => {
+      const normKey = normCashierName(s.cashier_name);
+      if (!map.has(normKey)) {
+        map.set(normKey, {
+          cashierName: s.cashier_name || 'Cashier',
           shiftsCount: 0,
           totalSales: 0,
           cashSales: 0,
           cardSales: 0
-        };
+        });
       }
-      const shiftVolume = (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
-      map[name].shiftsCount += 1;
-      map[name].totalSales += shiftVolume;
-      map[name].cashSales += (s.cash_sales || 0);
-      map[name].cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
-      overallTotal += shiftVolume;
+    });
+
+    // Populate actual sales stats for each cashier
+    scopedShifts.forEach(s => {
+      const normKey = normCashierName(s.cashier_name);
+      const entry = map.get(normKey);
+      if (entry) {
+        const shiftVol = (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
+        entry.shiftsCount += 1;
+        entry.totalSales += shiftVol;
+        entry.cashSales += (s.cash_sales || 0);
+        entry.cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
+      }
     });
 
     return {
-      cashierBreakdown: Object.values(map),
-      overallCashierTotal: overallTotal
+      cashierCards: Array.from(map.values()),
+      scopeTotalSales: totalVolume,
+      scopeShiftsCount: scopedShifts.length
     };
-  }, [allShifts, dateFilter, customDate]);
+  }, [allShifts, dateFilter, customDate, selectedCounter, terminalsList]);
 
   // Filtered Orders by Date
   const filteredOrders = useMemo(() => {
@@ -984,8 +1017,102 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
             </p>
           </div>
 
-          {/* Filter Controls: Date Range & Print Report Button */}
+          {/* Filter Controls: Searchable Counter Dropdown & Date Range */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Searchable Counter Dropdown */}
+            <div className="relative" ref={counterDropdownRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCounterDropdownOpen(prev => !prev);
+                  setCounterSearchQuery('');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2 hover:bg-slate-200/70 dark:hover:bg-slate-700/70 transition cursor-pointer shadow-2xs"
+                title="Select Counter"
+              >
+                <LuStore size={14} className="text-primary shrink-0" />
+                <span className="truncate max-w-[150px] sm:max-w-[200px]">
+                  {selectedCounter === 'All' ? 'All Counters (Overall)' : selectedCounter}
+                </span>
+                <LuChevronDown
+                  size={14}
+                  className={`text-slate-400 transition-transform duration-200 ${isCounterDropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {/* Searchable Popover Menu */}
+              {isCounterDropdownOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 w-64 rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl p-2 animate-fadeIn space-y-1.5"
+                  style={{ zIndex: 9999 }}
+                >
+                  {/* Search Input */}
+                  <div className="relative">
+                    <LuSearch size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={counterSearchQuery}
+                      onChange={(e) => setCounterSearchQuery(e.target.value)}
+                      placeholder="Search counter..."
+                      className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg bg-slate-100 dark:bg-[#1A2234] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+                    />
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto space-y-0.5">
+                    {/* All Counters option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCounter('All');
+                        setSelectedCashierFilter('All');
+                        setIsCounterDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                        selectedCounter === 'All'
+                          ? 'bg-primary/10 text-primary font-black'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <LuStore size={14} />
+                        <span>All Counters (Store Overall)</span>
+                      </div>
+                      {selectedCounter === 'All' && <LuCheck size={14} className="text-primary shrink-0" />}
+                    </button>
+
+                    {/* Filtered Terminals */}
+                    {filteredTerminalsList.map((t) => {
+                      const isSelected = selectedCounter === t.name;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCounter(t.name);
+                            setSelectedCashierFilter('All');
+                            setIsCounterDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary/10 text-primary font-black'
+                              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="truncate pr-2">
+                            <div>{t.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              /{t.slug} • {t.assigned_cashiers?.length || 0} cashiers
+                            </div>
+                          </div>
+                          {isSelected && <LuCheck size={14} className="text-primary shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200/80 dark:border-slate-700/60 text-xs font-bold">
               {(['All', 'Today', 'Yesterday', 'Last7Days'] as const).map((mode) => {
@@ -1033,192 +1160,93 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
           </div>
         </div>
 
-        {/* Performance Breakdown Section (Toggle between Counter and Cashier) */}
+        {/* Cashier Performance Cards (Dynamically scoped to selected counter) */}
         <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0c1017]/50">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                {breakdownView === 'counter' ? <LuStore className="text-primary" size={14} /> : <LuUser className="text-primary" size={14} />}
-                <span>Sales Breakdown ({dateFilter === 'All' ? 'All Dates' : dateFilter === 'Today' ? "Today" : dateFilter})</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <LuUser className="text-primary" size={14} />
+              <span>
+                {selectedCounter === 'All' ? 'All Cashiers Performance (Store-Wide)' : `Cashiers for ${selectedCounter}`}
               </span>
-
-              {/* View Toggle: By Counter vs By Cashier */}
-              <div className="inline-flex items-center rounded-xl bg-slate-200/70 dark:bg-slate-800/80 p-0.5 text-[11px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBreakdownView('counter');
-                    setSelectedCashierFilter('All');
-                  }}
-                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                    breakdownView === 'counter'
-                      ? 'bg-white dark:bg-[#111622] text-primary shadow-xs font-black'
-                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                  }`}
-                >
-                  <LuStore size={12} />
-                  <span>By Counter</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBreakdownView('cashier');
-                    setSelectedCounter('All');
-                  }}
-                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                    breakdownView === 'cashier'
-                      ? 'bg-white dark:bg-[#111622] text-primary shadow-xs font-black'
-                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                  }`}
-                >
-                  <LuUser size={12} />
-                  <span>By Cashier</span>
-                </button>
-              </div>
-            </div>
+            </span>
 
             <span className="text-[10px] text-slate-400 font-medium">
-              Click any card to filter sessions below
+              Click any cashier card to filter shifts below
             </span>
           </div>
 
-          {/* Cards for Counter View */}
-          {breakdownView === 'counter' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Overall Store Total Card */}
-              <button
-                type="button"
-                onClick={() => setSelectedCounter('All')}
-                className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
-                  selectedCounter === 'All'
-                    ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
-                    : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                    🏬 All Counters
-                  </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
-                    Store Total
-                  </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* All Staff / All Cashiers Card */}
+            <button
+              type="button"
+              onClick={() => setSelectedCashierFilter('All')}
+              className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                selectedCashierFilter === 'All'
+                  ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                  : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                  👥 All Cashiers
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
+                  {selectedCounter === 'All' ? 'Overall' : 'Counter Total'}
+                </span>
+              </div>
+              <div className="mt-2.5">
+                <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                  Rs. {scopeTotalSales.toLocaleString()}
                 </div>
-                <div className="mt-2.5">
-                  <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
-                    Rs. {overallCounterTotal.toLocaleString()}
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
-                    {overallShiftsCount} {overallShiftsCount === 1 ? 'shift' : 'shifts'} across all registers
-                  </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                  {cashierCards.length} cashiers assigned • {scopeShiftsCount} {scopeShiftsCount === 1 ? 'shift' : 'shifts'}
                 </div>
-              </button>
+              </div>
+            </button>
 
-              {/* Individual Counter Cards */}
-              {counterBreakdown.map((cb) => {
-                const isSelected = selectedCounter.toLowerCase() === cb.counterName.toLowerCase();
-                const percent = overallCounterTotal > 0 ? ((cb.totalSales / overallCounterTotal) * 100).toFixed(0) : '0';
+            {/* Individual Cashier Cards */}
+            {cashierCards.map((c) => {
+              const isSelected = normCashierName(selectedCashierFilter) === normCashierName(c.cashierName);
+              const percent = scopeTotalSales > 0 ? ((c.totalSales / scopeTotalSales) * 100).toFixed(0) : '0';
 
-                return (
-                  <button
-                    key={cb.counterName}
-                    type="button"
-                    onClick={() => setSelectedCounter(cb.counterName)}
-                    className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
-                        : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate pr-2">
-                        {cb.counterName}
-                      </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
-                        {percent}% Share
-                      </span>
+              return (
+                <button
+                  key={c.cashierName}
+                  type="button"
+                  onClick={() => setSelectedCashierFilter(c.cashierName)}
+                  className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                      : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate pr-2 capitalize">
+                      👤 {c.cashierName}
+                    </span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                      c.totalSales > 0
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                    }`}>
+                      {percent}% Share
+                    </span>
+                  </div>
+                  <div className="mt-2.5">
+                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                      Rs. {c.totalSales.toLocaleString()}
                     </div>
-                    <div className="mt-2.5">
-                      <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
-                        Rs. {cb.totalSales.toLocaleString()}
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium flex items-center justify-between">
-                        <span>{cb.shiftsCount} {cb.shiftsCount === 1 ? 'shift' : 'shifts'}</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Rs. {cb.cashSales.toLocaleString()} cash</span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            /* Cards for Cashier View */
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Overall Staff Card */}
-              <button
-                type="button"
-                onClick={() => setSelectedCashierFilter('All')}
-                className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
-                  selectedCashierFilter === 'All'
-                    ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
-                    : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                    👥 All Cashiers
-                  </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
-                    All Staff
-                  </span>
-                </div>
-                <div className="mt-2.5">
-                  <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
-                    Rs. {overallCashierTotal.toLocaleString()}
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
-                    {cashierBreakdown.length} active cashiers
-                  </div>
-                </div>
-              </button>
-
-              {/* Individual Cashier Cards */}
-              {cashierBreakdown.map((cb) => {
-                const isSelected = selectedCashierFilter.toLowerCase() === cb.cashierName.toLowerCase();
-                const percent = overallCashierTotal > 0 ? ((cb.totalSales / overallCashierTotal) * 100).toFixed(0) : '0';
-
-                return (
-                  <button
-                    key={cb.cashierName}
-                    type="button"
-                    onClick={() => setSelectedCashierFilter(cb.cashierName)}
-                    className={`p-3.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
-                        : 'bg-white dark:bg-[#111622] border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate pr-2 capitalize">
-                        👤 {cb.cashierName}
-                      </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shrink-0">
-                        {percent}% Share
+                    <div className="text-[10px] text-slate-400 mt-0.5 font-medium flex items-center justify-between">
+                      <span>{c.shiftsCount} {c.shiftsCount === 1 ? 'shift' : 'shifts'}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                        Rs. {c.cashSales.toLocaleString()} cash
                       </span>
                     </div>
-                    <div className="mt-2.5">
-                      <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
-                        Rs. {cb.totalSales.toLocaleString()}
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium flex items-center justify-between">
-                        <span>{cb.shiftsCount} {cb.shiftsCount === 1 ? 'shift' : 'shifts'}</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Rs. {cb.cashSales.toLocaleString()} cash</span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Date Filter Summary KPI Strip */}
