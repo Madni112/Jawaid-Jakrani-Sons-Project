@@ -213,11 +213,12 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
     const scopedShifts = allShifts.filter((s) => {
       const shiftDate = new Date(s.opened_at);
       const shiftDateStr = shiftDate.toISOString().split('T')[0];
+      const bDate = s.business_date || shiftDateStr;
 
-      if (dateFilter === 'Today' && shiftDateStr !== todayStr) return false;
-      if (dateFilter === 'Yesterday' && shiftDateStr !== yesterdayStr) return false;
+      if (dateFilter === 'Today' && bDate !== todayStr) return false;
+      if (dateFilter === 'Yesterday' && bDate !== yesterdayStr) return false;
       if (dateFilter === 'Last7Days' && shiftDate < sevenDaysAgo) return false;
-      if (dateFilter === 'Custom' && shiftDateStr !== customDate) return false;
+      if (dateFilter === 'Custom' && bDate !== customDate) return false;
 
       if (selectedCounter !== 'All') {
         const canonicalName = resolveTerminalName(s.terminal_code);
@@ -228,14 +229,27 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       return true;
     });
 
-    let totalVolume = 0;
-    scopedShifts.forEach((s) => {
-      totalVolume += (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
+    // Orders matching Date AND selected Counter
+    const scopedOrders = allOrders.filter((ord) => {
+      if (ord.status === 'Voided') return false;
+      const orderDate = new Date(ord.created_at);
+      const orderDateStr = orderDate.toISOString().split('T')[0];
+
+      if (dateFilter === 'Today' && orderDateStr !== todayStr) return false;
+      if (dateFilter === 'Yesterday' && orderDateStr !== yesterdayStr) return false;
+      if (dateFilter === 'Last7Days' && orderDate < sevenDaysAgo) return false;
+      if (dateFilter === 'Custom' && orderDateStr !== customDate) return false;
+
+      if (selectedCounter !== 'All') {
+        const canonicalName = resolveTerminalName(ord.terminal_code);
+        if (cleanCounterKey(canonicalName) !== cleanCounterKey(selectedCounter)) {
+          return false;
+        }
+      }
+      return true;
     });
 
     // Determine which cashiers to display:
-    // If specific counter is selected -> show that counter's assigned cashiers (e.g. 3 cashiers)
-    // If All Counters selected -> show all cashiers across all counters
     const map = new Map<string, { cashierName: string; role?: string; avatarColor?: string; shiftsCount: number; totalSales: number; cashSales: number; cardSales: number }>();
 
     if (selectedCounter !== 'All') {
@@ -271,7 +285,21 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       });
     }
 
-    // Also include any cashier from shifts that ran on this counter (or store)
+    // Include any cashiers from orders
+    scopedOrders.forEach(o => {
+      const normKey = normCashierName(o.cashier_name);
+      if (!map.has(normKey)) {
+        map.set(normKey, {
+          cashierName: o.cashier_name || 'Cashier',
+          shiftsCount: 0,
+          totalSales: 0,
+          cashSales: 0,
+          cardSales: 0
+        });
+      }
+    });
+
+    // Include any cashiers from shifts
     scopedShifts.forEach(s => {
       const normKey = normCashierName(s.cashier_name);
       if (!map.has(normKey)) {
@@ -285,25 +313,53 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       }
     });
 
-    // Populate actual sales stats for each cashier
+    // Populate shift counts
     scopedShifts.forEach(s => {
       const normKey = normCashierName(s.cashier_name);
       const entry = map.get(normKey);
       if (entry) {
-        const shiftVol = (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
         entry.shiftsCount += 1;
-        entry.totalSales += shiftVol;
-        entry.cashSales += (s.cash_sales || 0);
-        entry.cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
       }
     });
+
+    // Aggregate individual completed sales directly per cashier!
+    let totalVolume = 0;
+    if (scopedOrders.length > 0) {
+      scopedOrders.forEach(ord => {
+        const normKey = normCashierName(ord.cashier_name);
+        const entry = map.get(normKey);
+        const amt = Number(ord.total_amount) || 0;
+        totalVolume += amt;
+        if (entry) {
+          entry.totalSales += amt;
+          const method = (ord.payment_method || '').toLowerCase();
+          if (method.includes('card')) {
+            entry.cardSales += amt;
+          } else {
+            entry.cashSales += amt;
+          }
+        }
+      });
+    } else {
+      scopedShifts.forEach(s => {
+        const normKey = normCashierName(s.cashier_name);
+        const entry = map.get(normKey);
+        const vol = (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
+        totalVolume += vol;
+        if (entry) {
+          entry.totalSales += vol;
+          entry.cashSales += (s.cash_sales || 0);
+          entry.cardSales += (s.card_sales || 0) + (s.digital_sales || 0);
+        }
+      });
+    }
 
     return {
       cashierCards: Array.from(map.values()),
       scopeTotalSales: totalVolume,
       scopeShiftsCount: scopedShifts.length
     };
-  }, [allShifts, dateFilter, customDate, selectedCounter, terminalsList]);
+  }, [allShifts, allOrders, dateFilter, customDate, selectedCounter, terminalsList]);
 
   // Hierarchical Breakdown: Counter-wise -> Cashier-wise
   const hierarchicalBreakdown = useMemo(() => {
@@ -560,11 +616,30 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
     let totalVariance = 0;
 
     for (const s of filteredShifts) {
-      cashSales += s.cash_sales || 0;
-      cardSales += s.card_sales || 0;
-      digitalSales += s.digital_sales || 0;
-      totalVolume += (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
       totalVariance += (s.variance || 0);
+    }
+
+    if (filteredOrders.length > 0) {
+      for (const ord of filteredOrders) {
+        if (ord.status === 'Voided') continue;
+        const amt = Number(ord.total_amount) || 0;
+        totalVolume += amt;
+        const method = (ord.payment_method || '').toLowerCase();
+        if (method.includes('card')) {
+          cardSales += amt;
+        } else if (method.includes('digital') || method.includes('qr') || method.includes('bank')) {
+          digitalSales += amt;
+        } else {
+          cashSales += amt;
+        }
+      }
+    } else {
+      for (const s of filteredShifts) {
+        cashSales += s.cash_sales || 0;
+        cardSales += s.card_sales || 0;
+        digitalSales += s.digital_sales || 0;
+        totalVolume += (s.cash_sales || 0) + (s.card_sales || 0) + (s.digital_sales || 0);
+      }
     }
 
     return {
@@ -575,7 +650,7 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
       totalVariance,
       count: filteredShifts.length
     };
-  }, [filteredShifts]);
+  }, [filteredShifts, filteredOrders]);
 
   // Refresh shifts data
   const refreshShifts = () => {

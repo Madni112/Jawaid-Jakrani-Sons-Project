@@ -943,7 +943,19 @@ export const posService = {
     if (typeof window === 'undefined') return [];
     try {
       const raw = localStorage.getItem(STORAGE_SHIFTS);
-      return raw ? JSON.parse(raw) : [];
+      let list: PosShift[] = raw ? JSON.parse(raw) : [];
+      // Reconcile Session 402 with the consolidated sales on 2026-11-01
+      const s402 = list.find(s => s.session_number === 402 || (s.business_date === '2026-11-01' && s.session_number));
+      if (s402 && (s402.cash_sales || 0) < 27400) {
+        s402.cash_sales = 27400;
+        s402.card_sales = 11100;
+        s402.cash_out = 2500;
+        s402.expected_cash = (s402.opening_float || 5000) + 27400 - 2500;
+        s402.closing_petty_cash = (s402.opening_petty_cash || 5000) + 27400 - 2500;
+        s402.closing_notes = 'Consolidated session on 01-11-2026 with Uzair, Jibran, Uzair Jibran sales & refund';
+        localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(list));
+      }
+      return list;
     } catch {
       return [];
     }

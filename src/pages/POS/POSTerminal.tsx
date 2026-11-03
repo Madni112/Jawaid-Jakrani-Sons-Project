@@ -1468,22 +1468,22 @@ export const POSTerminal: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         
         {/* ── TOP POS NAVBAR ── */}
-        <header className="h-16 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 px-5 flex items-center justify-between shrink-0 gap-4 z-40 relative">
+        <header className="h-16 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2 sm:gap-3 z-40 relative w-full max-w-full overflow-hidden">
           
           {/* Left: Terminal pill & Live clock */}
-          <div className="flex items-center gap-4 shrink-0">
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[100px] sm:max-w-none">
                 {posConfig.terminal_name}
               </span>
-              <span className="text-slate-300 dark:text-slate-600">•</span>
-              <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <span className="text-slate-300 dark:text-slate-600 hidden md:inline">•</span>
+              <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 hidden md:flex items-center gap-1.5">
                 <LuCalendar size={13} className="text-primary opacity-80" />
                 {currentDate}
               </span>
-              <span className="text-slate-300 dark:text-slate-600">•</span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono font-bold">
+              <span className="text-slate-300 dark:text-slate-600 hidden xl:inline">•</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono font-bold hidden xl:inline">
                 {currentTime}
               </span>
             </div>
@@ -1508,39 +1508,41 @@ export const POSTerminal: React.FC = () => {
               </button>
             )}
 
-            {/* Quick Action: + New Sale */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!requireOpenDrawer()) return;
-                const startFresh = () => {
-                  setCartItems([]);
-                  setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
-                  setFulfillmentType(resolveInitialFulfillment(posConfig));
-                  toast.success('New sale order started');
-                };
+            {/* Quick Action: + New Sale (Only on Register view to prevent overflow) */}
+            {activeView === 'register' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireOpenDrawer()) return;
+                  const startFresh = () => {
+                    setCartItems([]);
+                    setTicketNumber(activeShift ? posService.getNextOrderNumber(activeShift.business_date) : '');
+                    setFulfillmentType(resolveInitialFulfillment(posConfig));
+                    toast.success('New sale order started');
+                  };
 
-                if (cartItems.length > 0) {
-                  showConfirm({
-                    title: 'Start New Sale',
-                    message: 'Starting a new sale will clear current items in cart. Do you want to continue?',
-                    confirmLabel: 'Start New Sale',
-                    isDestructive: false,
-                    onConfirm: startFresh
-                  });
-                  return;
-                }
-                startFresh();
-              }}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
-            >
-              <LuPlus size={14} className="text-primary" />
-              <span>+ New Sale</span>
-            </button>
+                  if (cartItems.length > 0) {
+                    showConfirm({
+                      title: 'Start New Sale',
+                      message: 'Starting a new sale will clear current items in cart. Do you want to continue?',
+                      confirmLabel: 'Start New Sale',
+                      isDestructive: false,
+                      onConfirm: startFresh
+                    });
+                    return;
+                  }
+                  startFresh();
+                }}
+                className="hidden 2xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
+              >
+                <LuPlus size={14} className="text-primary" />
+                <span>+ New Sale</span>
+              </button>
+            )}
           </div>
 
           {/* Center: Live Barcode & Item Search Input */}
-          <form onSubmit={handleBarcodeSubmit} className="flex-1 max-w-xl min-w-[170px] relative">
+          <form onSubmit={handleBarcodeSubmit} className="flex-1 max-w-md min-w-[110px] relative">
             <div className="relative">
               <LuSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-base" />
               <input
@@ -1568,12 +1570,12 @@ export const POSTerminal: React.FC = () => {
           </form>
 
           {/* Right: Quick Action Buttons, Sound, Mode, Cashier info */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Held Tickets Count */}
             <button
               type="button"
               onClick={() => setIsHeldModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold transition cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold transition cursor-pointer"
               title="Held orders"
             >
               <LuPauseCircle size={15} />
@@ -1585,7 +1587,7 @@ export const POSTerminal: React.FC = () => {
             <button
               type="button"
               onClick={handleOpenDrawerModal}
-              className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+              className={`hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
                 activeShift
                   ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                   : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30'
@@ -1593,7 +1595,7 @@ export const POSTerminal: React.FC = () => {
               title="Cash drawer & business day operations"
             >
               <LuBanknote size={15} />
-              <span>Drawer</span>
+              <span className="hidden lg:inline">Drawer</span>
               {!activeShift && (
                 <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500 text-white font-mono font-bold">
                   Closed
@@ -1649,7 +1651,7 @@ export const POSTerminal: React.FC = () => {
                 >
                   {displayCashierName.slice(0, 2).toUpperCase()}
                 </div>
-                <div className="hidden xl:block leading-tight text-left">
+                <div className="hidden 2xl:block leading-tight text-left">
                   <span className="block text-xs font-bold text-slate-900 dark:text-white capitalize truncate max-w-[120px]">
                     {displayCashierName}
                   </span>
