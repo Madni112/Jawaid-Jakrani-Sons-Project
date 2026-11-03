@@ -367,9 +367,16 @@ export const POSTerminal: React.FC = () => {
   const [colorMode, setColorMode] = useColorMode();
   const isDark = isDarkModeActive();
 
+  // Dynamic Counter & Logged-In Cashier
+  const { posSlug } = useParams<{ posSlug?: string }>();
+  const currentTerminalSlug = (posSlug || 'pos1').toLowerCase();
+  const currentCounterConfig = posService.getTerminalBySlug(currentTerminalSlug);
+  const loggedInCashier = posService.getLoggedInCashier(currentTerminalSlug);
+
   // Cashier profile info
-  const displayCashierName = userName || currentUser?.user_metadata?.full_name || currentUser?.user_metadata?.name || (userEmail ? userEmail.split('@')[0] : 'Uzair Jibran');
-  const displayCashierEmail = userEmail || currentUser?.email || 'cashier@uzairjibran.com';
+  const displayCashierName = loggedInCashier?.name || userName || currentUser?.user_metadata?.full_name || currentUser?.user_metadata?.name || (userEmail ? userEmail.split('@')[0] : 'Cashier');
+  const displayCashierRole = loggedInCashier?.role ? (loggedInCashier.role.charAt(0).toUpperCase() + loggedInCashier.role.slice(1)) : 'Cashier';
+  const displayCashierEmail = loggedInCashier ? `${loggedInCashier.name.toLowerCase().replace(/\s+/g, '.')}@pos.local` : (userEmail || currentUser?.email || 'cashier@uzairjibran.com');
 
   // Profile dropdown and In-POS settings modal
   const [profileDropdownOpen, setProfileDropdownOpen] = useState<boolean>(false);
@@ -388,12 +395,6 @@ export const POSTerminal: React.FC = () => {
     }
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [profileDropdownOpen]);
-
-  // Dynamic Counter & Logged-In Cashier
-  const { posSlug } = useParams<{ posSlug?: string }>();
-  const currentTerminalSlug = (posSlug || 'pos1').toLowerCase();
-  const currentCounterConfig = posService.getTerminalBySlug(currentTerminalSlug);
-  const loggedInCashier = posService.getLoggedInCashier(currentTerminalSlug);
 
   // Manager Override Modal State
   const [isManagerOverrideModalOpen, setIsManagerOverrideModalOpen] = useState(false);
@@ -1015,7 +1016,7 @@ export const POSTerminal: React.FC = () => {
       order_number: ticketNumber,
       order_label: orderLabel,
       note: finalNote,
-      cashier_name: userEmail?.split('@')[0] || 'Cashier',
+      cashier_name: displayCashierName,
       items: cartItems,
       subtotal,
       discount_percent: discountPercent,
@@ -1045,7 +1046,7 @@ export const POSTerminal: React.FC = () => {
         order_number: ticketNumber,
         order_label: activeLabel,
         note: 'Auto-parked during order switch',
-        cashier_name: userEmail?.split('@')[0] || 'Cashier',
+        cashier_name: displayCashierName,
         items: cartItems,
         subtotal,
         discount_percent: discountPercent,
@@ -1102,7 +1103,7 @@ export const POSTerminal: React.FC = () => {
       const orderPayload: Omit<PosOrder, 'id' | 'order_number' | 'created_at'> = {
         shift_id: activeShift?.id,
         order_number: ticketNumber,
-        cashier_name: userEmail?.split('@')[0] || 'Cashier',
+        cashier_name: displayCashierName,
         customer_name: customerName,
         customer_tier: customerTier,
         terminal_code: posConfig.terminal_name || 'Terminal 01',
@@ -1148,7 +1149,7 @@ export const POSTerminal: React.FC = () => {
     try {
       const shift = await posService.openDayShift({
         businessDate: dayOpenDate,
-        cashierName: userEmail?.split('@')[0] || 'Alex Rivera',
+        cashierName: displayCashierName,
         openingPettyCash: dayOpenPettyCash,
         cashIn: dayOpenCashIn,
         cashOut: dayOpenCashOut,
@@ -1673,8 +1674,8 @@ export const POSTerminal: React.FC = () => {
                     <p className="text-xs font-black text-slate-900 dark:text-white capitalize truncate" title={displayCashierName}>
                       {displayCashierName}
                     </p>
-                    <p className="text-[11px] text-slate-400 font-mono truncate" title={displayCashierEmail}>
-                      {displayCashierEmail}
+                    <p className="text-[11px] text-primary font-bold capitalize mt-0.5">
+                      {currentCounterConfig?.name || 'Counter'} • {displayCashierRole}
                     </p>
                     <div className="mt-2 flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100 dark:border-slate-800">
                       <span className="text-slate-400 font-medium">Drawer Status:</span>
@@ -1730,12 +1731,14 @@ export const POSTerminal: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setProfileDropdownOpen(false);
-                      logout();
+                      posService.clearLoggedInCashier(currentTerminalSlug);
+                      toast.success(`Logged out ${displayCashierName}`);
+                      navigate(`/${currentTerminalSlug}`);
                     }}
                     className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition cursor-pointer"
                   >
                     <LuLogOut size={16} />
-                    <span>Log Out</span>
+                    <span>Log Out Cashier</span>
                   </button>
                 </div>
               )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   LuBanknote,
   LuClock,
@@ -106,7 +106,10 @@ export const POSRegister: React.FC<POSRegisterProps> = ({ embedded, onBack }) =>
   const [dateFilter, setDateFilter] = useState<'All' | 'Today' | 'Yesterday' | 'Last7Days' | 'Custom'>('All');
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
-  const currentCashierName = userEmail?.split('@')[0] || 'Alex Rivera';
+  const { posSlug } = useParams<{ posSlug?: string }>();
+  const currentTerminalSlug = (posSlug || 'pos1').toLowerCase();
+  const loggedInCashier = posService.getLoggedInCashier(currentTerminalSlug);
+  const currentCashierName = loggedInCashier?.name || userEmail?.split('@')[0] || 'Alex Rivera';
 
   // Filtered Shifts by Date
   const filteredShifts = useMemo(() => {
