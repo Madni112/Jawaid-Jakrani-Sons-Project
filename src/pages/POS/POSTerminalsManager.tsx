@@ -430,10 +430,10 @@ export const POSTerminalsManager: React.FC = () => {
           MODAL 1: CREATE / EDIT POS TERMINAL & CASHIERS
          ───────────────────────────────────────────────────────────── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-hidden animate-fadeIn">
+          <div className="w-full max-w-2xl max-h-[85vh] rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scaleUp">
+            {/* Modal Header (Fixed at top) */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#111622]">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
                   <MdPointOfSale size={20} />
@@ -456,8 +456,10 @@ export const POSTerminalsManager: React.FC = () => {
               </button>
             </div>
 
-            {/* Modal Body */}
-            <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-5 space-y-5">
+            {/* Modal Form with Scrollable Content & Docked Footer */}
+            <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              {/* Scrollable Form Body */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4 sm:space-y-5">
               {/* Basic Counter Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="space-y-1">
@@ -647,8 +649,10 @@ export const POSTerminalsManager: React.FC = () => {
                 </div>
               </div>
 
-              {/* Submit Buttons */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              </div>
+
+              {/* Submit Buttons (Fixed at bottom) */}
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111622]/90 flex items-center justify-end gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
