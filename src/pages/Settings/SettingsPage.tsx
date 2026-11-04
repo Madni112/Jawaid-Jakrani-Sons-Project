@@ -101,7 +101,7 @@ interface TabItem {
   icon: React.ElementType;
 }
 
-const SETTINGS_TABS: TabItem[] = [
+const BASE_SETTINGS_TABS: TabItem[] = [
   {
     id: 'profile',
     label: 'Profile',
@@ -385,6 +385,17 @@ const SettingsPage: React.FC = () => {
   
   // AL Muhammadi Factory Reset State
   const isAlmPortal = detectIsAlm();
+  const settingsTabsList = isAlmPortal
+    ? [
+        ...BASE_SETTINGS_TABS,
+        {
+          id: 'alm_factory_reset',
+          label: 'Factory Reset ERP',
+          description: 'Wipe all data and reset to 0',
+          icon: LuTrash2,
+        },
+      ]
+    : BASE_SETTINGS_TABS;
   const [showFactoryResetModal, setShowFactoryResetModal] = useState(false);
   const [resetEnteredPassword, setResetEnteredPassword] = useState('');
   const [resetConfirmPhrase, setResetConfirmPhrase] = useState('');
@@ -1082,7 +1093,7 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <nav className="flex md:flex-col gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              {SETTINGS_TABS.map((tab) => {
+              {settingsTabsList.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
                 return (
@@ -2386,6 +2397,78 @@ const SettingsPage: React.FC = () => {
               </div>
             );
           })()}
+
+          
+          {/* TAB: AL MUHAMMADI FACTORY RESET ERP */}
+          {activeTab === 'alm_factory_reset' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-red-300 dark:border-red-900/60 p-6 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-red-100 dark:border-red-900/30">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl shrink-0">
+                      <LuShieldAlert />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-black text-red-700 dark:text-red-400">
+                          Factory Reset ERP & Wipe Transactions
+                        </h2>
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-200 dark:border-red-800">
+                          ALM Portal Exclusive
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Wipes all transactional data (sales, purchases, challans, vouchers, opening stock) and sets all physical stock and ledger balances to 0.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEnteredPassword('');
+                      setResetConfirmPhrase('');
+                      setResetWipeMaster(false);
+                      setShowFactoryResetModal(true);
+                    }}
+                    className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-red-600/30 cursor-pointer shrink-0"
+                  >
+                    <LuTrash2 size={16} />
+                    <span>Launch Factory Reset Modal</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                  <div className="p-4 rounded-xl bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/40 space-y-1">
+                    <span className="font-bold text-xs text-red-800 dark:text-red-300 block">
+                      1. Developer Password Required
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Cannot be executed accidentally. Must provide the Master Authorization Password managed in <code>/dev/master</code>.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 space-y-1">
+                    <span className="font-bold text-xs text-emerald-800 dark:text-emerald-300 block">
+                      2. Automatic Dual-Backup
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Instant browser download of JSON file + permanent immutable snapshot uploaded to <code>/dev/master/reset-backups</code>.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">
+                      3. Preserves Item Registry
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Product names, categories, and customers are safely preserved by default so you don't have to re-enter catalog setups.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* TAB 3: CUSTOMER CREDIT LIMITS */}
           {activeTab === 'credit_limits' && (() => {
