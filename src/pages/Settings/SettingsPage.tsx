@@ -1551,467 +1551,414 @@ const SettingsPage: React.FC = () => {
               {/* SECTION B: SIDEBAR FONT & ICON COLOR */}
               {themeSubTab === 'sidebar' && (
                 <div className="space-y-6 animate-fadeIn">
-                  {/* SIDEBAR BACKGROUND STYLE PICKER */}
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
+                  {/* LIVE INTERACTIVE SIDEBAR & WORKSPACE CONFIGURATOR STUDIO */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-6 shadow-sm">
+                    {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
                       <div>
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                          {isRTL ? "سائیڈبار کا پس منظر انداز" : "Sidebar Background Theme"}
-                        </h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {isRTL ? "سائیڈبار کا بنیادی پس منظر منتخب کریں (سفید، نیوی، زمرد، یا کلاسک چارکول)" : "Select the base background for the left navigation sidebar."}
-                        </p>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-2xs">
+                            <LuSparkles size={16} />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                              {isRTL ? "سائیڈبار تھیم و لے آؤٹ اسٹوڈیو" : "Sidebar Theme & Layout Studio"}
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {isRTL
+                                ? "انٹرایکٹو پریویو میں براہ راست تھیم اور اسٹائل تبدیل کریں اور فوری اثر دیکھیں۔"
+                                : "Interactive configurator. Select your background theme and sidebar style directly inside the live preview."}
+                            </p>
+                          </div>
+                        </div>
                       </div>
 
-                      <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
-                        Current: {sidebarThemeMode}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                      {[
-                        { id: 'light', name: 'Clean White', bg: '#FFFFFF', border: 'border-slate-300', text: 'text-slate-900', badge: 'Modern Minimal' },
-                        { id: 'navy', name: 'Executive Navy', bg: '#0F172A', border: 'border-slate-700', text: 'text-white', badge: 'Corporate' },
-                        { id: 'emerald', name: 'Rich Emerald', bg: '#0A1A18', border: 'border-emerald-900', text: 'text-white', badge: 'Heritage' },
-                        { id: 'charcoal', name: 'Warm Charcoal', bg: '#1C1917', border: 'border-stone-700', text: 'text-white', badge: 'Artisan' },
-                        { id: 'dark', name: 'Classic Dark', bg: '#0B0F17', border: 'border-slate-800', text: 'text-white', badge: 'Original' },
-                      ].map((item) => {
-                        const isSelected = sidebarThemeMode === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => handleSidebarThemeChange(item.id as SidebarThemeMode)}
-                            className={`relative p-3.5 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col items-center justify-between text-center gap-2 group ${
-                              isSelected
-                                ? 'ring-3 ring-blue-500/30 border-blue-600 shadow-md scale-102'
-                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-xs'
-                            }`}
-                            style={{ backgroundColor: item.bg }}
-                          >
-                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10" style={{ color: item.id === 'light' ? '#0F172A' : '#FFFFFF' }}>
-                              {item.badge}
-                            </span>
-                            <span className={`text-xs font-bold ${item.text}`}>
-                              {item.name}
-                            </span>
-                            {isSelected && (
-                              <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shadow-xs">
-                                ✓
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* LEFT SIDEBAR STYLE (FLOATING VS CLASSIC) */}
-                    <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                            <LuLayers size={14} className="text-blue-500" />
-                            <span>{isRTL ? "سائیڈبار کا اسٹرکچرل اسٹائل" : "Left Sidebar Style"}</span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                            {isRTL ? "فلوٹنگ کارڈ (مع راؤنڈ کونے اور شیڈو) یا کلاسک فل ایج اسٹائل میں سے منتخب کریں۔" : "Choose between detached floating island card or flush edge-to-edge ERP interface."}
-                          </p>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 self-start sm:self-auto">
-                          Active: {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+                          Theme: {sidebarThemeMode}
+                        </span>
+                        <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 uppercase">
+                          {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
                         </span>
                       </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => handleSetSidebarLayout('floating')}
-                          className={`p-3.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between ${
-                            sidebarLayout === 'floating'
-                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
-                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full mb-1">
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                              <span>🚀</span>
-                              <span>{isRTL ? "فلوٹنگ کارڈ" : "Floating Card"}</span>
-                            </span>
-                            {sidebarLayout === 'floating' && (
-                              <LuCheck className="text-blue-600 dark:text-blue-400 text-sm stroke-[3]" />
-                            )}
-                          </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                            {isRTL ? "گول کونے (rounded-2xl) مع حاشیائی شیڈو۔ پرتعیش اور جدید شکل۔" : "Rounded detached island card with ambient elevation and soft shadow."}
-                          </p>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleSetSidebarLayout('classic')}
-                          className={`p-3.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between ${
-                            sidebarLayout === 'classic'
-                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
-                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full mb-1">
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                              <span>🏛️</span>
-                              <span>{isRTL ? "کلاسک ایج" : "Classic Edge"}</span>
-                            </span>
-                            {sidebarLayout === 'classic' && (
-                              <LuCheck className="text-blue-600 dark:text-blue-400 text-sm stroke-[3]" />
-                            )}
-                          </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                            {isRTL ? "اسکرین کی دیوار سے جڑی ہوئی روایتی مکمل ایج ٹو ایج سائیڈبار۔" : "Original edge-to-edge flush sidebar attached directly to the screen wall."}
-                          </p>
-                        </button>
-                      </div>
                     </div>
 
-                    {/* LIVE ERP INTERFACE & SIDEBAR PREVIEW DOCK */}
-                    <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                              <LuEye size={14} />
-                            </div>
-                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                              {isRTL ? "براہ راست ای آر پی سائیڈبار پریویو" : "Live ERP Sidebar & Layout Preview"}
-                            </h4>
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                              Real-Time
-                            </span>
+                    {/* LIVE STUDIO SIMULATION FRAME */}
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 text-slate-100 shadow-lg overflow-hidden">
+                      {/* Top Chrome Bar */}
+                      <div className="px-4 py-2.5 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                            {isRTL
-                              ? "اپنے منتخب کردہ تھیم، سائیڈبار اسٹائل (فلوٹنگ یا کلاسک) اور کھلنے یا بند ہونے کی حالت کا فوری جائزہ لیں۔"
-                              : "Simulates the live ERP interface with your chosen theme, sidebar style (floating vs classic), and opened vs closed drawer state."}
-                          </p>
+                          <span className="text-[11px] font-mono text-slate-400 ml-2 hidden sm:inline">
+                            Live ERP Workspace Preview & Configurator
+                          </span>
                         </div>
 
-                        {/* OPENED / CLOSED PREVIEW TOGGLES */}
-                        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 self-start sm:self-auto">
+                        {/* OPENED / CLOSED PREVIEW TOGGLES IN CHROME */}
+                        <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-slate-800/90 border border-slate-700/80">
                           <button
                             type="button"
                             onClick={() => setSidebarPreviewMode('opened')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer ${
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150 cursor-pointer ${
                               sidebarPreviewMode === 'opened'
-                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'text-slate-400 hover:text-white'
                             }`}
                           >
-                            <LuPanelLeftOpen size={14} />
-                            <span>{isRTL ? "کھلی حالت (Expanded)" : "Opened View"}</span>
+                            <LuPanelLeftOpen size={13} />
+                            <span>{isRTL ? "کھلی حالت" : "Opened View"}</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => setSidebarPreviewMode('closed')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer ${
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150 cursor-pointer ${
                               sidebarPreviewMode === 'closed'
-                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'text-slate-400 hover:text-white'
                             }`}
                           >
-                            <LuPanelLeftClose size={14} />
-                            <span>{isRTL ? "بند حالت (Compact)" : "Closed View"}</span>
+                            <LuPanelLeftClose size={13} />
+                            <span>{isRTL ? "بند حالت" : "Closed View"}</span>
                           </button>
                         </div>
                       </div>
 
-                      {/* SIMULATION CANVAS FRAME */}
-                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 text-slate-100 shadow-inner overflow-hidden">
-                        {/* Browser-style Top Bar */}
-                        <div className="px-4 py-2.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
-                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
-                            </div>
-                            <span className="text-[11px] font-mono text-slate-400 ml-2 hidden sm:inline">
-                              jjs.noorhorizontechnologies.com/dashboard
-                            </span>
-                          </div>
+                      {/* Interactive Canvas Workspace */}
+                      {(() => {
+                        // Dynamic Theme Colors
+                        const isLight = sidebarThemeMode === 'light';
+                        const sidebarBg =
+                          sidebarThemeMode === 'light' ? '#FFFFFF' :
+                          sidebarThemeMode === 'navy' ? '#0F172A' :
+                          sidebarThemeMode === 'emerald' ? '#0A1A18' :
+                          sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17';
 
-                          <div className="flex items-center gap-2 text-[10px] font-mono">
-                            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700">
-                              Style: {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700 uppercase">
-                              Theme: {sidebarThemeMode}
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700/60">
-                              {sidebarPreviewMode === 'opened' ? 'Opened View' : 'Closed View'}
-                            </span>
-                          </div>
-                        </div>
+                        const sidebarTextColor = isLight ? '#0F172A' : '#FFFFFF';
+                        const sidebarSubTextColor = isLight ? '#64748B' : '#94A3B8';
+                        const sidebarBorderColor = isLight ? '#E2E8F0' : '#1E293B';
 
-                        {/* Interactive Canvas Workspace */}
-                        {(() => {
-                          // Dynamic Theme Colors
-                          const isLight = sidebarThemeMode === 'light';
-                          const sidebarBg =
-                            sidebarThemeMode === 'light' ? '#FFFFFF' :
-                            sidebarThemeMode === 'navy' ? '#0F172A' :
-                            sidebarThemeMode === 'emerald' ? '#0A1A18' :
-                            sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17';
-
-                          const sidebarTextColor = isLight ? '#0F172A' : '#FFFFFF';
-                          const sidebarSubTextColor = isLight ? '#64748B' : '#94A3B8';
-                          const sidebarBorderColor = isLight ? '#E2E8F0' : '#1E293B';
-                          const sidebarItemHover = isLight ? '#F1F5F9' : 'rgba(255,255,255,0.06)';
-
-                          return (
-                            <div className="relative flex h-[350px] overflow-hidden bg-slate-100 dark:bg-[#070A0F] text-slate-900 dark:text-slate-100 transition-colors">
-                              {/* SIMULATED SIDEBAR */}
-                              <div
-                                style={{
-                                  backgroundColor: sidebarBg,
-                                  color: sidebarTextColor,
-                                  borderColor: sidebarBorderColor,
-                                }}
-                                className={`transition-all duration-300 flex flex-col justify-between shrink-0 select-none ${
-                                  sidebarLayout === 'floating'
-                                    ? 'm-2.5 rounded-2xl border shadow-xl'
-                                    : 'm-0 rounded-none border-r border-t-0 border-b-0 border-l-0 shadow-sm'
-                                } ${
-                                  sidebarPreviewMode === 'opened'
-                                    ? 'w-48 sm:w-56 p-3.5'
-                                    : 'w-14 sm:w-16 p-2 items-center'
-                                }`}
-                              >
-                                {/* Top Header */}
-                                <div>
-                                  {sidebarPreviewMode === 'opened' ? (
-                                    <div className="flex items-center gap-2.5 pb-3 mb-3 border-b" style={{ borderColor: sidebarBorderColor }}>
-                                      <div
-                                        className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-xs"
-                                        style={{ backgroundColor: selectedAccentColor }}
-                                      >
-                                        JJS
+                        return (
+                          <div className="relative flex flex-col md:flex-row min-h-[420px] overflow-hidden bg-slate-100 dark:bg-[#070A0F] text-slate-900 dark:text-slate-100 transition-colors">
+                            {/* SIMULATED SIDEBAR */}
+                            <div
+                              style={{
+                                backgroundColor: sidebarBg,
+                                color: sidebarTextColor,
+                                borderColor: sidebarBorderColor,
+                              }}
+                              className={`transition-all duration-300 flex flex-col justify-between shrink-0 select-none ${
+                                sidebarLayout === 'floating'
+                                  ? 'm-2.5 rounded-2xl border shadow-xl'
+                                  : 'm-0 rounded-none border-r border-t-0 border-b-0 border-l-0 shadow-sm'
+                              } ${
+                                sidebarPreviewMode === 'opened'
+                                  ? 'w-full md:w-52 p-3.5'
+                                  : 'w-full md:w-16 p-2 items-center'
+                              }`}
+                            >
+                              {/* Top Header */}
+                              <div>
+                                {sidebarPreviewMode === 'opened' ? (
+                                  <div className="flex items-center gap-2.5 pb-3 mb-3 border-b" style={{ borderColor: sidebarBorderColor }}>
+                                    <div
+                                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-xs"
+                                      style={{ backgroundColor: selectedAccentColor }}
+                                    >
+                                      JJS
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-black tracking-wide truncate">
+                                        JAWAID JAKWANI
                                       </div>
-                                      <div className="min-w-0 flex-1">
-                                        <div className="text-xs font-black tracking-wide truncate">
-                                          JAWAID JAKWANI
-                                        </div>
-                                        <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
-                                          Cloth ERP
-                                        </div>
+                                      <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
+                                        Cloth ERP
                                       </div>
-                                    </div>
-                                  ) : (
-                                    <div className="pb-3 mb-3 border-b flex justify-center w-full" style={{ borderColor: sidebarBorderColor }}>
-                                      <div
-                                        className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shadow-xs"
-                                        style={{ backgroundColor: selectedAccentColor }}
-                                      >
-                                        JJS
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Navigation Menu Mockup */}
-                                  <div className="space-y-1">
-                                    {/* Item 1: Dashboard (Active) */}
-                                    <div
-                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold transition ${
-                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                      }`}
-                                      style={{
-                                        backgroundColor: isLight ? `${selectedAccentColor}18` : `${selectedAccentColor}28`,
-                                        color: isLight ? selectedAccentColor : '#FFFFFF',
-                                        border: `1px solid ${selectedAccentColor}40`,
-                                      }}
-                                    >
-                                      <LuLayoutDashboard size={16} style={{ color: selectedAccentColor }} className="shrink-0" />
-                                      {sidebarPreviewMode === 'opened' && (
-                                        <span className="truncate">Dashboard</span>
-                                      )}
-                                    </div>
-
-                                    {/* Item 2: POS */}
-                                    <div
-                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                      }`}
-                                      style={{ color: sidebarSubTextColor }}
-                                    >
-                                      <LuReceipt size={16} className="shrink-0" />
-                                      {sidebarPreviewMode === 'opened' && (
-                                        <span className="truncate">Point of Sale</span>
-                                      )}
-                                    </div>
-
-                                    {/* Item 3: Inventory */}
-                                    <div
-                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                      }`}
-                                      style={{ color: sidebarSubTextColor }}
-                                    >
-                                      <LuPackage size={16} className="shrink-0" />
-                                      {sidebarPreviewMode === 'opened' && (
-                                        <span className="truncate">Inventory</span>
-                                      )}
-                                    </div>
-
-                                    {/* Item 4: Accounts */}
-                                    <div
-                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                      }`}
-                                      style={{ color: sidebarSubTextColor }}
-                                    >
-                                      <LuCreditCard size={16} className="shrink-0" />
-                                      {sidebarPreviewMode === 'opened' && (
-                                        <span className="truncate">Accounts</span>
-                                      )}
-                                    </div>
-
-                                    {/* Item 5: Customers */}
-                                    <div
-                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                      }`}
-                                      style={{ color: sidebarSubTextColor }}
-                                    >
-                                      <LuUsers size={16} className="shrink-0" />
-                                      {sidebarPreviewMode === 'opened' && (
-                                        <span className="truncate">Customers</span>
-                                      )}
                                     </div>
                                   </div>
-                                </div>
-
-                                {/* Bottom Profile / Logout */}
-                                <div className="pt-3 border-t" style={{ borderColor: sidebarBorderColor }}>
-                                  {sidebarPreviewMode === 'opened' ? (
-                                    <div className="flex items-center justify-between text-[11px]">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <div
-                                          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                                          style={{ backgroundColor: selectedAccentColor }}
-                                        >
-                                          SA
-                                        </div>
-                                        <div className="truncate font-bold">Super Admin</div>
-                                      </div>
-                                      <LuLogOut size={13} style={{ color: sidebarSubTextColor }} />
+                                ) : (
+                                  <div className="pb-3 mb-3 border-b flex justify-center w-full" style={{ borderColor: sidebarBorderColor }}>
+                                    <div
+                                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shadow-xs"
+                                      style={{ backgroundColor: selectedAccentColor }}
+                                    >
+                                      JJS
                                     </div>
-                                  ) : (
-                                    <div className="flex justify-center">
+                                  </div>
+                                )}
+
+                                {/* Navigation Menu Mockup */}
+                                <div className="space-y-1">
+                                  {/* Item 1: Dashboard (Active) */}
+                                  <div
+                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold transition ${
+                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                    }`}
+                                    style={{
+                                      backgroundColor: isLight ? `${selectedAccentColor}18` : `${selectedAccentColor}28`,
+                                      color: isLight ? selectedAccentColor : '#FFFFFF',
+                                      border: `1px solid ${selectedAccentColor}40`,
+                                    }}
+                                  >
+                                    <LuLayoutDashboard size={16} style={{ color: selectedAccentColor }} className="shrink-0" />
+                                    {sidebarPreviewMode === 'opened' && (
+                                      <span className="truncate">Dashboard</span>
+                                    )}
+                                  </div>
+
+                                  {/* Item 2: POS */}
+                                  <div
+                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                    }`}
+                                    style={{ color: sidebarSubTextColor }}
+                                  >
+                                    <LuReceipt size={16} className="shrink-0" />
+                                    {sidebarPreviewMode === 'opened' && (
+                                      <span className="truncate">Point of Sale</span>
+                                    )}
+                                  </div>
+
+                                  {/* Item 3: Inventory */}
+                                  <div
+                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                    }`}
+                                    style={{ color: sidebarSubTextColor }}
+                                  >
+                                    <LuPackage size={16} className="shrink-0" />
+                                    {sidebarPreviewMode === 'opened' && (
+                                      <span className="truncate">Inventory</span>
+                                    )}
+                                  </div>
+
+                                  {/* Item 4: Accounts */}
+                                  <div
+                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                    }`}
+                                    style={{ color: sidebarSubTextColor }}
+                                  >
+                                    <LuCreditCard size={16} className="shrink-0" />
+                                    {sidebarPreviewMode === 'opened' && (
+                                      <span className="truncate">Accounts</span>
+                                    )}
+                                  </div>
+
+                                  {/* Item 5: Customers */}
+                                  <div
+                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                    }`}
+                                    style={{ color: sidebarSubTextColor }}
+                                  >
+                                    <LuUsers size={16} className="shrink-0" />
+                                    {sidebarPreviewMode === 'opened' && (
+                                      <span className="truncate">Customers</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Bottom Profile / Logout */}
+                              <div className="pt-3 border-t mt-3" style={{ borderColor: sidebarBorderColor }}>
+                                {sidebarPreviewMode === 'opened' ? (
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <div className="flex items-center gap-2 min-w-0">
                                       <div
-                                        className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                                        className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
                                         style={{ backgroundColor: selectedAccentColor }}
                                       >
                                         SA
                                       </div>
+                                      <div className="truncate font-bold">Super Admin</div>
                                     </div>
-                                  )}
+                                    <LuLogOut size={13} style={{ color: sidebarSubTextColor }} />
+                                  </div>
+                                ) : (
+                                  <div className="flex justify-center">
+                                    <div
+                                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                                      style={{ backgroundColor: selectedAccentColor }}
+                                    >
+                                      SA
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* SIMULATED DASHBOARD WORKSPACE WITH EMBEDDED THEME & STYLE CONTROLS */}
+                            <div className="flex-1 flex flex-col p-3.5 sm:p-5 overflow-y-auto bg-slate-50 dark:bg-[#0B0F17] min-w-0 space-y-4">
+                              {/* Sub-header inside canvas */}
+                              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                                <div>
+                                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                    <LuPalette size={14} style={{ color: selectedAccentColor }} />
+                                    <span>{isRTL ? "براہ راست کنٹرول: سائیڈبار کا رنگ اور اسٹائل تبدیل کریں" : "Live Studio Controls: Click Any Option to Transform Sidebar"}</span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    {isRTL
+                                      ? "تبدیلیاں فوری طور پر آپ کے ای آر پی اور بائیں جانب پریویو سائیڈبار پر لاگو ہوتی ہیں۔"
+                                      : "Changes apply instantly to your application and the preview sidebar on the left."}
+                                  </p>
+                                </div>
+                                <span
+                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase hidden sm:inline-block"
+                                  style={{
+                                    backgroundColor: `${selectedAccentColor}18`,
+                                    color: selectedAccentColor,
+                                  }}
+                                >
+                                  Instant Live Apply
+                                </span>
+                              </div>
+
+                              {/* CONTROL 1: SIDEBAR BACKGROUND THEME */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                                    {isRTL ? "۱۔ سائیڈبار کا پس منظر منتخب کریں" : "1. Select Sidebar Background Theme"}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500 uppercase">
+                                    Current: {sidebarThemeMode}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                  {[
+                                    { id: 'light', name: 'Clean White', bg: '#FFFFFF', text: 'text-slate-900', badge: 'Minimal' },
+                                    { id: 'navy', name: 'Executive Navy', bg: '#0F172A', text: 'text-white', badge: 'Corporate' },
+                                    { id: 'emerald', name: 'Rich Emerald', bg: '#0A1A18', text: 'text-white', badge: 'Heritage' },
+                                    { id: 'charcoal', name: 'Warm Charcoal', bg: '#1C1917', text: 'text-white', badge: 'Artisan' },
+                                    { id: 'dark', name: 'Classic Dark', bg: '#0B0F17', text: 'text-white', badge: 'Original' },
+                                  ].map((item) => {
+                                    const isSelected = sidebarThemeMode === item.id;
+                                    return (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => handleSidebarThemeChange(item.id as SidebarThemeMode)}
+                                        className={`relative p-2.5 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col items-center justify-between text-center gap-1.5 group ${
+                                          isSelected
+                                            ? 'ring-2 ring-blue-500 border-blue-500 shadow-md scale-102'
+                                            : 'border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-500 hover:shadow-2xs'
+                                        }`}
+                                        style={{ backgroundColor: item.bg }}
+                                      >
+                                        <span
+                                          className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10"
+                                          style={{ color: item.id === 'light' ? '#0F172A' : '#FFFFFF' }}
+                                        >
+                                          {item.badge}
+                                        </span>
+                                        <span className={`text-[11px] font-bold ${item.text}`}>
+                                          {item.name}
+                                        </span>
+                                        {isSelected && (
+                                          <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] shadow-xs">
+                                            ✓
+                                          </span>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               </div>
 
-                              {/* SIMULATED DASHBOARD WORKSPACE */}
-                              <div className="flex-1 flex flex-col p-3 overflow-hidden min-w-0">
-                                {/* Simulated Top Navbar */}
-                                <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-2xs backdrop-blur-xs mb-3">
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      className="w-2 h-2 rounded-full shrink-0"
-                                      style={{ backgroundColor: selectedAccentColor }}
-                                    />
-                                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                                      UJC • Portal Active
-                                    </span>
-                                  </div>
-
-                                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-400 font-mono">
-                                    <LuSearch size={11} />
-                                    <span>Search sales, stock, ledgers...</span>
-                                  </div>
-
-                                  <div className="flex items-center gap-2 text-[11px]">
-                                    <span
-                                      className="px-2 py-0.5 rounded-md font-bold text-[10px] text-white shadow-2xs"
-                                      style={{ backgroundColor: selectedAccentColor }}
-                                    >
-                                      + New Sale
-                                    </span>
-                                    <span className="text-slate-400 text-[10px] hidden md:inline">06:22 PM</span>
-                                  </div>
+                              {/* CONTROL 2: LEFT SIDEBAR STYLE */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                                    {isRTL ? "۲۔ سائیڈبار کا لے آؤٹ اسٹائل منتخب کریں" : "2. Select Left Sidebar Style"}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500">
+                                    Active: {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
+                                  </span>
                                 </div>
 
-                                {/* Simulated Main Content Canvas */}
-                                <div className="flex-1 flex flex-col justify-between overflow-hidden">
-                                  <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div>
-                                        <div className="text-xs font-bold text-slate-900 dark:text-white">
-                                          Executive Management Dashboard
-                                        </div>
-                                        <div className="text-[10px] text-slate-400">
-                                          Real-time fiscal monitoring & operational intelligence
-                                        </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetSidebarLayout('floating')}
+                                    className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-start gap-2.5 ${
+                                      sidebarLayout === 'floating'
+                                        ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/70 dark:bg-blue-950/30 shadow-xs'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700'
+                                    }`}
+                                  >
+                                    <span className="text-xl shrink-0">🚀</span>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between mb-0.5">
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                          {isRTL ? "فلوٹنگ کارڈ" : "Floating Card"}
+                                        </span>
+                                        {sidebarLayout === 'floating' && (
+                                          <LuCheck size={14} className="text-blue-600 dark:text-blue-400 stroke-[3]" />
+                                        )}
                                       </div>
+                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                                        {isRTL
+                                          ? "گول کونے (rounded-2xl) مع حاشیائی شیڈو۔ پرتعیش اور جدید شکل۔"
+                                          : "Rounded detached island card with ambient elevation and modern border."}
+                                      </p>
+                                    </div>
+                                  </button>
 
-                                      <span
-                                        className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase"
-                                        style={{
-                                          backgroundColor: `${selectedAccentColor}15`,
-                                          color: selectedAccentColor,
-                                        }}
-                                      >
-                                        Live Status
-                                      </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetSidebarLayout('classic')}
+                                    className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-start gap-2.5 ${
+                                      sidebarLayout === 'classic'
+                                        ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/70 dark:bg-blue-950/30 shadow-xs'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700'
+                                    }`}
+                                  >
+                                    <span className="text-xl shrink-0">🏛️</span>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between mb-0.5">
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                          {isRTL ? "کلاسک ایج" : "Classic Edge"}
+                                        </span>
+                                        {sidebarLayout === 'classic' && (
+                                          <LuCheck size={14} className="text-blue-600 dark:text-blue-400 stroke-[3]" />
+                                        )}
+                                      </div>
+                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                                        {isRTL
+                                          ? "اسکرین کی دیوار سے جڑی ہوئی روایتی مکمل ایج ٹو ایج سائیڈبار۔"
+                                          : "Original edge-to-edge flush sidebar attached directly to the screen wall."}
+                                      </p>
                                     </div>
+                                  </button>
+                                </div>
+                              </div>
 
-                                    {/* 4 Stats Cards */}
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-                                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
-                                        <div className="text-[9px] uppercase font-bold text-slate-400">Today Sales</div>
-                                        <div className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5">Rs. 185,400</div>
-                                      </div>
-                                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
-                                        <div className="text-[9px] uppercase font-bold text-slate-400">Purchases</div>
-                                        <div className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5">Rs. 74,200</div>
-                                      </div>
-                                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
-                                        <div className="text-[9px] uppercase font-bold text-slate-400">Stock Assets</div>
-                                        <div className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5">4,820 Pcs</div>
-                                      </div>
-                                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
-                                        <div className="text-[9px] uppercase font-bold text-slate-400">Receivables</div>
-                                        <div className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5">Rs. 320,000</div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Simulated Ledger Table Row Preview */}
-                                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 text-[10px]">
-                                    <div className="flex items-center justify-between text-slate-400 pb-1.5 border-b border-slate-100 dark:border-slate-800/80 font-bold uppercase text-[9px]">
-                                      <span>Recent Transaction</span>
-                                      <span>Amount</span>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1 text-slate-700 dark:text-slate-300">
-                                      <span className="truncate">INV-2026-0891 • Cotton Lawn Roll</span>
-                                      <span className="font-bold">Rs. 12,500</span>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1 text-slate-700 dark:text-slate-300">
-                                      <span className="truncate">INV-2026-0892 • Premium Linen 50m</span>
-                                      <span className="font-bold">Rs. 45,000</span>
-                                    </div>
-                                  </div>
+                              {/* CONTROL 3: QUICK STATUS PREVIEW BAR */}
+                              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 flex-wrap gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                  <span>
+                                    Simulating <strong>{sidebarPreviewMode === 'opened' ? 'Expanded' : 'Compact'}</strong> sidebar view
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 font-mono text-[10px]">
+                                  <span>Accent:</span>
+                                  <span
+                                    className="w-3 h-3 rounded-full inline-block border border-black/20"
+                                    style={{ backgroundColor: selectedAccentColor }}
+                                  />
+                                  <span>{selectedAccentColor.toUpperCase()}</span>
                                 </div>
                               </div>
                             </div>
-                          );
-                        })()}
-                      </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
