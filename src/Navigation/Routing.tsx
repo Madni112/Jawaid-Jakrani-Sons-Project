@@ -3,6 +3,7 @@ import { Route, Routes, useLocation, Navigate, useParams } from 'react-router-do
 import Loader from '../common/Loader';
 import SignIn from '../pages/Authentication/SignIn';
 import DeveloperDashboard from '../pages/Developer/DeveloperDashboard';
+import ErpResetBackupsPage from '../pages/Developer/ErpResetBackupsPage';
 import DefaultLayout from '../layout/DefaultLayout';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NotFound from '../pages/Error/NotFound';
@@ -121,6 +122,7 @@ function Navigation() {
 
       {/* 3. SUPER ADMIN & EMPLOYEE ROLE MANAGEMENT CONSOLE */}
       <Route path="/dev/master" element={<DeveloperDashboard />} />
+      <Route path="/dev/master/reset-backups" element={<ErpResetBackupsPage />} />
       <Route path="/Administration/Roles" element={<DeveloperDashboard />} />
       <Route path="/Administration/Users" element={<DeveloperDashboard />} />
 

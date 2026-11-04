@@ -673,6 +673,8 @@ const DeveloperDashboard: React.FC = () => {
 
   // Master System Permissions State
   const [systemConfig, setSystemConfig] = useState<SystemMasterConfig>(DEFAULT_SYSTEM_CONFIG);
+  const [showAlmResetPw, setShowAlmResetPw] = useState(false);
+  const [almResetPwInput, setAlmResetPwInput] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [userWhitelistSearch, setUserWhitelistSearch] = useState('');
 
@@ -933,6 +935,7 @@ const DeveloperDashboard: React.FC = () => {
       fetchSalesmenData();
       fetchSystemMasterConfig().then(cfg => {
         setSystemConfig(cfg);
+        setAlmResetPwInput(cfg.alm_reset_password || 'ALM-RESET-MASTER-2026');
       });
     }
   }, [isDevAuthorized]);
@@ -2944,6 +2947,77 @@ const DeveloperDashboard: React.FC = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+
+              {/* CARD 4: AL MUHAMMADI ERP FACTORY RESET SECURITY & ARCHIVES */}
+              <div className="bg-white dark:bg-boxdark rounded-2xl border border-red-200 dark:border-red-900/50 p-6 shadow-default space-y-5 lg:col-span-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stroke dark:border-strokedark">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 text-xl">
+                      <MdSecurity />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm text-black dark:text-white">AL Muhammadi ERP Factory Reset Governance</h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                          High Security
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400">
+                        Manages the authorization master password required to wipe transactions and view saved snapshots.
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    href="/dev/master/reset-backups"
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer shrink-0"
+                  >
+                    <MdCloudDone size={16} />
+                    <span>View Reset Backups Vault</span>
+                  </a>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-black dark:text-white">
+                      Authorization Master Password for ERP Reset
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type={showAlmResetPw ? 'text' : 'password'}
+                        value={almResetPwInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAlmResetPwInput(val);
+                          setSystemConfig((prev) => ({ ...prev, alm_reset_password: val }));
+                        }}
+                        placeholder="Enter Master Reset Password"
+                        className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-red-500 focus:outline-hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAlmResetPw((p) => !p)}
+                        className="px-3 rounded-xl border border-stroke dark:border-strokedark text-gray-500 hover:text-black dark:hover:text-white transition cursor-pointer"
+                        title={showAlmResetPw ? 'Hide password' : 'Show password'}
+                      >
+                        <MdVisibility />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-gray-400">
+                      Settings in AL Muhammadi will strictly verify against this password before allowing any database wipe.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50/30 dark:bg-red-950/20 space-y-1.5 text-xs text-red-900 dark:text-red-300">
+                    <span className="font-bold flex items-center gap-1.5">
+                      <MdInfoOutline size={15} /> Safety Guarantee & Automation
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Whenever an authorized user executes a Factory Reset from Settings, the system automatically captures a full Excel & JSON snapshot, triggers an instant browser download, and uploads a permanent copy to <strong>/dev/master/reset-backups</strong>.
+                    </p>
+                  </div>
+                </div>
               </div>
 
             </div>

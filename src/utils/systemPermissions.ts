@@ -7,6 +7,7 @@ export interface SystemMasterConfig {
   allow_credit_limit_super_admin: boolean; // Can Super Admin edit credit limits
   credit_limit_allowed_users: string[]; // Specific employee emails/slugs allowed to edit credit limits
   allow_negative_stock: boolean; // Whether stock is permitted to go below 0 (negative)
+  alm_reset_password?: string; // Master authorization password for Factory Resetting AL Muhammadi ERP
 }
 
 export const DEFAULT_SYSTEM_CONFIG: SystemMasterConfig = {
@@ -16,6 +17,7 @@ export const DEFAULT_SYSTEM_CONFIG: SystemMasterConfig = {
   allow_credit_limit_super_admin: true,
   credit_limit_allowed_users: [],
   allow_negative_stock: true, // Default: true (minus allowed)
+  alm_reset_password: 'ALM-RESET-MASTER-2026', // Default developer master reset password
 };
 
 const LOCAL_STORAGE_KEY = 'erp_system_master_permissions_cache';
