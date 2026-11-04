@@ -466,12 +466,6 @@ const Header = (props: {
                 <span>{isRTL ? "ڈیش بورڈ" : "Dashboard"}</span>
               </Link>
 
-              {/* Company / Settings Badge */}
-              <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-[11px] font-extrabold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
-                <LuSlidersHorizontal size={13} className="text-primary" />
-                <span className="uppercase tracking-wider">{isRTL ? "سیٹنگز" : "Settings"}</span>
-              </div>
-
               {/* 6 Tabs Pill Selector */}
               <div className="flex-1 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-0.5 min-w-0">
                 {SETTINGS_NAV_TABS.map((tab) => {
@@ -482,7 +476,7 @@ const Header = (props: {
                       key={tab.id}
                       type="button"
                       onClick={() => handleSelectSettingsTab(tab.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer shrink-0 select-none ${
+                      className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer shrink-0 select-none ${
                         isActive
                           ? 'bg-primary text-white shadow-sm ring-1 ring-primary/40'
                           : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'

@@ -2973,7 +2973,7 @@ const SettingsPage: React.FC = () => {
           {activeTab === 'security_devices' && (
             <div className="space-y-6 animate-fadeIn">
               {/* Top Security Banner */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-linear-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
                 <div className="flex items-start gap-4 z-10">
                   <div className="w-13 h-13 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl shrink-0 shadow-inner">
                     <LuShieldCheck />
