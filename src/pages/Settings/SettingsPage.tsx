@@ -1048,6 +1048,9 @@ const SettingsPage: React.FC = () => {
   const portalName = brand.portalName;
   const portalCode = brand.code;
 
+  const activeTabObj = settingsTabsList.find((t) => t.id === activeTab);
+  const currentTabLabel = activeTabObj ? activeTabObj.label : 'Profile';
+
   const activeAppliedPreset = PRESET_THEME_COLORS.find(
     (c) => c.hex.toLowerCase() === appliedAccentColor.toLowerCase()
   );
@@ -1060,30 +1063,24 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 animate-fadeIn">
-      {/* Top Page Header with Return Button */}
-      <div className="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] text-slate-600 dark:text-slate-300 hover:text-primary hover:border-primary/40 dark:hover:border-primary/40 transition shadow-2xs flex items-center gap-2 cursor-pointer text-xs font-bold shrink-0"
-            title="Return to Dashboard"
-          >
-            <LuArrowLeft size={16} />
-            <span className="hidden sm:inline">Back to Dashboard</span>
-          </button>
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              <LuSlidersHorizontal size={13} className="text-primary" />
-              <span>Application Preferences</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-0.5">
-              Settings
-            </h1>
+      {/* Top Page Header (Matches Image 1) */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-slate-800 pb-5">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <LuSlidersHorizontal size={14} className="text-primary" />
+            <span>Application Preferences</span>
           </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1 flex items-center gap-2">
+            <span>Settings</span>
+            <span className="text-slate-400 dark:text-slate-600 font-light">/</span>
+            <span className="text-primary">{currentTabLabel}</span>
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Manage your account credentials, primary brand colors, and portal appearance.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs text-xs font-semibold">
             <span
               className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs border border-slate-300 dark:border-slate-600"
@@ -1094,45 +1091,6 @@ const SettingsPage: React.FC = () => {
             </span>
           </div>
         </div>
-      </div>
-
-      {/* Modern Horizontal Tabs Bar */}
-      <div className="sticky top-2 z-20 mb-6 bg-white/95 dark:bg-[#111827]/95 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-1.5 shadow-md backdrop-blur-md">
-        <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
-          {settingsTabsList.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            const isDanger = tab.id === 'alm_factory_reset';
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`group flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 select-none ${
-                  isActive
-                    ? isDanger
-                      ? 'bg-red-600 text-white shadow-xs font-bold'
-                      : 'bg-primary text-white shadow-xs font-bold'
-                    : isDanger
-                    ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Icon
-                  size={16}
-                  className={
-                    isActive
-                      ? 'text-white'
-                      : isDanger
-                      ? 'text-red-500'
-                      : 'text-slate-400 group-hover:text-primary'
-                  }
-                />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
       </div>
 
       {/* Main Full-Width Content Area */}
@@ -2919,7 +2877,7 @@ const SettingsPage: React.FC = () => {
           {activeTab === 'security_devices' && (
             <div className="space-y-6 animate-fadeIn">
               {/* Top Security Banner */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-linear-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
                 <div className="flex items-start gap-4 z-10">
                   <div className="w-13 h-13 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl shrink-0 shadow-inner">
                     <LuShieldCheck />

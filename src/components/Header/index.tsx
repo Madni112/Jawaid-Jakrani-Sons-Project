@@ -403,7 +403,7 @@ const Header = (props: {
   return (
     <>
       <header
-        className={`shrink-0 z-40 flex flex-col duration-200 ease-in-out transition-all ${
+        className={`shrink-0 z-40 flex duration-200 ease-in-out transition-all ${
           navbarMode === 'classic'
             ? 'w-full rounded-none border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 shadow-2xs'
             : 'w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#111827]/95 shadow-xs min-[751px]:shadow-md'
@@ -411,169 +411,198 @@ const Header = (props: {
       >
         <div className="flex flex-grow items-center justify-between px-3 py-2 sm:px-4 2xl:px-6 gap-2 sm:gap-3 w-full min-w-0">
           
-          {/* Left Side: Mobile Menu or Back to Dashboard + Portal/Branch Pill + New Sale Button */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            {isSettingsPage ? (
-              <Link
-                to="/"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition shadow-2xs border border-slate-200/80 dark:border-slate-700/80 shrink-0"
-                title="Exit Settings and return to Dashboard"
-              >
-                <LuArrowLeft size={16} />
-                <span className="hidden sm:inline">Back to Dashboard</span>
-              </Link>
-            ) : (
-              /* Mobile Sidebar Toggle */
-              <button
-                aria-controls="sidebar"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.setSidebarOpen(!props.sidebarOpen);
-                }}
-                className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
-              >
-                <MdMenu size={20} />
-              </button>
-            )}
-
-            {/* Dynamic Portal & Branch Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-[11px] font-extrabold text-primary uppercase tracking-wider">
-                {portalCode}
-              </span>
-              <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
-              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[90px] xl:max-w-[130px]">
-                {branchLabel}
-              </span>
-            </div>
-
-            {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
-            <Link
-              to="/sales/invoice/add"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
-              style={{
-                backgroundColor: sidebarColor,
-                color: getContrastTextColor(sidebarColor),
-              }}
-              title="Create a New Sales Invoice"
-            >
-              <LuPlus className="text-sm stroke-[3]" />
-              <span className="hidden md:inline">New Sale</span>
-            </Link>
-          </div>
-
-          {/* Center: Command Palette / Quick Search Trigger */}
-          <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-1 sm:mx-2 hidden md:block min-w-0">
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition text-xs cursor-pointer shadow-2xs"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <LuSearch className="text-sm text-slate-400 shrink-0" />
-                <span className="truncate">Search invoices, customers, products...</span>
-              </div>
-              <kbd className="hidden 2xl:inline-flex items-center gap-0.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 shadow-2xs shrink-0">
-                <span>Ctrl</span>
-                <span>K</span>
-              </kbd>
-            </button>
-          </div>
-
-          {/* Right Side: Tools & Profile */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {/* Mobile Search Button */}
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition md:hidden cursor-pointer"
-              title="Quick Search (Ctrl + K)"
-            >
-              <LuSearch size={18} />
-            </button>
-
-            {/* Live Clock (Only time on xl, full date on 2xl) */}
-            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
-              <LuClock className="text-xs text-primary shrink-0" />
-              <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-100">
-                {timeString}
-              </span>
-              <span className="hidden 2xl:inline text-[10px] text-slate-400">•</span>
-              <span className="hidden 2xl:inline text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                {dateString}
-              </span>
-            </div>
-
-            {/* Fast Sound Mute / Unmute Button */}
-            <button
-              type="button"
-              onClick={toggleSound}
-              className={`p-1.5 sm:p-2 rounded-full border transition flex items-center justify-center cursor-pointer shadow-2xs shrink-0 ${
-                audioActive
-                  ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-              }`}
-              title={audioActive ? 'POS Sound Effects: ON (Click to Mute)' : 'POS Sound Effects: MUTED (Click to Turn On)'}
-            >
-              {audioActive ? <LuVolume2 size={16} /> : <LuVolumeX size={16} />}
-            </button>
-
-            {/* Header Notifications Dropdown */}
-            <NotificationDropdown />
-
-            {/* Dark Mode Switcher */}
-            <DarkModeSwitcher />
-
-            {/* Subtle Divider */}
-            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block shrink-0" />
-
-            {/* User Profile Dropdown */}
-            <DropdownUser />
-          </div>
-        </div>
-
-        {/* Settings Navigation Tabs in ERP Top Navbar */}
-        {isSettingsPage && (
-          <div className="border-t border-slate-200/80 dark:border-slate-800/80 px-3 py-1.5 sm:px-4 2xl:px-6 overflow-x-auto no-scrollbar flex items-center gap-1 sm:gap-1.5 bg-slate-50/70 dark:bg-slate-900/40">
-            {settingsNavTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeSettingsTab === tab.id;
-              const isDanger = tab.id === 'alm_factory_reset';
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setSearchParams({ tab: tab.id })}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer select-none shrink-0 ${
-                    isActive
-                      ? isDanger
-                        ? 'bg-red-600 text-white shadow-xs font-bold'
-                        : 'bg-primary text-white shadow-xs font-bold'
-                      : isDanger
-                      ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
-                  }`}
+          {isSettingsPage ? (
+            /* ── SETTINGS SINGLE-ROW HEADER (Matches Image 1) ── */
+            <>
+              {/* Left Side: Back to Dashboard */}
+              <div className="flex items-center shrink-0">
+                <Link
+                  to="/"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition shadow-2xs border border-slate-200/80 dark:border-slate-700/80 shrink-0"
+                  title="Exit Settings and return to Dashboard"
                 >
-                  <Icon
-                    size={14}
-                    className={
-                      isActive
-                        ? 'text-white'
-                        : isDanger
-                        ? 'text-red-500'
-                        : 'text-slate-400'
-                    }
-                  />
-                  <span>{tab.label}</span>
+                  <LuArrowLeft size={15} />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </Link>
+              </div>
+
+              {/* Center: Single-row Horizontal Settings Tabs */}
+              <div className="flex-1 flex items-center justify-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar mx-1 sm:mx-2 min-w-0 py-0.5">
+                {settingsNavTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeSettingsTab === tab.id;
+                  const isDanger = tab.id === 'alm_factory_reset';
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setSearchParams({ tab: tab.id })}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer select-none shrink-0 ${
+                        isActive
+                          ? isDanger
+                            ? 'bg-red-600 text-white shadow-xs font-bold'
+                            : 'bg-primary text-white shadow-xs font-bold'
+                          : isDanger
+                          ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Icon
+                        size={14}
+                        className={
+                          isActive
+                            ? 'text-white'
+                            : isDanger
+                            ? 'text-red-500'
+                            : 'text-slate-400'
+                        }
+                      />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right Side: Fast Sound, Notifications, Dark Mode, Profile */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={toggleSound}
+                  className={`p-1.5 sm:p-2 rounded-full border transition flex items-center justify-center cursor-pointer shadow-2xs shrink-0 ${
+                    audioActive
+                      ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                  title={audioActive ? 'POS Sound Effects: ON' : 'POS Sound Effects: MUTED'}
+                >
+                  {audioActive ? <LuVolume2 size={16} /> : <LuVolumeX size={16} />}
                 </button>
-              );
-            })}
-          </div>
-        )}
+
+                <NotificationDropdown />
+                <DarkModeSwitcher />
+                <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block shrink-0" />
+                <DropdownUser />
+              </div>
+            </>
+          ) : (
+            /* ── NORMAL ERP NAVBAR (Every other page) ── */
+            <>
+              {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}
+              <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                {/* Mobile Sidebar Toggle */}
+                <button
+                  aria-controls="sidebar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.setSidebarOpen(!props.sidebarOpen);
+                  }}
+                  className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
+                >
+                  <MdMenu size={20} />
+                </button>
+
+                {/* Dynamic Portal & Branch Badge */}
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] font-extrabold text-primary uppercase tracking-wider">
+                    {portalCode}
+                  </span>
+                  <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
+                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[90px] xl:max-w-[130px]">
+                    {branchLabel}
+                  </span>
+                </div>
+
+                {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
+                <Link
+                  to="/sales/invoice/add"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
+                  style={{
+                    backgroundColor: sidebarColor,
+                    color: getContrastTextColor(sidebarColor),
+                  }}
+                  title="Create a New Sales Invoice"
+                >
+                  <LuPlus className="text-sm stroke-[3]" />
+                  <span className="hidden md:inline">New Sale</span>
+                </Link>
+              </div>
+
+              {/* Center: Command Palette / Quick Search Trigger */}
+              <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-1 sm:mx-2 hidden md:block min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition text-xs cursor-pointer shadow-2xs"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <LuSearch className="text-sm text-slate-400 shrink-0" />
+                    <span className="truncate">Search invoices, customers, products...</span>
+                  </div>
+                  <kbd className="hidden 2xl:inline-flex items-center gap-0.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 shadow-2xs shrink-0">
+                    <span>Ctrl</span>
+                    <span>K</span>
+                  </kbd>
+                </button>
+              </div>
+
+              {/* Right Side: Tools & Profile */}
+              <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                {/* Mobile Search Button */}
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition md:hidden cursor-pointer"
+                  title="Quick Search (Ctrl + K)"
+                >
+                  <LuSearch size={18} />
+                </button>
+
+                {/* Live Clock (Only time on xl, full date on 2xl) */}
+                <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
+                  <LuClock className="text-xs text-primary shrink-0" />
+                  <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-100">
+                    {timeString}
+                  </span>
+                  <span className="hidden 2xl:inline text-[10px] text-slate-400">•</span>
+                  <span className="hidden 2xl:inline text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    {dateString}
+                  </span>
+                </div>
+
+                {/* Fast Sound Mute / Unmute Button */}
+                <button
+                  type="button"
+                  onClick={toggleSound}
+                  className={`p-1.5 sm:p-2 rounded-full border transition flex items-center justify-center cursor-pointer shadow-2xs shrink-0 ${
+                    audioActive
+                      ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                  title={audioActive ? 'POS Sound Effects: ON (Click to Mute)' : 'POS Sound Effects: MUTED (Click to Turn On)'}
+                >
+                  {audioActive ? <LuVolume2 size={16} /> : <LuVolumeX size={16} />}
+                </button>
+
+                {/* Header Notifications Dropdown */}
+                <NotificationDropdown />
+
+                {/* Dark Mode Switcher */}
+                <DarkModeSwitcher />
+
+                {/* Subtle Divider */}
+                <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block shrink-0" />
+
+                {/* User Profile Dropdown */}
+                <DropdownUser />
+              </div>
+            </>
+          )}
+
+        </div>
       </header>
 
       {/* ── COMMAND PALETTE / LIVE SPOTLIGHT GLOBAL SEARCH (Ctrl + K) ── */}
