@@ -1504,6 +1504,88 @@ const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                      {/* SECTION C: THEME MODE (LIGHT / DARK) - ONLY FOR TAB 1 */}
+                      <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+                        <div className="pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
+                          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                            Interface Theme Mode
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Select your preferred appearance for the entire workspace.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Light Mode Card */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (typeof setColorMode === 'function') setColorMode('light');
+                            }}
+                            className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                              colorMode === 'light'
+                                ? 'border-primary ring-2 ring-primary/20 bg-primary/5 shadow-xs'
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:border-slate-300'
+                            }`}
+                          >
+                            <div
+                              className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
+                                colorMode === 'light'
+                                  ? 'bg-primary text-white shadow-xs'
+                                  : 'bg-amber-100 text-amber-600'
+                              }`}
+                            >
+                              <LuSun size={20} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                Light Mode
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Clean, bright daylight interface with sharp contrast.
+                              </div>
+                            </div>
+                            {colorMode === 'light' && (
+                              <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
+                            )}
+                          </button>
+
+                          {/* Dark Mode Card */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (typeof setColorMode === 'function') setColorMode('dark');
+                            }}
+                            className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                              colorMode === 'dark'
+                                ? 'border-primary ring-2 ring-primary/20 bg-primary/10 shadow-xs'
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:border-slate-300'
+                            }`}
+                          >
+                            <div
+                              className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
+                                colorMode === 'dark'
+                                  ? 'bg-primary text-white shadow-xs'
+                                  : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600'
+                              }`}
+                            >
+                              <LuMoon size={20} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                Dark Mode
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Sleek low-light aesthetic reducing eye strain.
+                              </div>
+                            </div>
+                            {colorMode === 'dark' && (
+                              <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -1733,88 +1815,6 @@ const SettingsPage: React.FC = () => {
                 </div>
                     </div>
                   )}
-                </div>
-              </div>
-
-              {/* SECTION C: THEME MODE (LIGHT / DARK) */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
-                <div className="pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Interface Theme Mode
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Select your preferred appearance for the entire workspace.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Light Mode Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof setColorMode === 'function') setColorMode('light');
-                    }}
-                    className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                      colorMode === 'light'
-                        ? 'border-primary ring-2 ring-primary/20 bg-primary/5 shadow-xs'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:border-slate-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
-                        colorMode === 'light'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-amber-100 text-amber-600'
-                      }`}
-                    >
-                      <LuSun size={20} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                        Light Mode
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Clean, bright daylight interface with sharp contrast.
-                      </div>
-                    </div>
-                    {colorMode === 'light' && (
-                      <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
-                    )}
-                  </button>
-
-                  {/* Dark Mode Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof setColorMode === 'function') setColorMode('dark');
-                    }}
-                    className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                      colorMode === 'dark'
-                        ? 'border-primary ring-2 ring-primary/20 bg-primary/10 shadow-xs'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:border-slate-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
-                        colorMode === 'dark'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600'
-                      }`}
-                    >
-                      <LuMoon size={20} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                        Dark Mode
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Sleek low-light aesthetic reducing eye strain.
-                      </div>
-                    </div>
-                    {colorMode === 'dark' && (
-                      <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
-                    )}
-                  </button>
                 </div>
               </div>
 
