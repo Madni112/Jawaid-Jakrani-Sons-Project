@@ -218,6 +218,46 @@ const Header = (props: {
     window.dispatchEvent(new CustomEvent('jakwani_settings_tab_changed', { detail: tabId }));
   };
 
+  // Keyboard shortcut: Shift + Left / Right Arrow to cycle between Settings Tabs
+  useEffect(() => {
+    if (!isSettings) return;
+
+    const handleTabKeyDown = (e: KeyboardEvent) => {
+      if (!e.shiftKey) return;
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      if (isInput) return;
+
+      e.preventDefault();
+
+      const currentIndex = SETTINGS_NAV_TABS.findIndex((t) => t.id === activeSettingsTab);
+      const total = SETTINGS_NAV_TABS.length;
+      if (currentIndex === -1) return;
+
+      let nextIndex = currentIndex;
+      if (e.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % total;
+      } else if (e.key === 'ArrowLeft') {
+        nextIndex = (currentIndex - 1 + total) % total;
+      }
+
+      const nextTab = SETTINGS_NAV_TABS[nextIndex];
+      if (nextTab) {
+        handleSelectSettingsTab(nextTab.id);
+      }
+    };
+
+    window.addEventListener('keydown', handleTabKeyDown);
+    return () => window.removeEventListener('keydown', handleTabKeyDown);
+  }, [isSettings, activeSettingsTab, searchParams]);
+
   // 6. Command Palette / Live Global Search State
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -453,9 +493,9 @@ const Header = (props: {
           
           {isSettings ? (
             /* =========================================================================
-             * SETTINGS NAVBAR MODE: Back to Dashboard + 6 Horizontal Tabs
+             * SETTINGS NAVBAR MODE: Back to Dashboard + Centered Tabs (Icons + Active Name)
              * ========================================================================= */
-            <div className="flex flex-1 items-center gap-2 sm:gap-3 min-w-0">
+            <div className="flex flex-1 items-center justify-between gap-2 sm:gap-4 min-w-0">
               {/* Back to Dashboard Button */}
               <Link
                 to="/dashboard"
@@ -466,32 +506,46 @@ const Header = (props: {
                 <span>{isRTL ? "ڈیش بورڈ" : "Dashboard"}</span>
               </Link>
 
-              {/* 6 Tabs Pill Selector */}
-              <div className="flex-1 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-0.5 min-w-0">
-                {SETTINGS_NAV_TABS.map((tab) => {
-                  const TabIcon = tab.icon;
-                  const isActive = activeSettingsTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => handleSelectSettingsTab(tab.id)}
-                      className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer shrink-0 select-none ${
-                        isActive
-                          ? 'bg-primary text-white shadow-sm ring-1 ring-primary/40'
-                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                      style={
-                        isActive && accentColor && (accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff')
-                          ? { color: '#0F172A', border: '1px solid #CBD5E1' }
-                          : undefined
-                      }
-                    >
-                      <TabIcon size={14} className="shrink-0" />
-                      <span>{isRTL ? tab.urLabel : tab.label}</span>
-                    </button>
-                  );
-                })}
+              {/* Centered Segmented Dock: Icons Only + Name of Active Tab */}
+              <div className="flex-1 flex items-center justify-center overflow-x-auto no-scrollbar py-0.5 px-1 min-w-0">
+                <div className="flex items-center gap-1 sm:gap-1.5 p-1 rounded-2xl bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 shadow-2xs">
+                  {SETTINGS_NAV_TABS.map((tab) => {
+                    const TabIcon = tab.icon;
+                    const isActive = activeSettingsTab === tab.id;
+                    const tabTitle = isRTL ? tab.urLabel : tab.label;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => handleSelectSettingsTab(tab.id)}
+                        title={`${tabTitle} (Shift + ← / →)`}
+                        className={`flex items-center gap-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer shrink-0 select-none ${
+                          isActive
+                            ? 'bg-primary text-white shadow-md ring-1 ring-primary/40 px-3.5 py-1.5'
+                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-700/70 w-8.5 h-8.5 justify-center'
+                        }`}
+                        style={
+                          isActive && accentColor && (accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff')
+                            ? { color: '#0F172A', border: '1px solid #CBD5E1' }
+                            : undefined
+                        }
+                      >
+                        <TabIcon size={16} className="shrink-0" />
+                        {isActive && <span className="animate-fadeIn">{tabTitle}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Keyboard Shortcut Hint (Desktop) */}
+              <div
+                className="hidden xl:flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 font-mono shrink-0 select-none"
+                title="Keyboard navigation: hold Shift and press Left or Right Arrow"
+              >
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold">Shift</kbd>
+                <span>+</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold">← / →</kbd>
               </div>
             </div>
           ) : (

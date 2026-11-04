@@ -368,6 +368,43 @@ const SettingsPage: React.FC = () => {
     return () => window.removeEventListener('jakwani_settings_tab_changed', handleSettingsTabChange);
   }, [activeTab]);
 
+  // Keyboard Shortcut: Shift + Left / Right Arrow to cycle between Settings Tabs
+  useEffect(() => {
+    const tabOrder = ['profile', 'security_devices', 'theme', 'credit_limits', 'sound_effects', 'backup'];
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.shiftKey) return;
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      if (isInput) return;
+
+      e.preventDefault();
+
+      const currentIndex = tabOrder.indexOf(activeTab);
+      const total = tabOrder.length;
+      if (currentIndex === -1) return;
+
+      let nextIndex = currentIndex;
+      if (e.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % total;
+      } else if (e.key === 'ArrowLeft') {
+        nextIndex = (currentIndex - 1 + total) % total;
+      }
+
+      setActiveTab(tabOrder[nextIndex]);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab]);
+
   const [themeSubTab, setThemeSubTab] = useState<'suites' | 'navbar' | 'sidebar'>('suites');
   const [colorMode, setColorMode] = useColorMode();
 
