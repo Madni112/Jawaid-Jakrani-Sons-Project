@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import DropdownUser from './DropdownUser';
 import DarkModeSwitcher from './DarkModeSwitcher';
 import NotificationDropdown from './NotificationDropdown';
@@ -12,10 +12,17 @@ import {
   LuVolumeX,
   LuCommand,
   LuArrowRight,
+  LuArrowLeft,
   LuX,
   LuFileText,
   LuReceipt,
   LuUsers,
+  LuUser,
+  LuShieldCheck,
+  LuPalette,
+  LuCreditCard,
+  LuHardDrive,
+  LuTrash2,
   LuPackage,
   LuSlidersHorizontal,
   LuBarChart3,
@@ -25,7 +32,7 @@ import {
   LuSparkles,
 } from 'react-icons/lu';
 import { useAuth } from '../../Context/Auth';
-import { getBrandConfig } from '../../utils/brand';
+import { getBrandConfig, detectIsAlm } from '../../utils/brand';
 import { supabase } from '../../Context/supabaseClient';
 import {
   isUserAudioEnabled,
@@ -83,7 +90,26 @@ const Header = (props: {
   setSidebarOpen: (arg0: boolean) => void;
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userEmail, userLocationName } = useAuth();
+
+  const isSettingsPage = /(^|\/)settings\/?$/i.test(location.pathname);
+  const activeSettingsTab = searchParams.get('tab') || 'profile';
+
+  const isAlmPortal = detectIsAlm();
+  const settingsNavTabs = useMemo(() => [
+    { id: 'profile', label: 'Profile', icon: LuUser },
+    { id: 'security_devices', label: 'Login Devices & Security', icon: LuShieldCheck },
+    { id: 'theme', label: 'Theme & Appearance', icon: LuPalette },
+    { id: 'stock_control', label: 'Inventory & Stock Governance', icon: LuPackage },
+    { id: 'credit_limits', label: 'Customer Credit Limits', icon: LuCreditCard },
+    { id: 'sound_effects', label: 'Audio & Sound Effects', icon: LuVolume2 },
+    { id: 'backup', label: 'Data Backup & Export', icon: LuHardDrive },
+    ...(isAlmPortal
+      ? [{ id: 'alm_factory_reset', label: 'Factory Reset ERP', icon: LuTrash2 }]
+      : []),
+  ], [isAlmPortal]);
 
   // 1. Live Digital Clock State
   const [timeString, setTimeString] = useState<string>('');
@@ -377,7 +403,7 @@ const Header = (props: {
   return (
     <>
       <header
-        className={`shrink-0 z-40 flex duration-200 ease-in-out transition-all ${
+        className={`shrink-0 z-40 flex flex-col duration-200 ease-in-out transition-all ${
           navbarMode === 'classic'
             ? 'w-full rounded-none border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 shadow-2xs'
             : 'w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#111827]/95 shadow-xs min-[751px]:shadow-md'
@@ -385,19 +411,30 @@ const Header = (props: {
       >
         <div className="flex flex-grow items-center justify-between px-3 py-2 sm:px-4 2xl:px-6 gap-2 sm:gap-3 w-full min-w-0">
           
-          {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}
+          {/* Left Side: Mobile Menu or Back to Dashboard + Portal/Branch Pill + New Sale Button */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            {/* Mobile Sidebar Toggle */}
-            <button
-              aria-controls="sidebar"
-              onClick={(e) => {
-                e.stopPropagation();
-                props.setSidebarOpen(!props.sidebarOpen);
-              }}
-              className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
-            >
-              <MdMenu size={20} />
-            </button>
+            {isSettingsPage ? (
+              <Link
+                to="/"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition shadow-2xs border border-slate-200/80 dark:border-slate-700/80 shrink-0"
+                title="Exit Settings and return to Dashboard"
+              >
+                <LuArrowLeft size={16} />
+                <span className="hidden sm:inline">Back to Dashboard</span>
+              </Link>
+            ) : (
+              /* Mobile Sidebar Toggle */
+              <button
+                aria-controls="sidebar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.setSidebarOpen(!props.sidebarOpen);
+                }}
+                className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
+              >
+                <MdMenu size={20} />
+              </button>
+            )}
 
             {/* Dynamic Portal & Branch Badge */}
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
@@ -498,6 +535,45 @@ const Header = (props: {
             <DropdownUser />
           </div>
         </div>
+
+        {/* Settings Navigation Tabs in ERP Top Navbar */}
+        {isSettingsPage && (
+          <div className="border-t border-slate-200/80 dark:border-slate-800/80 px-3 py-1.5 sm:px-4 2xl:px-6 overflow-x-auto no-scrollbar flex items-center gap-1 sm:gap-1.5 bg-slate-50/70 dark:bg-slate-900/40">
+            {settingsNavTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeSettingsTab === tab.id;
+              const isDanger = tab.id === 'alm_factory_reset';
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSearchParams({ tab: tab.id })}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer select-none shrink-0 ${
+                    isActive
+                      ? isDanger
+                        ? 'bg-red-600 text-white shadow-xs font-bold'
+                        : 'bg-primary text-white shadow-xs font-bold'
+                      : isDanger
+                      ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Icon
+                    size={14}
+                    className={
+                      isActive
+                        ? 'text-white'
+                        : isDanger
+                        ? 'text-red-500'
+                        : 'text-slate-400'
+                    }
+                  />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </header>
 
       {/* ── COMMAND PALETTE / LIVE SPOTLIGHT GLOBAL SEARCH (Ctrl + K) ── */}
