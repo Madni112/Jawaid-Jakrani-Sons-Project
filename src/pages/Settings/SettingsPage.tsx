@@ -47,6 +47,10 @@ import {
   LuGlobe,
   LuStore,
   LuPrinter,
+  LuEye,
+  LuPanelLeftClose,
+  LuPanelLeftOpen,
+  LuPanelLeft,
 } from 'react-icons/lu';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -405,7 +409,8 @@ const SettingsPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab]);
 
-  const [themeSubTab, setThemeSubTab] = useState<'suites' | 'navbar' | 'sidebar'>('suites');
+  const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('sidebar');
+  const [sidebarPreviewMode, setSidebarPreviewMode] = useState<'opened' | 'closed'>('opened');
   const [colorMode, setColorMode] = useColorMode();
 
   // Curated Theme Suites & Sidebar Background State
@@ -1247,296 +1252,59 @@ const SettingsPage: React.FC = () => {
             <div className="space-y-6 animate-fadeIn">
               {/* BRAND COLOR PALETTES (STICKY SUB-NAVBAR SCOPE CONTAINER) */}
               <div className="relative space-y-4">
-                {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Theme Suites, Brand Accent, Sidebar) */}
+                {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Sidebar & Background, Navbar & Brand Accent) */}
                 <div className="p-2 rounded-2xl bg-white/95 dark:bg-[#111827]/95 border border-slate-200/90 dark:border-slate-800 shadow-md backdrop-blur-md sticky top-2 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto flex-wrap">
-                  {/* SUB-TAB 0: CURATED THEME SUITES */}
-                  <button
-                    type="button"
-                    onClick={() => setThemeSubTab('suites')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
-                      themeSubTab === 'suites'
-                        ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <LuSparkles size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
-                    <span>{isRTL ? "مکمل تھیم پیکجز" : "Curated Theme Suites"}</span>
-                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                      Top
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto flex-wrap">
+                    {/* SUB-TAB 1: SIDEBAR & BACKGROUND */}
+                    <button
+                      type="button"
+                      onClick={() => setThemeSubTab('sidebar')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
+                        themeSubTab === 'sidebar'
+                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
+                        style={{ backgroundColor: selectedSidebarColor }}
+                      />
+                      <span>{isRTL ? "سائیڈبار اور پس منظر" : "Sidebar & Background"}</span>
+                      {isSidebarChanged && (
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
+                      )}
+                    </button>
 
-                  {/* SUB-TAB 1: NAVBAR & BRAND ACCENT */}
-                  <button
-                    type="button"
-                    onClick={() => setThemeSubTab('navbar')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
-                      themeSubTab === 'navbar'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
-                      style={{ backgroundColor: selectedAccentColor }}
-                    />
-                    <span>{isRTL ? "نیوبار اور برانڈ کا رنگ" : "Navbar & Brand Accent"}</span>
-                    {isAccentChanged && (
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
-                    )}
-                  </button>
-
-                  {/* SUB-TAB 2: SIDEBAR */}
-                  <button
-                    type="button"
-                    onClick={() => setThemeSubTab('sidebar')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
-                      themeSubTab === 'sidebar'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
-                      style={{ backgroundColor: selectedSidebarColor }}
-                    />
-                    <span>{isRTL ? "سائیڈبار اور پس منظر" : "Sidebar & Background"}</span>
-                    {isSidebarChanged && (
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
-                    )}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-500 dark:text-slate-400 self-end sm:self-auto">
-                  <span>{isRTL ? "حسب ضرورت:" : "Customizing:"}</span>
-                  <strong className="text-slate-800 dark:text-slate-200 font-bold">
-                    {themeSubTab === 'suites'
-                      ? (isRTL ? 'مکمل تھیم پیکجز' : 'Curated Theme Suites')
-                      : themeSubTab === 'navbar'
-                      ? (isRTL ? 'نیوبار اور برانڈ کا رنگ' : 'Navbar & Brand Accent')
-                      : (isRTL ? 'سائیڈبار کے رنگ' : 'Sidebar Colors & Background')}
-                  </strong>
-                </div>
-              </div>
-
-              {/* SECTION 0: CURATED THEME SUITES */}
-              {themeSubTab === 'suites' && (
-                <div className="space-y-6 animate-fadeIn">
-                  {/* Hero Intro Banner */}
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-50/50 via-white to-indigo-50/30 dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-900/70 p-6 shadow-sm">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-600 text-white shadow-xs">
-                            Instant Transformation
-                          </span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {isRTL ? "ایک کلک سے مکمل نیا انداز" : "One-click harmonized aesthetics"}
-                          </span>
-                        </div>
-                        <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                          {isRTL ? "جاوید جکوانی اینڈ سنز کے لیے مخصوص تھیم پیکجز" : "Curated Theme Suites for Jawaid Jakwani & Sons"}
-                        </h3>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
-                          {isRTL
-                            ? "ہر تھیم سائیڈبار کے پس منظر، ایکٹو نیویگیشن بٹن، اور برانڈ رنگوں کو خودکار طریقے سے آپس میں ہم آہنگ کرتی ہے تاکہ آپ کا سسٹم زیادہ پیشہ ورانہ اور خوبصورت لگے۔"
-                            : "Each suite coordinates the sidebar background, active navigation pills, and brand accent colors into a coherent, high-contrast aesthetic tailored for textile enterprise management."}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 shadow-2xs">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>Active Suite: <strong>{CURATED_THEME_SUITES.find(s => s.id === activeSuiteId)?.name || 'Custom'}</strong></span>
-                        </span>
-                      </div>
-                    </div>
+                    {/* SUB-TAB 2: NAVBAR & BRAND ACCENT */}
+                    <button
+                      type="button"
+                      onClick={() => setThemeSubTab('navbar')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
+                        themeSubTab === 'navbar'
+                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
+                        style={{ backgroundColor: selectedAccentColor }}
+                      />
+                      <span>{isRTL ? "نیوبار اور برانڈ کا رنگ" : "Navbar & Brand Accent"}</span>
+                      {isAccentChanged && (
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
+                      )}
+                    </button>
                   </div>
 
-                  {/* Grid of 5 Theme Suites */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {CURATED_THEME_SUITES.map((suite) => {
-                      const isSuiteActive = activeSuiteId === suite.id;
-
-                      return (
-                        <div
-                          key={suite.id}
-                          onClick={() => handleApplyThemeSuite(suite)}
-                          className={`group relative rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden flex flex-col p-5 select-none ${
-                            isSuiteActive
-                              ? 'border-blue-600 dark:border-blue-500 ring-3 ring-blue-600/20 dark:ring-blue-500/30 bg-white dark:bg-[#111827] shadow-lg scale-101'
-                              : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5'
-                          }`}
-                        >
-                          {/* Top Badges */}
-                          <div className="flex items-center justify-between gap-2 mb-3">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                suite.isRecommended
-                                  ? 'bg-blue-600 text-white shadow-xs'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                              }`}
-                            >
-                              {suite.badge}
-                            </span>
-
-                            {isSuiteActive ? (
-                              <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300/70 dark:border-emerald-700">
-                                <LuCheck size={12} className="stroke-[3]" />
-                                <span>Active</span>
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-semibold text-slate-400 group-hover:text-blue-600 transition-colors">
-                                Click to Apply →
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Suite Title & Urdu */}
-                          <div className="mb-3">
-                            <h4 className="text-base font-black text-slate-900 dark:text-white tracking-tight flex items-center justify-between">
-                              <span>{suite.name}</span>
-                            </h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-urdu mt-0.5">
-                              {suite.urName}
-                            </p>
-                          </div>
-
-                          {/* Miniature Layout Preview Box */}
-                          <div
-                            className="rounded-xl border border-slate-200 dark:border-slate-700/80 p-2.5 mb-4 shadow-inner"
-                            style={{ backgroundColor: suite.previewBg }}
-                          >
-                            <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-black/5 dark:border-white/5 text-[10px] font-mono text-slate-500">
-                              <span className="w-2 h-2 rounded-full bg-rose-400/80" />
-                              <span className="w-2 h-2 rounded-full bg-amber-400/80" />
-                              <span className="w-2 h-2 rounded-full bg-emerald-400/80" />
-                              <span className="ml-auto text-[9px] uppercase tracking-wider font-bold text-slate-400">Live Mock</span>
-                            </div>
-
-                            <div className="flex gap-2 h-24">
-                              {/* Mini Sidebar */}
-                              <div
-                                className="w-1/3 rounded-lg border p-1.5 flex flex-col justify-between shrink-0 shadow-xs"
-                                style={{
-                                  backgroundColor: suite.sidebarBg,
-                                  borderColor: suite.sidebarBorder,
-                                }}
-                              >
-                                <div className="space-y-1">
-                                  <div
-                                    className="h-2 w-3/4 rounded-full opacity-80"
-                                    style={{ backgroundColor: suite.sidebarTextColor }}
-                                  />
-                                  {/* Active Pill item in Mini Sidebar */}
-                                  <div
-                                    className="h-4 rounded-md flex items-center px-1.5 text-[8px] font-bold shadow-2xs"
-                                    style={{
-                                      backgroundColor: `${suite.accentColor}25`,
-                                      color: suite.accentColor,
-                                      border: `1px solid ${suite.accentColor}50`,
-                                    }}
-                                  >
-                                    <span className="w-1 h-1 rounded-full mr-1" style={{ backgroundColor: suite.accentColor }} />
-                                    Active
-                                  </div>
-                                  <div
-                                    className="h-2 w-2/3 rounded-full opacity-40"
-                                    style={{ backgroundColor: suite.sidebarTextColor }}
-                                  />
-                                </div>
-
-                                <div
-                                  className="h-1.5 w-1/2 rounded-full opacity-30"
-                                  style={{ backgroundColor: suite.sidebarTextColor }}
-                                />
-                              </div>
-
-                              {/* Mini Content Area */}
-                              <div className="flex-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-2 flex flex-col justify-between">
-                                <div className="flex items-center justify-between">
-                                  <div className="h-2 w-12 rounded bg-slate-300 dark:bg-slate-700" />
-                                  <div
-                                    className="h-3 w-8 rounded-full text-[7px] font-bold flex items-center justify-center text-white"
-                                    style={{ backgroundColor: suite.accentColor }}
-                                  >
-                                    POS
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-1 my-1">
-                                  <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800">
-                                    <div className="h-1 w-6 rounded bg-slate-300 dark:bg-slate-700 mb-0.5" />
-                                    <div className="h-2 w-8 rounded" style={{ backgroundColor: suite.accentColor, opacity: 0.8 }} />
-                                  </div>
-                                  <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800">
-                                    <div className="h-1 w-6 rounded bg-slate-300 dark:bg-slate-700 mb-0.5" />
-                                    <div className="h-2 w-7 rounded bg-slate-400 dark:bg-slate-600" />
-                                  </div>
-                                </div>
-
-                                <div className="h-1.5 w-full rounded bg-slate-100 dark:bg-slate-800" />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Description */}
-                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4 flex-1">
-                            {suite.description}
-                          </p>
-
-                          {/* Palette Swatches Bar */}
-                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                            <div className="flex items-center gap-2">
-                              <span className="text-slate-400 font-medium">Palette:</span>
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className="w-4 h-4 rounded-full border border-black/15 shadow-2xs"
-                                  style={{ backgroundColor: suite.sidebarBg }}
-                                  title={`Sidebar: ${suite.sidebarBg}`}
-                                />
-                                <span
-                                  className="w-4 h-4 rounded-full border border-black/15 shadow-2xs"
-                                  style={{ backgroundColor: suite.sidebarTextColor }}
-                                  title={`Text: ${suite.sidebarTextColor}`}
-                                />
-                                <span
-                                  className="w-4 h-4 rounded-full border border-black/15 shadow-2xs"
-                                  style={{ backgroundColor: suite.accentColor }}
-                                  title={`Accent: ${suite.accentName} (${suite.accentColor})`}
-                                />
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleApplyThemeSuite(suite);
-                              }}
-                              className={`px-3 py-1.5 rounded-xl font-bold transition-all duration-200 text-xs flex items-center gap-1.5 cursor-pointer ${
-                                isSuiteActive
-                                  ? 'bg-emerald-600 text-white shadow-xs'
-                                  : 'bg-slate-100 dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-700 dark:text-slate-200'
-                              }`}
-                            >
-                              {isSuiteActive ? (
-                                <>
-                                  <LuCheck size={13} className="stroke-[3]" />
-                                  <span>Applied</span>
-                                </>
-                              ) : (
-                                <span>Apply Suite</span>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-500 dark:text-slate-400 self-end sm:self-auto">
+                    <span>{isRTL ? "حسب ضرورت:" : "Customizing:"}</span>
+                    <strong className="text-slate-800 dark:text-slate-200 font-bold">
+                      {themeSubTab === 'sidebar'
+                        ? (isRTL ? 'سائیڈبار کے رنگ اور لے آؤٹ' : 'Sidebar Colors & Background')
+                        : (isRTL ? 'نیوبار اور برانڈ کا رنگ' : 'Navbar & Brand Accent')}
+                    </strong>
                   </div>
                 </div>
-              )}
 
               {/* SECTION A: ACCENT COLOR THEME */}
               {themeSubTab === 'navbar' && (
@@ -1835,6 +1603,415 @@ const SettingsPage: React.FC = () => {
                           </button>
                         );
                       })}
+                    </div>
+
+                    {/* LEFT SIDEBAR STYLE (FLOATING VS CLASSIC) */}
+                    <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                            <LuLayers size={14} className="text-blue-500" />
+                            <span>{isRTL ? "سائیڈبار کا اسٹرکچرل اسٹائل" : "Left Sidebar Style"}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            {isRTL ? "فلوٹنگ کارڈ (مع راؤنڈ کونے اور شیڈو) یا کلاسک فل ایج اسٹائل میں سے منتخب کریں۔" : "Choose between detached floating island card or flush edge-to-edge ERP interface."}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 self-start sm:self-auto">
+                          Active: {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleSetSidebarLayout('floating')}
+                          className={`p-3.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between ${
+                            sidebarLayout === 'floating'
+                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                              <span>🚀</span>
+                              <span>{isRTL ? "فلوٹنگ کارڈ" : "Floating Card"}</span>
+                            </span>
+                            {sidebarLayout === 'floating' && (
+                              <LuCheck className="text-blue-600 dark:text-blue-400 text-sm stroke-[3]" />
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            {isRTL ? "گول کونے (rounded-2xl) مع حاشیائی شیڈو۔ پرتعیش اور جدید شکل۔" : "Rounded detached island card with ambient elevation and soft shadow."}
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSetSidebarLayout('classic')}
+                          className={`p-3.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between ${
+                            sidebarLayout === 'classic'
+                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                              <span>🏛️</span>
+                              <span>{isRTL ? "کلاسک ایج" : "Classic Edge"}</span>
+                            </span>
+                            {sidebarLayout === 'classic' && (
+                              <LuCheck className="text-blue-600 dark:text-blue-400 text-sm stroke-[3]" />
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            {isRTL ? "اسکرین کی دیوار سے جڑی ہوئی روایتی مکمل ایج ٹو ایج سائیڈبار۔" : "Original edge-to-edge flush sidebar attached directly to the screen wall."}
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* LIVE ERP INTERFACE & SIDEBAR PREVIEW DOCK */}
+                    <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                              <LuEye size={14} />
+                            </div>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                              {isRTL ? "براہ راست ای آر پی سائیڈبار پریویو" : "Live ERP Sidebar & Layout Preview"}
+                            </h4>
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              Real-Time
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            {isRTL
+                              ? "اپنے منتخب کردہ تھیم، سائیڈبار اسٹائل (فلوٹنگ یا کلاسک) اور کھلنے یا بند ہونے کی حالت کا فوری جائزہ لیں۔"
+                              : "Simulates the live ERP interface with your chosen theme, sidebar style (floating vs classic), and opened vs closed drawer state."}
+                          </p>
+                        </div>
+
+                        {/* OPENED / CLOSED PREVIEW TOGGLES */}
+                        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 self-start sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => setSidebarPreviewMode('opened')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer ${
+                              sidebarPreviewMode === 'opened'
+                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            <LuPanelLeftOpen size={14} />
+                            <span>{isRTL ? "کھلی حالت (Expanded)" : "Opened View"}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSidebarPreviewMode('closed')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer ${
+                              sidebarPreviewMode === 'closed'
+                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            <LuPanelLeftClose size={14} />
+                            <span>{isRTL ? "بند حالت (Compact)" : "Closed View"}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* SIMULATION CANVAS FRAME */}
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 text-slate-100 shadow-inner overflow-hidden">
+                        {/* Browser-style Top Bar */}
+                        <div className="px-4 py-2.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
+                            </div>
+                            <span className="text-[11px] font-mono text-slate-400 ml-2 hidden sm:inline">
+                              jjs.noorhorizontechnologies.com/dashboard
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[10px] font-mono">
+                            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700">
+                              Style: {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700 uppercase">
+                              Theme: {sidebarThemeMode}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700/60">
+                              {sidebarPreviewMode === 'opened' ? 'Opened View' : 'Closed View'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Interactive Canvas Workspace */}
+                        {(() => {
+                          // Dynamic Theme Colors
+                          const isLight = sidebarThemeMode === 'light';
+                          const sidebarBg =
+                            sidebarThemeMode === 'light' ? '#FFFFFF' :
+                            sidebarThemeMode === 'navy' ? '#0F172A' :
+                            sidebarThemeMode === 'emerald' ? '#0A1A18' :
+                            sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17';
+
+                          const sidebarTextColor = isLight ? '#0F172A' : '#FFFFFF';
+                          const sidebarSubTextColor = isLight ? '#64748B' : '#94A3B8';
+                          const sidebarBorderColor = isLight ? '#E2E8F0' : '#1E293B';
+                          const sidebarItemHover = isLight ? '#F1F5F9' : 'rgba(255,255,255,0.06)';
+
+                          return (
+                            <div className="relative flex h-[350px] overflow-hidden bg-slate-100 dark:bg-[#070A0F] text-slate-900 dark:text-slate-100 transition-colors">
+                              {/* SIMULATED SIDEBAR */}
+                              <div
+                                style={{
+                                  backgroundColor: sidebarBg,
+                                  color: sidebarTextColor,
+                                  borderColor: sidebarBorderColor,
+                                }}
+                                className={`transition-all duration-300 flex flex-col justify-between shrink-0 select-none ${
+                                  sidebarLayout === 'floating'
+                                    ? 'm-2.5 rounded-2xl border shadow-xl'
+                                    : 'm-0 rounded-none border-r border-t-0 border-b-0 border-l-0 shadow-sm'
+                                } ${
+                                  sidebarPreviewMode === 'opened'
+                                    ? 'w-48 sm:w-56 p-3.5'
+                                    : 'w-14 sm:w-16 p-2 items-center'
+                                }`}
+                              >
+                                {/* Top Header */}
+                                <div>
+                                  {sidebarPreviewMode === 'opened' ? (
+                                    <div className="flex items-center gap-2.5 pb-3 mb-3 border-b" style={{ borderColor: sidebarBorderColor }}>
+                                      <div
+                                        className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-xs"
+                                        style={{ backgroundColor: selectedAccentColor }}
+                                      >
+                                        JJS
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="text-xs font-black tracking-wide truncate">
+                                          JAWAID JAKWANI
+                                        </div>
+                                        <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
+                                          Cloth ERP
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="pb-3 mb-3 border-b flex justify-center w-full" style={{ borderColor: sidebarBorderColor }}>
+                                      <div
+                                        className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shadow-xs"
+                                        style={{ backgroundColor: selectedAccentColor }}
+                                      >
+                                        JJS
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Navigation Menu Mockup */}
+                                  <div className="space-y-1">
+                                    {/* Item 1: Dashboard (Active) */}
+                                    <div
+                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold transition ${
+                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                      }`}
+                                      style={{
+                                        backgroundColor: isLight ? `${selectedAccentColor}18` : `${selectedAccentColor}28`,
+                                        color: isLight ? selectedAccentColor : '#FFFFFF',
+                                        border: `1px solid ${selectedAccentColor}40`,
+                                      }}
+                                    >
+                                      <LuLayoutDashboard size={16} style={{ color: selectedAccentColor }} className="shrink-0" />
+                                      {sidebarPreviewMode === 'opened' && (
+                                        <span className="truncate">Dashboard</span>
+                                      )}
+                                    </div>
+
+                                    {/* Item 2: POS */}
+                                    <div
+                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                      }`}
+                                      style={{ color: sidebarSubTextColor }}
+                                    >
+                                      <LuReceipt size={16} className="shrink-0" />
+                                      {sidebarPreviewMode === 'opened' && (
+                                        <span className="truncate">Point of Sale</span>
+                                      )}
+                                    </div>
+
+                                    {/* Item 3: Inventory */}
+                                    <div
+                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                      }`}
+                                      style={{ color: sidebarSubTextColor }}
+                                    >
+                                      <LuPackage size={16} className="shrink-0" />
+                                      {sidebarPreviewMode === 'opened' && (
+                                        <span className="truncate">Inventory</span>
+                                      )}
+                                    </div>
+
+                                    {/* Item 4: Accounts */}
+                                    <div
+                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                      }`}
+                                      style={{ color: sidebarSubTextColor }}
+                                    >
+                                      <LuCreditCard size={16} className="shrink-0" />
+                                      {sidebarPreviewMode === 'opened' && (
+                                        <span className="truncate">Accounts</span>
+                                      )}
+                                    </div>
+
+                                    {/* Item 5: Customers */}
+                                    <div
+                                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                                        sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                                      }`}
+                                      style={{ color: sidebarSubTextColor }}
+                                    >
+                                      <LuUsers size={16} className="shrink-0" />
+                                      {sidebarPreviewMode === 'opened' && (
+                                        <span className="truncate">Customers</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Bottom Profile / Logout */}
+                                <div className="pt-3 border-t" style={{ borderColor: sidebarBorderColor }}>
+                                  {sidebarPreviewMode === 'opened' ? (
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div
+                                          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                                          style={{ backgroundColor: selectedAccentColor }}
+                                        >
+                                          SA
+                                        </div>
+                                        <div className="truncate font-bold">Super Admin</div>
+                                      </div>
+                                      <LuLogOut size={13} style={{ color: sidebarSubTextColor }} />
+                                    </div>
+                                  ) : (
+                                    <div className="flex justify-center">
+                                      <div
+                                        className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                                        style={{ backgroundColor: selectedAccentColor }}
+                                      >
+                                        SA
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* SIMULATED DASHBOARD WORKSPACE */}
+                              <div className="flex-1 flex flex-col p-3 overflow-hidden min-w-0">
+                                {/* Simulated Top Navbar */}
+                                <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-2xs backdrop-blur-xs mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className="w-2 h-2 rounded-full shrink-0"
+                                      style={{ backgroundColor: selectedAccentColor }}
+                                    />
+                                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                      UJC • Portal Active
+                                    </span>
+                                  </div>
+
+                                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-400 font-mono">
+                                    <LuSearch size={11} />
+                                    <span>Search sales, stock, ledgers...</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 text-[11px]">
+                                    <span
+                                      className="px-2 py-0.5 rounded-md font-bold text-[10px] text-white shadow-2xs"
+                                      style={{ backgroundColor: selectedAccentColor }}
+                                    >
+                                      + New Sale
+                                    </span>
+                                    <span className="text-slate-400 text-[10px] hidden md:inline">06:22 PM</span>
+                                  </div>
+                                </div>
+
+                                {/* Simulated Main Content Canvas */}
+                                <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div>
+                                        <div className="text-xs font-bold text-slate-900 dark:text-white">
+                                          Executive Management Dashboard
+                                        </div>
+                                        <div className="text-[10px] text-slate-400">
+                                          Real-time fiscal monitoring & operational intelligence
+                                        </div>
+                                      </div>
+
+                                      <span
+                                        className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase"
+                                        style={{
+                                          backgroundColor: `${selectedAccentColor}15`,
+                                          color: selectedAccentColor,
+                                        }}
+                                      >
+                                        Live Status
+                                      </span>
+                                    </div>
+
+                                    {/* 4 Stats Cards */}
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+                                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
+                                        <div className="text-[9px] uppercase font-bold text-slate-400">Today Sales</div>
+                                        <div className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5">Rs. 185,400</div>
+                                      </div>
+                                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
+                                        <div className="text-[9px] uppercase font-bold text-slate-400">Purchases</div>
+                                        <div className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5">Rs. 74,200</div>
+                                      </div>
+                                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
+                                        <div className="text-[9px] uppercase font-bold text-slate-400">Stock Assets</div>
+                                        <div className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5">4,820 Pcs</div>
+                                      </div>
+                                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
+                                        <div className="text-[9px] uppercase font-bold text-slate-400">Receivables</div>
+                                        <div className="text-xs font-black text-slate-800 dark:text-slate-100 mt-0.5">Rs. 320,000</div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Simulated Ledger Table Row Preview */}
+                                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 text-[10px]">
+                                    <div className="flex items-center justify-between text-slate-400 pb-1.5 border-b border-slate-100 dark:border-slate-800/80 font-bold uppercase text-[9px]">
+                                      <span>Recent Transaction</span>
+                                      <span>Amount</span>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1 text-slate-700 dark:text-slate-300">
+                                      <span className="truncate">INV-2026-0891 • Cotton Lawn Roll</span>
+                                      <span className="font-bold">Rs. 12,500</span>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1 text-slate-700 dark:text-slate-300">
+                                      <span className="truncate">INV-2026-0892 • Premium Linen 50m</span>
+                                      <span className="font-bold">Rs. 45,000</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
 
