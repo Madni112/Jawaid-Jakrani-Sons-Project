@@ -181,7 +181,7 @@ export const POSLogin: React.FC = () => {
           </div>
           <div>
             <h1 className="font-extrabold text-base tracking-tight leading-tight">
-              Uzair Jibran Cloth
+              Jawaid Jakwani & Sons
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -340,7 +340,7 @@ export const POSLogin: React.FC = () => {
 
       {/* Footer System Info */}
       <footer className="text-center text-xs text-slate-500 z-10 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-800/60 pt-4">
-        <span>Uzair Jibran Cloth POS v1.4 • High Security Atelier Counter</span>
+        <span>Jawaid Jakwani & Sons POS v1.4 • High Security Atelier Counter</span>
         <span>Register: {terminal.name} ({terminal.slug})</span>
       </footer>
 

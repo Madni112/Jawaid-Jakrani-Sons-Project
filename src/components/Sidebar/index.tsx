@@ -14,6 +14,11 @@ import {
   getSafeSidebarColor,
   SidebarLayoutMode,
   getSidebarLayoutMode,
+  SidebarThemeMode,
+  getSidebarThemeMode,
+  isDarkModeActive,
+  SidebarBehaviorMode,
+  getSidebarBehaviorMode,
 } from '../../constant/themeConfig';
 import { getBrandConfig } from '../../utils/brand';
 import IconDark from '../../images/logo/icon-dark.png';
@@ -32,7 +37,7 @@ interface SidebarProps {
 }
 
 // Collapsed hover nested flyout component
-const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebarColor }: any) => {
+const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebarColor, sidebarThemeMode }: any) => {
   const { isRTL } = useLanguage();
   const [showSubFlyout, setShowSubFlyout] = useState(false);
   const destination = (item.path && getTenantPath ? getTenantPath(item.path) : item.path) || '#';
@@ -46,7 +51,7 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
         onMouseLeave={() => setShowSubFlyout(false)}
       >
         <div
-          className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 hover:bg-slate-800/80 dark:hover:bg-slate-100 cursor-pointer"
+          className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 hover:bg-slate-100/90 dark:hover:bg-slate-800/80 cursor-pointer"
           style={{ color: sidebarColor }}
         >
           <span>{getSidebarLabel(item.label, isRTL)}</span>
@@ -55,7 +60,11 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
 
         {showSubFlyout && (
           <div
-            className="absolute left-full top-0 ml-1 min-w-[200px] rounded-xl border border-slate-700/90 dark:border-slate-200/90 bg-slate-900/95 dark:bg-white/95 p-1.5 shadow-2xl backdrop-blur-md z-99999"
+            className={`absolute left-full top-0 ml-1 min-w-[200px] rounded-xl border ${
+              sidebarThemeMode === 'light'
+                ? 'border-slate-200/90 bg-white/98 text-slate-800 shadow-xl'
+                : 'border-slate-700/90 bg-slate-900/95 text-slate-100 shadow-2xl'
+            } p-1.5 backdrop-blur-md z-99999`}
             style={{ animation: 'sidebarFlyoutFadeIn 0.15s ease-out forwards' }}
           >
             <div className="absolute top-0 -left-3 w-3 h-full bg-transparent" />
@@ -68,6 +77,7 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
                   handleLinkClick={handleLinkClick}
                   getTenantPath={getTenantPath}
                   sidebarColor={sidebarColor}
+                  sidebarThemeMode={sidebarThemeMode}
                 />
               ))}
             </ul>
@@ -82,7 +92,7 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
       <NavLink
         to={destination}
         onClick={handleLinkClick}
-        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 hover:bg-slate-800/80 dark:hover:bg-slate-100 ${
+        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 hover:bg-slate-100/90 dark:hover:bg-slate-800/80 ${
           isActive ? 'shadow-xs font-bold' : ''
         }`}
         style={{
@@ -111,6 +121,8 @@ const SidebarItem = ({
   getTenantPath,
   sidebarColor,
   layoutMode,
+  sidebarThemeMode,
+  sidebarBehaviorMode,
 }: any) => {
   const { isRTL } = useLanguage();
   const itemRef = useRef<HTMLDivElement>(null);
@@ -161,6 +173,8 @@ const SidebarItem = ({
 
   const handleLinkClick = () => {
     if (isMobile) {
+      setSidebarOpen(false);
+    } else if (sidebarBehaviorMode === 'closed') {
       setSidebarOpen(false);
     }
     hideModal();
@@ -267,6 +281,8 @@ const SidebarItem = ({
                         getTenantPath={getTenantPath}
                         sidebarColor={sidebarColor}
                         layoutMode={layoutMode}
+                        sidebarThemeMode={sidebarThemeMode}
+                        sidebarBehaviorMode={sidebarBehaviorMode}
                       />
                     ))}
                   </ul>
@@ -279,7 +295,11 @@ const SidebarItem = ({
         {/* Collapsed Flyout Popover */}
         {!sidebarOpen && showFlyout && !isMobile && (
           <div
-            className="fixed z-99999 min-w-[210px] rounded-2xl border border-slate-700/90 dark:border-slate-200/90 bg-slate-900/95 dark:bg-white/95 p-2 shadow-2xl backdrop-blur-md"
+            className={`fixed z-99999 min-w-[210px] rounded-2xl border ${
+              sidebarThemeMode === 'light'
+                ? 'border-slate-200/90 bg-white/98 text-slate-800 shadow-xl'
+                : 'border-slate-700/90 bg-slate-900/95 text-slate-100 shadow-2xl'
+            } p-2 backdrop-blur-md`}
             style={{
               top: `${flyoutTop}px`,
               left: `${flyoutLeft}px`,
@@ -308,6 +328,7 @@ const SidebarItem = ({
                   handleLinkClick={handleLinkClick}
                   getTenantPath={getTenantPath}
                   sidebarColor={sidebarColor}
+                  sidebarThemeMode={sidebarThemeMode}
                 />
               ))}
             </ul>
@@ -347,8 +368,9 @@ const SidebarItem = ({
         } ${shouldShowLabels ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
         style={{
           paddingLeft: shouldShowLabels ? `${(depth + 1) * 0.85}rem` : undefined,
-          color: sidebarColor,
-          backgroundColor: isDirectActive ? `${sidebarColor}20` : undefined,
+          color: isDirectActive ? 'var(--color-primary)' : sidebarColor,
+          backgroundColor: isDirectActive ? 'rgba(var(--color-primary-rgb), 0.12)' : undefined,
+          borderColor: isDirectActive ? 'rgba(var(--color-primary-rgb), 0.25)' : 'transparent',
         }}
       >
         {item.icon && (
@@ -369,7 +391,11 @@ const SidebarItem = ({
 
       {!sidebarOpen && showFlyout && !isMobile && (
         <div
-          className="fixed z-99999 px-3 py-1.5 rounded-xl border border-slate-700/90 dark:border-slate-200/90 bg-slate-900/95 dark:bg-white/95 text-xs font-bold shadow-2xl backdrop-blur-md pointer-events-none whitespace-nowrap"
+          className={`fixed z-99999 px-3 py-1.5 rounded-xl border ${
+            sidebarThemeMode === 'light'
+              ? 'border-slate-200/90 bg-white/98 text-slate-800 shadow-xl'
+              : 'border-slate-700/90 bg-slate-900/95 text-slate-100 shadow-2xl'
+          } text-xs font-bold backdrop-blur-md pointer-events-none whitespace-nowrap`}
           style={{
             top: `${flyoutTop}px`,
             left: `${flyoutLeft}px`,
@@ -418,6 +444,39 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   // Sidebar Layout Mode (Floating Modern vs Classic Edge)
   const [layoutMode, setLayoutMode] = useState<SidebarLayoutMode>(getSidebarLayoutMode());
 
+  // Sidebar Behavior Mode ('opened' = Pinned Expanded vs 'closed' = Auto-Expand on Click & Hover-Out Collapse)
+  const [sidebarBehaviorMode, setSidebarBehaviorModeState] = useState<SidebarBehaviorMode>(getSidebarBehaviorMode());
+  const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const updateBehavior = () => {
+      setSidebarBehaviorModeState(getSidebarBehaviorMode());
+    };
+    window.addEventListener('jakwani_sidebar_behavior_changed', updateBehavior);
+    window.addEventListener('storage', updateBehavior);
+    return () => {
+      window.removeEventListener('jakwani_sidebar_behavior_changed', updateBehavior);
+      window.removeEventListener('storage', updateBehavior);
+    };
+  }, []);
+
+  // Sidebar Theme Mode (light / navy / emerald / charcoal / dark)
+  const [sidebarThemeMode, setSidebarThemeModeState] = useState<SidebarThemeMode>(getSidebarThemeMode());
+
+  useEffect(() => {
+    const updateTheme = () => {
+      setSidebarThemeModeState(getSidebarThemeMode());
+    };
+    window.addEventListener('jakwani_sidebar_theme_changed', updateTheme);
+    window.addEventListener('jakwani_theme_suite_changed', updateTheme);
+    window.addEventListener('storage', updateTheme);
+    return () => {
+      window.removeEventListener('jakwani_sidebar_theme_changed', updateTheme);
+      window.removeEventListener('jakwani_theme_suite_changed', updateTheme);
+      window.removeEventListener('storage', updateTheme);
+    };
+  }, []);
+
   useEffect(() => {
     const updateLayoutMode = () => {
       setLayoutMode(getSidebarLayoutMode());
@@ -434,8 +493,9 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
   useEffect(() => {
     const updateColors = () => {
-      const raw = localStorage.getItem('uzair_jibran_sidebar_raw_color') || getSavedSidebarColor();
-      const res = getSafeSidebarColor(raw);
+      const inDark = isDarkModeActive();
+      const raw = localStorage.getItem('uzair_jibran_sidebar_raw_color') || getSavedSidebarColor(inDark);
+      const res = getSafeSidebarColor(raw, inDark);
       setCurrentSidebarColor(res.safeColor);
       setWasContrastAdjusted(res.wasAdjusted);
     };
@@ -443,11 +503,15 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
     updateColors();
 
     window.addEventListener('uzair_jibran_sidebar_color_changed', updateColors);
+    window.addEventListener('jakwani_sidebar_theme_changed', updateColors);
+    window.addEventListener('jakwani_theme_suite_changed', updateColors);
     window.addEventListener('color-mode-changed', updateColors);
     window.addEventListener('storage', updateColors);
 
     return () => {
       window.removeEventListener('uzair_jibran_sidebar_color_changed', updateColors);
+      window.removeEventListener('jakwani_sidebar_theme_changed', updateColors);
+      window.removeEventListener('jakwani_theme_suite_changed', updateColors);
       window.removeEventListener('color-mode-changed', updateColors);
       window.removeEventListener('storage', updateColors);
     };
@@ -461,25 +525,131 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
   const isMobile = windowWidth <= 750;
 
+  const themeStyles = (() => {
+    switch (sidebarThemeMode) {
+      case 'light':
+        return {
+          bg: 'bg-white dark:bg-[#0B0F17]',
+          text: 'text-slate-800 dark:text-slate-100',
+          border: 'border-slate-200/90 dark:border-slate-800/90',
+          headerBorder: 'border-slate-100 dark:border-slate-800/80',
+          toggleBg: 'bg-white dark:bg-[#0B0F17]',
+          toggleBorder: 'border-slate-200 dark:border-slate-700',
+          toggleText: 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+          hoverBg: 'hover:bg-slate-100/90 dark:hover:bg-slate-800/80',
+          shadow: layoutMode === 'floating' ? 'shadow-xl shadow-slate-200/70 dark:shadow-2xl' : 'shadow-md',
+          brandCard: 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800',
+          brandText: 'text-slate-900 dark:text-white',
+          brandSub: 'text-slate-500 dark:text-slate-400',
+        };
+      case 'navy':
+        return {
+          bg: 'bg-[#0F172A]',
+          text: 'text-slate-100',
+          border: 'border-slate-800/90',
+          headerBorder: 'border-slate-800/80',
+          toggleBg: 'bg-[#0F172A]',
+          toggleBorder: 'border-slate-700',
+          toggleText: 'text-slate-400 hover:text-white',
+          hoverBg: 'hover:bg-slate-800/80',
+          shadow: 'shadow-2xl shadow-slate-950/60',
+          brandCard: 'bg-slate-900 border-slate-800',
+          brandText: 'text-white',
+          brandSub: 'text-slate-400',
+        };
+      case 'emerald':
+        return {
+          bg: 'bg-[#0A1A18]',
+          text: 'text-slate-100',
+          border: 'border-emerald-950/80',
+          headerBorder: 'border-emerald-950/70',
+          toggleBg: 'bg-[#0A1A18]',
+          toggleBorder: 'border-emerald-900/80',
+          toggleText: 'text-emerald-300/70 hover:text-white',
+          hoverBg: 'hover:bg-emerald-950/60',
+          shadow: 'shadow-2xl shadow-emerald-950/50',
+          brandCard: 'bg-[#061412] border-emerald-900/50',
+          brandText: 'text-white',
+          brandSub: 'text-emerald-400/80',
+        };
+      case 'charcoal':
+        return {
+          bg: 'bg-[#1C1917]',
+          text: 'text-slate-100',
+          border: 'border-stone-800/90',
+          headerBorder: 'border-stone-800/70',
+          toggleBg: 'bg-[#1C1917]',
+          toggleBorder: 'border-stone-700',
+          toggleText: 'text-stone-400 hover:text-white',
+          hoverBg: 'hover:bg-stone-800/80',
+          shadow: 'shadow-2xl shadow-stone-950/60',
+          brandCard: 'bg-stone-900 border-stone-800',
+          brandText: 'text-white',
+          brandSub: 'text-stone-400',
+        };
+      case 'dark':
+      default:
+        return {
+          bg: 'bg-[#0B0F17]',
+          text: 'text-slate-100',
+          border: 'border-slate-800/90',
+          headerBorder: 'border-slate-800/80',
+          toggleBg: 'bg-[#0B0F17]',
+          toggleBorder: 'border-slate-700/80',
+          toggleText: 'text-slate-400 hover:text-white',
+          hoverBg: 'hover:bg-slate-800/80',
+          shadow: 'shadow-2xl',
+          brandCard: 'bg-slate-900 border-slate-800',
+          brandText: 'text-white',
+          brandSub: 'text-slate-400',
+        };
+    }
+  })();
+
   return (
     <aside
       ref={sidebar}
-      className={`flex flex-col bg-[#0B0F17] dark:bg-white text-slate-100 dark:text-slate-900 duration-300 ease-in-out shadow-2xl select-none ${
+      onClick={() => {
+        if (!sidebarOpen && !isMobile && sidebarBehaviorMode === 'closed') {
+          if (collapseTimeoutRef.current) {
+            clearTimeout(collapseTimeoutRef.current);
+            collapseTimeoutRef.current = null;
+          }
+          setSidebarOpen(true);
+        }
+      }}
+      onMouseEnter={() => {
+        if (collapseTimeoutRef.current) {
+          clearTimeout(collapseTimeoutRef.current);
+          collapseTimeoutRef.current = null;
+        }
+      }}
+      onMouseLeave={() => {
+        if (sidebarOpen && !isMobile && sidebarBehaviorMode === 'closed') {
+          if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
+          collapseTimeoutRef.current = setTimeout(() => {
+            setSidebarOpen(false);
+          }, 220);
+        }
+      }}
+      className={`flex flex-col ${themeStyles.bg} ${themeStyles.text} duration-300 ease-in-out select-none ${themeStyles.shadow} ${
+        !sidebarOpen && sidebarBehaviorMode === 'closed' ? 'cursor-pointer' : ''
+      } ${
         isMobile
           ? 'fixed left-0 top-0 z-99999 h-screen block'
           : `min-[751px]:relative min-[751px]:shrink-0 min-[751px]:z-30 ${
               layoutMode === 'floating'
-                ? 'min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-3xl min-[751px]:border min-[751px]:border-slate-800/90 dark:min-[751px]:border-slate-200/90 min-[751px]:shadow-2xl'
-                : 'min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-slate-800/90 dark:min-[751px]:border-slate-200/90'
+                ? `min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-3xl min-[751px]:border ${themeStyles.border}`
+                : `min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r ${themeStyles.border}`
             }`
       } ${
         sidebarOpen
-          ? `w-72.5 translate-x-0 visible ${layoutMode === 'classic' ? 'border-r border-slate-800/90 dark:border-slate-200/90' : ''}`
-          : `w-0 -translate-x-full min-[751px]:w-18 ${layoutMode === 'floating' ? 'min-[751px]:translate-x-0' : 'min-[751px]:translate-x-0 min-[751px]:border-r min-[751px]:border-slate-800/90 dark:min-[751px]:border-slate-200/90'} max-[750px]:invisible`
+          ? `w-72.5 translate-x-0 visible ${layoutMode === 'classic' ? `border-r ${themeStyles.border}` : ''}`
+          : `w-0 -translate-x-full min-[751px]:w-18 ${layoutMode === 'floating' ? 'min-[751px]:translate-x-0' : `min-[751px]:translate-x-0 min-[751px]:border-r ${themeStyles.border}`} max-[750px]:invisible`
       }`}
     >
       {/* Brand Header */}
-      <div className={`flex items-center shrink-0 border-b border-slate-800/80 dark:border-slate-200/80 ${
+      <div className={`flex items-center shrink-0 border-b ${themeStyles.headerBorder} ${
         sidebarOpen ? 'px-5 py-4' : 'justify-center p-3'
       }`}>
         {sidebarOpen ? (
@@ -487,16 +657,15 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             to="/dashboard"
             className="flex items-center gap-3 transition-opacity duration-200 hover:opacity-90 min-w-0"
           >
-            <div className="w-10 h-10 rounded-xl bg-slate-900 dark:bg-slate-100 p-1 flex items-center justify-center shadow-md shrink-0 border border-slate-800 dark:border-slate-200 overflow-hidden select-none">
-              <img src={IconDark} alt="Logo" className="w-full h-full object-contain block dark:hidden" />
-              <img src={IconLight} alt="Logo" className="w-full h-full object-contain hidden dark:block" />
+            <div className={`w-10 h-10 rounded-xl ${themeStyles.brandCard} p-1 flex items-center justify-center shadow-md shrink-0 border overflow-hidden select-none`}>
+              <img src={sidebarThemeMode === 'light' ? IconLight : IconDark} alt="Logo" className="w-full h-full object-contain" />
             </div>
 
             <div className="flex flex-col min-w-0">
-              <span className={`font-black tracking-tight text-sm text-white dark:text-slate-900 leading-tight truncate ${isRTL ? 'font-sans' : 'font-cinzel'}`}>
-                {isRTL ? 'عزیر جبران کلوتھ' : (brand.fullName || 'UZAIR JIBRAN CLOTH')}
+              <span className={`font-black tracking-tight text-sm ${themeStyles.brandText} leading-tight truncate ${isRTL ? 'font-sans' : 'font-cinzel'}`}>
+                {isRTL ? 'جاوید جکوانی اینڈ سنز' : (brand.fullName || 'JAWAID JAKWANI & SONS')}
               </span>
-              <span className="text-[10px] font-mono tracking-wider uppercase text-slate-400 dark:text-slate-500 font-bold">
+              <span className={`text-[10px] font-mono tracking-wider uppercase ${themeStyles.brandSub} font-bold`}>
                 {isRTL ? 'کلوتھ ERP' : 'CLOTH ERP'}
               </span>
             </div>
@@ -517,10 +686,10 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
       <button
         type="button"
         onClick={() => setSidebarOpen((prev) => !prev)}
-        className={`absolute top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-5 h-10 bg-[#0B0F17] dark:bg-white text-slate-400 dark:text-slate-600 hover:text-white dark:hover:text-black shadow-md cursor-pointer transition-all duration-200 hover:w-6 hover:text-primary dark:hover:text-primary group ${
+        className={`absolute top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-5 h-10 ${themeStyles.toggleBg} ${themeStyles.toggleText} shadow-md cursor-pointer transition-all duration-200 hover:w-6 group ${
           isRTL
-            ? '-left-3.5 rounded-l-full border-y border-l border-slate-700/80 dark:border-slate-300'
-            : '-right-3.5 rounded-r-full border-y border-r border-slate-700/80 dark:border-slate-300'
+            ? `-left-3.5 rounded-l-full border-y border-l ${themeStyles.toggleBorder}`
+            : `-right-3.5 rounded-r-full border-y border-r ${themeStyles.toggleBorder}`
         }`}
         title={sidebarOpen ? (isRTL ? 'سائیڈبار بند کریں' : 'Collapse Sidebar (<)') : (isRTL ? 'سائیڈبار کھولیں' : 'Expand Sidebar (>)')}
       >
@@ -556,6 +725,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               getTenantPath={getTenantPath}
               sidebarColor={currentSidebarColor}
               layoutMode={layoutMode}
+              sidebarThemeMode={sidebarThemeMode}
+              sidebarBehaviorMode={sidebarBehaviorMode}
             />
           ))}
 
@@ -563,6 +734,11 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           <li className="w-full mt-2">
             <NavLink
               to={getTenantPath('/settings')}
+              onClick={() => {
+                if (sidebarBehaviorMode === 'closed' && !isMobile) {
+                  setSidebarOpen(false);
+                }
+              }}
               className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out hover:bg-slate-800/80 dark:hover:bg-slate-100 ${
                 pathname === getTenantPath('/settings') || pathname === '/settings' ? 'font-bold shadow-xs' : ''
               } ${sidebarOpen ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}

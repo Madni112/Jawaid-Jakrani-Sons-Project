@@ -75,7 +75,7 @@ const CompanyLanding: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-1.5 font-black text-sm sm:text-base tracking-tight leading-tight">
-                <span className="text-emerald-600 dark:text-emerald-400">UZAIR JIBRAN</span>
+                <span className="text-emerald-600 dark:text-emerald-400">JAWAID JAKWANI & SONS</span>
                 <span className="text-slate-900 dark:text-white">CLOTH</span>
               </div>
               <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono tracking-wider uppercase font-semibold">
@@ -677,7 +677,7 @@ const CompanyLanding: React.FC = () => {
           </div>
 
           <div className="text-center sm:text-right text-[11px]">
-            Engineered and maintained natively by <span className="text-slate-700 dark:text-slate-300 font-semibold">NHT ENTERPRISES (Abdul Sattar)</span> for <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Uzair Jibran Cloth</span>.
+            Engineered and maintained natively by <span className="text-slate-700 dark:text-slate-300 font-semibold">NHT ENTERPRISES (Abdul Sattar)</span> for <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Jawaid Jakwani & Sons</span>.
           </div>
         </div>
       </footer>

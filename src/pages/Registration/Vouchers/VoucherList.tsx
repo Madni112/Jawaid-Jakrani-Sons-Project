@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
 import { MdReceipt, MdAssignment, MdDelete } from 'react-icons/md';
+import { LuSparkles } from 'react-icons/lu';
 import { useAuth } from '../../../Context/Auth';
 import { recalculateInvoiceSettlementStatus } from '../../../service/financialCalculations';
 
@@ -23,16 +24,146 @@ function VoucherList() {
     fetchVoucherLedgerHistory();
   }, []);
 
+  const [syncing, setSyncing] = useState(false);
+
+  const syncCustomerOpeningBalances = async (silent = false) => {
+    try {
+      setSyncing(true);
+      // 1. Fetch customers with opening balance
+      const { data: customers, error: custErr } = await supabase
+        .from('customers')
+        .select('*');
+
+      if (custErr) throw custErr;
+      if (!customers || customers.length === 0) {
+        if (!silent) toast('No customer records found to sync.');
+        return;
+      }
+
+      // 2. Fetch existing financial vouchers
+      const { data: existingVouchers } = await supabase
+        .from('financial_vouchers')
+        .select('id, voucher_no, account_code, total_amount, debit, credit, voucher_type');
+
+      // Auto-repair any existing vouchers where total_amount is 0/null but debit/credit is set
+      if (existingVouchers) {
+        for (const ev of existingVouchers) {
+          const actualAmt = Number(ev.debit) || Number(ev.credit) || 0;
+          if ((!ev.total_amount || Number(ev.total_amount) === 0) && actualAmt > 0) {
+            try {
+              await supabase.from('financial_vouchers').update({ total_amount: actualAmt }).eq('id', ev.id);
+            } catch {}
+          }
+        }
+      }
+
+      const existingNos = new Set((existingVouchers || []).map((v: any) => String(v.voucher_no || '').trim().toUpperCase()));
+
+      const toInsert: any[] = [];
+
+      customers.forEach((c: any) => {
+        const rawBal = c.opening_balance ?? c.openingBalance ?? c.balance ?? c.currentBalance;
+        const bal = Math.abs(Number(rawBal) || 0);
+        if (bal <= 0) return;
+
+        const code = String(c.customer_code || c.customerCode || c.coa_code || c.id || '').trim();
+        const cleanCode = code ? (code.length < 3 ? code.padStart(3, '0') : code) : `CUST-${c.id}`;
+        const voucherNo = `OB-${cleanCode}`.toUpperCase();
+
+        // Skip if voucher already documented
+        if (existingNos.has(voucherNo)) return;
+
+        const custName = c.customerName || c.customername || c.customer_name || c.name || `Customer #${cleanCode}`;
+        const nature = c.balance_nature || c.balanceNature || 'Debit';
+        const isDebit = String(nature).toLowerCase() === 'debit';
+
+        toInsert.push({
+          voucher_no: `OB-${cleanCode}`,
+          voucher_type: 'Journal Voucher',
+          voucher_date: c.created_at ? c.created_at.split('T')[0] : '2026-10-31',
+          account_code: cleanCode,
+          account_title: custName,
+          total_amount: bal,
+          debit: isDebit ? bal : 0,
+          credit: !isDebit ? bal : 0,
+          narration: `Opening Balance for Customer ${custName}`
+        });
+      });
+
+      if (toInsert.length > 0) {
+        const { error: insertErr } = await supabase
+          .from('financial_vouchers')
+          .insert(toInsert);
+
+        if (insertErr) {
+          console.error('Batch voucher insert error:', insertErr);
+          if (!silent) toast.error('Failed to sync some vouchers: ' + insertErr.message);
+        } else {
+          toast.success(`Generated ${toInsert.length} customer opening balance vouchers!`);
+          await fetchVoucherLedgerHistory();
+        }
+      } else {
+        if (!silent) {
+          toast.success('All customer opening balances are already documented in vouchers!');
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (!silent) toast.error('Sync error: ' + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const fetchVoucherLedgerHistory = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('financial_vouchers')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
 
       if (error) throw error;
-      setVouchers(data || []);
+
+      // Auto-deduplicate by normalized voucher number and customer (keeping exactly 1 voucher per customer)
+      const seenKeys = new Set<string>();
+      const uniqueList: any[] = [];
+      const duplicateIdsToDelete: any[] = [];
+
+      (data || []).forEach((v: any) => {
+        const rawNo = String(v.voucher_no || '').trim().toUpperCase();
+        const numMatch = rawNo.match(/OB-(?:2020-)?(\d+)/);
+        const normNo = numMatch ? `OB-${numMatch[1].padStart(3, '0')}` : rawNo;
+        const custKey = String(v.account_code || v.account_title || '').trim().toLowerCase();
+
+        // Primary key by normalized voucher number, fallback by customer key
+        const uniqueKey = normNo.startsWith('OB-') ? normNo : (custKey || v.id);
+
+        if (seenKeys.has(uniqueKey) || (custKey && seenKeys.has('cust:' + custKey))) {
+          duplicateIdsToDelete.push(v.id);
+        } else {
+          seenKeys.add(uniqueKey);
+          if (custKey) seenKeys.add('cust:' + custKey);
+          uniqueList.push(v);
+        }
+      });
+
+      // Permanently remove duplicates from database
+      if (duplicateIdsToDelete.length > 0) {
+        try {
+          await supabase.from('financial_vouchers').delete().in('id', duplicateIdsToDelete);
+        } catch (delErr) {
+          console.warn('Voucher cleanup note:', delErr);
+        }
+      }
+
+      // Sort vouchers sequentially by number (OB-001, OB-002, ..., OB-033)
+      uniqueList.sort((a, b) => {
+        const numA = parseInt(String(a.voucher_no || '').replace(/\D/g, '') || '999999', 10);
+        const numB = parseInt(String(b.voucher_no || '').replace(/\D/g, '') || '999999', 10);
+        return numA - numB;
+      });
+
+      setVouchers(uniqueList);
     } catch (err: any) {
       toast.error('Failed to load voucher histories: ' + err.message);
     } finally {
@@ -97,13 +228,16 @@ function VoucherList() {
         <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
           🧾 General Ledger Financial Vouchers
         </h2>
-        <button
-          type="button"
-          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/Vouchers/Add`)}
-          className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition duration-150 shadow-sm cursor-pointer"
-        >
-          + Add New Voucher
-        </button>
+        <div className="flex items-center gap-2.5">
+          
+          <button
+            type="button"
+            onClick={() => navigate('/Registration/Vouchers/Add')}
+            className="flex items-center justify-center rounded-lg bg-primary py-2 px-4 text-xs font-bold text-white hover:bg-opacity-90 transition duration-150 shadow-sm cursor-pointer"
+          >
+            + Add New Voucher
+          </button>
+        </div>
 
       </div>
 
@@ -154,15 +288,26 @@ function VoucherList() {
                       <td className="py-3.5 px-4 font-medium text-black dark:text-white">{serialNumber}</td>
                       <td className="py-3.5 px-4 font-mono font-bold text-primary tracking-wide">{v.voucher_no}</td>
                       <td className="py-3.5 px-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider text-[10px]
-                          ${v.voucher_type === 'Journal Voucher' ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-600' :
-                            v.voucher_type?.includes('Receipt') ? 'bg-success/10 text-success' : 'bg-red-50 dark:bg-red-950/40 text-danger'}`}>
-                          <MdAssignment size={11} /> {v.voucher_type}
-                        </span>
+                        {(() => {
+                          const isJV = v.voucher_type === 'Journal Voucher' || v.voucher_type === 'JV';
+                          const isReceipt = v.voucher_type?.includes('Receipt') || v.voucher_type === 'CRV' || v.voucher_type === 'BRV';
+                          return (
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider text-[10px]
+                              ${isJV ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-600' :
+                                isReceipt ? 'bg-success/10 text-success' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600'}`}>
+                              <MdAssignment size={11} /> {isJV ? 'Journal Voucher' : v.voucher_type}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 font-medium max-w-xs">
                         <div className="flex flex-col gap-0.5">
-                          {v.items && v.items.map((item: any, idx: number) => {
+                          {(v.account_title || v.account_code) && (
+                            <div className="text-[11px] font-bold text-black dark:text-white">
+                              {v.account_title || v.account_code} {v.debit > 0 ? `(Dr: ${Number(v.debit).toLocaleString()})` : v.credit > 0 ? `(Cr: ${Number(v.credit).toLocaleString()})` : ''}
+                            </div>
+                          )}
+                          {!v.voucher_no?.startsWith('OB-') && v.items && v.items.filter((it: any) => it.accountCode !== '3010-001').map((item: any, idx: number) => {
                             const amountStr = item.debit > 0 ? `(Dr: ${item.debit})` : `(Cr: ${item.credit})`;
                             return (
                               <div key={idx} className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
@@ -173,14 +318,13 @@ function VoucherList() {
                           {(v.notes || v.narration) && <p className="text-[10px] text-emerald-600 dark:text-emerald-400 border-t border-stroke dark:border-strokedark mt-1 pt-0.5 italic">Note: {v.notes || v.narration}</p>}
                         </div>
                       </td>
-                      <td className="py-3.5 px-4 text-right font-bold text-black dark:text-white font-mono">{Number(v.total_amount || 0).toFixed(2)}</td>
+                      <td className="py-3.5 px-4 text-right font-bold text-black dark:text-white font-mono">{Number(v.total_amount || v.debit || v.credit || 0).toFixed(2)}</td>
                       <td className="py-3.5 px-4 text-center text-gray-500 font-medium">{v.voucher_date}</td>
                       <td className="py-3.5 px-4 text-center">
                         <TableActions
-                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/Vouchers/Add`, { state: { voucher: v } })}
-                          onDelete={() => handleDeleteVoucher(v.id)}
+                          onEdit={() => navigate(`/Registration/Vouchers/Add?id=${v.id}`, { state: { voucher: v } })}
+                          canDelete={false}
                           editTitle="View or Edit Voucher"
-                          deleteTitle="Delete Voucher"
                         />
                       </td>
                     </tr>

@@ -1,8 +1,8 @@
 /**
- * Dynamic Enterprise Branding Configuration for Uzair Jibran Cloth
+ * Dynamic Enterprise Branding Configuration for Jawaid Jakwani & Sons
  * 
  * Guarantees zero cross-contamination so brand name, codes, and credentials
- * remain strictly scoped to UZAIR JIBRAN CLOTH.
+ * remain strictly scoped to JAWAID JAKWANI & SONS.
  */
 
 export interface BrandConfig {
@@ -29,14 +29,14 @@ export function getBrandConfig(): BrandConfig {
   return {
     isAlm: false,
     code: 'UJC',
-    name: 'Uzair Jibran Cloth',
-    fullName: 'UZAIR JIBRAN CLOTH',
-    brandWord1: 'UZAIR',
-    brandWord2: 'JIBRAN',
-    brandSuffix: 'CLOTH',
-    shortName: 'UJC',
-    portalName: 'Uzair Jibran Cloth (UJC)',
-    adminEmail: 'uzairjibran@nht.com',
+    name: 'Jawaid Jakwani & Sons',
+    fullName: 'JAWAID JAKWANI & SONS',
+    brandWord1: 'JAWAID',
+    brandWord2: 'JAKWANI',
+    brandSuffix: '& SONS',
+    shortName: 'JJS',
+    portalName: 'Jawaid Jakwani & Sons (JJS)',
+    adminEmail: 'jawaidjakwani@nht.com',
     supportPhone: '0312-8039911',
     address: 'Cloth Market, Pakistan',
     tagline: 'Retail & Wholesale Textile Management Infrastructure',

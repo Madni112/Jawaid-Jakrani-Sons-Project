@@ -734,7 +734,7 @@ const DeveloperDashboard: React.FC = () => {
             full_name: salesmanToAssignLogin.name.trim(),
             role: assignLoginRole,
             tenant_id: cleanSlug,
-            business_name: 'UZAIR JIBRAN CLOTH',
+            business_name: 'JAWAID JAKWANI & SONS',
             allowed_modules: roleModules,
           },
         },
@@ -749,7 +749,7 @@ const DeveloperDashboard: React.FC = () => {
           slug: cleanSlug,
           email: assignLoginEmail.trim(),
           business_activity: assignLoginRole,
-          seller_address: 'Uzair Jibran Cloth',
+          seller_address: 'Jawaid Jakwani & Sons',
           allowed_modules: roleModules,
         },
       ], { onConflict: 'slug' });
@@ -1167,7 +1167,7 @@ const DeveloperDashboard: React.FC = () => {
             full_name: newEmployee.name.trim(),
             role: newEmployee.role,
             tenant_id: cleanSlug,
-            business_name: 'UZAIR JIBRAN CLOTH',
+            business_name: 'JAWAID JAKWANI & SONS',
             allowed_modules: newEmployee.modules,
           },
         },
@@ -1183,7 +1183,7 @@ const DeveloperDashboard: React.FC = () => {
             slug: cleanSlug,
             email: newEmployee.email.trim(),
             business_activity: newEmployee.role,
-            seller_address: 'Uzair Jibran Cloth',
+            seller_address: 'Jawaid Jakwani & Sons',
             allowed_modules: newEmployee.modules,
             location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
           },
@@ -1197,7 +1197,7 @@ const DeveloperDashboard: React.FC = () => {
               slug: cleanSlug,
               email: newEmployee.email.trim(),
               business_activity: newEmployee.role,
-              seller_address: 'Uzair Jibran Cloth',
+              seller_address: 'Jawaid Jakwani & Sons',
               allowed_modules: newEmployee.modules,
               location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
             },
@@ -1727,7 +1727,7 @@ const DeveloperDashboard: React.FC = () => {
               <MdSecurity />
             </div>
             <h2 className="text-2xl font-black tracking-tight text-black dark:text-white">Master Role & Dev Console</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for UZAIR JIBRAN CLOTH</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for JAWAID JAKWANI & SONS</p>
           </div>
 
           {authError && (
@@ -1790,7 +1790,7 @@ const DeveloperDashboard: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">UZAIR JIBRAN CLOTH</h1>
+              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">JAWAID JAKWANI & SONS</h1>
               <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                 Employee Role & Access Control
               </span>
@@ -2195,7 +2195,7 @@ const DeveloperDashboard: React.FC = () => {
                   </p>
                 </div>
                 <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-semibold flex items-center gap-1.5">
-                  <MdSecurity /> UZAIR JIBRAN CLOTH RBAC
+                  <MdSecurity /> JAWAID JAKWANI & SONS RBAC
                 </span>
               </div>
 
@@ -2261,7 +2261,7 @@ const DeveloperDashboard: React.FC = () => {
                       <input
                         type="email"
                         required
-                        placeholder="e.g. employee@uzairjibrancloth.com"
+                        placeholder="e.g. employee@jawaidjakwani.com"
                         value={newEmployee.email}
                         onChange={e => setNewEmployee({ ...newEmployee, email: e.target.value })}
                         className="w-full bg-white dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-lg p-2.5 text-black dark:text-white text-xs outline-none focus:border-emerald-500"

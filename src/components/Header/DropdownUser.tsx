@@ -54,7 +54,7 @@ const DropdownUser = () => {
 
   // Translate brand company and role when in Urdu mode
   const displayCompanyName = isRTL
-    ? (rawCompanyName.toLowerCase().includes('uzair jibran') ? 'عزیر جبران کلوتھ' : getUrduText(rawCompanyName))
+    ? ((rawCompanyName.toLowerCase().includes('uzair jibran') || rawCompanyName.toLowerCase().includes('jawaid')) ? 'جاوید جکوانی اینڈ سنز' : getUrduText(rawCompanyName))
     : rawCompanyName;
 
   const displayRole = isRTL

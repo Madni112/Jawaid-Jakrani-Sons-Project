@@ -244,8 +244,10 @@ export const QUICK_MAP: Record<string, string> = {
     'no transaction voucher slips documented inside system history logs': 'کوئی واؤچر ریکارڈ نہیں ملا۔',
 
   // Top Nav & Brand
-    'uzair jibran cloth': 'عزیر جبران کلوتھ',
-    'uzair jibran': 'عزیر جبران',
+    'uzair jibran cloth': 'جاوید جکوانی اینڈ سنز',
+    'jawaid jawani & sons': 'جاوید جکوانی اینڈ سنز',
+    'jawaid jawani': 'جاوید جکوانی',
+    'uzair jibran': 'جاوید جکوانی',
     'cloth erp': 'کلوتھ ERP',
     'cloth retail & wholesale': 'کلوتھ ریٹیل اینڈ ہول سیل',
     'retail & wholesale': 'ریٹیل اینڈ ہول سیل',

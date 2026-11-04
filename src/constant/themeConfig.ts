@@ -39,7 +39,189 @@ export const PRESET_THEME_COLORS: ThemeColor[] = [
   { name: 'Pitch Black', hex: '#000000' },
 ];
 
-export const DEFAULT_THEME_COLOR = '#06B6D4'; // Vibrant Cyan default
+export const DEFAULT_THEME_COLOR = '#2563EB'; // Cobalt / Electric Blue for Modern SaaS look
+
+export type SidebarThemeMode = 'light' | 'dark' | 'navy' | 'emerald' | 'charcoal';
+
+export interface CuratedThemeSuite {
+  id: string;
+  name: string;
+  urName: string;
+  isRecommended?: boolean;
+  badge?: string;
+  tagline: string;
+  urTagline: string;
+  sidebarTheme: SidebarThemeMode;
+  sidebarBg: string;
+  sidebarBorder: string;
+  sidebarTextColor: string;
+  accentColor: string;
+  accentName: string;
+  previewBg: string;
+  description: string;
+  urDescription: string;
+}
+
+export const CURATED_THEME_SUITES: CuratedThemeSuite[] = [
+  {
+    id: 'unified-light',
+    name: 'Unified Clean Light',
+    urName: 'یونیفائیڈ کلین لائٹ',
+    isRecommended: true,
+    badge: 'Recommended • Modern Minimalist',
+    tagline: 'Clean white canvas • Eliminates floating island effect',
+    urTagline: 'صاف و شفاف وائٹ کینوس • جدید ترین اور واضح انداز',
+    sidebarTheme: 'light',
+    sidebarBg: '#FFFFFF',
+    sidebarBorder: '#E2E8F0',
+    sidebarTextColor: '#0F172A',
+    accentColor: '#2563EB', // Cobalt Blue
+    accentName: 'Electric Blue',
+    previewBg: '#F8FAFC',
+    description: 'Removes the dark floating island look. Clean white sidebar with subtle border and vivid electric blue accents for a modern Apple/Stripe feel.',
+    urDescription: 'سائیڈبار کو خوبصورت سفید رنگ اور واضح نیلی پٹیوں کے ساتھ یکجا کرتا ہے تاکہ پورا سسٹم جدید اور پڑھنے میں آسان لگے۔',
+  },
+  {
+    id: 'executive-navy',
+    name: 'Executive Deep Navy & Ice Blue',
+    urName: 'ایگزیکٹو ڈیپ نیوی اور آئس بلیو',
+    badge: 'Executive Corporate',
+    tagline: 'Deep corporate midnight navy with crisp ice blue accents',
+    urTagline: 'کارپوریٹ گہرا نیوی نیلا اور چمکدار آئس بلیو رنگ',
+    sidebarTheme: 'navy',
+    sidebarBg: '#0F172A',
+    sidebarBorder: '#1E293B',
+    sidebarTextColor: '#F8FAFC',
+    accentColor: '#0284C7', // Sky Blue
+    accentName: 'Sky Blue',
+    previewBg: '#F8FAFC',
+    description: 'Prestigious corporate deep navy sidebar paired with bright sky blue accents for an authoritative executive look.',
+    urDescription: 'باوقار اور گہرا نیوی سائیڈبار جو کہ نیلے ایکسنٹ کے ساتھ پرکشش انتظامی شکل دیتا ہے۔',
+  },
+  {
+    id: 'emerald-pearl',
+    name: 'Emerald Slate & Pearl',
+    urName: 'زمرد اور پرل کلوتھ تھیم',
+    badge: 'Cloth Merchant Heritage',
+    tagline: 'Rich jewel-toned dark emerald with fresh green accents',
+    urTagline: 'کپڑے کے تاجروں کا روایتی باوقار زمردی سبز انداز',
+    sidebarTheme: 'emerald',
+    sidebarBg: '#0A1A18',
+    sidebarBorder: '#064E3B',
+    sidebarTextColor: '#ECFDF5',
+    accentColor: '#059669', // Emerald Green
+    accentName: 'Emerald Green',
+    previewBg: '#F8FAFC',
+    description: 'Bespoke deep botanical emerald sidebar reflecting textile tradition with crisp emerald jewel tones.',
+    urDescription: 'کپڑے اور پارچہ بافی کی شان کے عین مطابق گہرا زمردی سبز سائیڈبار اور شفاف موتی جیسے سفید صفحات۔',
+  },
+  {
+    id: 'warm-charcoal',
+    name: 'Warm Charcoal & Amber Gold',
+    urName: 'وارم چارکول اور گولڈ تھیم',
+    badge: 'Artisan Luxury',
+    tagline: 'Warm stone charcoal sidebar paired with rich amber gold',
+    urTagline: 'نفیس پتھریلا چارکول اور سنہرا عنبر',
+    sidebarTheme: 'charcoal',
+    sidebarBg: '#1C1917',
+    sidebarBorder: '#292524',
+    sidebarTextColor: '#FAF7F2',
+    accentColor: '#D97706', // Amber Gold
+    accentName: 'Amber Gold',
+    previewBg: '#FAF7F2',
+    description: 'Warm stone charcoal sidebar with warm gold highlights for a tailored, artisanal luxury experience.',
+    urDescription: 'قدرتی گرم چارکول رنگ کا سائیڈبار اور سنہری بٹن جو کہ شاہانہ اور نفیس تاثر پیش کرتے ہیں۔',
+  },
+  {
+    id: 'classic-midnight',
+    name: 'Classic Midnight Obsidian',
+    urName: 'کلاسک مڈ نائٹ ابسیڈین',
+    badge: 'Original Classic',
+    tagline: 'High-contrast floating dark sidebar with neon cyan accents',
+    urTagline: 'اصل کلاسک سیاہ سائیڈبار اور چمکدار سیان رنگ',
+    sidebarTheme: 'dark',
+    sidebarBg: '#0B0F17',
+    sidebarBorder: '#1E293B',
+    sidebarTextColor: '#FFFFFF',
+    accentColor: '#06B6D4', // Vibrant Cyan
+    accentName: 'Vibrant Cyan',
+    previewBg: '#F8FAFC',
+    description: 'The original bold floating black sidebar with glowing vibrant cyan accents.',
+    urDescription: 'شروع کا روایتی ڈارک فلوٹنگ سائیڈبار جس کے ساتھ روشن سیان رنگ کے بٹن موجود ہیں۔',
+  },
+];
+
+export function getSidebarThemeMode(): SidebarThemeMode {
+  if (typeof window === 'undefined') return 'light';
+  const stored = localStorage.getItem('jakwani_sidebar_theme_mode') || localStorage.getItem('uzair_jibran_sidebar_theme_mode');
+  if (stored && ['light', 'dark', 'navy', 'emerald', 'charcoal'].includes(stored)) {
+    return stored as SidebarThemeMode;
+  }
+  return 'light'; // Default to modern Unified Clean Light
+}
+
+export function setSidebarThemeMode(mode: SidebarThemeMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('jakwani_sidebar_theme_mode', mode);
+    localStorage.setItem('uzair_jibran_sidebar_theme_mode', mode);
+    window.dispatchEvent(new Event('jakwani_sidebar_theme_changed'));
+  }
+}
+
+export function isSidebarBackgroundLight(isDarkMode?: boolean): boolean {
+  const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
+  if (inDark) return false;
+  return getSidebarThemeMode() === 'light';
+}
+
+export function applyThemeSuite(suiteId: string): boolean {
+  const suite = CURATED_THEME_SUITES.find((s) => s.id === suiteId);
+  if (!suite) return false;
+
+  setSidebarThemeMode(suite.sidebarTheme);
+  const inDark = isDarkModeActive();
+  const targetColor = inDark ? '#FFFFFF' : suite.sidebarTextColor;
+  applySidebarColor(targetColor);
+  applyAccentColor(suite.accentColor);
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('jakwani_active_theme_suite', suiteId);
+    window.dispatchEvent(new Event('jakwani_theme_suite_changed'));
+    window.dispatchEvent(new Event('jakwani_sidebar_theme_changed'));
+    window.dispatchEvent(new Event('uzair_jibran_sidebar_color_changed'));
+    window.dispatchEvent(new Event('uzair_jibran_theme_color_changed'));
+  }
+  return true;
+}
+
+export function getActiveThemeSuiteId(): string {
+  if (typeof window === 'undefined') return 'unified-light';
+  const saved = localStorage.getItem('jakwani_active_theme_suite');
+  if (saved && CURATED_THEME_SUITES.some((s) => s.id === saved)) {
+    return saved;
+  }
+  const currentSidebarTheme = getSidebarThemeMode();
+  if (currentSidebarTheme === 'light') return 'unified-light';
+  if (currentSidebarTheme === 'navy') return 'executive-navy';
+  if (currentSidebarTheme === 'emerald') return 'emerald-pearl';
+  if (currentSidebarTheme === 'charcoal') return 'warm-charcoal';
+  return 'classic-midnight';
+}
+
+export type SidebarBehaviorMode = 'opened' | 'closed'; // 'opened' = Always Keep Opened; 'closed' = Keep Closed (Auto-expand on click & collapse on mouse out)
+
+export function getSidebarBehaviorMode(): SidebarBehaviorMode {
+  if (typeof window === 'undefined') return 'opened';
+  const stored = localStorage.getItem('jakwani_sidebar_behavior_mode');
+  return stored === 'closed' ? 'closed' : 'opened';
+}
+
+export function setSidebarBehaviorMode(mode: SidebarBehaviorMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('jakwani_sidebar_behavior_mode', mode);
+    window.dispatchEvent(new Event('jakwani_sidebar_behavior_changed'));
+  }
+}
 
 export type SidebarLayoutMode = 'floating' | 'classic';
 
@@ -396,7 +578,8 @@ export function isDarkModeActive(): boolean {
  */
 export function getSafeSidebarColor(hexColor: string, isDarkMode?: boolean): { safeColor: string; wasAdjusted: boolean } {
   const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
-  const defaultFallback = inDark ? '#0F172A' : '#FFFFFF';
+  const isLightBg = isSidebarBackgroundLight(inDark);
+  const defaultFallback = isLightBg ? '#0F172A' : '#FFFFFF';
 
   if (!hexColor) return { safeColor: defaultFallback, wasAdjusted: false };
   
@@ -415,37 +598,31 @@ export function getSafeSidebarColor(hexColor: string, isDarkMode?: boolean): { s
   // Relative luminance
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
-  if (!inDark) {
-    // LIGHT MODE APP: Sidebar background is BLACK (#0B0F17)
-    // White and bright colors are fully allowed!
-    // Block black or dark colors that would make text invisible against black:
-    if (luminance < 0.35) {
-      if (luminance <= 0.18) {
-        // Pure black or dark charcoal -> adjust to crisp high-contrast white
-        return { safeColor: '#FFFFFF', wasAdjusted: true };
-      }
-      // For chromatic dark colors, brighten to be visible
-      const scale = 0.55 / Math.max(0.01, luminance);
-      const safeR = Math.min(255, Math.max(0, Math.round(r * scale + (255 - r) * 0.35)));
-      const safeG = Math.min(255, Math.max(0, Math.round(g * scale + (255 - g) * 0.35)));
-      const safeB = Math.min(255, Math.max(0, Math.round(b * scale + (255 - b) * 0.35)));
-      const safeHex = `#${safeR.toString(16).padStart(2, '0')}${safeG.toString(16).padStart(2, '0')}${safeB.toString(16).padStart(2, '0')}`;
-      return { safeColor: safeHex, wasAdjusted: true };
-    }
-  } else {
-    // DARK MODE APP: Sidebar background is WHITE (#FFFFFF)
-    // Black and dark colors are fully allowed!
-    // Block white or light colors that would make text invisible against white:
-    if (luminance > 0.65) {
-      if (luminance >= 0.85) {
-        // Pure white or pale light -> adjust to crisp high-contrast dark charcoal/black
+  if (isLightBg) {
+    // LIGHT SIDEBAR BACKGROUND (#FFFFFF)
+    // Dark font colors are readable. Block white or pale colors:
+    if (luminance > 0.60) {
+      if (luminance >= 0.80) {
         return { safeColor: '#0F172A', wasAdjusted: true };
       }
-      // For chromatic pale colors, darken to be readable on white
       const scale = 0.45 / luminance;
       const safeR = Math.min(255, Math.max(0, Math.round(r * scale)));
       const safeG = Math.min(255, Math.max(0, Math.round(g * scale)));
       const safeB = Math.min(255, Math.max(0, Math.round(b * scale)));
+      const safeHex = `#${safeR.toString(16).padStart(2, '0')}${safeG.toString(16).padStart(2, '0')}${safeB.toString(16).padStart(2, '0')}`;
+      return { safeColor: safeHex, wasAdjusted: true };
+    }
+  } else {
+    // DARK SIDEBAR BACKGROUND (#0B0F17, #0F172A, #0A1A18, #1C1917)
+    // White and bright colors are allowed! Block dark colors:
+    if (luminance < 0.35) {
+      if (luminance <= 0.18) {
+        return { safeColor: '#FFFFFF', wasAdjusted: true };
+      }
+      const scale = 0.55 / Math.max(0.01, luminance);
+      const safeR = Math.min(255, Math.max(0, Math.round(r * scale + (255 - r) * 0.35)));
+      const safeG = Math.min(255, Math.max(0, Math.round(g * scale + (255 - g) * 0.35)));
+      const safeB = Math.min(255, Math.max(0, Math.round(b * scale + (255 - b) * 0.35)));
       const safeHex = `#${safeR.toString(16).padStart(2, '0')}${safeG.toString(16).padStart(2, '0')}${safeB.toString(16).padStart(2, '0')}`;
       return { safeColor: safeHex, wasAdjusted: true };
     }
@@ -456,22 +633,22 @@ export function getSafeSidebarColor(hexColor: string, isDarkMode?: boolean): { s
 
 export function getSavedSidebarColor(isDarkMode?: boolean): string {
   const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
-  const defaultFallback = inDark ? '#0F172A' : '#FFFFFF';
+  const isLightBg = isSidebarBackgroundLight(inDark);
+  const defaultFallback = isLightBg ? '#0F172A' : '#FFFFFF';
   if (typeof window === 'undefined') return defaultFallback;
 
   const raw = localStorage.getItem('uzair_jibran_sidebar_raw_color') 
     || localStorage.getItem('uzair_jibran_sidebar_color');
 
-  // If cached value was an old invisible color for current mode, reset to proper default
-  if (!inDark && (raw === '#0F172A' || raw === '#1E293B' || raw === '#475569' || raw === '#000000')) {
-    return '#FFFFFF';
-  }
-  if (inDark && (raw === '#FFFFFF' || raw === '#F8FAFC' || raw === '#F1F5F9')) {
+  // If cached value was an invisible color for current background mode, reset to proper default
+  if (isLightBg && (raw === '#FFFFFF' || raw === '#F8FAFC' || raw === '#F1F5F9' || !raw)) {
     return '#0F172A';
   }
+  if (!isLightBg && (raw === '#0F172A' || raw === '#1E293B' || raw === '#475569' || raw === '#000000' || !raw)) {
+    return '#FFFFFF';
+  }
 
-  if (!raw) return defaultFallback;
-  return getSafeSidebarColor(raw, inDark).safeColor;
+  return getSafeSidebarColor(raw, isDarkMode).safeColor;
 }
 
 export function applySidebarColor(hexColor: string, isDarkMode?: boolean): { safeColor: string; wasAdjusted: boolean } {

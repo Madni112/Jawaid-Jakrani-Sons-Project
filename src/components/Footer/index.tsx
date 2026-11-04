@@ -8,7 +8,7 @@ const Footer: React.FC = () => {
   const { isRTL } = useLanguage();
   const currentYear = new Date().getFullYear();
 
-  const brandTitle = isRTL ? 'عزیر جبران کلوتھ' : 'UZAIR JIBRAN CLOTH';
+  const brandTitle = isRTL ? 'جاوید جکوانی اینڈ سنز' : 'JAWAID JAKWANI & SONS';
 
   return (
     <footer className="print:hidden w-full border-t border-slate-200/80 backdrop-blur-md bg-white/90 px-4 py-3.5 dark:border-slate-800 dark:bg-[#1E293B]/90 md:px-6 2xl:px-8 duration-200 transition-all">
@@ -25,7 +25,7 @@ const Footer: React.FC = () => {
 
           {businessName && (
             <span className="hidden sm:inline-flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-              {isRTL && businessName.toLowerCase().includes('uzair jibran') ? 'عزیر جبران کلوتھ' : businessName}
+              {isRTL && (businessName.toLowerCase().includes('uzair jibran') || businessName.toLowerCase().includes('jawaid')) ? 'جاوید جکوانی اینڈ سنز' : businessName}
             </span>
           )}
 

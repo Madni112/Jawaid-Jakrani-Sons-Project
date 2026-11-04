@@ -217,7 +217,7 @@ export const POSSettingsTab: React.FC<POSSettingsTabProps> = ({ onClose, isModal
                 type="text"
                 value={posConfig.store_title}
                 onChange={e => setPosConfig(prev => ({ ...prev, store_title: e.target.value }))}
-                placeholder="e.g. Uzair Jibran Cloth"
+                placeholder="e.g. Jawaid Jakwani & Sons"
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-meta-4 py-2.5 px-3 text-xs font-medium text-black dark:text-white outline-none focus:border-primary"
               />
             </div>

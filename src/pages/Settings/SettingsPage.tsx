@@ -82,6 +82,16 @@ import {
   NavbarLayoutMode,
   getNavbarLayoutMode,
   setNavbarLayoutMode,
+  SidebarThemeMode,
+  getSidebarThemeMode,
+  setSidebarThemeMode,
+  CuratedThemeSuite,
+  CURATED_THEME_SUITES,
+  applyThemeSuite,
+  getActiveThemeSuiteId,
+  SidebarBehaviorMode,
+  getSidebarBehaviorMode,
+  setSidebarBehaviorMode,
 } from '../../constant/themeConfig';
 import {
   fetchSystemMasterConfig,
@@ -339,8 +349,63 @@ const SettingsPage: React.FC = () => {
     if (p) setActiveTab(p);
   }, [location.search]);
 
-  const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('navbar');
+  const [themeSubTab, setThemeSubTab] = useState<'suites' | 'navbar' | 'sidebar'>('suites');
   const [colorMode, setColorMode] = useColorMode();
+
+  // Curated Theme Suites & Sidebar Background State
+  const [activeSuiteId, setActiveSuiteId] = useState<string>(() => getActiveThemeSuiteId());
+  const [sidebarThemeMode, setSidebarThemeModeState] = useState<SidebarThemeMode>(() => getSidebarThemeMode());
+
+  const handleApplyThemeSuite = (suite: CuratedThemeSuite) => {
+    applyThemeSuite(suite.id);
+    setActiveSuiteId(suite.id);
+    setSelectedAccentColor(suite.accentColor);
+    setAppliedAccentColor(suite.accentColor);
+    setCustomAccentHex(suite.accentColor.replace('#', ''));
+    
+    const isDark = isDarkModeActive();
+    const effectiveTextColor = isDark ? '#FFFFFF' : suite.sidebarTextColor;
+    setSelectedSidebarColor(effectiveTextColor);
+    setAppliedSidebarColor(effectiveTextColor);
+    setCustomSidebarHex(effectiveTextColor.replace('#', ''));
+    setSidebarThemeModeState(suite.sidebarTheme);
+    triggerFeedbackSound('success');
+    toast.success(
+      isRTL
+        ? `${suite.urName} تھیم کامیابی سے لاگو ہو گئی!`
+        : `Applied "${suite.name}" theme suite!`,
+      { id: 'theme-suite-toast' }
+    );
+  };
+
+  const [sidebarBehavior, setSidebarBehavior] = useState<SidebarBehaviorMode>(() => getSidebarBehaviorMode());
+
+  const handleSetSidebarBehavior = (mode: SidebarBehaviorMode) => {
+    setSidebarBehavior(mode);
+    setSidebarBehaviorMode(mode);
+    triggerFeedbackSound('success');
+    toast.success(
+      mode === 'closed'
+        ? (isRTL ? '✨ سمارٹ آٹو کوولاپس: سائیڈبار کلک پر کھلے گی، ماؤس ہٹانے پر خود بند ہو جائے گی' : '✨ Auto-Collapse active: Click sidebar to expand, hover out to close!')
+        : (isRTL ? '📌 مستقل کھلی سائیڈبار لاگو کر دی گئی' : '📌 Pinned Sidebar active: Sidebar remains permanently opened.'),
+      { id: 'sidebar-behavior-toast' }
+    );
+  };
+
+  const handleSidebarThemeChange = (mode: SidebarThemeMode) => {
+    setSidebarThemeMode(mode);
+    setSidebarThemeModeState(mode);
+    const safe = getSafeSidebarColor(selectedSidebarColor);
+    applySidebarColor(safe.safeColor);
+    setSelectedSidebarColor(safe.safeColor);
+    setAppliedSidebarColor(safe.safeColor);
+    setCustomSidebarHex(safe.safeColor.replace('#', ''));
+    triggerFeedbackSound('success');
+    toast.success(
+      isRTL ? 'سائیڈبار کا پس منظر تبدیل کر دیا گیا' : `Sidebar background set to ${mode.toUpperCase()}!`,
+      { id: 'sidebar-theme-toast' }
+    );
+  };
 
   // Primary Accent Color State
   const [appliedAccentColor, setAppliedAccentColor] = useState<string>(getSavedAccentColor());
@@ -1178,9 +1243,26 @@ const SettingsPage: React.FC = () => {
             <div className="space-y-6 animate-fadeIn">
               {/* BRAND COLOR PALETTES (STICKY SUB-NAVBAR SCOPE CONTAINER) */}
               <div className="relative space-y-4">
-                {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Navbar & Brand Accent, Sidebar) */}
+                {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Theme Suites, Brand Accent, Sidebar) */}
                 <div className="p-2 rounded-2xl bg-white/95 dark:bg-[#111827]/95 border border-slate-200/90 dark:border-slate-800 shadow-md backdrop-blur-md sticky top-2 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto">
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto flex-wrap">
+                  {/* SUB-TAB 0: CURATED THEME SUITES */}
+                  <button
+                    type="button"
+                    onClick={() => setThemeSubTab('suites')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
+                      themeSubTab === 'suites'
+                        ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <LuSparkles size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span>{isRTL ? "مکمل تھیم پیکجز" : "Curated Theme Suites"}</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      Top
+                    </span>
+                  </button>
+
                   {/* SUB-TAB 1: NAVBAR & BRAND ACCENT */}
                   <button
                     type="button"
@@ -1215,7 +1297,7 @@ const SettingsPage: React.FC = () => {
                       className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
                       style={{ backgroundColor: selectedSidebarColor }}
                     />
-                    <span>{isRTL ? "سائیڈبار" : "Sidebar"}</span>
+                    <span>{isRTL ? "سائیڈبار اور پس منظر" : "Sidebar & Background"}</span>
                     {isSidebarChanged && (
                       <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
                     )}
@@ -1225,10 +1307,232 @@ const SettingsPage: React.FC = () => {
                 <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-500 dark:text-slate-400 self-end sm:self-auto">
                   <span>{isRTL ? "حسب ضرورت:" : "Customizing:"}</span>
                   <strong className="text-slate-800 dark:text-slate-200 font-bold">
-                    {isRTL ? (themeSubTab === 'navbar' ? 'نیوبار اور برانڈ کا رنگ' : 'سائیڈبار کے رنگ') : (themeSubTab === 'navbar' ? 'Navbar & Brand Accent' : 'Sidebar Colors')}
+                    {themeSubTab === 'suites'
+                      ? (isRTL ? 'مکمل تھیم پیکجز' : 'Curated Theme Suites')
+                      : themeSubTab === 'navbar'
+                      ? (isRTL ? 'نیوبار اور برانڈ کا رنگ' : 'Navbar & Brand Accent')
+                      : (isRTL ? 'سائیڈبار کے رنگ' : 'Sidebar Colors & Background')}
                   </strong>
                 </div>
               </div>
+
+              {/* SECTION 0: CURATED THEME SUITES */}
+              {themeSubTab === 'suites' && (
+                <div className="space-y-6 animate-fadeIn">
+                  {/* Hero Intro Banner */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-50/50 via-white to-indigo-50/30 dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-900/70 p-6 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-600 text-white shadow-xs">
+                            Instant Transformation
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {isRTL ? "ایک کلک سے مکمل نیا انداز" : "One-click harmonized aesthetics"}
+                          </span>
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                          {isRTL ? "جاوید جکوانی اینڈ سنز کے لیے مخصوص تھیم پیکجز" : "Curated Theme Suites for Jawaid Jakwani & Sons"}
+                        </h3>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
+                          {isRTL
+                            ? "ہر تھیم سائیڈبار کے پس منظر، ایکٹو نیویگیشن بٹن، اور برانڈ رنگوں کو خودکار طریقے سے آپس میں ہم آہنگ کرتی ہے تاکہ آپ کا سسٹم زیادہ پیشہ ورانہ اور خوبصورت لگے۔"
+                            : "Each suite coordinates the sidebar background, active navigation pills, and brand accent colors into a coherent, high-contrast aesthetic tailored for textile enterprise management."}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>Active Suite: <strong>{CURATED_THEME_SUITES.find(s => s.id === activeSuiteId)?.name || 'Custom'}</strong></span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Grid of 5 Theme Suites */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {CURATED_THEME_SUITES.map((suite) => {
+                      const isSuiteActive = activeSuiteId === suite.id;
+
+                      return (
+                        <div
+                          key={suite.id}
+                          onClick={() => handleApplyThemeSuite(suite)}
+                          className={`group relative rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden flex flex-col p-5 select-none ${
+                            isSuiteActive
+                              ? 'border-blue-600 dark:border-blue-500 ring-3 ring-blue-600/20 dark:ring-blue-500/30 bg-white dark:bg-[#111827] shadow-lg scale-101'
+                              : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5'
+                          }`}
+                        >
+                          {/* Top Badges */}
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                suite.isRecommended
+                                  ? 'bg-blue-600 text-white shadow-xs'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                              }`}
+                            >
+                              {suite.badge}
+                            </span>
+
+                            {isSuiteActive ? (
+                              <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300/70 dark:border-emerald-700">
+                                <LuCheck size={12} className="stroke-[3]" />
+                                <span>Active</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-semibold text-slate-400 group-hover:text-blue-600 transition-colors">
+                                Click to Apply →
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Suite Title & Urdu */}
+                          <div className="mb-3">
+                            <h4 className="text-base font-black text-slate-900 dark:text-white tracking-tight flex items-center justify-between">
+                              <span>{suite.name}</span>
+                            </h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-urdu mt-0.5">
+                              {suite.urName}
+                            </p>
+                          </div>
+
+                          {/* Miniature Layout Preview Box */}
+                          <div
+                            className="rounded-xl border border-slate-200 dark:border-slate-700/80 p-2.5 mb-4 shadow-inner"
+                            style={{ backgroundColor: suite.previewBg }}
+                          >
+                            <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-black/5 dark:border-white/5 text-[10px] font-mono text-slate-500">
+                              <span className="w-2 h-2 rounded-full bg-rose-400/80" />
+                              <span className="w-2 h-2 rounded-full bg-amber-400/80" />
+                              <span className="w-2 h-2 rounded-full bg-emerald-400/80" />
+                              <span className="ml-auto text-[9px] uppercase tracking-wider font-bold text-slate-400">Live Mock</span>
+                            </div>
+
+                            <div className="flex gap-2 h-24">
+                              {/* Mini Sidebar */}
+                              <div
+                                className="w-1/3 rounded-lg border p-1.5 flex flex-col justify-between shrink-0 shadow-xs"
+                                style={{
+                                  backgroundColor: suite.sidebarBg,
+                                  borderColor: suite.sidebarBorder,
+                                }}
+                              >
+                                <div className="space-y-1">
+                                  <div
+                                    className="h-2 w-3/4 rounded-full opacity-80"
+                                    style={{ backgroundColor: suite.sidebarTextColor }}
+                                  />
+                                  {/* Active Pill item in Mini Sidebar */}
+                                  <div
+                                    className="h-4 rounded-md flex items-center px-1.5 text-[8px] font-bold shadow-2xs"
+                                    style={{
+                                      backgroundColor: `${suite.accentColor}25`,
+                                      color: suite.accentColor,
+                                      border: `1px solid ${suite.accentColor}50`,
+                                    }}
+                                  >
+                                    <span className="w-1 h-1 rounded-full mr-1" style={{ backgroundColor: suite.accentColor }} />
+                                    Active
+                                  </div>
+                                  <div
+                                    className="h-2 w-2/3 rounded-full opacity-40"
+                                    style={{ backgroundColor: suite.sidebarTextColor }}
+                                  />
+                                </div>
+
+                                <div
+                                  className="h-1.5 w-1/2 rounded-full opacity-30"
+                                  style={{ backgroundColor: suite.sidebarTextColor }}
+                                />
+                              </div>
+
+                              {/* Mini Content Area */}
+                              <div className="flex-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-2 flex flex-col justify-between">
+                                <div className="flex items-center justify-between">
+                                  <div className="h-2 w-12 rounded bg-slate-300 dark:bg-slate-700" />
+                                  <div
+                                    className="h-3 w-8 rounded-full text-[7px] font-bold flex items-center justify-center text-white"
+                                    style={{ backgroundColor: suite.accentColor }}
+                                  >
+                                    POS
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-1 my-1">
+                                  <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800">
+                                    <div className="h-1 w-6 rounded bg-slate-300 dark:bg-slate-700 mb-0.5" />
+                                    <div className="h-2 w-8 rounded" style={{ backgroundColor: suite.accentColor, opacity: 0.8 }} />
+                                  </div>
+                                  <div className="p-1 rounded bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800">
+                                    <div className="h-1 w-6 rounded bg-slate-300 dark:bg-slate-700 mb-0.5" />
+                                    <div className="h-2 w-7 rounded bg-slate-400 dark:bg-slate-600" />
+                                  </div>
+                                </div>
+
+                                <div className="h-1.5 w-full rounded bg-slate-100 dark:bg-slate-800" />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Description */}
+                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4 flex-1">
+                            {suite.description}
+                          </p>
+
+                          {/* Palette Swatches Bar */}
+                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-400 font-medium">Palette:</span>
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="w-4 h-4 rounded-full border border-black/15 shadow-2xs"
+                                  style={{ backgroundColor: suite.sidebarBg }}
+                                  title={`Sidebar: ${suite.sidebarBg}`}
+                                />
+                                <span
+                                  className="w-4 h-4 rounded-full border border-black/15 shadow-2xs"
+                                  style={{ backgroundColor: suite.sidebarTextColor }}
+                                  title={`Text: ${suite.sidebarTextColor}`}
+                                />
+                                <span
+                                  className="w-4 h-4 rounded-full border border-black/15 shadow-2xs"
+                                  style={{ backgroundColor: suite.accentColor }}
+                                  title={`Accent: ${suite.accentName} (${suite.accentColor})`}
+                                />
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApplyThemeSuite(suite);
+                              }}
+                              className={`px-3 py-1.5 rounded-xl font-bold transition-all duration-200 text-xs flex items-center gap-1.5 cursor-pointer ${
+                                isSuiteActive
+                                  ? 'bg-emerald-600 text-white shadow-xs'
+                                  : 'bg-slate-100 dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-700 dark:text-slate-200'
+                              }`}
+                            >
+                              {isSuiteActive ? (
+                                <>
+                                  <LuCheck size={13} className="stroke-[3]" />
+                                  <span>Applied</span>
+                                </>
+                              ) : (
+                                <span>Apply Suite</span>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* SECTION A: ACCENT COLOR THEME */}
               {themeSubTab === 'navbar' && (
@@ -1474,7 +1778,163 @@ const SettingsPage: React.FC = () => {
 
               {/* SECTION B: SIDEBAR FONT & ICON COLOR */}
               {themeSubTab === 'sidebar' && (
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm animate-fadeIn">
+                <div className="space-y-6 animate-fadeIn">
+                  {/* SIDEBAR BACKGROUND STYLE PICKER */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                          {isRTL ? "سائیڈبار کا پس منظر انداز" : "Sidebar Background Theme"}
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {isRTL ? "سائیڈبار کا بنیادی پس منظر منتخب کریں (سفید، نیوی، زمرد، یا کلاسک چارکول)" : "Select the base background for the left navigation sidebar."}
+                        </p>
+                      </div>
+
+                      <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+                        Current: {sidebarThemeMode}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      {[
+                        { id: 'light', name: 'Clean White', bg: '#FFFFFF', border: 'border-slate-300', text: 'text-slate-900', badge: 'Modern Minimal' },
+                        { id: 'navy', name: 'Executive Navy', bg: '#0F172A', border: 'border-slate-700', text: 'text-white', badge: 'Corporate' },
+                        { id: 'emerald', name: 'Rich Emerald', bg: '#0A1A18', border: 'border-emerald-900', text: 'text-white', badge: 'Heritage' },
+                        { id: 'charcoal', name: 'Warm Charcoal', bg: '#1C1917', border: 'border-stone-700', text: 'text-white', badge: 'Artisan' },
+                        { id: 'dark', name: 'Classic Dark', bg: '#0B0F17', border: 'border-slate-800', text: 'text-white', badge: 'Original' },
+                      ].map((item) => {
+                        const isSelected = sidebarThemeMode === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleSidebarThemeChange(item.id as SidebarThemeMode)}
+                            className={`relative p-3.5 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col items-center justify-between text-center gap-2 group ${
+                              isSelected
+                                ? 'ring-3 ring-blue-500/30 border-blue-600 shadow-md scale-102'
+                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-xs'
+                            }`}
+                            style={{ backgroundColor: item.bg }}
+                          >
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10" style={{ color: item.id === 'light' ? '#0F172A' : '#FFFFFF' }}>
+                              {item.badge}
+                            </span>
+                            <span className={`text-xs font-bold ${item.text}`}>
+                              {item.name}
+                            </span>
+                            {isSelected && (
+                              <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shadow-xs">
+                                ✓
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* SIDEBAR DEFAULT BEHAVIOR (OPENED VS CLOSED) */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                            {isRTL ? "سائیڈبار کھلنے اور بند رہنے کا انداز" : "Sidebar Default State & Interaction"}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            Smart Drawer
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {isRTL
+                            ? "منتخب کریں کہ آیا سائیڈبار مستقل طور پر کھلی رہے گی، یا ضرورت پڑنے پر کلک سے کھلے اور ماؤس ہٹانے پر خود بخود بند ہو جائے۔"
+                            : "Choose whether the sidebar stays permanently pinned open, or stays collapsed and auto-expands on click and auto-collapses on mouse leave."}
+                        </p>
+                      </div>
+
+                      <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        {sidebarBehavior === 'closed' ? 'Keep Closed (Auto-Drawer)' : 'Always Opened (Pinned)'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* OPTION 1: KEEP OPENED */}
+                      <button
+                        type="button"
+                        onClick={() => handleSetSidebarBehavior('opened')}
+                        className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer flex items-start gap-3.5 text-left group ${
+                          sidebarBehavior === 'opened'
+                            ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 ring-3 ring-blue-500/20 shadow-sm'
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                          sidebarBehavior === 'opened'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}>
+                          <LuMonitor size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                              {isRTL ? "مستقل کھلی رکھیں (پنڈ)" : "Keep Opened (Pinned)"}
+                            </span>
+                            {sidebarBehavior === 'opened' && (
+                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-full border border-blue-300 dark:border-blue-800">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            {isRTL
+                              ? "سائیڈبار ہر وقت پوری چوڑائی کے ساتھ کھلی رہتی ہے تاکہ تمام ماڈیولز ایک نظر میں نظر آئیں۔"
+                              : "Sidebar remains fully expanded at all times. Great for fast multi-tasking and quick reading."}
+                          </p>
+                        </div>
+                      </button>
+
+                      {/* OPTION 2: KEEP CLOSED (AUTO-DRAWER) */}
+                      <button
+                        type="button"
+                        onClick={() => handleSetSidebarBehavior('closed')}
+                        className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer flex items-start gap-3.5 text-left group ${
+                          sidebarBehavior === 'closed'
+                            ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 ring-3 ring-blue-500/20 shadow-sm'
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                          sidebarBehavior === 'closed'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}>
+                          <LuLaptop size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                              {isRTL ? "بند رکھیں (کلک پر کھلے، ماؤس ہٹانے پر بند)" : "Keep Closed (Click to Open, Hover Out to Close)"}
+                            </span>
+                            {sidebarBehavior === 'closed' && (
+                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-full border border-blue-300 dark:border-blue-800">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            {isRTL
+                              ? "سائیڈبار عام طور پر بند رہتی ہے۔ سائیڈبار پر کلک کرنے سے کھل جاتی ہے، اور ماؤس ہٹاتے ہی خود بخود دوبارہ بند ہو جاتی ہے۔"
+                              : "Keeps the screen spacious & clean. Clicking the sidebar expands it to interact; moving your mouse away automatically collapses it back."}
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* SIDEBAR FONT & ICON COLOR THEME */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2.5">
                     <div
@@ -1696,6 +2156,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              </div>
               </div>
             )}
               </div>

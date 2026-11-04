@@ -1,6 +1,6 @@
 /**
  * Commercial Invoicing & Billing Utilities
- * UZAIR JIBRAN CLOTH
+ * JAWAID JAKWANI & SONS
  */
 
 export interface InvoiceItemPayload {

@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   });
   const [tenantId, setTenantId] = useState<string | null>('uzair');
-  const [businessName, setBusinessName] = useState<string | null>('UZAIR JIBRAN CLOTH');
+  const [businessName, setBusinessName] = useState<string | null>('JAWAID JAKWANI & SONS');
   const [userEmail, setUserEmail] = useState<string | null>(() => {
     try {
       return localStorage.getItem('zac_user_email') || null;
@@ -271,7 +271,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUserEmail(email || null);
       setRole(userRole);
       setTenantId('uzair');
-      setBusinessName('UZAIR JIBRAN CLOTH');
+      setBusinessName('JAWAID JAKWANI & SONS');
       setAllowedModules(userPermissions);
       setUserLocationId(locId);
       setUserLocationName(locName);
@@ -292,7 +292,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUserEmail(null);
       setRole('Super Admin');
       setTenantId(null);
-      setBusinessName('UZAIR JIBRAN CLOTH');
+      setBusinessName('JAWAID JAKWANI & SONS');
       setUserLocationId(null);
       setUserLocationName(null);
       setUserName(null);
@@ -386,9 +386,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const isMasterDeveloper = Boolean(
       userEmail && (
         userEmail.toLowerCase() === 'developer@noorhorizontechnologies.com' ||
-        userEmail.toLowerCase() === 'admin@uzairjibrancloth.com' ||
+        userEmail.toLowerCase() === 'admin@jawaidjakwani.com' || userEmail.toLowerCase() === 'admin@uzairjibrancloth.com' ||
         userEmail.toLowerCase() === 'admin@almuhammadi.com' ||
-        userEmail.toLowerCase() === 'uzairjibran@nht.com' ||
+        userEmail.toLowerCase() === 'jawaidjakwani@nht.com' || userEmail.toLowerCase() === 'uzairjibran@nht.com' ||
         userEmail.toLowerCase() === 'admin@nht.com'
       )
     );
@@ -514,9 +514,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const isMasterDeveloper = Boolean(
       userEmail && (
         userEmail.toLowerCase() === 'developer@noorhorizontechnologies.com' ||
-        userEmail.toLowerCase() === 'admin@uzairjibrancloth.com' ||
+        userEmail.toLowerCase() === 'admin@jawaidjakwani.com' || userEmail.toLowerCase() === 'admin@uzairjibrancloth.com' ||
         userEmail.toLowerCase() === 'admin@almuhammadi.com' ||
-        userEmail.toLowerCase() === 'uzairjibran@nht.com' ||
+        userEmail.toLowerCase() === 'jawaidjakwani@nht.com' || userEmail.toLowerCase() === 'uzairjibran@nht.com' ||
         userEmail.toLowerCase() === 'admin@nht.com'
       )
     );
