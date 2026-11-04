@@ -44,6 +44,7 @@ import {
   LuRadio,
   LuCpu,
   LuGlobe,
+  LuTrash2,
 } from 'react-icons/lu';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
