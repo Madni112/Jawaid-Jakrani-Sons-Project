@@ -51,7 +51,9 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
         onMouseLeave={() => setShowSubFlyout(false)}
       >
         <div
-          className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 hover:bg-slate-100/90 dark:hover:bg-slate-800/80 cursor-pointer"
+          className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 ${
+            sidebarThemeMode === 'light' ? 'hover:bg-slate-100/90' : 'hover:bg-white/10'
+          } cursor-pointer`}
           style={{ color: sidebarColor }}
         >
           <span>{getSidebarLabel(item.label, isRTL)}</span>
@@ -92,7 +94,9 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
       <NavLink
         to={destination}
         onClick={handleLinkClick}
-        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 hover:bg-slate-100/90 dark:hover:bg-slate-800/80 ${
+        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 ${
+          sidebarThemeMode === 'light' ? 'hover:bg-slate-100/90' : 'hover:bg-white/10'
+        } ${
           isActive ? 'shadow-xs font-bold' : ''
         }`}
         style={{
@@ -207,7 +211,9 @@ const SidebarItem = ({
             <>
               <NavLink
                 to="#"
-                className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out hover:bg-slate-800/80 dark:hover:bg-slate-100 ${
+                className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out ${
+                  sidebarThemeMode === 'light' ? 'hover:bg-slate-100/90' : 'hover:bg-white/10'
+                } ${
                   isChildActive && shouldShowLabels ? 'font-bold shadow-xs' : ''
                 } ${shouldShowLabels ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
                 style={{
@@ -363,7 +369,9 @@ const SidebarItem = ({
     >
       <NavLink
         to={singleDestination}
-        className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out hover:bg-slate-800/80 dark:hover:bg-slate-100 ${
+        className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out ${
+          sidebarThemeMode === 'light' ? 'hover:bg-slate-100/90' : 'hover:bg-white/10'
+        } ${
           isDirectActive ? 'font-bold shadow-xs' : ''
         } ${shouldShowLabels ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
         style={{
@@ -529,18 +537,21 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
     switch (sidebarThemeMode) {
       case 'light':
         return {
-          bg: 'bg-white dark:bg-[#0B0F17]',
-          text: 'text-slate-800 dark:text-slate-100',
-          border: 'border-slate-200/90 dark:border-slate-800/90',
-          headerBorder: 'border-slate-100 dark:border-slate-800/80',
-          toggleBg: 'bg-white dark:bg-[#0B0F17]',
-          toggleBorder: 'border-slate-200 dark:border-slate-700',
-          toggleText: 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
-          hoverBg: 'hover:bg-slate-100/90 dark:hover:bg-slate-800/80',
-          shadow: layoutMode === 'floating' ? 'shadow-xl shadow-slate-200/70 dark:shadow-2xl' : 'shadow-md',
-          brandCard: 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800',
-          brandText: 'text-slate-900 dark:text-white',
-          brandSub: 'text-slate-500 dark:text-slate-400',
+          bg: 'bg-white',
+          text: 'text-slate-800',
+          border: 'border-slate-200/90 dark:border-slate-700/80',
+          headerBorder: 'border-slate-100 dark:border-slate-200/80',
+          dividerBorder: 'border-slate-200/90',
+          toggleBg: 'bg-white',
+          toggleBorder: 'border-slate-200 dark:border-slate-300',
+          toggleText: 'text-slate-500 hover:text-slate-900',
+          hoverBg: 'hover:bg-slate-100/90',
+          itemHover: 'hover:bg-slate-100/90',
+          logoutHover: 'hover:bg-rose-50 hover:text-rose-600',
+          shadow: layoutMode === 'floating' ? 'shadow-xl shadow-slate-200/70 dark:shadow-2xl dark:shadow-black/60' : 'shadow-md',
+          brandCard: 'bg-slate-50 border-slate-200',
+          brandText: 'text-slate-900',
+          brandSub: 'text-slate-500',
         };
       case 'navy':
         return {
@@ -548,10 +559,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           text: 'text-slate-100',
           border: 'border-slate-800/90',
           headerBorder: 'border-slate-800/80',
+          dividerBorder: 'border-slate-800/90',
           toggleBg: 'bg-[#0F172A]',
           toggleBorder: 'border-slate-700',
           toggleText: 'text-slate-400 hover:text-white',
           hoverBg: 'hover:bg-slate-800/80',
+          itemHover: 'hover:bg-white/10',
+          logoutHover: 'hover:bg-rose-500/20 hover:text-rose-400',
           shadow: 'shadow-2xl shadow-slate-950/60',
           brandCard: 'bg-slate-900 border-slate-800',
           brandText: 'text-white',
@@ -563,10 +577,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           text: 'text-slate-100',
           border: 'border-emerald-950/80',
           headerBorder: 'border-emerald-950/70',
+          dividerBorder: 'border-emerald-950/80',
           toggleBg: 'bg-[#0A1A18]',
           toggleBorder: 'border-emerald-900/80',
           toggleText: 'text-emerald-300/70 hover:text-white',
           hoverBg: 'hover:bg-emerald-950/60',
+          itemHover: 'hover:bg-white/10',
+          logoutHover: 'hover:bg-rose-500/20 hover:text-rose-400',
           shadow: 'shadow-2xl shadow-emerald-950/50',
           brandCard: 'bg-[#061412] border-emerald-900/50',
           brandText: 'text-white',
@@ -578,10 +595,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           text: 'text-slate-100',
           border: 'border-stone-800/90',
           headerBorder: 'border-stone-800/70',
+          dividerBorder: 'border-stone-800/90',
           toggleBg: 'bg-[#1C1917]',
           toggleBorder: 'border-stone-700',
           toggleText: 'text-stone-400 hover:text-white',
           hoverBg: 'hover:bg-stone-800/80',
+          itemHover: 'hover:bg-white/10',
+          logoutHover: 'hover:bg-rose-500/20 hover:text-rose-400',
           shadow: 'shadow-2xl shadow-stone-950/60',
           brandCard: 'bg-stone-900 border-stone-800',
           brandText: 'text-white',
@@ -594,10 +614,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           text: 'text-slate-100',
           border: 'border-slate-800/90',
           headerBorder: 'border-slate-800/80',
+          dividerBorder: 'border-slate-800/90',
           toggleBg: 'bg-[#0B0F17]',
           toggleBorder: 'border-slate-700/80',
           toggleText: 'text-slate-400 hover:text-white',
           hoverBg: 'hover:bg-slate-800/80',
+          itemHover: 'hover:bg-white/10',
+          logoutHover: 'hover:bg-rose-500/20 hover:text-rose-400',
           shadow: 'shadow-2xl',
           brandCard: 'bg-slate-900 border-slate-800',
           brandText: 'text-white',
@@ -658,7 +681,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             className="flex items-center gap-3 transition-opacity duration-200 hover:opacity-90 min-w-0"
           >
             <div className={`w-10 h-10 rounded-xl ${themeStyles.brandCard} p-1 flex items-center justify-center shadow-md shrink-0 border overflow-hidden select-none`}>
-              <img src={sidebarThemeMode === 'light' ? IconLight : IconDark} alt="Logo" className="w-full h-full object-contain" />
+              <img src={sidebarThemeMode === 'light' ? IconDark : IconLight} alt="Logo" className="w-full h-full object-contain" />
             </div>
 
             <div className="flex flex-col min-w-0">
@@ -673,11 +696,14 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
         ) : (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="w-10 h-10 rounded-xl bg-slate-900 dark:bg-slate-100 p-1 flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all duration-200 border border-slate-800 dark:border-slate-200 overflow-hidden select-none cursor-pointer group"
+            className={`w-10 h-10 rounded-xl ${themeStyles.brandCard} p-1 flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all duration-200 border overflow-hidden select-none cursor-pointer group`}
             title="Click to Open / Expand Sidebar"
           >
-            <img src={IconDark} alt="Logo" className="w-full h-full object-contain block dark:hidden group-hover:scale-110 transition-transform" />
-            <img src={IconLight} alt="Logo" className="w-full h-full object-contain hidden dark:block group-hover:scale-110 transition-transform" />
+            <img
+              src={sidebarThemeMode === 'light' ? IconDark : IconLight}
+              alt="Logo"
+              className="w-full h-full object-contain group-hover:scale-110 transition-transform"
+            />
           </button>
         )}
       </div>
@@ -739,7 +765,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   setSidebarOpen(false);
                 }
               }}
-              className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out hover:bg-slate-800/80 dark:hover:bg-slate-100 ${
+              className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out ${themeStyles.itemHover} ${
                 pathname === getTenantPath('/settings') || pathname === '/settings' ? 'font-bold shadow-xs' : ''
               } ${sidebarOpen ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
               style={{
@@ -759,7 +785,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
           {/* Log Out Button */}
           <li
-            className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out hover:bg-rose-500/15 dark:hover:bg-rose-50 hover:text-rose-400 dark:hover:text-rose-600 cursor-pointer mt-4 border-t border-slate-800/90 dark:border-slate-200/90 pt-4 ${
+            className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out ${themeStyles.logoutHover} cursor-pointer mt-4 border-t ${themeStyles.dividerBorder} pt-4 ${
               sidebarOpen ? 'justify-start px-3.5' : 'justify-center mx-auto w-10 h-10 px-0'
             }`}
             style={{ color: currentSidebarColor }}

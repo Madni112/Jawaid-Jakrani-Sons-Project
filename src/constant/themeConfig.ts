@@ -169,8 +169,6 @@ export function setSidebarThemeMode(mode: SidebarThemeMode) {
 }
 
 export function isSidebarBackgroundLight(isDarkMode?: boolean): boolean {
-  const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
-  if (inDark) return false;
   return getSidebarThemeMode() === 'light';
 }
 
@@ -179,8 +177,7 @@ export function applyThemeSuite(suiteId: string): boolean {
   if (!suite) return false;
 
   setSidebarThemeMode(suite.sidebarTheme);
-  const inDark = isDarkModeActive();
-  const targetColor = inDark ? '#FFFFFF' : suite.sidebarTextColor;
+  const targetColor = suite.sidebarTheme === 'light' ? suite.sidebarTextColor : '#FFFFFF';
   applySidebarColor(targetColor);
   applyAccentColor(suite.accentColor);
 
