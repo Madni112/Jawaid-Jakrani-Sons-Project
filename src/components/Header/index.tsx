@@ -104,12 +104,55 @@ const Header = (props: {
     { id: 'theme', label: 'Theme & Appearance', icon: LuPalette },
     { id: 'stock_control', label: 'Inventory & Stock Governance', icon: LuPackage },
     { id: 'credit_limits', label: 'Customer Credit Limits', icon: LuCreditCard },
-    { id: 'sound_effects', label: 'Audio & Sound Effects', icon: LuVolume2 },
-    { id: 'backup', label: 'Data Backup & Export', icon: LuHardDrive },
+    { id: 'sound_effects', label: 'Audio', icon: LuVolume2 },
+    { id: 'backup', label: 'Data Backup', icon: LuHardDrive },
     ...(isAlmPortal
       ? [{ id: 'alm_factory_reset', label: 'Factory Reset ERP', icon: LuTrash2 }]
       : []),
   ], [isAlmPortal]);
+
+  // Keyboard Navigation: Shift + ArrowRight / ArrowLeft to cycle tabs in Settings
+  useEffect(() => {
+    if (!isSettingsPage) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input, textarea, or contentEditable
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        e.preventDefault();
+        const currentIndex = settingsNavTabs.findIndex(
+          (t) => t.id === activeSettingsTab
+        );
+        const safeIndex = currentIndex === -1 ? 0 : currentIndex;
+        let nextIndex: number;
+
+        if (e.key === 'ArrowRight') {
+          nextIndex = (safeIndex + 1) % settingsNavTabs.length;
+        } else {
+          nextIndex = (safeIndex - 1 + settingsNavTabs.length) % settingsNavTabs.length;
+        }
+
+        const targetTab = settingsNavTabs[nextIndex];
+        if (targetTab) {
+          setSearchParams({ tab: targetTab.id });
+          triggerFeedbackSound('tab_click', userEmail);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSettingsPage, activeSettingsTab, settingsNavTabs, setSearchParams, userEmail]);
 
   // 1. Live Digital Clock State
   const [timeString, setTimeString] = useState<string>('');
@@ -426,7 +469,7 @@ const Header = (props: {
                 </Link>
               </div>
 
-              {/* Center: Single-row Horizontal Settings Tabs */}
+              {/* Center: Single-row Settings Tabs (Icons only, Active tab expanded with label) */}
               <div className="flex-1 flex items-center justify-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar mx-1 sm:mx-2 min-w-0 py-0.5">
                 {settingsNavTabs.map((tab) => {
                   const Icon = tab.icon;
@@ -437,27 +480,32 @@ const Header = (props: {
                       key={tab.id}
                       type="button"
                       onClick={() => setSearchParams({ tab: tab.id })}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer select-none shrink-0 ${
+                      title={`${tab.label} (Press Shift + ← / → to switch)`}
+                      className={`flex items-center gap-1.5 rounded-xl transition-all duration-200 cursor-pointer select-none shrink-0 ${
                         isActive
                           ? isDanger
-                            ? 'bg-red-600 text-white shadow-xs font-bold'
-                            : 'bg-primary text-white shadow-xs font-bold'
+                            ? 'px-3 py-1.5 bg-red-600 text-white shadow-xs font-bold ring-2 ring-red-500/30'
+                            : 'px-3 py-1.5 bg-primary text-white shadow-xs font-bold ring-2 ring-primary/30'
                           : isDanger
-                          ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40'
-                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
+                          ? 'p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl'
+                          : 'p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white rounded-xl'
                       }`}
                     >
                       <Icon
-                        size={14}
+                        size={isActive ? 15 : 17}
                         className={
                           isActive
-                            ? 'text-white'
+                            ? 'text-white shrink-0'
                             : isDanger
-                            ? 'text-red-500'
-                            : 'text-slate-400'
+                            ? 'text-red-500 shrink-0'
+                            : 'text-slate-500 dark:text-slate-400 shrink-0'
                         }
                       />
-                      <span>{tab.label}</span>
+                      {isActive && (
+                        <span className="text-xs font-bold whitespace-nowrap animate-fadeIn">
+                          {tab.label}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
