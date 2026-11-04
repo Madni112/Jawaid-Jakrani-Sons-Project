@@ -1,10 +1,13 @@
 import React, { useState, ReactNode, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Header from '../components/Header/index';
 import Sidebar from '../components/Sidebar/index';
 import Footer from '../components/Footer/index';
 import { getSidebarBehaviorMode } from '../constant/themeConfig';
 
 const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const location = useLocation();
+  const isSettings = location.pathname.toLowerCase().startsWith('/settings');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const behavior = getSidebarBehaviorMode();
@@ -71,7 +74,7 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
     <div className="bg-[#F8FAFC] dark:bg-[#0B0F17] text-slate-700 dark:text-slate-200 min-h-screen font-sans selection:bg-emerald-600 selection:text-white">
       <div className="flex h-screen overflow-hidden relative w-full">
         
-        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={handleSetSidebarOpen} />
+        {!isSettings && <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={handleSetSidebarOpen} />}
 
         {/* Content Column: Fixed Header on top, scrollable content underneath */}
         <div className="relative flex flex-1 flex-col h-screen overflow-hidden duration-300 ease-in-out w-full min-w-0">

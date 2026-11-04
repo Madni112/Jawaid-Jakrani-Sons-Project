@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import DropdownUser from './DropdownUser';
 import DarkModeSwitcher from './DarkModeSwitcher';
 import NotificationDropdown from './NotificationDropdown';
@@ -12,6 +12,7 @@ import {
   LuVolumeX,
   LuCommand,
   LuArrowRight,
+  LuArrowLeft,
   LuX,
   LuFileText,
   LuReceipt,
@@ -23,6 +24,11 @@ import {
   LuBuilding2,
   LuRefreshCw,
   LuSparkles,
+  LuUser,
+  LuShieldCheck,
+  LuPalette,
+  LuCreditCard,
+  LuHardDrive,
 } from 'react-icons/lu';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
@@ -37,8 +43,25 @@ import {
   NavbarLayoutMode,
   getNavbarLayoutMode,
   getSavedSidebarColor,
+  getSavedAccentColor,
   getContrastTextColor,
 } from '../../constant/themeConfig';
+
+export interface SettingsNavTab {
+  id: string;
+  label: string;
+  urLabel: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}
+
+export const SETTINGS_NAV_TABS: SettingsNavTab[] = [
+  { id: 'profile', label: 'Profile', urLabel: 'پروفائل', icon: LuUser },
+  { id: 'security_devices', label: 'Login Devices & Security', urLabel: 'لاگ ان ڈیوائسز', icon: LuShieldCheck },
+  { id: 'theme', label: 'Theme & Appearance', urLabel: 'تھیم اور اسٹائل', icon: LuPalette },
+  { id: 'credit_limits', label: 'Customer Credit Limits', urLabel: 'کسٹمر کریڈٹ لمٹس', icon: LuCreditCard },
+  { id: 'sound_effects', label: 'Audio', urLabel: 'آڈیو', icon: LuVolume2 },
+  { id: 'backup', label: 'Data Backup', urLabel: 'ڈیٹا بیک اپ', icon: LuHardDrive },
+];
 
 export interface GlobalSearchItem {
   id: string;
@@ -154,7 +177,48 @@ const Header = (props: {
     };
   }, []);
 
-  // 4. Command Palette / Live Global Search State
+  // 5. Settings Route & Tabs Synchronization
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isSettings = location.pathname.toLowerCase().startsWith('/settings');
+  const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
+
+  useEffect(() => {
+    const handleAccentChange = () => setAccentColor(getSavedAccentColor());
+    window.addEventListener('uzair_jibran_accent_color_changed', handleAccentChange);
+    return () => window.removeEventListener('uzair_jibran_accent_color_changed', handleAccentChange);
+  }, []);
+
+  const [activeSettingsTab, setActiveSettingsTab] = useState<string>(
+    () => searchParams.get('tab') || 'profile'
+  );
+
+  useEffect(() => {
+    const p = searchParams.get('tab');
+    if (p) {
+      setActiveSettingsTab(p);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const handleSettingsTabEvt = (e: any) => {
+      if (e.detail) {
+        setActiveSettingsTab(e.detail);
+      }
+    };
+    window.addEventListener('jakwani_settings_tab_changed', handleSettingsTabEvt);
+    return () => window.removeEventListener('jakwani_settings_tab_changed', handleSettingsTabEvt);
+  }, []);
+
+  const handleSelectSettingsTab = (tabId: string) => {
+    setActiveSettingsTab(tabId);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('tab', tabId);
+    setSearchParams(newParams, { replace: true });
+    window.dispatchEvent(new CustomEvent('jakwani_settings_tab_changed', { detail: tabId }));
+  };
+
+  // 6. Command Palette / Live Global Search State
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFilter, setSearchFilter] = useState<CategoryFilter>('ALL');
@@ -387,91 +451,151 @@ const Header = (props: {
       >
         <div className="flex flex-grow items-center justify-between px-3 py-2 sm:px-4 2xl:px-6 gap-2 sm:gap-3 w-full min-w-0">
           
-          {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            {/* Mobile Sidebar Toggle */}
-            <button
-              aria-controls="sidebar"
-              onClick={(e) => {
-                e.stopPropagation();
-                props.setSidebarOpen(!props.sidebarOpen);
-              }}
-              className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
-            >
-              <MdMenu size={20} />
-            </button>
+          {isSettings ? (
+            /* =========================================================================
+             * SETTINGS NAVBAR MODE: Back to Dashboard + 6 Horizontal Tabs
+             * ========================================================================= */
+            <div className="flex flex-1 items-center gap-2 sm:gap-3 min-w-0">
+              {/* Back to Dashboard Button */}
+              <Link
+                to="/dashboard"
+                className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs transition-all cursor-pointer shrink-0 group"
+                title={isRTL ? "ڈیش بورڈ پر واپس جائیں" : "Back to Dashboard"}
+              >
+                <LuArrowLeft className={`text-sm group-hover:-translate-x-0.5 transition-transform ${isRTL ? 'rotate-180 group-hover:translate-x-0.5' : ''}`} />
+                <span>{isRTL ? "ڈیش بورڈ" : "Dashboard"}</span>
+              </Link>
 
-            {/* Dynamic Portal & Branch Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-[11px] font-extrabold text-primary uppercase tracking-wider">
-                {portalCode}
-              </span>
-              <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
-              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[90px] xl:max-w-[130px]">
-                {branchLabel === 'Portal Active' && isRTL ? 'پورٹل فعال' : branchLabel}
-              </span>
-            </div>
-
-            {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
-            <Link
-              to="/sales/invoice/add"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
-              style={{
-                backgroundColor: sidebarColor,
-                color: getContrastTextColor(sidebarColor),
-              }}
-              title={isRTL ? 'نئی سیل انوائس بنائیں' : 'Create a New Sales Invoice'}
-            >
-              <LuPlus className="text-sm stroke-[3]" />
-              <span className="hidden md:inline">{isRTL ? 'نئی سیل' : 'New Sale'}</span>
-            </Link>
-          </div>
-
-          {/* Center: Command Palette / Quick Search Trigger */}
-          <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-1 sm:mx-2 hidden md:block min-w-0">
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition text-xs cursor-pointer shadow-2xs"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <LuSearch className="text-sm text-slate-400 shrink-0" />
-                <span className="truncate">{t('search_placeholder', 'Search invoices, customers, products...')}</span>
+              {/* Company / Settings Badge */}
+              <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-[11px] font-extrabold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
+                <LuSlidersHorizontal size={13} className="text-primary" />
+                <span className="uppercase tracking-wider">{isRTL ? "سیٹنگز" : "Settings"}</span>
               </div>
-              <kbd className="hidden 2xl:inline-flex items-center gap-0.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 shadow-2xs shrink-0">
-                <span>Ctrl</span>
-                <span>K</span>
-              </kbd>
-            </button>
-          </div>
+
+              {/* 6 Tabs Pill Selector */}
+              <div className="flex-1 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-0.5 min-w-0">
+                {SETTINGS_NAV_TABS.map((tab) => {
+                  const TabIcon = tab.icon;
+                  const isActive = activeSettingsTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => handleSelectSettingsTab(tab.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer shrink-0 select-none ${
+                        isActive
+                          ? 'bg-primary text-white shadow-sm ring-1 ring-primary/40'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                      style={
+                        isActive && accentColor && (accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff')
+                          ? { color: '#0F172A', border: '1px solid #CBD5E1' }
+                          : undefined
+                      }
+                    >
+                      <TabIcon size={14} className="shrink-0" />
+                      <span>{isRTL ? tab.urLabel : tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* =========================================================================
+             * STANDARD ERP NAVBAR: Mobile Menu, Portal Badge, New Sale, Search
+             * ========================================================================= */
+            <>
+              {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}
+              <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                {/* Mobile Sidebar Toggle */}
+                <button
+                  aria-controls="sidebar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.setSidebarOpen(!props.sidebarOpen);
+                  }}
+                  className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
+                >
+                  <MdMenu size={20} />
+                </button>
+
+                {/* Dynamic Portal & Branch Badge */}
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] font-extrabold text-primary uppercase tracking-wider">
+                    {portalCode}
+                  </span>
+                  <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
+                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[90px] xl:max-w-[130px]">
+                    {branchLabel === 'Portal Active' && isRTL ? 'پورٹل فعال' : branchLabel}
+                  </span>
+                </div>
+
+                {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
+                <Link
+                  to="/sales/invoice/add"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
+                  style={{
+                    backgroundColor: sidebarColor,
+                    color: getContrastTextColor(sidebarColor),
+                  }}
+                  title={isRTL ? 'نئی سیل انوائس بنائیں' : 'Create a New Sales Invoice'}
+                >
+                  <LuPlus className="text-sm stroke-[3]" />
+                  <span className="hidden md:inline">{isRTL ? 'نئی سیل' : 'New Sale'}</span>
+                </Link>
+              </div>
+
+              {/* Center: Command Palette / Quick Search Trigger */}
+              <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-1 sm:mx-2 hidden md:block min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition text-xs cursor-pointer shadow-2xs"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <LuSearch className="text-sm text-slate-400 shrink-0" />
+                    <span className="truncate">{t('search_placeholder', 'Search invoices, customers, products...')}</span>
+                  </div>
+                  <kbd className="hidden 2xl:inline-flex items-center gap-0.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 shadow-2xs shrink-0">
+                    <span>Ctrl</span>
+                    <span>K</span>
+                  </kbd>
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Right Side: Tools & Profile */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Mobile Search Button */}
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition md:hidden cursor-pointer"
-              title="Quick Search (Ctrl + K)"
-            >
-              <LuSearch size={18} />
-            </button>
+            {!isSettings && (
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition md:hidden cursor-pointer"
+                title="Quick Search (Ctrl + K)"
+              >
+                <LuSearch size={18} />
+              </button>
+            )}
 
             {/* Live Clock (Only time on xl, full date on 2xl) */}
-            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
-              <LuClock className="text-xs text-primary shrink-0" />
-              <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-100">
-                {timeString}
-              </span>
-              <span className="hidden 2xl:inline text-[10px] text-slate-400">•</span>
-              <span className="hidden 2xl:inline text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                {dateString}
-              </span>
-            </div>
+            {!isSettings && (
+              <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
+                <LuClock className="text-xs text-primary shrink-0" />
+                <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-100">
+                  {timeString}
+                </span>
+                <span className="hidden 2xl:inline text-[10px] text-slate-400">•</span>
+                <span className="hidden 2xl:inline text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  {dateString}
+                </span>
+              </div>
+            )}
 
             {/* Fast Sound Mute / Unmute Button */}
             <button

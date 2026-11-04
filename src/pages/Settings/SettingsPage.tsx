@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LuUser,
   LuPalette,
@@ -340,14 +340,33 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
 const SettingsPage: React.FC = () => {
   const { userEmail, role, businessName, tenantId } = useAuth();
   const { isRTL } = useLanguage();
+  const navigate = useNavigate();
   const location = useLocation();
   const searchTab = new URLSearchParams(location.search).get('tab');
-  const [activeTab, setActiveTab] = useState<string>(searchTab || 'profile');
+  const [activeTab, setActiveTabState] = useState<string>(searchTab || 'profile');
+
+  const setActiveTab = (tabId: string) => {
+    setActiveTabState(tabId);
+    const newParams = new URLSearchParams(location.search);
+    newParams.set('tab', tabId);
+    navigate(`?${newParams.toString()}`, { replace: true });
+    window.dispatchEvent(new CustomEvent('jakwani_settings_tab_changed', { detail: tabId }));
+  };
 
   useEffect(() => {
     const p = new URLSearchParams(location.search).get('tab');
-    if (p) setActiveTab(p);
+    if (p && p !== activeTab) setActiveTabState(p);
   }, [location.search]);
+
+  useEffect(() => {
+    const handleSettingsTabChange = (e: any) => {
+      if (e.detail && e.detail !== activeTab) {
+        setActiveTabState(e.detail);
+      }
+    };
+    window.addEventListener('jakwani_settings_tab_changed', handleSettingsTabChange);
+    return () => window.removeEventListener('jakwani_settings_tab_changed', handleSettingsTabChange);
+  }, [activeTab]);
 
   const [themeSubTab, setThemeSubTab] = useState<'suites' | 'navbar' | 'sidebar'>('suites');
   const [colorMode, setColorMode] = useColorMode();
@@ -1043,8 +1062,17 @@ const SettingsPage: React.FC = () => {
             <LuSlidersHorizontal size={14} className="text-primary" />
             <span>Application Preferences</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1 flex items-center gap-2.5">
-            Settings
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1 flex flex-wrap items-center gap-2">
+            <span>Settings</span>
+            <span className="text-slate-300 dark:text-slate-700 font-light">/</span>
+            <span className="text-primary font-bold text-xl sm:text-2xl">
+              {activeTab === 'profile' && (isRTL ? 'پروفائل' : 'Profile')}
+              {activeTab === 'security_devices' && (isRTL ? 'لاگ ان ڈیوائسز اور سیکیورٹی' : 'Login Devices & Security')}
+              {activeTab === 'theme' && (isRTL ? 'تھیم اور ظاہری شکل' : 'Theme & Appearance')}
+              {activeTab === 'credit_limits' && (isRTL ? 'کسٹمر کریڈٹ لمٹس' : 'Customer Credit Limits')}
+              {activeTab === 'sound_effects' && (isRTL ? 'آواز اور آڈیو اثرات' : 'Audio & Sound Effects')}
+              {activeTab === 'backup' && (isRTL ? 'ڈیٹا بیک اپ اور ایکسپورٹ' : 'Data Backup & Export')}
+            </span>
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Manage your account credentials, primary brand colors, and portal appearance.
@@ -1064,69 +1092,8 @@ const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Two-Column Layout with Floating Settings Sidebar */}
-      <div className="flex flex-col md:flex-row gap-6 items-start">
-        {/* Floating Settings Sidebar */}
-        <aside className="w-full md:w-64 lg:w-72 shrink-0 md:sticky md:top-20 z-10">
-          <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-[#111827]/95 p-3 shadow-md backdrop-blur-md">
-            <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/80 mb-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Navigation
-              </span>
-            </div>
-
-            <nav className="flex md:flex-col gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              {SETTINGS_TABS.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`group flex items-center gap-3.5 w-full p-2.5 sm:p-3 rounded-xl text-left transition-all duration-150 cursor-pointer shrink-0 md:shrink select-none ${
-                      isActive
-                        ? 'bg-primary/10 text-primary font-bold shadow-xs border border-primary/20'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
-                    }`}
-                  >
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                        isActive
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 group-hover:text-slate-800 dark:group-hover:text-white'
-                      }`}
-                      style={
-                        isActive && appliedAccentColor && (appliedAccentColor.toLowerCase() === '#ffffff' || appliedAccentColor.toLowerCase() === '#fff')
-                          ? { color: '#0F172A', border: '1px solid #CBD5E1' }
-                          : undefined
-                      }
-                    >
-                      <Icon size={18} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold truncate leading-tight">
-                        {isRTL ? ((tab as any).urLabel || tab.label) : tab.label}
-                      </div>
-                      <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate hidden lg:block mt-0.5 font-normal">
-                        {isRTL ? ((tab as any).urDescription || tab.description) : tab.description}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </nav>
-
-            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 px-2 text-[11px] text-slate-400 dark:text-slate-500">
-              <div className="flex items-center gap-1.5 font-medium">
-                <LuBuilding2 size={13} className="text-primary" />
-                <span className="truncate">{displayCompanyName}</span>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Content Area */}
-        <main className="flex-1 w-full min-w-0">
+      {/* Main Settings Content Area (Full Screen Width) */}
+      <div className="w-full min-w-0">
           {/* TAB 1: PROFILE */}
           {activeTab === 'profile' && (
             <div className="space-y-6 animate-fadeIn">
@@ -3318,7 +3285,6 @@ const SettingsPage: React.FC = () => {
               </div>
             </div>
           )}
-        </main>
       </div>
     </div>
   );
