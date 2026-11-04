@@ -145,7 +145,6 @@ const Header = (props: {
         const targetTab = settingsNavTabs[nextIndex];
         if (targetTab) {
           setSearchParams({ tab: targetTab.id });
-          triggerFeedbackSound('tab_click', userEmail);
         }
       }
     };
