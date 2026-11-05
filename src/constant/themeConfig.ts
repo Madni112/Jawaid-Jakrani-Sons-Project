@@ -152,12 +152,17 @@ export const CURATED_THEME_SUITES: CuratedThemeSuite[] = [
 ];
 
 export function getSidebarThemeMode(): SidebarThemeMode {
-  if (typeof window === 'undefined') return 'light';
+  if (typeof window === 'undefined') return 'dark';
+  const customBg = localStorage.getItem('jakwani_sidebar_custom_bg');
+  if (customBg) {
+    const lower = customBg.toLowerCase().trim();
+    return (lower === '#ffffff' || lower === '#fff' || lower === 'white') ? 'light' : 'dark';
+  }
   const stored = localStorage.getItem('jakwani_sidebar_theme_mode') || localStorage.getItem('uzair_jibran_sidebar_theme_mode');
   if (stored && ['light', 'dark', 'navy', 'emerald', 'charcoal'].includes(stored)) {
     return stored as SidebarThemeMode;
   }
-  return 'light'; // Default to modern Unified Clean Light
+  return 'dark';
 }
 
 export function setSidebarThemeMode(mode: SidebarThemeMode) {
@@ -169,7 +174,18 @@ export function setSidebarThemeMode(mode: SidebarThemeMode) {
 }
 
 export function isSidebarBackgroundLight(isDarkMode?: boolean): boolean {
-  return getSidebarThemeMode() === 'light';
+  if (typeof window !== 'undefined') {
+    const customBg = localStorage.getItem('jakwani_sidebar_custom_bg');
+    if (customBg) {
+      const lower = customBg.toLowerCase().trim();
+      if (lower === '#ffffff' || lower === '#fff' || lower === 'white' || lower.includes('rgb(255, 255, 255)')) {
+        return true;
+      }
+      return false;
+    }
+  }
+  const mode = getSidebarThemeMode();
+  return mode === 'light';
 }
 
 export function applyThemeSuite(suiteId: string): boolean {
@@ -235,6 +251,54 @@ export function setSidebarLayoutMode(mode: SidebarLayoutMode) {
 }
 
 export type NavbarLayoutMode = 'sticky' | 'normal';
+
+export type MasterThemePreset = 'nht-1' | 'nht-2' | 'custom';
+
+export function getMasterThemePreset(): MasterThemePreset {
+  if (typeof window === 'undefined') return 'nht-1';
+  const saved = localStorage.getItem('jakwani_master_theme_preset') as MasterThemePreset;
+  if (saved === 'nht-1' || saved === 'nht-2' || saved === 'custom') return saved;
+  const sLayout = getSidebarLayoutMode();
+  const nLayout = getNavbarLayoutMode();
+  const accent = (localStorage.getItem('uzair_jibran_accent_color') || '').toUpperCase();
+  const customBg = localStorage.getItem('jakwani_sidebar_custom_bg') || '';
+  const sTheme = getSidebarThemeMode();
+
+  if (sLayout === 'classic' && (accent === '#800020' || sTheme === 'charcoal' || customBg === '#1A1A1A')) {
+    return 'nht-2';
+  }
+  if (sLayout === 'floating' && (accent === '#06B6D4' || !customBg)) {
+    return 'nht-1';
+  }
+  return 'custom';
+}
+
+export function setMasterThemePreset(preset: MasterThemePreset) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('jakwani_master_theme_preset', preset);
+    if (preset === 'nht-1' || preset === 'nht-2') {
+      localStorage.setItem('jakwani_base_master_theme', preset);
+    }
+    window.dispatchEvent(new Event('jakwani_master_theme_preset_changed'));
+  }
+}
+
+export function isNHTTheme2Active(): boolean {
+  if (typeof window === 'undefined') return false;
+  const preset = getMasterThemePreset();
+  if (preset === 'nht-2') return true;
+  if (preset === 'custom') {
+    const base = localStorage.getItem('jakwani_base_master_theme');
+    if (base === 'nht-2') return true;
+    const sLayout = getSidebarLayoutMode();
+    const accent = (localStorage.getItem('uzair_jibran_accent_color') || '').toUpperCase();
+    const customBg = localStorage.getItem('jakwani_sidebar_custom_bg') || '';
+    if (sLayout === 'classic' && (accent === '#800020' || customBg === '#1A1A1A')) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function getNavbarLayoutMode(): NavbarLayoutMode {
   if (typeof window === 'undefined') return 'sticky';
@@ -588,41 +652,36 @@ export function getSafeSidebarColor(hexColor: string, isDarkMode?: boolean): { s
     return { safeColor: defaultFallback, wasAdjusted: false };
   }
 
+  // If sidebar is NOT light (it's dark, navy, charcoal, or a custom gradient):
+  // White (#FFFFFF) and light colors are ALWAYS valid and readable! Never block white!
+  if (!isLightBg) {
+    if (cleanHex.toUpperCase() === 'FFFFFF') {
+      return { safeColor: '#FFFFFF', wasAdjusted: false };
+    }
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    // Block only pure pitch black or completely dark unreadable font colors on dark background
+    if (luminance <= 0.08) {
+      return { safeColor: '#FFFFFF', wasAdjusted: true };
+    }
+    return { safeColor: `#${cleanHex}`, wasAdjusted: false };
+  }
+
+  // If sidebar is LIGHT background (#FFFFFF):
+  // Block white-on-white text:
+  if (cleanHex.toUpperCase() === 'FFFFFF') {
+    return { safeColor: '#0F172A', wasAdjusted: true };
+  }
+
   const r = parseInt(cleanHex.substring(0, 2), 16);
   const g = parseInt(cleanHex.substring(2, 4), 16);
   const b = parseInt(cleanHex.substring(4, 6), 16);
-
-  // Relative luminance
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
-  if (isLightBg) {
-    // LIGHT SIDEBAR BACKGROUND (#FFFFFF)
-    // Dark font colors are readable. Block white or pale colors:
-    if (luminance > 0.60) {
-      if (luminance >= 0.80) {
-        return { safeColor: '#0F172A', wasAdjusted: true };
-      }
-      const scale = 0.45 / luminance;
-      const safeR = Math.min(255, Math.max(0, Math.round(r * scale)));
-      const safeG = Math.min(255, Math.max(0, Math.round(g * scale)));
-      const safeB = Math.min(255, Math.max(0, Math.round(b * scale)));
-      const safeHex = `#${safeR.toString(16).padStart(2, '0')}${safeG.toString(16).padStart(2, '0')}${safeB.toString(16).padStart(2, '0')}`;
-      return { safeColor: safeHex, wasAdjusted: true };
-    }
-  } else {
-    // DARK SIDEBAR BACKGROUND (#0B0F17, #0F172A, #0A1A18, #1C1917)
-    // White and bright colors are allowed! Block dark colors:
-    if (luminance < 0.35) {
-      if (luminance <= 0.18) {
-        return { safeColor: '#FFFFFF', wasAdjusted: true };
-      }
-      const scale = 0.55 / Math.max(0.01, luminance);
-      const safeR = Math.min(255, Math.max(0, Math.round(r * scale + (255 - r) * 0.35)));
-      const safeG = Math.min(255, Math.max(0, Math.round(g * scale + (255 - g) * 0.35)));
-      const safeB = Math.min(255, Math.max(0, Math.round(b * scale + (255 - b) * 0.35)));
-      const safeHex = `#${safeR.toString(16).padStart(2, '0')}${safeG.toString(16).padStart(2, '0')}${safeB.toString(16).padStart(2, '0')}`;
-      return { safeColor: safeHex, wasAdjusted: true };
-    }
+  if (luminance >= 0.85) {
+    return { safeColor: '#0F172A', wasAdjusted: true };
   }
 
   return { safeColor: `#${cleanHex}`, wasAdjusted: false };

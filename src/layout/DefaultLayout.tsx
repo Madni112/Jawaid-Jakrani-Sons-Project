@@ -3,11 +3,22 @@ import { useLocation } from 'react-router-dom';
 import Header from '../components/Header/index';
 import Sidebar from '../components/Sidebar/index';
 import Footer from '../components/Footer/index';
-import { getSidebarBehaviorMode } from '../constant/themeConfig';
+import { getSidebarBehaviorMode, getMasterThemePreset, MasterThemePreset } from '../constant/themeConfig';
 
 const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isSettings = location.pathname.toLowerCase().startsWith('/settings');
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updatePreset = () => setMasterPreset(getMasterThemePreset());
+    window.addEventListener('jakwani_master_theme_preset_changed', updatePreset);
+    window.addEventListener('storage', updatePreset);
+    return () => {
+      window.removeEventListener('jakwani_master_theme_preset_changed', updatePreset);
+      window.removeEventListener('storage', updatePreset);
+    };
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const behavior = getSidebarBehaviorMode();
@@ -85,7 +96,7 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
               {/* Subtle top ambient cyan glow */}
               <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-primary/5 via-primary/5 to-transparent dark:from-primary/15 dark:via-primary/5 dark:to-transparent" />
               
-              <div className="relative mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-8 w-full">
+              <div className={`relative mx-auto ${masterPreset === 'nht-2' ? 'w-full max-w-full px-4 md:px-6 2xl:px-8 py-4 sm:py-6' : 'max-w-screen-2xl p-4 md:p-6 2xl:p-8 w-full'}`}>
                 {children}
               </div>
             </main>

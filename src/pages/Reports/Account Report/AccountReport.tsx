@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import { SearchableMultiSelect } from '../../../components/SearchableMultiSelect';
 import { DEFAULT_SUB_AREAS, DEFAULT_AREAS, DEFAULT_SUBAREA_AREAS_MAP } from '../../../components/SubAreaAreaInput';
+import {
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+} from '../../../constant/themeConfig';
+import { LuBarChart2, LuDownload, LuPrinter, LuSearch } from 'react-icons/lu';
 
 const AccountReport = () => {
   const navigate = useNavigate();
@@ -13,8 +19,28 @@ const AccountReport = () => {
   const { tenantId } = useAuth();
   const [loading, setLoading] = useState(true);
 
-  const initialTab = Number(location.state?.activeTab || location.state?.tab || 1);
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+    };
+    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
+    };
+  }, []);
+
+  const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
+
+  const [searchParams] = useSearchParams();
+  const queryTab = searchParams.get('tab') ? Number(searchParams.get('tab')) : null;
+  const defaultTab = isTheme2 ? 11 : 1;
+  const initialTab = Number(location.state?.activeTab || location.state?.tab || queryTab || defaultTab);
   const [activeTab, setActiveTab] = useState<number>(initialTab);
+  const [trialViewMode, setTrialViewMode] = useState<'hierarchy' | '2-column' | '6-column'>('hierarchy');
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);
@@ -304,33 +330,71 @@ const AccountReport = () => {
     });
   };
 
+  const tabNames: Record<number, string> = {
+    1: 'General Ledger',
+    2: 'Customer Summary',
+    3: 'Vendor Balance Detail',
+    4: 'Operational Expenses',
+    5: 'Chart of Accounts',
+    6: 'Vendor Outstanding',
+    7: 'Customer Recovery',
+    8: 'Voucher Report',
+    9: 'Cash & Bank Daybook',
+    10: 'Salesman Statement',
+    11: 'Trial Balance',
+    12: 'Aging Report',
+    13: 'Customer Balance Detail',
+  };
+
   if (loading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-black dark:text-bodydark text-xs antialiased font-sans relative">
       <div>
-        <h2 className="text-xl font-bold text-black dark:text-white uppercase tracking-wider">Corporate Account Auditing Center</h2>
-        <p className="text-xs text-gray-400">Compile general ledgers, trial balance summaries, and corporate financial aging statements</p>
+        <h2 className="text-xl font-bold text-black dark:text-white uppercase tracking-wider">
+          {isTheme2 ? (tabNames[activeTab] || 'Financial Reports') : 'Corporate Account Auditing Center'}
+        </h2>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {isTheme2
+            ? `Reports / Accounting Reports / ${tabNames[activeTab] || 'Financial Reports'}`
+            : 'Compile general ledgers, trial balance summaries, and corporate financial aging statements'}
+        </p>
       </div>
 
-      <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[10px] uppercase text-gray-500">
-        <button type="button" onClick={() => handleTabChange(13)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 13 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Balance Detail</button>
-        <button type="button" onClick={() => handleTabChange(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Vendor Balance Detail</button>
-        <button type="button" onClick={() => handleTabChange(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>General Ledger</button>
-        <button type="button" onClick={() => handleTabChange(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Summary</button>
-        <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Operational Expenses</button>
-        <button type="button" onClick={() => handleTabChange(5)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 5 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Chart of Accounts</button>
-        <button type="button" onClick={() => handleTabChange(6)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 6 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Vendor Outstanding</button>
-        <button type="button" onClick={() => handleTabChange(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Recovery</button>
-        <button type="button" onClick={() => handleTabChange(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Voucher Report</button>
-        <button type="button" onClick={() => handleTabChange(9)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 9 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Cash & Bank Daybook</button>
-        <button type="button" onClick={() => handleTabChange(10)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 10 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Salesman Statement</button>
-        <button type="button" onClick={() => handleTabChange(11)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 11 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Trial Balance</button>
-        <button type="button" onClick={() => handleTabChange(12)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 12 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Aging Report</button>
+      <div className={`flex flex-wrap gap-1.5 ${isTheme2 ? 'bg-transparent pb-1' : 'border-b border-stroke dark:border-strokedark bg-white dark:bg-boxdark p-1'} font-semibold text-xs`}>
+        {[11, 1, 13, 3, 2, 4, 5, 6, 7, 8, 9, 10, 12].map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => handleTabChange(t)}
+            className={`py-1.5 px-3.5 rounded-lg transition-all cursor-pointer text-xs ${
+              activeTab === t
+                ? isTheme2
+                  ? 'bg-[#800020] text-white font-bold shadow-xs'
+                  : 'border-b-2 border-primary text-primary font-black bg-primary/5'
+                : isTheme2
+                ? 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                : 'border-transparent text-gray-400 hover:text-black'
+            }`}
+          >
+            {tabNames[t]}
+          </button>
+        ))}
       </div>
 
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
-        <h3 className="font-bold text-sm text-black dark:text-white mb-4 uppercase tracking-wider text-primary">Report Criteria Specification</h3>
+      <div className={`${isTheme2 ? 'rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xs' : 'rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6'}`}>
+        <div className="flex items-center justify-between mb-4 border-b pb-3 border-slate-100 dark:border-slate-800">
+          <h3 className={`font-bold text-sm ${isTheme2 ? 'text-slate-900 dark:text-white' : 'text-primary uppercase tracking-wider'}`}>
+            {isTheme2 ? 'Report Criteria & Filters' : 'Report Criteria Specification'}
+          </h3>
+          {isTheme2 && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50 font-semibold">
+                Financial Year 2026-27 (Active)
+              </span>
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
 
           {(activeTab === 1 || activeTab === 13) && (
@@ -500,9 +564,129 @@ const AccountReport = () => {
             <SearchableMultiSelect label="Linked Salesman Agent:" placeholder="Salesman" options={salesmanOptions} value={filters.salesman} onChange={(val) => handleInputChange('salesman', val)} />
           )}
 
-          {activeTab === 11 && (
+          {activeTab === 11 && isTheme2 ? (
+            <>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Financial Year</label>
+                <select className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none">
+                  <option>Financial Year 2026-27 (Active)</option>
+                  <option>Financial Year 2025-26</option>
+                  <option>Financial Year 2024-25</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">View</label>
+                <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800 text-xs">
+                  {(['hierarchy', '2-column', '6-column'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setTrialViewMode(mode)}
+                      className={`flex-1 py-1.5 px-3 rounded-lg font-bold capitalize transition-all cursor-pointer ${
+                        trialViewMode === mode
+                          ? 'bg-[#800020] text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">As Of Date</label>
+                <input
+                  type="date"
+                  value={filters.dateTo || getTodayDateString()}
+                  onChange={(e) => handleInputChange('dateTo', e.target.value)}
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">From Account (L5)</label>
+                <select className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none">
+                  <option>-- First --</option>
+                  {chartOfAccountOptions.slice(0, 30).map((opt, i) => (
+                    <option key={i} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">To Account (L5)</label>
+                <select className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none">
+                  <option>-- Last --</option>
+                  {chartOfAccountOptions.slice(0, 30).map((opt, i) => (
+                    <option key={i} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Account Type</label>
+                <select className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none">
+                  <option>All Types</option>
+                  <option>Asset</option>
+                  <option>Liability</option>
+                  <option>Equity</option>
+                  <option>Revenue</option>
+                  <option>Expense</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Account Level</label>
+                <select className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none">
+                  <option>Level 5 - Detail</option>
+                  <option>Level 4 - Sub-Control</option>
+                  <option>Level 3 - Control</option>
+                  <option>Level 2 - Group</option>
+                  <option>Level 1 - Class</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex-1 relative">
+                  <LuSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by account code or name..."
+                    className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(filters.showZeroValues)}
+                      onChange={(e) => handleInputChange('showZeroValues', e.target.checked)}
+                      className="w-4 h-4 rounded text-[#800020] accent-[#800020] border-slate-300"
+                    />
+                    <span>Show Zero Balances</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 flex items-center gap-1"
+                  >
+                    <span>Expand</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 flex items-center gap-1"
+                  >
+                    <span>Collapse</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : activeTab === 11 ? (
             <SearchableMultiSelect label="Category Code Selection:" placeholder="Category Code" options={categoryCodeOptions} value={filters.categoryCode} onChange={(val) => handleInputChange('categoryCode', val)} />
-          )}
+          ) : null}
 
           {activeTab === 12 && (
             <SearchableMultiSelect label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
@@ -524,16 +708,65 @@ const AccountReport = () => {
           )}
         </div>
 
-        <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex justify-end">
+        <div className={`mt-8 pt-4 border-t ${isTheme2 ? 'border-slate-100 dark:border-slate-800' : 'border-stroke dark:border-strokedark'} flex items-center justify-end gap-3`}>
+          {isTheme2 && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  toast.success('Downloading report CSV...');
+                  handleDispatchReportView();
+                }}
+                className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <LuDownload size={14} />
+                <span>CSV</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDispatchReportView}
+                className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <LuPrinter size={14} />
+                <span>Print</span>
+              </button>
+            </>
+          )}
+
           <button
             type="button"
             onClick={handleDispatchReportView}
-            className="rounded bg-primary py-2.5 px-12 font-black text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 cursor-pointer uppercase tracking-wider"
+            className={`${
+              isTheme2
+                ? 'rounded-lg bg-[#800020] hover:bg-[#6b001a] py-2 px-6 font-bold text-white transition text-xs shadow-sm flex items-center gap-2 cursor-pointer'
+                : 'rounded bg-primary py-2.5 px-12 font-black text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 cursor-pointer uppercase tracking-wider'
+            }`}
           >
-            Show Report
+            {isTheme2 ? (
+              <>
+                <LuBarChart2 size={15} />
+                <span>Generate</span>
+              </>
+            ) : (
+              'Show Report'
+            )}
           </button>
         </div>
       </div>
+
+      {/* Amal ERP Empty State Preview Card when in NHT Theme 2 */}
+      {isTheme2 && (
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-16 shadow-xs flex flex-col items-center justify-center text-center min-h-[380px]">
+          <div className="flex items-end gap-1.5 text-slate-300 dark:text-slate-600 mb-4 h-10">
+            <span className="w-1.5 h-6 bg-slate-300 dark:bg-slate-600 rounded-full inline-block" />
+            <span className="w-1.5 h-10 bg-slate-300 dark:bg-slate-600 rounded-full inline-block" />
+            <span className="w-1.5 h-4 bg-slate-300 dark:bg-slate-600 rounded-full inline-block" />
+          </div>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 max-w-md">
+            Select a financial year and click <strong className="text-slate-700 dark:text-slate-200">Generate</strong> to view the {tabNames[activeTab] || 'trial balance'}
+          </p>
+        </div>
+      )}
     </div>
   );
 };

@@ -42,6 +42,23 @@ import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
 import SalesmanDashboard from './SalesmanDashboard';
 import WarehouseDashboard from './WarehouseDashboard';
+import {
+  LuPlus,
+  LuShoppingCart,
+  LuFileText,
+  LuArrowDownToLine,
+  LuSearch,
+  LuMoon,
+  LuBell,
+  LuCreditCard,
+  LuArrowDownLeft,
+  LuArrowUpRight,
+} from 'react-icons/lu';
+import {
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+} from '../../constant/themeConfig';
 
 const AdminRoleSwitcher: React.FC<{
   activeView: 'executive' | 'salesman' | 'warehouse';
@@ -155,9 +172,50 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
   const navigate = useNavigate();
-  const { role, tenantId } = useAuth();
+  const { role, tenantId, userEmail, userName } = useAuth();
   const { isRTL, t } = useLanguage();
   const [adminView, setAdminView] = useState<'executive' | 'salesman' | 'warehouse'>(initialView);
+
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+    };
+    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
+    };
+  }, []);
+
+  const isTheme2 = isNHTTheme2Active() || masterPreset === 'nht-2';
+
+  const [currentTime, setCurrentTime] = useState<string>(() => {
+    return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  });
+  const [currentDate, setCurrentDate] = useState<string>(() => {
+    return new Date().toLocaleDateString('en-US', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
+      setCurrentDate(now.toLocaleDateString('en-US', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const greeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  })();
+
+  const displayName = userName || (userEmail ? userEmail.split('@')[0].toUpperCase() : 'MUHAMMAD SAAD');
 
   const userRoleLower = (role || '').toLowerCase();
   let allowedModules: string[] = [];
@@ -780,86 +838,305 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs pb-12">
-      {/* Role Dashboard Switcher for Admins */}
-      <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />
+      {/* Role Dashboard Switcher for Admins (Theme 1 or when testing views) */}
+      {!isTheme2 && <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />}
 
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <div>
-          <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-            {t('executive_dashboard_title', 'Executive Management Dashboard')}
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {t('executive_dashboard_subtitle', 'Real-time fiscal monitoring, procurement velocity & operational intelligence')}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 font-mono text-xs">
-          <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 shadow-sm flex items-center gap-1.5">
-            <MdCalendarToday className="text-emerald-600" />
-            <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+      {isTheme2 ? (
+        /* =========================================================================
+         * NHT THEME 2 (AMAL ERP STYLE): Burgundy Hero Banner + 4 Primary Cards + 4 Analytical Panels
+         * ========================================================================= */
+        <>
+          {/* Burgundy Hero Banner */}
+          <div className="rounded-2xl bg-[#800020] text-white p-5 md:p-6 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-3xl md:text-4xl font-extrabold tracking-tight font-mono">
+                  {currentTime}
+                </span>
+                <span className="text-sm font-medium text-white/80">
+                  {currentDate}
+                </span>
+              </div>
+              <p className="text-base md:text-lg font-bold text-white/95 mt-1 tracking-tight">
+                {greeting}, {displayName}!
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => navigate('/sales/invoice/new')}
+                className="bg-white text-gray-900 hover:bg-slate-100 font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all"
+              >
+                <LuPlus size={14} />
+                <span>New Sale</span>
+              </button>
+              <button
+                onClick={() => navigate('/Purchase/Purchases/list')}
+                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              >
+                <LuShoppingCart size={14} />
+                <span>Purchase</span>
+              </button>
+              <button
+                onClick={() => navigate('/Reports/Reports-Dashboard')}
+                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              >
+                <LuFileText size={14} />
+                <span>Reports</span>
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              >
+                <LuArrowDownToLine size={14} />
+                <span>Export</span>
+              </button>
+              <button
+                onClick={() => navigate('/sales/invoice/list')}
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
+                title="Search"
+              >
+                <LuSearch size={14} />
+              </button>
+              <button
+                onClick={() => window.dispatchEvent(new Event('toggle-dark-mode'))}
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
+                title="Toggle Dark Mode"
+              >
+                <LuMoon size={14} />
+              </button>
+              <button
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
+                title="Notifications"
+              >
+                <LuBell size={14} />
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* --- TOP ACTION TILES GRID --- */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
-        <ActionCard title="Sales" subtitle="Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/list')} />
-        <ActionCard title="Purchases" subtitle="Buy New Product" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-teal-700 to-emerald-900" onClick={() => navigate('/Purchase/Purchases/list')} />
-        <ActionCard title="Products" subtitle="Items List" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/list')} />
-        <ActionCard title="Sale Return" subtitle="Customer Return" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/Sales/Sales-Return/List')} />
-        <ActionCard
-          title="Stock Report"
-          subtitle="Inventory Audit"
-          Icon={MdAssessment}
-          bgGradient="bg-gradient-to-br from-emerald-700 to-teal-900"
-          onClick={() => {
-            navigate('/Reports/Reports-Dashboard?category=inventory', { state: { category: 'inventory' } });
-          }}
-        />
-        <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-teal-500 to-emerald-700" onClick={() => { }} />
-        <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-emerald-800 to-slate-900" onClick={() => { }} />
-        <ActionCard title="This Month Purchases" subtitle={`Rs. ${metrics.thisMonthPurchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowDownward} bgGradient="bg-gradient-to-br from-teal-800 to-slate-900" onClick={() => { }} />
-      </div>
+          {/* 4 Financial Metric Cards (Amal Style) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* CASH */}
+            <div
+              onClick={() => setActiveBreakdownModal('cash')}
+              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-cyan-400 cursor-pointer hover:shadow-sm transition-all"
+            >
+              <div className="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 flex items-center justify-center font-bold text-sm mb-3">
+                $
+              </div>
+              <div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Rs.{metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  CASH
+                </div>
+              </div>
+            </div>
 
-      {/* --- FINANCIAL KPI STAT CARDS --- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        <StatCard
-          title="Cash"
-          value={metrics.cashBalance}
-          Icon={MdAccountBalanceWallet}
-          bgColor="bg-gradient-to-br from-emerald-500 to-teal-600"
-          thisMonthValue={metrics.thisMonthCashInflow}
-          thisMonthLabel="This Month"
-          onClick={() => setActiveBreakdownModal('cash')}
-        />
-        <StatCard
-          title="Bank Balance"
-          value={metrics.totalBankBalance}
-          Icon={MdAccountBalance}
-          bgColor="bg-gradient-to-br from-teal-600 to-cyan-700"
-          thisMonthValue={metrics.thisMonthBankInflow}
-          thisMonthLabel="This Month"
-          onClick={() => setActiveBreakdownModal('bank')}
-        />
-        <StatCard
-          title="Receivables"
-          value={metrics.totalReceivables}
-          Icon={MdReceiptLong}
-          bgColor="bg-gradient-to-br from-emerald-600 to-teal-700"
-          thisMonthValue={metrics.thisMonthReceivables}
-          thisMonthLabel="This Month"
-          onClick={() => setActiveBreakdownModal('receivables')}
-        />
-        <StatCard
-          title="Stock Assets"
-          value={metrics.inventoryAssetValue}
-          Icon={MdAssessment}
-          bgColor="bg-gradient-to-br from-emerald-700 to-slate-900"
-          thisMonthValue={metrics.inventoryAssetValue}
-          thisMonthLabel="This Month"
-          onClick={() => setActiveBreakdownModal('stock')}
-        />
-      </div>
+            {/* BANK */}
+            <div
+              onClick={() => setActiveBreakdownModal('bank')}
+              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-emerald-400 cursor-pointer hover:shadow-sm transition-all"
+            >
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-bold text-sm mb-3">
+                <LuCreditCard size={16} />
+              </div>
+              <div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Rs.{metrics.totalBankBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  BANK
+                </div>
+              </div>
+            </div>
+
+            {/* RECEIVABLE */}
+            <div
+              onClick={() => setActiveBreakdownModal('receivables')}
+              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-amber-400 cursor-pointer hover:shadow-sm transition-all"
+            >
+              <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center font-bold text-sm mb-3">
+                <LuArrowDownLeft size={16} />
+              </div>
+              <div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Rs.{metrics.totalReceivables.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  RECEIVABLE
+                </div>
+              </div>
+            </div>
+
+            {/* PAYABLE */}
+            <div
+              onClick={() => setActiveBreakdownModal('stock')}
+              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-purple-400 cursor-pointer hover:shadow-sm transition-all"
+            >
+              <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center font-bold text-sm mb-3">
+                <LuArrowUpRight size={16} />
+              </div>
+              <div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Rs.{metrics.thisMonthPurchases.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  PAYABLE
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Analytical Panels (Amal Style) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Money Position */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-rose-50 text-rose-500 flex items-center justify-center text-xs">
+                  📈
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Money Position</h3>
+                  <p className="text-[11px] text-slate-400">Cash and bank, month by month</p>
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center text-slate-400 text-xs text-center py-6">
+                Not enough history yet — this builds up month by month.
+              </div>
+            </div>
+
+            {/* Owed to you vs owed by you */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-amber-50 text-amber-500 flex items-center justify-center text-xs">
+                  ⏱️
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Owed to you vs owed by you</h3>
+                  <p className="text-[11px] text-slate-400">Receivable against payable</p>
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center text-slate-400 text-xs text-center py-6">
+                Nothing outstanding either way.
+              </div>
+            </div>
+
+            {/* Sales vs Recovery */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-teal-50 text-teal-500 flex items-center justify-center text-xs">
+                  🔄
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Sales vs Recovery</h3>
+                  <p className="text-[11px] text-slate-400">Monthly recovery against billing</p>
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center text-slate-400 text-xs text-center py-6">
+                Not enough history yet — this builds up month by month.
+              </div>
+            </div>
+
+            {/* Sales vs Expense */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-500 flex items-center justify-center text-xs">
+                  📊
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Sales vs Expense</h3>
+                  <p className="text-[11px] text-slate-400">Revenue against procurement velocity</p>
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center text-slate-400 text-xs text-center py-6">
+                No sales or expense activity yet.
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* =========================================================================
+         * NHT THEME 1 (ORIGINAL CLASSIC): 8 Action Tiles + 4 Stat Cards
+         * ========================================================================= */
+        <>
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+            <div>
+              <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                {t('executive_dashboard_title', 'Executive Management Dashboard')}
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {t('executive_dashboard_subtitle', 'Real-time fiscal monitoring, procurement velocity & operational intelligence')}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 font-mono text-xs">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 shadow-sm flex items-center gap-1.5">
+                <MdCalendarToday className="text-emerald-600" />
+                <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
+            <ActionCard title="Sales" subtitle="Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/list')} />
+            <ActionCard title="Purchases" subtitle="Buy New Product" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-teal-700 to-emerald-900" onClick={() => navigate('/Purchase/Purchases/list')} />
+            <ActionCard title="Products" subtitle="Items List" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/list')} />
+            <ActionCard title="Sale Return" subtitle="Customer Return" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/Sales/Sales-Return/List')} />
+            <ActionCard
+              title="Stock Report"
+              subtitle="Inventory Audit"
+              Icon={MdAssessment}
+              bgGradient="bg-gradient-to-br from-emerald-700 to-teal-900"
+              onClick={() => {
+                navigate('/Reports/Reports-Dashboard?category=inventory', { state: { category: 'inventory' } });
+              }}
+            />
+            <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-teal-500 to-emerald-700" onClick={() => { }} />
+            <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-emerald-800 to-slate-900" onClick={() => { }} />
+            <ActionCard title="This Month Purchases" subtitle={`Rs. ${metrics.thisMonthPurchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowDownward} bgGradient="bg-gradient-to-br from-teal-800 to-slate-900" onClick={() => { }} />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            <StatCard
+              title="Cash"
+              value={metrics.cashBalance}
+              Icon={MdAccountBalanceWallet}
+              bgColor="bg-gradient-to-br from-emerald-500 to-teal-600"
+              thisMonthValue={metrics.thisMonthCashInflow}
+              thisMonthLabel="This Month"
+              onClick={() => setActiveBreakdownModal('cash')}
+            />
+            <StatCard
+              title="Bank Balance"
+              value={metrics.totalBankBalance}
+              Icon={MdAccountBalance}
+              bgColor="bg-gradient-to-br from-teal-600 to-cyan-700"
+              thisMonthValue={metrics.thisMonthBankInflow}
+              thisMonthLabel="This Month"
+              onClick={() => setActiveBreakdownModal('bank')}
+            />
+            <StatCard
+              title="Receivables"
+              value={metrics.totalReceivables}
+              Icon={MdReceiptLong}
+              bgColor="bg-gradient-to-br from-emerald-600 to-teal-700"
+              thisMonthValue={metrics.thisMonthReceivables}
+              thisMonthLabel="This Month"
+              onClick={() => setActiveBreakdownModal('receivables')}
+            />
+            <StatCard
+              title="Stock Assets"
+              value={metrics.inventoryAssetValue}
+              Icon={MdAssessment}
+              bgColor="bg-gradient-to-br from-emerald-700 to-slate-900"
+              thisMonthValue={metrics.inventoryAssetValue}
+              thisMonthLabel="This Month"
+              onClick={() => setActiveBreakdownModal('stock')}
+            />
+          </div>
+        </>
+      )}
       {/* ========================================================================= */}
       {/* EXPANDABLE OPERATIONAL DETAILS TOGGLE BAR                                */}
       {/* ========================================================================= */}

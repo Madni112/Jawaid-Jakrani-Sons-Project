@@ -1,9 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, useLocation } from 'react-router-dom';
 import SidebarLinkGroup from './SidebarLinkGroup';
 import { AiOutlineUp, AiOutlineDown, AiOutlineRight, AiOutlineArrowLeft } from 'react-icons/ai';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { LuLogOut, LuSlidersHorizontal } from 'react-icons/lu';
+import {
+  LuLogOut,
+  LuSlidersHorizontal,
+  LuHome,
+  LuBox,
+  LuLayers,
+  LuDollarSign,
+  LuShoppingCart,
+  LuBarChart3,
+  LuMonitor,
+  LuArrowDownToLine,
+  LuArrowUpFromLine,
+  LuBookOpen,
+  LuSettings,
+  LuStore,
+  LuFileText,
+} from 'react-icons/lu';
 import { useModal } from '../../Context/Modal';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage, getUrduText } from '../../Context/LanguageContext';
@@ -19,6 +36,9 @@ import {
   isDarkModeActive,
   SidebarBehaviorMode,
   getSidebarBehaviorMode,
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
 } from '../../constant/themeConfig';
 import { getBrandConfig } from '../../utils/brand';
 import IconDark from '../../images/logo/icon-dark.png';
@@ -110,9 +130,286 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
   );
 };
 
+// Amal ERP style outline icon mapping for NHT Theme 2
+const getTheme2Icon = (item: any): React.ElementType | null => {
+  const label = (item?.label || '').toLowerCase().trim();
+  const path = (item?.path || '').toLowerCase().trim();
+
+  // Dashboard (Amal: Home icon)
+  if (label.includes('dashboard') || path.includes('dashboard')) {
+    return LuHome;
+  }
+  // POS
+  if (label.includes('point of sale') || label.includes('pos') || path.includes('/pos')) {
+    return LuStore;
+  }
+  // Maintain / Accounts / Financials (Amal: Maintain stacked layers)
+  if (label.includes('maintain') || label.includes('account') || path.includes('chart') || path.includes('account')) {
+    return LuLayers;
+  }
+  // Purchases (Amal: Shopping cart)
+  if (label.includes('purchase') || path.includes('purchase')) {
+    return LuShoppingCart;
+  }
+  // Sales (Amal: Dollar sign)
+  if (label.includes('sale') || path.includes('sale') || path.includes('invoice')) {
+    return LuDollarSign;
+  }
+  // Store / Inventory / Products / Categories (Amal: Store 3D box)
+  if (
+    label.includes('store') ||
+    label.includes('inventory') ||
+    label.includes('product') ||
+    label.includes('item') ||
+    path.includes('product') ||
+    path.includes('categories')
+  ) {
+    return LuBox;
+  }
+  // Receipts (Amal: Download tray)
+  if (label.includes('receipt') || path.includes('receipt')) {
+    return LuArrowDownToLine;
+  }
+  // Payments / Vouchers (Amal: Upload tray)
+  if (label.includes('payment') || label.includes('voucher') || path.includes('voucher') || path.includes('payment')) {
+    return LuArrowUpFromLine;
+  }
+  // Journal (Amal: Open book)
+  if (label.includes('journal') || path.includes('journal')) {
+    return LuBookOpen;
+  }
+  // Salary / Human Resources / Employees (Amal: Salary screen/monitor)
+  if (
+    label.includes('salary') ||
+    label.includes('human resource') ||
+    label.includes('hr') ||
+    label.includes('employee') ||
+    path.includes('human-resources') ||
+    path.includes('employee')
+  ) {
+    return LuMonitor;
+  }
+  // Fixed Assets / Locations / Machinery / BOM (Amal: Sliders)
+  if (
+    label.includes('fixed asset') ||
+    label.includes('location') ||
+    label.includes('machinery') ||
+    label.includes('manufacturing') ||
+    label.includes('bom') ||
+    path.includes('location') ||
+    path.includes('manufacturing')
+  ) {
+    return LuSlidersHorizontal;
+  }
+  // Reports (Amal: Bar chart 3 bars)
+  if (label.includes('report') || path.includes('report')) {
+    return LuBarChart3;
+  }
+  // Quotations
+  if (label.includes('quotation') || path.includes('quotation')) {
+    return LuFileText;
+  }
+  // Settings / Administration (Amal: Gear/cog)
+  if (label.includes('setting') || label.includes('administration') || path.includes('setting')) {
+    return LuSettings;
+  }
+
+  return item?.icon || null;
+};
+
 // Reusable Multi-Level Recursive Sidebar Item Component
+const NHT2_REPORTS_CHILDREN = [
+  {
+    path: '/Reports/Account-Report?tab=11',
+    label: 'Main Reports',
+    children: [
+      { path: '/Reports/Account-Report?tab=11', label: 'Trial Balance' },
+      { path: '/Reports/Reports-Dashboard?tab=balance-sheet', label: 'Balance Sheet' },
+      { path: '/Reports/Reports-Dashboard?tab=profit-loss', label: 'Profit & Loss' },
+      { path: '/Reports/Account-Report?tab=9', label: 'Cash Flow' },
+      { path: '/Reports/Reports-Dashboard?tab=executive', label: 'Executive Summary' },
+    ],
+  },
+  {
+    path: '/Reports/Purchase-Report',
+    label: 'Purchase Reports',
+    children: [
+      { path: '/Reports/Purchase-Report?tab=purchase', label: 'Purchase Summary' },
+      { path: '/Reports/Purchase-Report?tab=invoice', label: 'Purchase Register' },
+      { path: '/Reports/Purchase-Report?tab=party', label: 'Party Purchase Summary' },
+      { path: '/Reports/Account-Report?tab=3', label: 'Vendor Payments' },
+      { path: '/Reports/Purchase-Report?tab=activity', label: 'Purchase Activity' },
+      { path: '/Reports/Purchase-Report?tab=analysis', label: 'Item Purchase Analysis' },
+      { path: '/Reports/Account-Report?tab=12', label: 'Accounts Payable Aging' },
+      { path: '/Reports/Account-Report?tab=3', label: 'Vendor Balances' },
+      { path: '/Reports/Purchase-Report?tab=cost', label: 'Landed Cost Analysis' },
+      { path: '/Reports/Purchase-Report?tab=cycle', label: 'Purchase Cycle (Flow)' },
+    ],
+  },
+  {
+    path: '/Reports/Sales-Report',
+    label: 'Sale Reports',
+    children: [
+      { path: '/Reports/Sales-Report?tab=category-sales', label: 'Sale Summary' },
+      { path: '/Reports/Sales-Report?tab=sales-query', label: 'Sale Register' },
+      { path: '/Reports/Sales-Report?tab=customer-sales', label: 'Customer Sale Summary' },
+      { path: '/Reports/Sales-Report?tab=sale', label: 'Salesman Sale Summary' },
+      { path: '/Reports/Sales-Report?tab=product-sales-history', label: 'Product Sale History' },
+      { path: '/Reports/Sales-Report?tab=category-sales', label: 'Category Sale Summary' },
+      { path: '/Reports/Sales-Report?tab=return', label: 'Sale Return Register' },
+      { path: '/Reports/Account-Report?tab=12', label: 'Accounts Receivable Aging' },
+      { path: '/Reports/Account-Report?tab=2', label: 'Customer Balances' },
+      { path: '/Reports/Sales-Report?tab=invoice', label: 'Sale Invoice Report' },
+    ],
+  },
+  {
+    path: '/Reports/Stock-Report',
+    label: 'Inventory Reports',
+    children: [
+      { path: '/Reports/Stock-Report?tab=1', label: 'Stock Activity' },
+      { path: '/Reports/Stock-Report?tab=2', label: 'Stock Balance' },
+      { path: '/Reports/Stock-Report?tab=3', label: 'Stock Status' },
+      { path: '/Reports/Stock-Report?tab=4', label: 'Stock Transfer' },
+      { path: '/Reports/Stock-Report?tab=8', label: 'Location Stock' },
+      { path: '/Reports/Stock-Report?tab=7', label: 'Category Valuation' },
+      { path: '/Reports/Stock-Report?tab=5', label: 'Slow Moving Stock' },
+      { path: '/Reports/Stock-Report?tab=6', label: 'Stock Ledger' },
+    ],
+  },
+  {
+    path: '/Reports/Account-Report?tab=11',
+    label: 'Financial Reports',
+    children: [
+      { path: '/Reports/Account-Report?tab=11', label: 'Trial Balance' },
+      { path: '/Reports/Account-Report?tab=1', label: 'General Ledger' },
+      { path: '/Reports/Account-Report?tab=13', label: 'Customer Balance Detail' },
+      { path: '/Reports/Account-Report?tab=3', label: 'Vendor Balance Detail' },
+      { path: '/Reports/Account-Report?tab=9', label: 'Cash & Bank Daybook' },
+      { path: '/Reports/Account-Report?tab=5', label: 'Chart of Accounts' },
+      { path: '/Reports/Account-Report?tab=7', label: 'Customer Recovery' },
+      { path: '/Reports/Account-Report?tab=6', label: 'Vendor Outstanding' },
+      { path: '/Reports/Account-Report?tab=8', label: 'Voucher Report' },
+      { path: '/Reports/Account-Report?tab=12', label: 'Aging Report' },
+    ],
+  },
+  {
+    path: '/Reports/Account-Report?tab=10',
+    label: 'Salary Reports',
+    children: [
+      { path: '/Reports/Account-Report?tab=10', label: 'Salary Sheet' },
+      { path: '/Reports/Account-Report?tab=10', label: 'Employee Statement' },
+      { path: '/Reports/Account-Report?tab=10', label: 'Payroll Summary' },
+    ],
+  },
+  {
+    path: '/Reports/Holding-Report',
+    label: 'Fixed Asset Reports',
+    children: [
+      { path: '/Reports/Holding-Report?perspective=detailed', label: 'Asset Register' },
+      { path: '/Reports/Holding-Report?perspective=gatepass', label: 'Depreciation Schedule' },
+      { path: '/Reports/Holding-Report?perspective=invoice', label: 'Asset Disposal' },
+      { path: '/Reports/Holding-Report?perspective=customer', label: 'Holding Inventory' },
+    ],
+  },
+  {
+    path: '/Reports/Account-Report?tab=1',
+    label: 'Job Reports',
+    children: [
+      { path: '/Reports/Account-Report?tab=1', label: 'Job Profitability' },
+      { path: '/Reports/Account-Report?tab=1', label: 'Job Ledger' },
+      { path: '/Reports/Account-Report?tab=1', label: 'Project Costing' },
+    ],
+  },
+  {
+    path: '/Reports/Stock-Report?tab=4',
+    label: 'Production Reports',
+    children: [
+      { path: '/Reports/Stock-Report?tab=4', label: 'Production Summary' },
+      { path: '/Reports/Stock-Report?tab=4', label: 'Material Consumption' },
+      { path: '/Reports/Stock-Report?tab=4', label: 'Batch Costing' },
+      { path: '/Reports/Stock-Report?tab=4', label: 'WIP Inventory' },
+    ],
+  },
+];
+
+// 2nd Tier Hover Component for Theme 2
+const Theme2FlyoutItem = ({
+  child,
+  pathname,
+  handleLinkClick,
+  getTenantPath,
+  setOpenMenuId,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const subDest = (child.path && getTenantPath ? getTenantPath(child.path) : child.path) || '#';
+  const hasSubChildren = Boolean(child.children && child.children.length > 0);
+  const isSubActive = child.path && (pathname === subDest || pathname === child.path);
+
+  return (
+    <li
+      className="relative"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <NavLink
+        to={hasSubChildren ? (child.children[0]?.path || subDest) : subDest}
+        onClick={() => {
+          setOpenMenuId(null);
+          handleLinkClick();
+        }}
+        className={`flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150 ${
+          isHovered || isSubActive
+            ? 'bg-[#800020] text-white shadow-xs font-semibold'
+            : 'text-neutral-300 hover:bg-white/10 hover:text-white'
+        }`}
+      >
+        <span className="truncate">{child.label}</span>
+        {hasSubChildren && (
+          <FiChevronRight size={12} className={`shrink-0 ml-2 transition-transform ${isHovered ? 'text-white' : 'text-neutral-400'}`} />
+        )}
+      </NavLink>
+
+      {/* 2nd Tier Nested Sub-Flyout (pops out to the right) */}
+      {hasSubChildren && isHovered && (
+        <div
+          className="absolute left-full top-0 ml-1.5 min-w-[210px] max-w-[250px] rounded-xl border border-[#2D2D2D] bg-[#161618] text-slate-100 shadow-2xl ring-1 ring-white/5 p-1.5 z-99999"
+          style={{ animation: 'sidebarFlyoutFadeIn 0.12s ease-out forwards' }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div className="absolute top-0 -left-2 w-2 h-full bg-transparent" />
+          <ul className="flex flex-col gap-0.5">
+            {child.children.map((grandChild: any, gIdx: number) => {
+              const gDest = (grandChild.path && getTenantPath ? getTenantPath(grandChild.path) : grandChild.path) || '#';
+              const isGActive = grandChild.path && (pathname === gDest || pathname === grandChild.path);
+              return (
+                <li key={gIdx}>
+                  <NavLink
+                    to={gDest}
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      handleLinkClick();
+                    }}
+                    className={`flex items-center rounded-lg px-3 py-1.5 text-[12.5px] font-normal transition-all duration-150 ${
+                      isGActive
+                        ? 'bg-[#800020] text-white font-semibold shadow-xs'
+                        : 'text-neutral-300 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <span className="truncate">{grandChild.label}</span>
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </li>
+  );
+};
+
 const SidebarItem = ({
-  item,
+  item: rawItem,
   depth = 0,
   pathname,
   sidebarOpen,
@@ -127,14 +424,58 @@ const SidebarItem = ({
   layoutMode,
   sidebarThemeMode,
   sidebarBehaviorMode,
+  masterPreset,
 }: any) => {
+  const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
+  const isReportsItem = (rawItem?.label || '').toLowerCase().trim() === 'reports';
+  const effectiveChildren = (isTheme2 && isReportsItem && (!rawItem?.children || rawItem.children.length === 0))
+    ? NHT2_REPORTS_CHILDREN
+    : rawItem?.children;
+  const item = { ...rawItem, children: effectiveChildren };
+  const EffectiveIcon = isTheme2 ? (getTheme2Icon(item) || item.icon) : item.icon;
   const { isRTL } = useLanguage();
   const itemRef = useRef<HTMLDivElement>(null);
+  const flyoutPanelRef = useRef<HTMLDivElement>(null);
   const menuUniqueKey = `${parentKey}-${item.label}`;
   const [open, setOpen] = useState(false);
   const [showFlyout, setShowFlyout] = useState(false);
   const [flyoutTop, setFlyoutTop] = useState<number>(0);
   const [flyoutLeft, setFlyoutLeft] = useState<number>(56);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Close opened flyout container on outside click (Theme 2)
+  useEffect(() => {
+    if (masterPreset === 'nht-2' && sidebarOpen && openMenuId === menuUniqueKey) {
+      const handleClickOutside = (e: MouseEvent) => {
+        if (
+          itemRef.current && !itemRef.current.contains(e.target as Node) &&
+          flyoutPanelRef.current && !flyoutPanelRef.current.contains(e.target as Node)
+        ) {
+          setOpenMenuId(null);
+        }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [masterPreset, sidebarOpen, openMenuId, menuUniqueKey, setOpenMenuId]);
+
+  const clearHideTimeout = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleHide = () => {
+    clearHideTimeout();
+    hideTimeoutRef.current = setTimeout(() => {
+      setShowFlyout(false);
+    }, 120);
+  };
+
+  useEffect(() => {
+    return () => clearHideTimeout();
+  }, []);
 
   // Helper check: Recursively verifies if any nested children match the active route URL
   const checkChildActive = (node: any): boolean => {
@@ -186,14 +527,21 @@ const SidebarItem = ({
   };
 
   const handleMouseEnter = () => {
+    clearHideTimeout();
     if (!sidebarOpen && !isMobile && itemRef.current) {
       const rect = itemRef.current.getBoundingClientRect();
       const asideEl = itemRef.current.closest('aside');
-      const edgeRight = asideEl ? asideEl.getBoundingClientRect().right : rect.right;
+      const asideRect = asideEl ? asideEl.getBoundingClientRect() : null;
       const estimatedHeight = Math.min((item.children?.length || 4) * 36 + 50, 420);
       const maxTop = Math.max(12, window.innerHeight - estimatedHeight - 16);
       setFlyoutTop(Math.min(rect.top, maxTop));
-      setFlyoutLeft(edgeRight + 2);
+      if (isRTL) {
+        const edgeLeft = asideRect ? asideRect.left : rect.left;
+        setFlyoutLeft(edgeLeft);
+      } else {
+        const edgeRight = asideRect ? asideRect.right : rect.right;
+        setFlyoutLeft(edgeRight);
+      }
       setShowFlyout(true);
     }
   };
@@ -204,7 +552,7 @@ const SidebarItem = ({
         ref={itemRef}
         className="w-full"
         onMouseEnter={handleMouseEnter}
-        onMouseLeave={() => !sidebarOpen && !isMobile && setShowFlyout(false)}
+        onMouseLeave={scheduleHide}
       >
         <SidebarLinkGroup activeCondition={isChildActive}>
           {(handleClick, isGroupOpen) => (
@@ -218,11 +566,38 @@ const SidebarItem = ({
                 } ${shouldShowLabels ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
                 style={{
                   paddingLeft: shouldShowLabels ? `${(depth + 1) * 0.85}rem` : undefined,
-                  color: sidebarColor,
-                  backgroundColor: isChildActive && shouldShowLabels ? `${sidebarColor}20` : undefined,
+                  color: isTheme2 && isChildActive ? '#FFFFFF' : sidebarColor,
+                  backgroundColor: isTheme2 && isChildActive
+                    ? 'var(--color-primary, #800020)'
+                    : isChildActive && shouldShowLabels ? `${sidebarColor}20` : undefined,
                 }}
                 onClick={(e) => {
                   e.preventDefault();
+                  // In NHT Theme 2 when opened on desktop: Clicking opens the side flyout container!
+                  if (masterPreset === 'nht-2' && sidebarOpen && !isMobile) {
+                    const isCurrentlyOpen = openMenuId === menuUniqueKey;
+                    if (isCurrentlyOpen) {
+                      setOpenMenuId(null);
+                    } else {
+                      if (itemRef.current) {
+                        const rect = itemRef.current.getBoundingClientRect();
+                        const asideEl = itemRef.current.closest('aside');
+                        const asideRect = asideEl ? asideEl.getBoundingClientRect() : null;
+                        const estimatedHeight = Math.min((item.children?.length || 4) * 38 + 50, 480);
+                        const maxTop = Math.max(12, window.innerHeight - estimatedHeight - 16);
+                        setFlyoutTop(Math.min(rect.top, maxTop));
+                        if (isRTL) {
+                          setFlyoutLeft(asideRect ? asideRect.left : rect.left);
+                        } else {
+                          setFlyoutLeft(asideRect ? asideRect.right : rect.right);
+                        }
+                      }
+                      setOpenMenuId(menuUniqueKey);
+                    }
+                    return;
+                  }
+
+                  // Default Theme 1 accordion expansion
                   const nextState = !open;
                   setOpen(nextState);
                   if (nextState && depth === 0) {
@@ -233,32 +608,38 @@ const SidebarItem = ({
                   handleClick();
                 }}
               >
-                {item.icon && (
-                  <item.icon
+                {EffectiveIcon && (
+                  <EffectiveIcon
                     className="text-lg shrink-0 transition-colors"
-                    style={{ color: sidebarColor }}
+                    style={{ color: isTheme2 && isChildActive ? '#FFFFFF' : sidebarColor }}
                   />
                 )}
                 {shouldShowLabels && (
                   <>
                     <span
                       className="text-xs font-semibold ml-2.5 whitespace-nowrap overflow-hidden text-ellipsis flex flex-col gap-1 tracking-wide"
-                      style={{ color: sidebarColor }}
+                      style={{ color: isTheme2 && isChildActive ? '#FFFFFF' : sidebarColor }}
                     >
                       {getSidebarLabel(item.label, isRTL)}
                     </span>
                     <span
                       className="ml-auto transition-transform duration-200"
-                      style={{ color: sidebarColor, opacity: 0.8 }}
+                      style={{ color: isTheme2 && isChildActive ? '#FFFFFF' : sidebarColor, opacity: 0.8 }}
                     >
-                      {open ? <AiOutlineUp size={11} /> : <AiOutlineDown size={11} />}
+                      {masterPreset === 'nht-2' && !isMobile ? (
+                        <FiChevronRight size={13} className={`transition-transform duration-200 ${openMenuId === menuUniqueKey ? (isRTL ? '-rotate-90' : 'rotate-90') : ''}`} />
+                      ) : open ? (
+                        <AiOutlineUp size={11} />
+                      ) : (
+                        <AiOutlineDown size={11} />
+                      )}
                     </span>
                   </>
                 )}
               </NavLink>
 
-              {/* Collapsible Sub-item Drawer */}
-              {shouldShowLabels && (
+              {/* Collapsible Sub-item Drawer (Theme 1 Accordion Mode) */}
+              {shouldShowLabels && (masterPreset !== 'nht-2' || isMobile) && (
                 <div
                   className="transition-all duration-300 ease-in-out overflow-hidden transform pl-3 ml-2 border-l"
                   style={{
@@ -289,6 +670,7 @@ const SidebarItem = ({
                         layoutMode={layoutMode}
                         sidebarThemeMode={sidebarThemeMode}
                         sidebarBehaviorMode={sidebarBehaviorMode}
+                        masterPreset={masterPreset}
                       />
                     ))}
                   </ul>
@@ -298,8 +680,39 @@ const SidebarItem = ({
           )}
         </SidebarLinkGroup>
 
+        {/* NHT Theme 2: Opened Side Flyout Container on Click (Amal-style pure text menu) */}
+        {masterPreset === 'nht-2' && sidebarOpen && openMenuId === menuUniqueKey && !isMobile && typeof document !== 'undefined' && createPortal(
+          <div
+            ref={flyoutPanelRef}
+            className={`fixed z-99999 min-w-[210px] max-w-[260px] rounded-xl border ${
+              sidebarThemeMode === 'light'
+                ? 'border-slate-200 bg-white text-slate-800 shadow-2xl'
+                : 'border-[#2D2D2D] bg-[#1A1A1A] text-slate-100 shadow-2xl ring-1 ring-white/5'
+            } p-1.5 backdrop-blur-xl animate-fadeIn`}
+            style={{
+              top: `${flyoutTop}px`,
+              ...(isRTL ? { right: `${Math.max(0, window.innerWidth - flyoutLeft)}px` } : { left: `${flyoutLeft}px` }),
+              overflow: 'visible',
+            }}
+          >
+            <ul className="flex flex-col gap-0.5">
+              {item.children.filter((child: any) => child && !child.hideFromSidebar).map((child: any, idx: number) => (
+                <Theme2FlyoutItem
+                  key={idx}
+                  child={child}
+                  pathname={pathname}
+                  handleLinkClick={handleLinkClick}
+                  getTenantPath={getTenantPath}
+                  setOpenMenuId={setOpenMenuId}
+                />
+              ))}
+            </ul>
+          </div>,
+          document.body
+        )}
+
         {/* Collapsed Flyout Popover */}
-        {!sidebarOpen && showFlyout && !isMobile && (
+        {!sidebarOpen && showFlyout && !isMobile && typeof document !== 'undefined' && createPortal(
           <div
             className={`fixed z-99999 min-w-[210px] rounded-2xl border ${
               sidebarThemeMode === 'light'
@@ -308,17 +721,19 @@ const SidebarItem = ({
             } p-2 backdrop-blur-md`}
             style={{
               top: `${flyoutTop}px`,
-              left: `${flyoutLeft}px`,
+              ...(isRTL ? { right: `${Math.max(0, window.innerWidth - flyoutLeft)}px` } : { left: `${flyoutLeft}px` }),
               animation: 'sidebarFlyoutFadeIn 0.18s ease-out forwards',
             }}
+            onMouseEnter={clearHideTimeout}
+            onMouseLeave={scheduleHide}
           >
             <style>{`
               @keyframes sidebarFlyoutFadeIn {
-                from { opacity: 0; transform: translateX(-6px); }
+                from { opacity: 0; transform: ${isRTL ? 'translateX(6px)' : 'translateX(-6px)'}; }
                 to { opacity: 1; transform: translateX(0); }
               }
             `}</style>
-            <div className="absolute top-0 -left-3 w-3 h-full bg-transparent" />
+            <div className={`absolute top-0 ${isRTL ? '-right-3' : '-left-3'} w-3 h-full bg-transparent`} />
             <div
               className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider border-b border-slate-800 dark:border-slate-200/60 mb-1"
               style={{ color: sidebarColor, opacity: 0.7 }}
@@ -338,7 +753,8 @@ const SidebarItem = ({
                 />
               ))}
             </ul>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );
@@ -348,12 +764,19 @@ const SidebarItem = ({
   const isDirectActive = item.path && (pathname === singleDestination || pathname === item.path);
 
   const handleSingleMouseEnter = () => {
+    clearHideTimeout();
     if (!sidebarOpen && !isMobile && itemRef.current) {
       const rect = itemRef.current.getBoundingClientRect();
       const asideEl = itemRef.current.closest('aside');
-      const edgeRight = asideEl ? asideEl.getBoundingClientRect().right : rect.right;
+      const asideRect = asideEl ? asideEl.getBoundingClientRect() : null;
       setFlyoutTop(rect.top + (rect.height / 2) - 15);
-      setFlyoutLeft(edgeRight + 2);
+      if (isRTL) {
+        const edgeLeft = asideRect ? asideRect.left : rect.left;
+        setFlyoutLeft(edgeLeft);
+      } else {
+        const edgeRight = asideRect ? asideRect.right : rect.right;
+        setFlyoutLeft(edgeRight);
+      }
       setShowFlyout(true);
     }
   };
@@ -365,7 +788,7 @@ const SidebarItem = ({
       className="w-full relative"
       title={!shouldShowLabels ? getSidebarLabel(item.label, isRTL) : undefined}
       onMouseEnter={handleSingleMouseEnter}
-      onMouseLeave={() => !sidebarOpen && !isMobile && setShowFlyout(false)}
+      onMouseLeave={scheduleHide}
     >
       <NavLink
         to={singleDestination}
@@ -376,28 +799,30 @@ const SidebarItem = ({
         } ${shouldShowLabels ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
         style={{
           paddingLeft: shouldShowLabels ? `${(depth + 1) * 0.85}rem` : undefined,
-          color: isDirectActive ? 'var(--color-primary)' : sidebarColor,
-          backgroundColor: isDirectActive ? 'rgba(var(--color-primary-rgb), 0.12)' : undefined,
-          borderColor: isDirectActive ? 'rgba(var(--color-primary-rgb), 0.25)' : 'transparent',
+          color: isTheme2 && isDirectActive ? '#FFFFFF' : (isDirectActive ? 'var(--color-primary)' : sidebarColor),
+          backgroundColor: isTheme2 && isDirectActive
+            ? 'var(--color-primary, #800020)'
+            : isDirectActive ? 'rgba(var(--color-primary-rgb), 0.12)' : undefined,
+          borderColor: isDirectActive && !isTheme2 ? 'rgba(var(--color-primary-rgb), 0.25)' : 'transparent',
         }}
       >
-        {item.icon && (
-          <item.icon
+        {EffectiveIcon && (
+          <EffectiveIcon
             className="text-lg shrink-0 transition-colors"
-            style={{ color: sidebarColor }}
+            style={{ color: isTheme2 && isDirectActive ? '#FFFFFF' : sidebarColor }}
           />
         )}
         {shouldShowLabels && (
           <span
             className="text-xs font-semibold ml-2.5 whitespace-nowrap overflow-hidden text-ellipsis tracking-wide"
-            style={{ color: sidebarColor }}
+            style={{ color: isTheme2 && isDirectActive ? '#FFFFFF' : sidebarColor }}
           >
             {getSidebarLabel(item.label, isRTL)}
           </span>
         )}
       </NavLink>
 
-      {!sidebarOpen && showFlyout && !isMobile && (
+      {!sidebarOpen && showFlyout && !isMobile && typeof document !== 'undefined' && createPortal(
         <div
           className={`fixed z-99999 px-3 py-1.5 rounded-xl border ${
             sidebarThemeMode === 'light'
@@ -406,20 +831,21 @@ const SidebarItem = ({
           } text-xs font-bold backdrop-blur-md pointer-events-none whitespace-nowrap`}
           style={{
             top: `${flyoutTop}px`,
-            left: `${flyoutLeft}px`,
+            ...(isRTL ? { right: `${Math.max(0, window.innerWidth - flyoutLeft + 4)}px` } : { left: `${flyoutLeft + 4}px` }),
             color: sidebarColor,
             animation: 'sidebarFlyoutFadeIn 0.18s ease-out forwards',
           }}
         >
           {getSidebarLabel(item.label, isRTL)}
-        </div>
+        </div>,
+        document.body
       )}
     </li>
   );
 };
 
 const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
-  const { getRoleBasedRoutes, logout, tenantId } = useAuth();
+  const { getRoleBasedRoutes, logout, tenantId, userEmail } = useAuth();
   const { isRTL } = useLanguage();
   const roleRoutes = getRoleBasedRoutes();
   const location = useLocation();
@@ -470,10 +896,14 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
   // Sidebar Theme Mode (light / navy / emerald / charcoal / dark)
   const [sidebarThemeMode, setSidebarThemeModeState] = useState<SidebarThemeMode>(getSidebarThemeMode());
+  const [customSidebarBg, setCustomSidebarBg] = useState<string>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('jakwani_sidebar_custom_bg') || '' : '';
+  });
 
   useEffect(() => {
     const updateTheme = () => {
       setSidebarThemeModeState(getSidebarThemeMode());
+      setCustomSidebarBg(localStorage.getItem('jakwani_sidebar_custom_bg') || '');
     };
     window.addEventListener('jakwani_sidebar_theme_changed', updateTheme);
     window.addEventListener('jakwani_theme_suite_changed', updateTheme);
@@ -496,6 +926,23 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
       window.removeEventListener('storage', updateLayoutMode);
     };
   }, []);
+
+  // Master Theme Preset State (NHT Theme 1 vs NHT Theme 2 vs Custom)
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+    };
+    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
+    };
+  }, []);
+
+  const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
 
   const [wasContrastAdjusted, setWasContrastAdjusted] = useState(false);
 
@@ -655,7 +1102,10 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           }, 220);
         }
       }}
-      className={`flex flex-col ${themeStyles.bg} ${themeStyles.text} duration-300 ease-in-out select-none ${themeStyles.shadow} ${
+      style={{
+        background: customSidebarBg || undefined,
+      }}
+      className={`flex flex-col ${customSidebarBg ? '' : themeStyles.bg} ${themeStyles.text} duration-300 ease-in-out select-none ${themeStyles.shadow} ${
         !sidebarOpen && sidebarBehaviorMode === 'closed' ? 'cursor-pointer' : ''
       } ${
         isMobile
@@ -667,13 +1117,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             }`
       } ${
         sidebarOpen
-          ? `w-72.5 translate-x-0 visible ${layoutMode === 'classic' ? `border-r ${themeStyles.border}` : ''}`
+          ? `${masterPreset === 'nht-2' ? 'w-56' : 'w-72.5'} translate-x-0 visible ${layoutMode === 'classic' ? `border-r ${themeStyles.border}` : ''}`
           : `w-0 -translate-x-full min-[751px]:w-18 ${layoutMode === 'floating' ? 'min-[751px]:translate-x-0' : `min-[751px]:translate-x-0 min-[751px]:border-r ${themeStyles.border}`} max-[750px]:invisible`
       }`}
     >
       {/* Brand Header */}
       <div className={`flex items-center shrink-0 border-b ${themeStyles.headerBorder} ${
-        sidebarOpen ? 'px-5 py-4' : 'justify-center p-3'
+        sidebarOpen ? (masterPreset === 'nht-2' ? 'px-3 py-3.5' : 'px-5 py-4') : 'justify-center p-3'
       }`}>
         {sidebarOpen ? (
           <NavLink
@@ -708,31 +1158,33 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
         )}
       </div>
 
-      {/* Floating Border Edge Toggle Tab (Half-circle protruding on border center) */}
-      <button
-        type="button"
-        onClick={() => setSidebarOpen((prev) => !prev)}
-        className={`absolute top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-5 h-10 ${themeStyles.toggleBg} ${themeStyles.toggleText} shadow-md cursor-pointer transition-all duration-200 hover:w-6 group ${
-          isRTL
-            ? `-left-3.5 rounded-l-full border-y border-l ${themeStyles.toggleBorder}`
-            : `-right-3.5 rounded-r-full border-y border-r ${themeStyles.toggleBorder}`
-        }`}
-        title={sidebarOpen ? (isRTL ? 'سائیڈبار بند کریں' : 'Collapse Sidebar (<)') : (isRTL ? 'سائیڈبار کھولیں' : 'Expand Sidebar (>)')}
-      >
-        {sidebarOpen ? (
-          isRTL ? (
-            <FiChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+      {/* Floating Border Edge Toggle Tab (Half-circle protruding on border center) - Hidden when in NHT Theme 2 or Keep Closed */}
+      {sidebarBehaviorMode !== 'closed' && !isTheme2 && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          className={`absolute top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-5 h-10 ${themeStyles.toggleBg} ${themeStyles.toggleText} shadow-md cursor-pointer transition-all duration-200 hover:w-6 group ${
+            isRTL
+              ? `-left-3.5 rounded-l-full border-y border-l ${themeStyles.toggleBorder}`
+              : `-right-3.5 rounded-r-full border-y border-r ${themeStyles.toggleBorder}`
+          }`}
+          title={sidebarOpen ? (isRTL ? 'سائیڈبار بند کریں' : 'Collapse Sidebar (<)') : (isRTL ? 'سائیڈبار کھولیں' : 'Expand Sidebar (>)')}
+        >
+          {sidebarOpen ? (
+            isRTL ? (
+              <FiChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+            ) : (
+              <FiChevronLeft size={13} className="transition-transform group-hover:-translate-x-0.5" />
+            )
           ) : (
-            <FiChevronLeft size={13} className="transition-transform group-hover:-translate-x-0.5" />
-          )
-        ) : (
-          isRTL ? (
-            <FiChevronLeft size={13} className="transition-transform group-hover:-translate-x-0.5" />
-          ) : (
-            <FiChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
-          )
-        )}
-      </button>
+            isRTL ? (
+              <FiChevronLeft size={13} className="transition-transform group-hover:-translate-x-0.5" />
+            ) : (
+              <FiChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+            )
+          )}
+        </button>
+      )}
 
       {/* Navigation List */}
       <div className="flex-1 overflow-y-auto no-scrollbar py-3 px-3">
@@ -753,6 +1205,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               layoutMode={layoutMode}
               sidebarThemeMode={sidebarThemeMode}
               sidebarBehaviorMode={sidebarBehaviorMode}
+              masterPreset={masterPreset}
             />
           ))}
 
@@ -783,24 +1236,47 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             </NavLink>
           </li>
 
-          {/* Log Out Button */}
-          <li
-            className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out ${themeStyles.logoutHover} cursor-pointer mt-4 border-t ${themeStyles.dividerBorder} pt-4 ${
-              sidebarOpen ? 'justify-start px-3.5' : 'justify-center mx-auto w-10 h-10 px-0'
-            }`}
-            style={{ color: currentSidebarColor }}
-            onClick={() => logout()}
-            title={!sidebarOpen ? (isRTL ? 'لاگ آؤٹ' : 'Log Out') : undefined}
-          >
-            <LuLogOut className="text-lg shrink-0 transition-colors" />
-            {sidebarOpen && (
-              <span className="text-xs font-semibold ml-2.5 whitespace-nowrap overflow-hidden text-ellipsis tracking-wide">
-                {isRTL ? 'لاگ آؤٹ' : 'Log Out'}
-              </span>
-            )}
-          </li>
+          {/* Log Out Button (Only shown in standard Theme 1 or when collapsed) */}
+          {(!isTheme2 || !sidebarOpen) && (
+            <li
+              className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out ${themeStyles.logoutHover} cursor-pointer mt-4 border-t ${themeStyles.dividerBorder} pt-4 ${
+                sidebarOpen ? 'justify-start px-3.5' : 'justify-center mx-auto w-10 h-10 px-0'
+              }`}
+              style={{ color: currentSidebarColor }}
+              onClick={() => logout()}
+              title={!sidebarOpen ? (isRTL ? 'لاگ آؤٹ' : 'Log Out') : undefined}
+            >
+              <LuLogOut className="text-lg shrink-0 transition-colors" />
+              {sidebarOpen && (
+                <span className="text-xs font-semibold ml-2.5 whitespace-nowrap overflow-hidden text-ellipsis tracking-wide">
+                  {isRTL ? 'لاگ آؤٹ' : 'Log Out'}
+                </span>
+              )}
+            </li>
+          )}
         </ul>
       </div>
+
+      {/* User Profile Footer (Amal ERP Style for Theme 2) */}
+      {isTheme2 && sidebarOpen && (
+        <div className="shrink-0 border-t border-white/10 px-3.5 py-3 flex items-center justify-between bg-black/25">
+          <div className="flex flex-col min-w-0 pr-2">
+            <span className="text-[12px] font-bold text-white truncate leading-tight tracking-wide">
+              {userEmail ? userEmail.split('@')[0].toUpperCase() : 'MUHAMMAD SAAD'}
+            </span>
+            <span className="text-[9px] text-neutral-400 truncate uppercase tracking-wider font-semibold mt-0.5">
+              {brand.fullName || 'AL MUHAMMADI TILES EMPOR...'}
+            </span>
+          </div>
+          <button
+            onClick={() => logout()}
+            title="Log Out"
+            className="text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10 shrink-0"
+          >
+            <LuLogOut size={15} />
+          </button>
+        </div>
+      )}
     </aside>
   );
 };

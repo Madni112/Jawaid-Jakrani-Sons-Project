@@ -6,11 +6,32 @@ import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import SearchableMultiSelect from '../../../components/SearchableMultiSelect';
 import SearchableDropdown from '../../../components/SearchableDropdown';
+import {
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+} from '../../../constant/themeConfig';
+import { LuBarChart2, LuDownload, LuPrinter } from 'react-icons/lu';
 
 const SalesReport = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { tenantId } = useAuth();
+    const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+    useEffect(() => {
+      const updateMasterPreset = () => {
+        setMasterPreset(getMasterThemePreset());
+      };
+      window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.addEventListener('storage', updateMasterPreset);
+      return () => {
+        window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+        window.removeEventListener('storage', updateMasterPreset);
+      };
+    }, []);
+
+    const isTheme2 = isNHTTheme2Active() || masterPreset === 'nht-2';
     const [loading, setLoading] = useState(true);
 
     const initialReportType = (location.state?.reportType || location.state?.tab || location.state?.activeTab || 'category-sales') as 'sale' | 'sales-query' | 'customer-sales' | 'return' | 'invoice' | 'product-sales-history' | 'category-sales';
@@ -167,45 +188,102 @@ const SalesReport = () => {
 
     return (
         <div className="mx-auto max-w-7xl flex flex-col gap-6 text-black dark:text-bodydark text-xs antialiased font-sans relative">
-            <div>
-                <h2 className="text-xl font-bold text-black dark:text-white">Commercial Sales Auditing Center</h2>
-                <p className="text-xs text-gray-400">Isolate parameters and compile corporate distribution ledger records</p>
-            </div>
+{isTheme2 ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 pb-1">
+                    <div className="flex items-center gap-1.5 font-medium">
+                        <span>Reports</span>
+                        <span className="text-slate-400">/</span>
+                        <span>Sale Reports</span>
+                        <span className="text-slate-400">/</span>
+                        <span className="text-slate-900 dark:text-white font-bold">
+                            {reportType === 'category-sales' ? 'Category-Wise Sales' :
+                             reportType === 'product-sales-history' ? 'Product Sales History' :
+                             reportType === 'sale' ? 'Commercial Sales' :
+                             reportType === 'sales-query' ? 'Parameter Register' :
+                             reportType === 'customer-sales' ? 'Customer Sales & Volume' :
+                             reportType === 'return' ? 'Sales Return & Credit' : 'Sale Invoice Report'}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Active Fiscal DB
+                        </span>
+                    </div>
+                </div>
+            ) : (
+                <div>
+                    <h2 className="text-xl font-bold text-black dark:text-white">Commercial Sales Auditing Center</h2>
+                    <p className="text-xs text-gray-400">Isolate parameters and compile corporate distribution ledger records</p>
+                </div>
+            )}
 
-            <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-2 bg-white dark:bg-boxdark font-black tracking-wider text-[11px] uppercase text-gray-500">
-                <button 
-                    type="button" 
-                    onClick={() => handleTabChange('category-sales')} 
-                    className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer flex items-center gap-2 ${
-                        reportType === 'category-sales' 
-                            ? 'border-emerald-600 text-emerald-600 font-black' 
-                            : 'border-transparent text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white cursor-pointer'
-                    }`}
-                >
-                    <span>Category-Wise Sales</span>
-                    <span className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black shadow-xs tracking-normal">
-                        NEW
-                    </span>
-                </button>
-                <button 
-                    type="button" 
-                    onClick={() => handleTabChange('product-sales-history')} 
-                    className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer flex items-center gap-2 ${
-                        reportType === 'product-sales-history' 
-                            ? 'border-emerald-600 text-emerald-600 font-black' 
-                            : 'border-transparent text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white cursor-pointer'
-                    }`}
-                >
-                    <span>Product Sales History</span>
-                </button>
-                <button type="button" onClick={() => handleTabChange('sale')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'sale' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Commercial Sales (Salesman-Wise)</button>
-                <button type="button" onClick={() => handleTabChange('sales-query')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'sales-query' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Parameter Register</button>
-                <button type="button" onClick={() => handleTabChange('customer-sales')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'customer-sales' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Customer Sales & Volume Analysis</button>
-                <button type="button" onClick={() => handleTabChange('return')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'return' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sales Return & Credit Ledger</button>
-                <button type="button" onClick={() => handleTabChange('invoice')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'invoice' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sale Invoice Report</button>
-            </div>
+            {isTheme2 ? (
+                <div className="flex flex-wrap items-center gap-2 pb-1">
+                    {[
+                        { key: 'category-sales', label: 'Category-Wise Sales', badge: 'NEW' },
+                        { key: 'product-sales-history', label: 'Product Sales History' },
+                        { key: 'sale', label: 'Commercial Sales' },
+                        { key: 'sales-query', label: 'Parameter Register' },
+                        { key: 'customer-sales', label: 'Customer Analysis' },
+                        { key: 'return', label: 'Sales Return' },
+                        { key: 'invoice', label: 'Sale Invoice' },
+                    ].map((tab: any) => (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => handleTabChange(tab.key)}
+                            className={`px-4 py-2 rounded-full font-semibold text-xs whitespace-nowrap cursor-pointer transition flex items-center gap-1.5 ${
+                                reportType === tab.key
+                                    ? 'bg-[#800020] text-white shadow-xs'
+                                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                            }`}
+                        >
+                            <span>{tab.label}</span>
+                            {tab.badge && (
+                                <span className="bg-emerald-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
+                                    {tab.badge}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            ) : (
+                <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-2 bg-white dark:bg-boxdark font-black tracking-wider text-[11px] uppercase text-gray-500">
+                    <button 
+                        type="button" 
+                        onClick={() => handleTabChange('category-sales')} 
+                        className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer flex items-center gap-2 ${
+                            reportType === 'category-sales' 
+                                ? 'border-emerald-600 text-emerald-600 font-black' 
+                                : 'border-transparent text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white cursor-pointer'
+                        }`}
+                    >
+                        <span>Category-Wise Sales</span>
+                        <span className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black shadow-xs tracking-normal">
+                            NEW
+                        </span>
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={() => handleTabChange('product-sales-history')} 
+                        className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer flex items-center gap-2 ${
+                            reportType === 'product-sales-history' 
+                                ? 'border-emerald-600 text-emerald-600 font-black' 
+                                : 'border-transparent text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white cursor-pointer'
+                        }`}
+                    >
+                        <span>Product Sales History</span>
+                    </button>
+                    <button type="button" onClick={() => handleTabChange('sale')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'sale' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Commercial Sales (Salesman-Wise)</button>
+                    <button type="button" onClick={() => handleTabChange('sales-query')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'sales-query' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Parameter Register</button>
+                    <button type="button" onClick={() => handleTabChange('customer-sales')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'customer-sales' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Customer Sales & Volume Analysis</button>
+                    <button type="button" onClick={() => handleTabChange('return')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'return' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sales Return & Credit Ledger</button>
+                    <button type="button" onClick={() => handleTabChange('invoice')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'invoice' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sale Invoice Report</button>
+                </div>
+            )}
 
-            <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+            <div className={`p-6 ${isTheme2 ? "rounded-2xl border border-slate-200/80 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900" : "rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark"}`}>
                 <h3 className="font-bold text-sm text-black dark:text-white mb-4 uppercase tracking-wider text-primary">Report Criteria Specification</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
                     {(reportType === 'sale' || reportType === 'sales-query') && (
@@ -543,28 +621,52 @@ const SalesReport = () => {
                     </div>
                 </div>
 
-                <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex justify-end">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (reportType === 'detailed' || reportType === 'customer' || reportType === 'product') {
-                                if (criteria.dateFrom && criteria.dateTo) {
-                                    const start = new Date(criteria.dateFrom);
-                                    const end = new Date(criteria.dateTo);
-                                    const diffTime = Math.abs(end.getTime() - start.getTime());
-                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                    if (diffDays > 93) {
-                                        toast.error("Please select a date range of 3 months or less for detailed reports.");
-                                        return;
+                <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        {isTheme2 && (
+                            <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                Financial Year 2026-27 (Active)
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {isTheme2 && (
+                            <button
+                                type="button"
+                                onClick={() => window.print()}
+                                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold transition cursor-pointer"
+                            >
+                                <LuPrinter size={14} />
+                                <span>Print</span>
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (reportType === 'customer-sales' || reportType === 'product-sales-history') {
+                                    if (criteria.dateFrom && criteria.dateTo) {
+                                        const start = new Date(criteria.dateFrom);
+                                        const end = new Date(criteria.dateTo);
+                                        const diffTime = Math.abs(end.getTime() - start.getTime());
+                                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                        if (diffDays > 93) {
+                                            toast.error("Please select a date range of 3 months or less for detailed reports.");
+                                            return;
+                                        }
                                     }
                                 }
-                            }
-                            navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Sales-Report/Print`, { state: { type: reportType, filters: criteria } });
-                        }}
-                        className="rounded bg-primary py-2.5 px-12 font-bold text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 cursor-pointer"
-                    >
-                        Generate Statement
-                    </button>
+                                navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Sales-Report/Print`, { state: { type: reportType, filters: criteria } });
+                            }}
+                            className={`flex items-center gap-1.5 transition text-xs cursor-pointer ${
+                                isTheme2
+                                    ? 'bg-[#800020] hover:bg-[#6e001c] text-white px-8 py-2.5 rounded-xl font-bold shadow-xs'
+                                    : 'rounded bg-primary py-2.5 px-12 font-bold text-white hover:bg-opacity-90 shadow-sm h-9'
+                            }`}
+                        >
+                            {isTheme2 && <LuBarChart2 size={15} />}
+                            <span>Generate Statement</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

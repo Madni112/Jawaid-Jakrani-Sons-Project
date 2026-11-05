@@ -51,6 +51,9 @@ import {
   LuPanelLeftClose,
   LuPanelLeftOpen,
   LuPanelLeft,
+  LuTrash2,
+  LuPlus,
+  LuBookmark,
 } from 'react-icons/lu';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -411,13 +414,252 @@ const SettingsPage: React.FC = () => {
 
   const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('sidebar');
   const [sidebarPreviewMode, setSidebarPreviewMode] = useState<'opened' | 'closed'>('opened');
+  const [sidebarActiveConfigTab, setSidebarActiveConfigTab] = useState<'theme' | 'accent' | 'layout' | 'drawer' | 'colors'>('theme');
+  const [previewHoverOpen, setPreviewHoverOpen] = useState<boolean>(false);
+  const [previewColorDropdownOpen, setPreviewColorDropdownOpen] = useState<boolean>(true);
   const [colorMode, setColorMode] = useColorMode();
 
   // Curated Theme Suites & Sidebar Background State
   const [activeSuiteId, setActiveSuiteId] = useState<string>(() => getActiveThemeSuiteId());
   const [sidebarThemeMode, setSidebarThemeModeState] = useState<SidebarThemeMode>(() => getSidebarThemeMode());
 
+  // Custom Sidebar Background (Gradient / Solid) & Saved Themes State
+  const [sidebarCustomBg, setSidebarCustomBg] = useState<string>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('jakwani_sidebar_custom_bg') || '' : '';
+  });
+
+  interface SavedSidebarTheme {
+    id: string;
+    name: string;
+    bg: string;
+    type: 'gradient' | 'solid';
+    stop1?: string;
+    stop2?: string;
+    angle?: number;
+    date?: string;
+  }
+
+  const [savedCustomThemes, setSavedCustomThemes] = useState<SavedSidebarTheme[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('jakwani_saved_sidebar_themes');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const parseBgCss = (bg: string) => {
+    if (!bg) {
+      return { type: 'solid' as const, stop1: '#0F172A', stop2: '#1E3A8A', angle: 135, solid: '#0F172A' };
+    }
+    const gradientMatch = bg.match(/linear-gradient\(\s*(\d+)deg\s*,\s*([^,]+)\s*,\s*([^)]+)\)/i);
+    if (gradientMatch) {
+      const angle = parseInt(gradientMatch[1], 10) || 135;
+      const s1 = gradientMatch[2].replace(/\s*\d+%/g, '').trim();
+      const s2 = gradientMatch[3].replace(/\s*\d+%/g, '').trim();
+      return {
+        type: 'gradient' as const,
+        angle,
+        stop1: s1.startsWith('#') ? s1 : '#0F172A',
+        stop2: s2.startsWith('#') ? s2 : '#1E3A8A',
+        solid: s1,
+      };
+    }
+    return {
+      type: 'solid' as const,
+      stop1: bg.startsWith('#') ? bg : '#0F172A',
+      stop2: '#1E3A8A',
+      angle: 135,
+      solid: bg.startsWith('#') ? bg : '#0F172A',
+    };
+  };
+
+  const initialParsed = parseBgCss(
+    (typeof window !== 'undefined' ? localStorage.getItem('jakwani_sidebar_custom_bg') : '') || '#0F172A'
+  );
+
+  const [customBgSubTab, setCustomBgSubTab] = useState<'presets' | 'custom' | 'saved'>('presets');
+  const [customBgType, setCustomBgType] = useState<'gradient' | 'solid'>(initialParsed.type);
+  const [customColorStop1, setCustomColorStop1] = useState<string>(initialParsed.stop1);
+  const [customColorStop2, setCustomColorStop2] = useState<string>(initialParsed.stop2);
+  const [customGradientAngle, setCustomGradientAngle] = useState<number>(initialParsed.angle);
+  const [customSolidColor, setCustomSolidColor] = useState<string>(initialParsed.solid);
+  const [customThemeName, setCustomThemeName] = useState<string>('');
+
+  const syncStudioWithActiveBg = () => {
+    const currentBg = sidebarCustomBg || (
+      sidebarThemeMode === 'light' ? '#FFFFFF' :
+      sidebarThemeMode === 'navy' ? '#0F172A' :
+      sidebarThemeMode === 'emerald' ? '#0A1A18' :
+      sidebarThemeMode === 'charcoal' ? '#1C1917' :
+      sidebarThemeMode === 'dark' ? '#0B0F17' : '#0B0F17'
+    );
+    const parsed = parseBgCss(currentBg);
+    setCustomBgType(parsed.type);
+    setCustomColorStop1(parsed.stop1);
+    setCustomColorStop2(parsed.stop2);
+    setCustomGradientAngle(parsed.angle);
+    setCustomSolidColor(parsed.solid);
+  };
+
+  const SUGGESTED_THEME_NAMES = [
+    'Midnight Aurora',
+    'Royal Velvet',
+    'Emerald Matrix',
+    'Deep Ocean Abyss',
+    'Sunset Ember',
+    'Nordic Glacier',
+    'Titanium Horizon',
+    'Cosmic Obsidian',
+    'Imperial Plum',
+    'Golden Charcoal',
+    'Electric Dusk',
+    'Cyber Teal',
+  ];
+
+  // Master Themes: NHT Theme 1 (Modern Floating) vs NHT Theme 2 (Classic Executive) vs Custom
+  type MasterThemePreset = 'nht-1' | 'nht-2' | 'custom';
+
+  const [masterThemePreset, setMasterThemePreset] = useState<MasterThemePreset>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('jakwani_master_theme_preset') as MasterThemePreset;
+      if (saved === 'nht-1' || saved === 'nht-2' || saved === 'custom') return saved;
+    }
+    const sLayout = getSidebarLayoutMode();
+    const nLayout = getNavbarLayoutMode();
+    const accent = (typeof window !== 'undefined' ? localStorage.getItem('uzair_jibran_accent_color') || '' : '').toUpperCase();
+    const customBg = typeof window !== 'undefined' ? localStorage.getItem('jakwani_sidebar_custom_bg') || '' : '';
+    const sTheme = getSidebarThemeMode();
+
+    if (sLayout === 'classic' && nLayout === 'classic' && (accent === '#800020' || sTheme === 'charcoal' || customBg === '#1A1A1A')) {
+      return 'nht-2';
+    }
+    if (sLayout === 'floating' && nLayout === 'floating' && (accent === '#06B6D4' || !customBg)) {
+      return 'nht-1';
+    }
+    return 'custom';
+  });
+
+  const markAsCustom = () => {
+    setMasterThemePreset('custom');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('jakwani_master_theme_preset', 'custom');
+    }
+  };
+
+  const handleApplyMasterPreset = (preset: 'nht-1' | 'nht-2') => {
+    if (preset === 'nht-1') {
+      setSidebarLayout('floating');
+      setSidebarLayoutMode('floating');
+      setNavbarLayout('floating');
+      setNavbarLayoutMode('floating');
+
+      applyAccentColor('#06B6D4');
+      setSelectedAccentColor('#06B6D4');
+      setAppliedAccentColor('#06B6D4');
+      setCustomAccentHex('06B6D4');
+
+      setSidebarThemeMode('dark');
+      setSidebarThemeModeState('dark');
+      localStorage.removeItem('jakwani_sidebar_custom_bg');
+      setSidebarCustomBg('');
+
+      const safe = getSafeSidebarColor('#FFFFFF');
+      setSelectedSidebarColor(safe.safeColor);
+      setSavedSidebarColor(safe.safeColor);
+      applySidebarColor(safe.safeColor);
+      setCustomSidebarHex('FFFFFF');
+
+      setMasterThemePreset('nht-1');
+      localStorage.setItem('jakwani_master_theme_preset', 'nht-1');
+
+      toast.success(
+        isRTL ? '✨ NHT تھیم 1 (جدید فلوٹنگ لے آؤٹ) فعال ہو گئی!' : '✨ NHT Theme 1 (Modern Floating) activated!',
+        { id: 'master-theme-toast' }
+      );
+    } else {
+      setSidebarLayout('classic');
+      setSidebarLayoutMode('classic');
+      setNavbarLayout('classic');
+      setNavbarLayoutMode('classic');
+
+      applyAccentColor('#800020');
+      setSelectedAccentColor('#800020');
+      setAppliedAccentColor('#800020');
+      setCustomAccentHex('800020');
+
+      setSidebarThemeMode('charcoal');
+      setSidebarThemeModeState('charcoal');
+      localStorage.setItem('jakwani_sidebar_custom_bg', '#1A1A1A');
+      setSidebarCustomBg('#1A1A1A');
+
+      const safe = getSafeSidebarColor('#FFFFFF');
+      setSelectedSidebarColor(safe.safeColor);
+      setSavedSidebarColor(safe.safeColor);
+      applySidebarColor(safe.safeColor);
+      setCustomSidebarHex('FFFFFF');
+
+      setMasterThemePreset('nht-2');
+      localStorage.setItem('jakwani_master_theme_preset', 'nht-2');
+
+      toast.success(
+        isRTL ? '🏛️ NHT تھیم 2 (کلاسک ایگزیکٹو لے آؤٹ) فعال ہو گئی!' : '🏛️ NHT Theme 2 (Classic Executive) activated!',
+        { id: 'master-theme-toast' }
+      );
+    }
+    triggerFeedbackSound('success');
+  };
+
+  const applyCustomSidebarBg = (bgCss: string, themeName?: string) => {
+    markAsCustom();
+    setSidebarCustomBg(bgCss);
+    localStorage.setItem('jakwani_sidebar_custom_bg', bgCss);
+    window.dispatchEvent(new Event('jakwani_sidebar_theme_changed'));
+    triggerFeedbackSound('success');
+    if (themeName) {
+      toast.success(
+        isRTL ? `سائیڈبار کا پس منظر: ${themeName}` : `Applied "${themeName}" to sidebar!`,
+        { id: 'sidebar-theme-toast' }
+      );
+    }
+  };
+
+  const handleSaveCustomTheme = () => {
+    const bgCss = customBgType === 'gradient'
+      ? `linear-gradient(${customGradientAngle}deg, ${customColorStop1} 0%, ${customColorStop2} 100%)`
+      : customSolidColor;
+
+    const finalName = customThemeName.trim() || (customBgType === 'gradient' ? 'Custom Gradient' : 'Custom Solid');
+    const newTheme: SavedSidebarTheme = {
+      id: 'theme_' + Date.now(),
+      name: finalName,
+      bg: bgCss,
+      type: customBgType,
+      stop1: customColorStop1,
+      stop2: customColorStop2,
+      angle: customGradientAngle,
+      date: new Date().toLocaleDateString(),
+    };
+
+    const updated = [newTheme, ...savedCustomThemes.filter(t => t.name !== finalName)];
+    setSavedCustomThemes(updated);
+    localStorage.setItem('jakwani_saved_sidebar_themes', JSON.stringify(updated));
+
+    applyCustomSidebarBg(bgCss, finalName);
+    setCustomThemeName('');
+  };
+
+  const handleDeleteSavedTheme = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = savedCustomThemes.filter(t => t.id !== id);
+    setSavedCustomThemes(updated);
+    localStorage.setItem('jakwani_saved_sidebar_themes', JSON.stringify(updated));
+    toast.success('Removed saved theme');
+  };
+
   const handleApplyThemeSuite = (suite: CuratedThemeSuite) => {
+    markAsCustom();
     applyThemeSuite(suite.id);
     setActiveSuiteId(suite.id);
     setSelectedAccentColor(suite.accentColor);
@@ -454,6 +696,9 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSidebarThemeChange = (mode: SidebarThemeMode) => {
+    markAsCustom();
+    setSidebarCustomBg('');
+    localStorage.removeItem('jakwani_sidebar_custom_bg');
     setSidebarThemeMode(mode);
     setSidebarThemeModeState(mode);
     const safe = getSafeSidebarColor(selectedSidebarColor);
@@ -490,6 +735,7 @@ const SettingsPage: React.FC = () => {
   const [navbarLayout, setNavbarLayout] = useState<NavbarLayoutMode>(() => getNavbarLayoutMode());
 
   const handleSetSidebarLayout = (mode: SidebarLayoutMode) => {
+    markAsCustom();
     setSidebarLayout(mode);
     setSidebarLayoutMode(mode);
     toast.success(
@@ -501,6 +747,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSetNavbarLayout = (mode: NavbarLayoutMode) => {
+    markAsCustom();
     setNavbarLayout(mode);
     setNavbarLayoutMode(mode);
     toast.success(
@@ -512,6 +759,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleApplyPreset = (mode: 'floating' | 'classic') => {
+    markAsCustom();
     setSidebarLayout(mode);
     setSidebarLayoutMode(mode);
     setNavbarLayout(mode);
@@ -1020,6 +1268,7 @@ const SettingsPage: React.FC = () => {
 
   const handleApplyAccentColor = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    markAsCustom();
     let hexToApply = selectedAccentColor;
     if (customAccentHex) {
       const clean = customAccentHex.replace(/[^0-9A-Fa-f]/g, '').trim();
@@ -1046,6 +1295,13 @@ const SettingsPage: React.FC = () => {
   const handleSidebarSelect = (hex: string) => {
     const cleanHex = hex.startsWith('#') ? hex : `#${hex}`;
     const isDark = isDarkModeActive();
+    // Allow white (#FFFFFF) directly whenever sidebar is not white
+    if ((cleanHex.toUpperCase() === '#FFFFFF' || cleanHex.toUpperCase() === '#FFF') && !isSidebarBackgroundLight(isDark)) {
+      setSelectedSidebarColor('#FFFFFF');
+      setCustomSidebarHex('FFFFFF');
+      setWasSidebarAdjusted(false);
+      return;
+    }
     const safeCheck = getSafeSidebarColor(cleanHex, isDark);
     setSelectedSidebarColor(safeCheck.safeColor);
     setCustomSidebarHex(safeCheck.safeColor.replace('#', ''));
@@ -1054,6 +1310,7 @@ const SettingsPage: React.FC = () => {
 
   const handleApplySidebarColor = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    markAsCustom();
     let hexToApply = selectedSidebarColor;
     if (customSidebarHex) {
       const clean = customSidebarHex.replace(/[^0-9A-Fa-f]/g, '').trim();
@@ -1063,6 +1320,21 @@ const SettingsPage: React.FC = () => {
     }
 
     const isDark = isDarkModeActive();
+    // Allow white (#FFFFFF) directly whenever sidebar is not white
+    if ((hexToApply.toUpperCase() === '#FFFFFF' || hexToApply.toUpperCase() === '#FFF') && !isSidebarBackgroundLight(isDark)) {
+      localStorage.setItem('uzair_jibran_sidebar_color', '#FFFFFF');
+      localStorage.setItem('uzair_jibran_sidebar_raw_color', '#FFFFFF');
+      window.dispatchEvent(new Event('uzair_jibran_sidebar_color_changed'));
+      setAppliedSidebarColor('#FFFFFF');
+      setSelectedSidebarColor('#FFFFFF');
+      setCustomSidebarHex('FFFFFF');
+      setWasSidebarAdjusted(false);
+      setSidebarAppliedRecently(true);
+      toast.success('Sidebar font & icon color applied!');
+      setTimeout(() => setSidebarAppliedRecently(false), 2500);
+      return;
+    }
+
     const result = applySidebarColor(hexToApply, isDark);
     setAppliedSidebarColor(result.safeColor);
     setSelectedSidebarColor(result.safeColor);
@@ -1250,1320 +1522,1608 @@ const SettingsPage: React.FC = () => {
           {/* TAB 2: THEME & APPEARANCE */}
           {activeTab === 'theme' && (
             <div className="space-y-6 animate-fadeIn">
-              {/* BRAND COLOR PALETTES (STICKY SUB-NAVBAR SCOPE CONTAINER) */}
-              <div className="relative space-y-4">
-                {/* TOP FLOATING SEGMENTED SUB-NAVBAR: (Sidebar & Background, Navbar & Brand Accent) */}
-                <div className="p-2 rounded-2xl bg-white/95 dark:bg-[#111827]/95 border border-slate-200/90 dark:border-slate-800 shadow-md backdrop-blur-md sticky top-2 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto flex-wrap">
-                    {/* SUB-TAB 1: SIDEBAR & BACKGROUND */}
-                    <button
-                      type="button"
-                      onClick={() => setThemeSubTab('sidebar')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
-                        themeSubTab === 'sidebar'
-                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
-                    >
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
-                        style={{ backgroundColor: selectedSidebarColor }}
-                      />
-                      <span>{isRTL ? "سائیڈبار اور پس منظر" : "Sidebar & Background"}</span>
-                      {isSidebarChanged && (
-                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
-                      )}
-                    </button>
-
-                    {/* SUB-TAB 2: NAVBAR & BRAND ACCENT */}
-                    <button
-                      type="button"
-                      onClick={() => setThemeSubTab('navbar')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
-                        themeSubTab === 'navbar'
-                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
-                    >
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
-                        style={{ backgroundColor: selectedAccentColor }}
-                      />
-                      <span>{isRTL ? "نیوبار اور برانڈ کا رنگ" : "Navbar & Brand Accent"}</span>
-                      {isAccentChanged && (
-                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-500 dark:text-slate-400 self-end sm:self-auto">
-                    <span>{isRTL ? "حسب ضرورت:" : "Customizing:"}</span>
-                    <strong className="text-slate-800 dark:text-slate-200 font-bold">
-                      {themeSubTab === 'sidebar'
-                        ? (isRTL ? 'سائیڈبار کے رنگ اور لے آؤٹ' : 'Sidebar Colors & Background')
-                        : (isRTL ? 'نیوبار اور برانڈ کا رنگ' : 'Navbar & Brand Accent')}
-                    </strong>
-                  </div>
-                </div>
-
-              {/* SECTION A: ACCENT COLOR THEME */}
-              {themeSubTab === 'navbar' && (
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm animate-fadeIn">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2.5">
+              {/* MASTER WORKSPACE THEME PRESETS (NHT Theme 1 / NHT Theme 2 / Custom) */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-5 shadow-sm">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3">
                     <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs transition-colors border border-slate-200/80 dark:border-slate-700/80"
-                      style={{
-                        backgroundColor: selectedAccentColor,
-                        color: getContrastTextColor(selectedAccentColor),
-                      }}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm transition-all"
+                      style={{ backgroundColor: selectedAccentColor }}
                     >
-                      <LuSparkles size={18} />
+                      <LuLayers size={20} />
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                        {isRTL ? "برانڈ کا بنیادی رنگ" : "Brand Accent Color"}
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Select a color to preview, then click <strong className="text-slate-700 dark:text-slate-200">{isRTL ? "رنگ لاگو کریں" : "Apply Accent Color"}</strong> to save changes.
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                          {isRTL ? "ورک اسپیس تھیمز" : "Workspace Themes"}
+                        </h3>
+                        <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-full uppercase tracking-wider ${
+                          masterThemePreset === 'nht-1'
+                            ? 'bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-800'
+                            : masterThemePreset === 'nht-2'
+                            ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-800'
+                            : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800'
+                        }`}>
+                          {masterThemePreset === 'nht-1' ? 'NHT Theme 1 Active' : masterThemePreset === 'nht-2' ? 'NHT Theme 2 Active' : 'Custom Theme'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {masterThemePreset === 'nht-1'
+                          ? 'Modern floating card architecture with dynamic cyan branding.'
+                          : masterThemePreset === 'nht-2'
+                          ? 'Classic edge-to-edge flush rail layout with charcoal black sidebar and rich burgundy accent.'
+                          : 'Personalized workspace with your custom colors, gradients, and layout options.'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {isAccentChanged && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        Unapplied Selection
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold">
-                      <span
-                        className="w-3 h-3 rounded-full border border-black/15 shadow-2xs shrink-0"
-                        style={{ backgroundColor: selectedAccentColor }}
-                      />
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {selectedAccentColor.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 24 Presets Grid */}
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Preset Palette ({PRESET_THEME_COLORS.length} Colors)
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      {isRTL ? "پیش نظارہ کے لیے کسی بھی رنگ پر کلک کریں" : "Click any swatch to preview"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2.5">
-                    {PRESET_THEME_COLORS.map((c) => {
-                      const isSelected =
-                        selectedAccentColor.toLowerCase() === c.hex.toLowerCase();
-                      const isCurrentlyApplied =
-                        appliedAccentColor.toLowerCase() === c.hex.toLowerCase();
-
-                      return (
-                        <button
-                          key={c.hex}
-                          type="button"
-                          onClick={() => handleAccentSelect(c.hex)}
-                          className={`group relative h-11 rounded-xl transition-all duration-200 hover:scale-105 flex flex-col items-center justify-center cursor-pointer border ${
-                            isSelected
-                              ? 'ring-3 ring-offset-2 ring-slate-900 dark:ring-white border-transparent shadow-md scale-102'
-                              : 'border-black/10 dark:border-white/10 hover:shadow-xs'
-                          }`}
-                          style={{ backgroundColor: c.hex }}
-                          title={`${c.name} (${c.hex})${isCurrentlyApplied ? ' - Currently Active' : ''}`}
-                        >
-                          {isSelected && (
-                            <LuCheck className="text-white drop-shadow-md text-base stroke-[3]" />
-                          )}
-                          {!isSelected && isCurrentlyApplied && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/80 shadow-xs absolute bottom-1.5" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Custom Accent Color & Action Bar */}
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex flex-col lg:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 w-full lg:w-auto">
-                    <label
-                      className="relative flex items-center justify-center cursor-pointer shrink-0"
-                      title="Open color wheel picker"
-                    >
-                      <span
-                        className="w-11 h-11 rounded-xl border border-black/15 shadow-sm block transition hover:scale-105"
-                        style={{ backgroundColor: selectedAccentColor }}
-                      />
-                      <input
-                        type="color"
-                        value={selectedAccentColor}
-                        onChange={(e) => handleAccentSelect(e.target.value)}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                    </label>
-
-                    <div>
-                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                        <LuPenLine size={13} />
-                        <span>{isRTL ? "حسب ضرورت ہیکس کوڈ" : "Custom Accent Hex"}</span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 dark:text-slate-400">
-                        {isRTL ? "رنگوں کے پہیے سے منتخب کریں یا کوڈ لکھیں" : "Pick from the color wheel or type any hex"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <form
-                    onSubmit={handleApplyAccentColor}
-                    className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-end"
-                  >
-                    <div className="flex items-center px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 shadow-2xs w-36">
-                      <span className="text-slate-400 select-none mr-1">#</span>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={customAccentHex}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setCustomAccentHex(val);
-                          const clean = val.replace(/[^0-9A-Fa-f]/g, '').trim();
-                          if (clean.length === 3 || clean.length === 6) {
-                            setSelectedAccentColor(`#${clean}`);
-                          }
-                        }}
-                        placeholder="10B981"
-                        className="w-full bg-transparent outline-none uppercase font-mono tracking-wider text-xs"
-                      />
-                    </div>
-
-                    {isAccentChanged && (
-                      <button
-                        type="button"
-                        onClick={handleResetAccentColor}
-                        className="px-3 py-2.5 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer flex items-center gap-1"
-                        title="Revert to active color"
-                      >
-                        <LuRotateCcw size={13} />
-                        <span>Reset</span>
-                      </button>
-                    )}
-
-                    {/* VIBRANT & HIGHLY VISIBLE APPLY BUTTON */}
-                    <button
-                      type="submit"
-                      className={`px-5 py-2.5 text-xs font-bold rounded-xl text-white shadow-md transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
-                        isAccentChanged
-                          ? 'ring-2 ring-offset-2 ring-emerald-500 hover:brightness-110 shadow-emerald-600/30 font-extrabold scale-102'
-                          : 'hover:opacity-90'
-                      }`}
-                      style={{
-                        backgroundColor: selectedAccentColor,
-                        color: getContrastTextColor(selectedAccentColor),
-                        border: getContrastTextColor(selectedAccentColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
-                      }}
-                    >
-                      {accentAppliedRecently ? (
-                        <>
-                          <LuCheck size={16} className="stroke-[3]" />
-                          <span>Applied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <LuSparkles size={15} />
-                          <span>{isRTL ? "رنگ لاگو کریں" : "Apply Accent Color"}</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Live UI Interactive Preview */}
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Live UI Preview
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      Showing preview of: <strong className="font-mono text-slate-600 dark:text-slate-300">{selectedAccentColor}</strong>
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-700/50">
+                  {/* 1-Click Theme Switcher Control */}
+                  <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 self-start lg:self-center shrink-0">
                     <button
                       type="button"
-                      className="px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors"
-                      style={{
-                        backgroundColor: selectedAccentColor,
-                        color: getContrastTextColor(selectedAccentColor),
-                        border: getContrastTextColor(selectedAccentColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
-                      }}
+                      onClick={() => handleApplyMasterPreset('nht-1')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                        masterThemePreset === 'nht-1'
+                          ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/25 scale-[1.02]'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+                      }`}
                     >
-                      Primary Button
+                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-300 shadow-xs" />
+                      <span>NHT Theme 1</span>
                     </button>
-                    <span
-                      className="px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
-                      style={{
-                        backgroundColor:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '#F1F5F9'
-                            : `${selectedAccentColor}1A`,
-                        color:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '#0F172A'
-                            : selectedAccentColor,
-                        border:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '1px solid #CBD5E1'
-                            : undefined,
-                      }}
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplyMasterPreset('nht-2')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                        masterThemePreset === 'nht-2'
+                          ? 'bg-[#800020] text-white shadow-md shadow-rose-950/30 scale-[1.02]'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
+                      }`}
                     >
-                      Badge Highlight
-                    </span>
-                    <div
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-colors"
-                      style={{
-                        borderColor:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '#94A3B8'
-                            : `${selectedAccentColor}60`,
-                        color:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '#0F172A'
-                            : selectedAccentColor,
-                      }}
-                    >
-                      Outline Element
-                    </div>
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-xs" />
+                      <span>NHT Theme 2</span>
+                    </button>
+
+                    {masterThemePreset === 'custom' && (
+                      <div className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1.5 animate-fadeIn">
+                        <LuSlidersHorizontal size={13} />
+                        <span>Custom</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            )}
 
-              {/* SECTION B: SIDEBAR FONT & ICON COLOR */}
-              {themeSubTab === 'sidebar' && (
-                <div className="space-y-6 animate-fadeIn">
-                  {/* LIVE INTERACTIVE SIDEBAR & WORKSPACE CONFIGURATOR STUDIO */}
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-6 shadow-sm">
-                    {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
-                      <div>
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-2xs">
-                            <LuSparkles size={16} />
-                          </div>
-                          <div>
-                            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                              {isRTL ? "سائیڈبار تھیم و لے آؤٹ اسٹوڈیو" : "Sidebar Theme & Layout Studio"}
-                            </h3>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {isRTL
-                                ? "انٹرایکٹو پریویو میں براہ راست تھیم اور اسٹائل تبدیل کریں اور فوری اثر دیکھیں۔"
-                                : "Interactive configurator. Select your background theme and sidebar style directly inside the live preview."}
-                            </p>
-                          </div>
-                        </div>
+              {/* LIVE INTERACTIVE SIDEBAR & NAVBAR WORKSPACE STUDIO */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-6 shadow-sm">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-8 h-8 rounded-xl flex items-center justify-center shadow-2xs text-white transition-colors"
+                        style={{ backgroundColor: selectedAccentColor }}
+                      >
+                        <LuSparkles size={16} />
                       </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
-                          Theme: {sidebarThemeMode}
-                        </span>
-                        <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 uppercase">
-                          {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
-                        </span>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                          {isRTL ? "تھیم و لے آؤٹ اسٹوڈیو" : "Workspace Theme & Layout Studio"}
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {isRTL
+                            ? "سائیڈبار کے ذریعے تمام ترتیبات کو کنٹرول کریں اور سائیڈبار و نیوبار دونوں پر فوری لائیو اثر دیکھیں۔"
+                            : "Click any tab in the preview sidebar to customize background, brand accent, layout, drawer behavior, and colors live."}
+                        </p>
                       </div>
                     </div>
+                  </div>
 
-                    {/* LIVE STUDIO SIMULATION FRAME */}
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 text-slate-100 shadow-lg overflow-hidden">
-                      {/* Top Chrome Bar */}
-                      <div className="px-4 py-2.5 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
-                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
-                          </div>
-                          <span className="text-[11px] font-mono text-slate-400 ml-2 hidden sm:inline">
-                            Live ERP Workspace Preview & Configurator
-                          </span>
-                        </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+                      Theme: {masterThemePreset === 'nht-1' ? 'NHT Theme 1' : masterThemePreset === 'nht-2' ? 'NHT Theme 2' : 'Custom'}
+                    </span>
+                    <span
+                      className="text-xs font-mono font-bold px-3 py-1 rounded-lg border text-white shadow-2xs"
+                      style={{ backgroundColor: selectedAccentColor }}
+                    >
+                      Accent: {selectedAccentColor.toUpperCase()}
+                    </span>
+                    <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 uppercase">
+                      {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
+                    </span>
+                  </div>
+                </div>
 
-                        {/* OPENED / CLOSED PREVIEW TOGGLES IN CHROME */}
-                        <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-slate-800/90 border border-slate-700/80">
-                          <button
-                            type="button"
-                            onClick={() => setSidebarPreviewMode('opened')}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150 cursor-pointer ${
-                              sidebarPreviewMode === 'opened'
-                                ? 'bg-blue-600 text-white shadow-xs'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            <LuPanelLeftOpen size={13} />
-                            <span>{isRTL ? "کھلی حالت" : "Opened View"}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setSidebarPreviewMode('closed')}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150 cursor-pointer ${
-                              sidebarPreviewMode === 'closed'
-                                ? 'bg-blue-600 text-white shadow-xs'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            <LuPanelLeftClose size={13} />
-                            <span>{isRTL ? "بند حالت" : "Closed View"}</span>
-                          </button>
-                        </div>
+                {/* LIVE STUDIO SIMULATION FRAME */}
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 text-slate-100 shadow-lg overflow-hidden">
+                  {/* Top Window Bar */}
+                  <div className="px-4 py-2.5 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
                       </div>
+                      <span className="text-[11px] font-mono text-slate-400 ml-2 hidden sm:inline">
+                        Live ERP Workspace Preview & Configurator
+                      </span>
+                    </div>
 
-                      {/* Interactive Canvas Workspace */}
-                      {(() => {
-                        // Dynamic Theme Colors
-                        const isLight = sidebarThemeMode === 'light';
-                        const sidebarBg =
-                          sidebarThemeMode === 'light' ? '#FFFFFF' :
-                          sidebarThemeMode === 'navy' ? '#0F172A' :
-                          sidebarThemeMode === 'emerald' ? '#0A1A18' :
-                          sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17';
+                    {/* OPENED / CLOSED PREVIEW TOGGLES */}
+                    <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-slate-800/90 border border-slate-700/80">
+                      <button
+                        type="button"
+                        onClick={() => setSidebarPreviewMode('opened')}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150 cursor-pointer ${
+                          sidebarPreviewMode === 'opened'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <LuPanelLeftOpen size={13} />
+                        <span>{isRTL ? "کھلی حالت" : "Opened View"}</span>
+                      </button>
 
-                        const sidebarTextColor = isLight ? '#0F172A' : '#FFFFFF';
-                        const sidebarSubTextColor = isLight ? '#64748B' : '#94A3B8';
-                        const sidebarBorderColor = isLight ? '#E2E8F0' : '#1E293B';
+                      <button
+                        type="button"
+                        onClick={() => setSidebarPreviewMode('closed')}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150 cursor-pointer ${
+                          sidebarPreviewMode === 'closed'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <LuPanelLeftClose size={13} />
+                        <span>{isRTL ? "بند حالت" : "Closed View"}</span>
+                      </button>
+                    </div>
+                  </div>
 
-                        return (
-                          <div className="relative flex flex-col md:flex-row min-h-[420px] overflow-hidden bg-slate-100 dark:bg-[#070A0F] text-slate-900 dark:text-slate-100 transition-colors">
-                            {/* SIMULATED SIDEBAR */}
-                            <div
-                              style={{
-                                backgroundColor: sidebarBg,
-                                color: sidebarTextColor,
-                                borderColor: sidebarBorderColor,
-                              }}
-                              className={`transition-all duration-300 flex flex-col justify-between shrink-0 select-none ${
-                                sidebarLayout === 'floating'
-                                  ? 'm-2.5 rounded-2xl border shadow-xl'
-                                  : 'm-0 rounded-none border-r border-t-0 border-b-0 border-l-0 shadow-sm'
-                              } ${
-                                sidebarPreviewMode === 'opened'
-                                  ? 'w-full md:w-52 p-3.5'
-                                  : 'w-full md:w-16 p-2 items-center'
-                              }`}
-                            >
-                              {/* Top Header */}
-                              <div>
-                                {sidebarPreviewMode === 'opened' ? (
-                                  <div className="flex items-center gap-2.5 pb-3 mb-3 border-b" style={{ borderColor: sidebarBorderColor }}>
-                                    <div
-                                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-xs"
-                                      style={{ backgroundColor: selectedAccentColor }}
-                                    >
-                                      JJS
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="text-xs font-black tracking-wide truncate">
-                                        JAWAID JAKWANI
-                                      </div>
-                                      <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
-                                        Cloth ERP
-                                      </div>
-                                    </div>
+                  {/* Interactive Canvas Workspace */}
+                  {(() => {
+                    const isLight = !sidebarCustomBg && sidebarThemeMode === 'light';
+                    const sidebarBg = sidebarCustomBg || (
+                      sidebarThemeMode === 'light' ? '#FFFFFF' :
+                      sidebarThemeMode === 'navy' ? '#0F172A' :
+                      sidebarThemeMode === 'emerald' ? '#0A1A18' :
+                      sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17'
+                    );
+
+                    const sidebarTextColor = isLight ? '#0F172A' : '#FFFFFF';
+                    const sidebarSubTextColor = isLight ? '#64748B' : '#94A3B8';
+                    const sidebarBorderColor = isLight ? '#E2E8F0' : '#1E293B';
+
+                    const isEffectiveOpened =
+                      sidebarPreviewMode === 'opened' || (sidebarBehavior === 'closed' && previewHoverOpen);
+
+                    return (
+                      <div className="relative flex flex-col md:flex-row min-h-[580px] overflow-hidden bg-slate-100 dark:bg-[#070A0F] text-slate-900 dark:text-slate-100 transition-colors">
+                        {/* 1. SIMULATED INTERACTIVE SIDEBAR (ACTS AS TABS) */}
+                        <div
+                          onMouseEnter={() => {
+                            if (sidebarBehavior === 'closed' && sidebarPreviewMode === 'closed') {
+                              setPreviewHoverOpen(true);
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            if (previewHoverOpen) {
+                              setPreviewHoverOpen(false);
+                            }
+                          }}
+                          style={{
+                            background: sidebarBg,
+                            color: isLight ? '#0F172A' : '#FFFFFF',
+                            borderColor: sidebarBorderColor,
+                          }}
+                          className={`transition-all duration-300 flex flex-col justify-between shrink-0 select-none ${
+                            sidebarLayout === 'floating'
+                              ? 'm-2.5 rounded-2xl border shadow-xl'
+                              : 'm-0 rounded-none border-r border-t-0 border-b-0 border-l-0 shadow-sm'
+                          } ${
+                            isEffectiveOpened
+                              ? 'w-full md:w-64 p-3.5'
+                              : 'w-full md:w-16 p-2 items-center'
+                          }`}
+                        >
+                          {/* Top Brand Header */}
+                          <div>
+                            {isEffectiveOpened ? (
+                              <div className="flex items-center gap-2.5 pb-3 mb-3 border-b" style={{ borderColor: sidebarBorderColor }}>
+                                <div
+                                  className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-xs cursor-pointer transition hover:scale-105"
+                                  style={{ backgroundColor: selectedAccentColor }}
+                                  onClick={() => setSidebarPreviewMode(sidebarPreviewMode === 'opened' ? 'closed' : 'opened')}
+                                  title="Toggle expanded/compact view"
+                                >
+                                  JJS
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-black tracking-wide truncate">
+                                    JAWAID JAKWANI
                                   </div>
-                                ) : (
-                                  <div className="pb-3 mb-3 border-b flex justify-center w-full" style={{ borderColor: sidebarBorderColor }}>
-                                    <div
-                                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shadow-xs"
-                                      style={{ backgroundColor: selectedAccentColor }}
-                                    >
-                                      JJS
-                                    </div>
+                                  <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
+                                    Cloth ERP
                                   </div>
-                                )}
+                                </div>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-bold border border-blue-500/20">
+                                  Tabs
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="pb-3 mb-3 border-b flex justify-center w-full" style={{ borderColor: sidebarBorderColor }}>
+                                <div
+                                  className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shadow-xs cursor-pointer transition hover:scale-105"
+                                  style={{ backgroundColor: selectedAccentColor }}
+                                  onClick={() => setSidebarPreviewMode('opened')}
+                                  title="Click to expand sidebar"
+                                >
+                                  JJS
+                                </div>
+                              </div>
+                            )}
 
-                                {/* Navigation Menu Mockup */}
-                                <div className="space-y-1">
-                                  {/* Item 1: Dashboard (Active) */}
-                                  <div
-                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold transition ${
-                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
+                            {/* SIDEBAR NAVIGATION TABS & DROPDOWN */}
+                            <div className="space-y-1.5">
+                              {[
+                                {
+                                  id: 'theme',
+                                  label: isRTL ? 'سائیڈبار پس منظر تھیم' : 'Sidebar Background Theme',
+                                  icon: LuPalette,
+                                  badge: sidebarThemeMode.toUpperCase(),
+                                },
+                                {
+                                  id: 'layout',
+                                  label: isRTL ? 'ورک اسپیس و لے آؤٹ' : 'Workspace & Layout',
+                                  icon: LuLayers,
+                                  badge: sidebarLayout === 'floating' ? 'Floating' : 'Classic',
+                                },
+                                {
+                                  id: 'drawer',
+                                  label: isRTL ? 'کھلنے بند رہنے کا انداز' : 'Drawer Behavior',
+                                  icon: LuMonitor,
+                                  badge: sidebarBehavior === 'closed' ? 'Auto' : 'Pinned',
+                                },
+                              ].map((tab) => {
+                                const isActive = sidebarActiveConfigTab === tab.id;
+                                const TabIcon = tab.icon;
+
+                                return (
+                                  <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setSidebarActiveConfigTab(tab.id as any)}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer group text-left ${
+                                      !isEffectiveOpened ? 'justify-center px-0' : 'justify-between'
                                     }`}
                                     style={{
-                                      backgroundColor: isLight ? `${selectedAccentColor}18` : `${selectedAccentColor}28`,
-                                      color: isLight ? selectedAccentColor : '#FFFFFF',
-                                      border: `1px solid ${selectedAccentColor}40`,
+                                      backgroundColor: isActive
+                                        ? (isLight ? `${selectedAccentColor}18` : `${selectedAccentColor}28`)
+                                        : 'transparent',
+                                      color: isActive
+                                        ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                        : selectedSidebarColor,
+                                      border: isActive ? `1px solid ${selectedAccentColor}45` : '1px solid transparent',
                                     }}
+                                    title={tab.label}
                                   >
-                                    <LuLayoutDashboard size={16} style={{ color: selectedAccentColor }} className="shrink-0" />
-                                    {sidebarPreviewMode === 'opened' && (
-                                      <span className="truncate">Dashboard</span>
-                                    )}
-                                  </div>
-
-                                  {/* Item 2: POS */}
-                                  <div
-                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                    }`}
-                                    style={{ color: sidebarSubTextColor }}
-                                  >
-                                    <LuReceipt size={16} className="shrink-0" />
-                                    {sidebarPreviewMode === 'opened' && (
-                                      <span className="truncate">Point of Sale</span>
-                                    )}
-                                  </div>
-
-                                  {/* Item 3: Inventory */}
-                                  <div
-                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                    }`}
-                                    style={{ color: sidebarSubTextColor }}
-                                  >
-                                    <LuPackage size={16} className="shrink-0" />
-                                    {sidebarPreviewMode === 'opened' && (
-                                      <span className="truncate">Inventory</span>
-                                    )}
-                                  </div>
-
-                                  {/* Item 4: Accounts */}
-                                  <div
-                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                    }`}
-                                    style={{ color: sidebarSubTextColor }}
-                                  >
-                                    <LuCreditCard size={16} className="shrink-0" />
-                                    {sidebarPreviewMode === 'opened' && (
-                                      <span className="truncate">Accounts</span>
-                                    )}
-                                  </div>
-
-                                  {/* Item 5: Customers */}
-                                  <div
-                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                                      sidebarPreviewMode === 'closed' ? 'justify-center px-0' : ''
-                                    }`}
-                                    style={{ color: sidebarSubTextColor }}
-                                  >
-                                    <LuUsers size={16} className="shrink-0" />
-                                    {sidebarPreviewMode === 'opened' && (
-                                      <span className="truncate">Customers</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Bottom Profile / Logout */}
-                              <div className="pt-3 border-t mt-3" style={{ borderColor: sidebarBorderColor }}>
-                                {sidebarPreviewMode === 'opened' ? (
-                                  <div className="flex items-center justify-between text-[11px]">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div
-                                        className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                                        style={{ backgroundColor: selectedAccentColor }}
+                                    <div className="flex items-center gap-2.5 truncate">
+                                      <TabIcon
+                                        size={17}
+                                        className="shrink-0 transition-transform group-hover:scale-110"
+                                        style={{ color: isActive ? selectedAccentColor : selectedSidebarColor }}
+                                      />
+                                      {isEffectiveOpened && (
+                                        <span className="truncate">{tab.label}</span>
+                                      )}
+                                    </div>
+                                    {isEffectiveOpened && (
+                                      <span
+                                        className="text-[9px] font-mono px-1.5 py-0.5 rounded-md truncate max-w-[65px]"
+                                        style={{
+                                          backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)',
+                                          color: isActive ? (isLight ? selectedAccentColor : '#FFFFFF') : selectedSidebarColor,
+                                          opacity: 0.85,
+                                        }}
                                       >
-                                        SA
-                                      </div>
-                                      <div className="truncate font-bold">Super Admin</div>
-                                    </div>
-                                    <LuLogOut size={13} style={{ color: sidebarSubTextColor }} />
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-center">
-                                    <div
-                                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
-                                      style={{ backgroundColor: selectedAccentColor }}
-                                    >
-                                      SA
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                                        {tab.badge}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
 
-                            {/* SIMULATED DASHBOARD WORKSPACE WITH EMBEDDED THEME & STYLE CONTROLS */}
-                            <div className="flex-1 flex flex-col p-3.5 sm:p-5 overflow-y-auto bg-slate-50 dark:bg-[#0B0F17] min-w-0 space-y-4">
-                              {/* Sub-header inside canvas */}
-                              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                                <div>
-                                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                    <LuPalette size={14} style={{ color: selectedAccentColor }} />
-                                    <span>{isRTL ? "براہ راست کنٹرول: سائیڈبار کا رنگ اور اسٹائل تبدیل کریں" : "Live Studio Controls: Click Any Option to Transform Sidebar"}</span>
+                              {/* 4. COLOR DROPDOWN (Contains Navbar & Brand Accent + Sidebar Font & Icon Color) */}
+                              {(() => {
+                                const isColorActive = sidebarActiveConfigTab === 'accent' || sidebarActiveConfigTab === 'colors';
+
+                                return (
+                                  <div className="space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!isEffectiveOpened) {
+                                          if (sidebarActiveConfigTab === 'accent') {
+                                            setSidebarActiveConfigTab('colors');
+                                          } else {
+                                            setSidebarActiveConfigTab('accent');
+                                          }
+                                          return;
+                                        }
+                                        setPreviewColorDropdownOpen(!previewColorDropdownOpen);
+                                        if (!isColorActive) {
+                                          setSidebarActiveConfigTab('accent');
+                                          setPreviewColorDropdownOpen(true);
+                                        }
+                                      }}
+                                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer group text-left ${
+                                        !isEffectiveOpened ? 'justify-center px-0' : 'justify-between'
+                                      }`}
+                                      style={{
+                                        backgroundColor: isColorActive
+                                          ? (isLight ? `${selectedAccentColor}14` : `${selectedAccentColor}22`)
+                                          : 'transparent',
+                                        color: isColorActive
+                                          ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                          : selectedSidebarColor,
+                                        border: isColorActive ? `1px solid ${selectedAccentColor}35` : '1px solid transparent',
+                                      }}
+                                      title={isRTL ? "رنگ و ایکسنٹ" : "Color (Navbar & Sidebar Colors)"}
+                                    >
+                                      <div className="flex items-center gap-2.5 truncate">
+                                        <LuSparkles
+                                          size={17}
+                                          className="shrink-0 transition-transform group-hover:scale-110"
+                                          style={{ color: isColorActive ? selectedAccentColor : selectedSidebarColor }}
+                                        />
+                                        {isEffectiveOpened && (
+                                          <span className="truncate">{isRTL ? "رنگ و اسٹائل" : "Color"}</span>
+                                        )}
+                                      </div>
+
+                                      {isEffectiveOpened && (
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <div className="flex items-center -space-x-1">
+                                            <span
+                                              className="w-2.5 h-2.5 rounded-full ring-1 ring-white/40 shadow-2xs"
+                                              style={{ backgroundColor: selectedAccentColor }}
+                                              title={`Navbar Accent: ${selectedAccentColor}`}
+                                            />
+                                            <span
+                                              className="w-2.5 h-2.5 rounded-full ring-1 ring-white/40 shadow-2xs"
+                                              style={{ backgroundColor: selectedSidebarColor }}
+                                              title={`Sidebar Color: ${selectedSidebarColor}`}
+                                            />
+                                          </div>
+                                          <LuChevronDown
+                                            size={14}
+                                            className={`transition-transform duration-200 stroke-[2.5] ${
+                                              previewColorDropdownOpen ? 'rotate-180' : ''
+                                            }`}
+                                            style={{ color: isColorActive ? selectedAccentColor : selectedSidebarColor }}
+                                          />
+                                        </div>
+                                      )}
+                                    </button>
+
+                                    {/* DROPDOWN SUB-ITEMS */}
+                                    {isEffectiveOpened && previewColorDropdownOpen && (
+                                      <div
+                                        className="space-y-1 pl-3.5 ml-3.5 border-l transition-all duration-200"
+                                        style={{ borderColor: sidebarBorderColor }}
+                                      >
+                                        {/* Sub-item A: Navbar & Brand Accent Color */}
+                                        <button
+                                          type="button"
+                                          onClick={() => setSidebarActiveConfigTab('accent')}
+                                          className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[11px] font-bold transition cursor-pointer text-left group"
+                                          style={{
+                                            backgroundColor: sidebarActiveConfigTab === 'accent'
+                                              ? (isLight ? `${selectedAccentColor}20` : `${selectedAccentColor}35`)
+                                              : 'transparent',
+                                            color: sidebarActiveConfigTab === 'accent'
+                                              ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                              : selectedSidebarColor,
+                                            border: sidebarActiveConfigTab === 'accent'
+                                              ? `1px solid ${selectedAccentColor}50`
+                                              : '1px solid transparent',
+                                          }}
+                                          title={isRTL ? "نیوبار و برانڈ ایکسنٹ کلر" : "Navbar & Brand Accent Color"}
+                                        >
+                                          <div className="flex items-center gap-2 truncate">
+                                            <span
+                                              className="w-2 h-2 rounded-full shrink-0 shadow-2xs transition-transform group-hover:scale-125"
+                                              style={{ backgroundColor: selectedAccentColor }}
+                                            />
+                                            <span className="truncate">
+                                              {isRTL ? "نیوبار و برانڈ ایکسنٹ کلر" : "Navbar & Brand Accent Color"}
+                                            </span>
+                                          </div>
+                                          <span
+                                            className="text-[9px] font-mono px-1 py-0.5 rounded truncate shrink-0"
+                                            style={{
+                                              backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)',
+                                              color: sidebarActiveConfigTab === 'accent'
+                                                ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                                : selectedSidebarColor,
+                                              opacity: 0.9,
+                                            }}
+                                          >
+                                            {selectedAccentColor.toUpperCase()}
+                                          </span>
+                                        </button>
+
+                                        {/* Sub-item B: Sidebar Font & Icon Color */}
+                                        <button
+                                          type="button"
+                                          onClick={() => setSidebarActiveConfigTab('colors')}
+                                          className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[11px] font-bold transition cursor-pointer text-left group"
+                                          style={{
+                                            backgroundColor: sidebarActiveConfigTab === 'colors'
+                                              ? (isLight ? `${selectedAccentColor}20` : `${selectedAccentColor}35`)
+                                              : 'transparent',
+                                            color: sidebarActiveConfigTab === 'colors'
+                                              ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                              : selectedSidebarColor,
+                                            border: sidebarActiveConfigTab === 'colors'
+                                              ? `1px solid ${selectedAccentColor}50`
+                                              : '1px solid transparent',
+                                          }}
+                                          title={isRTL ? "سائیڈبار فونٹ و آئکن کلر" : "Sidebar Font & Icon Color"}
+                                        >
+                                          <div className="flex items-center gap-2 truncate">
+                                            <span
+                                              className="w-2 h-2 rounded-full shrink-0 shadow-2xs transition-transform group-hover:scale-125"
+                                              style={{ backgroundColor: selectedSidebarColor }}
+                                            />
+                                            <span className="truncate">
+                                              {isRTL ? "سائیڈبار فونٹ و آئکن کلر" : "Sidebar Font & Icon Color"}
+                                            </span>
+                                          </div>
+                                          <span
+                                            className="text-[9px] font-mono px-1 py-0.5 rounded truncate shrink-0"
+                                            style={{
+                                              backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)',
+                                              color: sidebarActiveConfigTab === 'colors'
+                                                ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                                : selectedSidebarColor,
+                                              opacity: 0.9,
+                                            }}
+                                          >
+                                            {selectedSidebarColor.toUpperCase()}
+                                          </span>
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
-                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                    {isRTL
-                                      ? "تبدیلیاں فوری طور پر آپ کے ای آر پی اور بائیں جانب پریویو سائیڈبار پر لاگو ہوتی ہیں۔"
-                                      : "Changes apply instantly to your application and the preview sidebar on the left."}
-                                  </p>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* Bottom Profile / Logout */}
+                          <div className="pt-3 border-t mt-3" style={{ borderColor: sidebarBorderColor }}>
+                            {isEffectiveOpened ? (
+                              <div className="flex items-center justify-between text-[11px]">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-2xs"
+                                    style={{ backgroundColor: selectedAccentColor }}
+                                  >
+                                    SA
+                                  </div>
+                                  <div className="truncate font-bold" style={{ color: selectedSidebarColor }}>
+                                    Super Admin
+                                  </div>
                                 </div>
-                                <span
-                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase hidden sm:inline-block"
-                                  style={{
-                                    backgroundColor: `${selectedAccentColor}18`,
-                                    color: selectedAccentColor,
-                                  }}
+                                <LuLogOut size={13} style={{ color: selectedSidebarColor, opacity: 0.7 }} />
+                              </div>
+                            ) : (
+                              <div className="flex justify-center">
+                                <div
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                                  style={{ backgroundColor: selectedAccentColor }}
                                 >
-                                  Instant Live Apply
+                                  SA
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 2. RIGHT PANEL: SIMULATED TOP NAVBAR + ACTIVE CONFIG TAB CONTENT */}
+                        <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-[#0B0F17] overflow-hidden">
+                          {/* 2A. SIMULATED LIVE ERP TOP NAVBAR */}
+                          <div className="p-2 sm:p-3 border-b border-slate-200/80 dark:border-slate-800">
+                            <div
+                              className={`transition-all duration-300 flex items-center justify-between gap-3 p-2.5 backdrop-blur-md select-none ${
+                                navbarLayout === 'floating'
+                                  ? 'rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-md bg-white/95 dark:bg-[#111827]/95'
+                                  : 'rounded-none border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827]'
+                              }`}
+                            >
+                              {/* Left: Brand Badge & Route */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full animate-pulse shadow-xs shrink-0"
+                                  style={{ backgroundColor: selectedAccentColor }}
+                                  title="Portal Active indicator"
+                                />
+                                <span className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-100 hidden sm:inline">
+                                  UJC • Portal Active
+                                </span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                  Theme Studio
                                 </span>
                               </div>
 
-                              {/* CONTROL 1: SIDEBAR BACKGROUND THEME */}
-                              <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                                    {isRTL ? "۱۔ سائیڈبار کا پس منظر منتخب کریں" : "1. Select Sidebar Background Theme"}
-                                  </span>
-                                  <span className="text-[10px] font-mono text-slate-500 uppercase">
-                                    Current: {sidebarThemeMode}
-                                  </span>
+                              {/* Center: Search Input Mockup */}
+                              <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-[11px] text-slate-400 font-mono w-60 border border-slate-200/60 dark:border-slate-700/60">
+                                <LuSearch size={12} />
+                                <span className="truncate">Search invoices... (Ctrl+K)</span>
+                              </div>
+
+                              {/* Right: + New Sale Action Button, Interface Theme Mode Toggle & User */}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  className="px-3 py-1.5 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer flex items-center gap-1 active:scale-95"
+                                  style={{
+                                    backgroundColor: selectedAccentColor,
+                                    color: getContrastTextColor(selectedAccentColor),
+                                  }}
+                                  title="New Sale button reflects your selected accent color"
+                                >
+                                  <span>+ New Sale</span>
+                                </button>
+
+                                {/* INTERFACE THEME MODE (LIGHT / DARK) TOGGLE */}
+                                <div className="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (typeof setColorMode === 'function') setColorMode('light');
+                                    }}
+                                    title={isRTL ? "لائٹ موڈ" : "Switch to Light Mode"}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                      colorMode === 'light'
+                                        ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200'
+                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    <LuSun size={13} className={colorMode === 'light' ? 'text-amber-500' : ''} />
+                                    <span className="hidden sm:inline">{isRTL ? "لائٹ" : "Light"}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (typeof setColorMode === 'function') setColorMode('dark');
+                                    }}
+                                    title={isRTL ? "ڈارک موڈ" : "Switch to Dark Mode"}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                      colorMode === 'dark'
+                                        ? 'bg-slate-900 text-white shadow-xs ring-1 ring-slate-700'
+                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    <LuMoon size={13} className={colorMode === 'dark' ? 'text-indigo-400' : ''} />
+                                    <span className="hidden sm:inline">{isRTL ? "ڈارک" : "Dark"}</span>
+                                  </button>
                                 </div>
 
-                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                                  {[
-                                    { id: 'light', name: 'Clean White', bg: '#FFFFFF', text: 'text-slate-900', badge: 'Minimal' },
-                                    { id: 'navy', name: 'Executive Navy', bg: '#0F172A', text: 'text-white', badge: 'Corporate' },
-                                    { id: 'emerald', name: 'Rich Emerald', bg: '#0A1A18', text: 'text-white', badge: 'Heritage' },
-                                    { id: 'charcoal', name: 'Warm Charcoal', bg: '#1C1917', text: 'text-white', badge: 'Artisan' },
-                                    { id: 'dark', name: 'Classic Dark', bg: '#0B0F17', text: 'text-white', badge: 'Original' },
-                                  ].map((item) => {
-                                    const isSelected = sidebarThemeMode === item.id;
+                                <span className="text-[10px] text-slate-400 font-mono hidden lg:inline">
+                                  06:22 PM
+                                </span>
+
+                                <div className="flex items-center gap-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                                    style={{ backgroundColor: selectedAccentColor }}
+                                  >
+                                    SA
+                                  </div>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 hidden sm:inline truncate max-w-[100px]">
+                                    Super Admin
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 2B. ACTIVE CONFIGURATION TAB CONTENT */}
+                          <div className="flex-1 p-4 sm:p-6 overflow-y-auto max-h-[580px]">
+                            {/* TAB 1: SIDEBAR BACKGROUND THEME */}
+                            {sidebarActiveConfigTab === 'theme' && (
+                              <div className="space-y-4 animate-fadeIn">
+                                {/* Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-800">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuPalette size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{isRTL ? "سائیڈبار کا پس منظر انداز و گریڈینٹ" : "Sidebar Background Theme & Gradients"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {isRTL ? "12 کیوریٹڈ تھیمز، یا کسٹم لینیئر گریڈینٹ بنا کر محفوظ کریں۔" : "Choose from 12 curated themes, or craft and save your own custom gradients."}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+                                      {sidebarCustomBg ? 'Custom Theme' : `Preset: ${sidebarThemeMode}`}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Studio Sub-tabs: Curated Themes | Custom & Gradient | Saved Themes */}
+                                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 w-fit flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => setCustomBgSubTab('presets')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                                      customBgSubTab === 'presets'
+                                        ? 'bg-white dark:bg-slate-900 text-primary shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    <LuPalette size={13} />
+                                    <span>{isRTL ? "کیوریٹڈ تھیمز" : "Curated Themes"} (12)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCustomBgSubTab('custom');
+                                      syncStudioWithActiveBg();
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                                      customBgSubTab === 'custom'
+                                        ? 'bg-white dark:bg-slate-900 text-primary shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    <LuSparkles size={13} />
+                                    <span>{isRTL ? "کسٹم گریڈینٹ اسٹوڈیو" : "Custom & Gradient Studio"}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCustomBgSubTab('saved')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                                      customBgSubTab === 'saved'
+                                        ? 'bg-white dark:bg-slate-900 text-primary shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    <LuBookmark size={13} />
+                                    <span>{isRTL ? "محفوظ شدہ تھیمز" : "Saved Themes"} ({savedCustomThemes.length})</span>
+                                  </button>
+                                </div>
+
+                                {/* VIEW 1: CURATED THEMES (12 OPTIONS) */}
+                                {customBgSubTab === 'presets' && (
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1 animate-fadeIn">
+                                    {[
+                                      { id: 'light', name: 'Clean White', bg: '#FFFFFF', text: 'text-slate-900', badge: 'Minimal' },
+                                      { id: 'navy', name: 'Executive Navy', bg: '#0F172A', text: 'text-white', badge: 'Corporate' },
+                                      { id: 'emerald', name: 'Rich Emerald', bg: '#0A1A18', text: 'text-white', badge: 'Heritage' },
+                                      { id: 'charcoal', name: 'Warm Charcoal', bg: '#1C1917', text: 'text-white', badge: 'Artisan' },
+                                      { id: 'dark', name: 'Classic Dark', bg: '#0B0F17', text: 'text-white', badge: 'Original' },
+                                      { id: 'indigo', name: 'Midnight Indigo', bg: '#0C1033', text: 'text-white', badge: 'Indigo' },
+                                      { id: 'burgundy', name: 'Royal Velvet', bg: '#200D1F', text: 'text-white', badge: 'Velvet' },
+                                      { id: 'slate', name: 'Nordic Slate', bg: '#1E293B', text: 'text-white', badge: 'Titanium' },
+                                      { id: 'pine', name: 'Forest Pine', bg: '#061D15', text: 'text-white', badge: 'Botanic' },
+                                      { id: 'pitch', name: 'Obsidian Pitch', bg: '#050508', text: 'text-white', badge: 'Carbon' },
+                                      { id: 'ember', name: 'Sunset Ember', bg: '#23120C', text: 'text-white', badge: 'Sunset' },
+                                      { id: 'ocean', name: 'Deep Ocean', bg: '#071A24', text: 'text-white', badge: 'Oceanic' },
+                                    ].map((item) => {
+                                      const isSelected = !sidebarCustomBg && sidebarThemeMode === item.id;
+                                      return (
+                                        <button
+                                          key={item.id}
+                                          type="button"
+                                          onClick={() => {
+                                            if (['light', 'navy', 'emerald', 'charcoal', 'dark'].includes(item.id)) {
+                                              handleSidebarThemeChange(item.id as SidebarThemeMode);
+                                            } else {
+                                              applyCustomSidebarBg(item.bg, item.name);
+                                            }
+                                          }}
+                                          className={`relative p-3 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col items-center justify-between text-center gap-2 group h-24 ${
+                                            isSelected || sidebarCustomBg === item.bg
+                                              ? 'ring-2 ring-blue-500 border-blue-500 shadow-md scale-102'
+                                              : 'border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-500 hover:shadow-2xs'
+                                          }`}
+                                          style={{ backgroundColor: item.bg }}
+                                        >
+                                          <span
+                                            className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10"
+                                            style={{ color: item.id === 'light' ? '#0F172A' : '#FFFFFF' }}
+                                          >
+                                            {item.badge}
+                                          </span>
+                                          <span className={`text-xs font-bold leading-tight ${item.text}`}>
+                                            {item.name}
+                                          </span>
+                                          {(isSelected || sidebarCustomBg === item.bg) && (
+                                            <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shadow-xs">
+                                              ✓
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* VIEW 2: CUSTOM & GRADIENT STUDIO */}
+                                {customBgSubTab === 'custom' && (
+                                  <div className="space-y-4 pt-1 animate-fadeIn">
+                                    {/* Current Active Background Status & Quick Sync Card */}
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between gap-3 flex-wrap">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <div
+                                          className="w-10 h-10 rounded-xl shadow-xs border border-white/20 shrink-0 flex items-center justify-center text-white"
+                                          style={{
+                                            background: sidebarCustomBg || (
+                                              sidebarThemeMode === 'light' ? '#FFFFFF' :
+                                              sidebarThemeMode === 'navy' ? '#0F172A' :
+                                              sidebarThemeMode === 'emerald' ? '#0A1A18' :
+                                              sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17'
+                                            ),
+                                          }}
+                                        >
+                                          <LuCheck size={15} className="stroke-[3]" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-primary flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                            <span>Current Active Background</span>
+                                          </div>
+                                          <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                            {sidebarCustomBg
+                                              ? (sidebarCustomBg.includes('gradient') ? 'Custom Linear Gradient Active' : `Custom Color Active: ${sidebarCustomBg}`)
+                                              : `Preset Active: ${sidebarThemeMode.toUpperCase()}`}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={syncStudioWithActiveBg}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:border-primary hover:text-primary transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                        title="Load current active background into studio controls"
+                                      >
+                                        <LuRotateCcw size={12} />
+                                        <span>Load Active into Studio</span>
+                                      </button>
+                                    </div>
+
+                                    {/* Gradient vs Solid Toggle */}
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {isRTL ? "بیک گراؤنڈ ٹائپ:" : "Background Type:"}
+                                      </span>
+                                      <div className="flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                        <button
+                                          type="button"
+                                          onClick={() => setCustomBgType('gradient')}
+                                          className={`px-3 py-1 rounded-md text-xs font-bold transition cursor-pointer ${
+                                            customBgType === 'gradient'
+                                              ? 'bg-primary text-white shadow-xs'
+                                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                          }`}
+                                        >
+                                          🌈 {isRTL ? "لینیئر گریڈینٹ" : "Linear Gradient"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setCustomBgType('solid')}
+                                          className={`px-3 py-1 rounded-md text-xs font-bold transition cursor-pointer ${
+                                            customBgType === 'solid'
+                                              ? 'bg-primary text-white shadow-xs'
+                                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                          }`}
+                                        >
+                                          ⬛ {isRTL ? "سولڈ رنگ" : "Solid Color"}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Gradient Controls or Solid Color Controls */}
+                                    {customBgType === 'gradient' ? (
+                                      <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                          {/* Stop 1 */}
+                                          <div className="space-y-1.5">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                              Gradient Color 1 (Start Stop)
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              <input
+                                                type="color"
+                                                value={customColorStop1}
+                                                onChange={(e) => setCustomColorStop1(e.target.value)}
+                                                className="w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white dark:bg-slate-800"
+                                              />
+                                              <input
+                                                type="text"
+                                                value={customColorStop1.toUpperCase()}
+                                                onChange={(e) => setCustomColorStop1(e.target.value)}
+                                                maxLength={7}
+                                                className="w-28 px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* Stop 2 */}
+                                          <div className="space-y-1.5">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                              Gradient Color 2 (End Stop)
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              <input
+                                                type="color"
+                                                value={customColorStop2}
+                                                onChange={(e) => setCustomColorStop2(e.target.value)}
+                                                className="w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white dark:bg-slate-800"
+                                              />
+                                              <input
+                                                type="text"
+                                                value={customColorStop2.toUpperCase()}
+                                                onChange={(e) => setCustomColorStop2(e.target.value)}
+                                                maxLength={7}
+                                                className="w-28 px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Angle Presets */}
+                                        <div className="space-y-1.5">
+                                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            Gradient Angle & Flow Direction
+                                          </span>
+                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            {[
+                                              { angle: 135, label: 'Diagonal 135°' },
+                                              { angle: 180, label: 'Vertical 180°' },
+                                              { angle: 90, label: 'Horizontal 90°' },
+                                              { angle: 45, label: 'Angled 45°' },
+                                            ].map((preset) => (
+                                              <button
+                                                key={preset.angle}
+                                                type="button"
+                                                onClick={() => setCustomGradientAngle(preset.angle)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                                                  customGradientAngle === preset.angle
+                                                    ? 'border-primary bg-primary/10 text-primary font-bold'
+                                                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                                                }`}
+                                              >
+                                                {preset.label}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+
+                                        {/* Live Preview Box & Quick Apply */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                          <div className="flex items-center gap-3">
+                                            <div
+                                              className="w-24 h-11 rounded-xl shadow-xs border border-white/20 flex items-center justify-center text-white text-[10px] font-bold tracking-wider"
+                                              style={{
+                                                background: `linear-gradient(${customGradientAngle}deg, ${customColorStop1} 0%, ${customColorStop2} 100%)`,
+                                              }}
+                                            >
+                                              Preview
+                                            </div>
+                                            <span className="text-xs font-mono text-slate-500 truncate max-w-[200px]">
+                                              {customColorStop1} → {customColorStop2} ({customGradientAngle}°)
+                                            </span>
+                                          </div>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const bg = `linear-gradient(${customGradientAngle}deg, ${customColorStop1} 0%, ${customColorStop2} 100%)`;
+                                              applyCustomSidebarBg(bg, 'Custom Gradient');
+                                            }}
+                                            className="px-4 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                                          >
+                                            <LuSparkles size={13} />
+                                            <span>Test Live on Sidebar</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+                                        <div className="space-y-1.5">
+                                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            Custom Solid Background Color
+                                          </span>
+                                          <div className="flex items-center gap-3">
+                                            <input
+                                              type="color"
+                                              value={customSolidColor}
+                                              onChange={(e) => setCustomSolidColor(e.target.value)}
+                                              className="w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white dark:bg-slate-800"
+                                            />
+                                            <input
+                                              type="text"
+                                              value={customSolidColor.toUpperCase()}
+                                              onChange={(e) => setCustomSolidColor(e.target.value)}
+                                              maxLength={7}
+                                              className="w-28 px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => applyCustomSidebarBg(customSolidColor, 'Custom Solid')}
+                                              className="px-4 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                                            >
+                                              <LuSparkles size={13} />
+                                              <span>Test Live on Sidebar</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* SAVE CUSTOM THEME & SUGGESTED NAMES */}
+                                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+                                      <div>
+                                        <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                          <LuSave size={13} className="text-primary" />
+                                          <span>{isRTL ? "تھیم محفوظ کریں اور مجوزہ نام منتخب کریں:" : "Save this Theme & Pick a Suggested Name:"}</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                          {isRTL ? "کسی بھی مجوزہ نام پر کلک کریں تاکہ خودکار طور پر نام داخل ہو جائے:" : "Click any suggested name pill below to quickly autofill, or type your own:"}
+                                        </p>
+                                      </div>
+
+                                      {/* Suggested Names Pills */}
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {SUGGESTED_THEME_NAMES.map((name) => (
+                                          <button
+                                            key={name}
+                                            type="button"
+                                            onClick={() => setCustomThemeName(name)}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
+                                              customThemeName === name
+                                                ? 'bg-primary text-white border-primary shadow-xs'
+                                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary'
+                                            }`}
+                                          >
+                                            ✨ {name}
+                                          </button>
+                                        ))}
+                                      </div>
+
+                                      {/* Save Input & Button */}
+                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                                        <input
+                                          type="text"
+                                          value={customThemeName}
+                                          onChange={(e) => setCustomThemeName(e.target.value)}
+                                          placeholder="Enter theme name (e.g. Midnight Aurora)..."
+                                          className="flex-1 px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={handleSaveCustomTheme}
+                                          className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                                        >
+                                          <LuSave size={13} />
+                                          <span>{isRTL ? "تھیم محفوظ کریں" : "Save & Apply Theme"}</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* VIEW 3: SAVED CUSTOM THEMES */}
+                                {customBgSubTab === 'saved' && (
+                                  <div className="space-y-3 pt-1 animate-fadeIn">
+                                    {savedCustomThemes.length === 0 ? (
+                                      <div className="p-8 text-center rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-300 dark:border-slate-700">
+                                        <LuBookmark className="mx-auto text-slate-400 mb-2" size={24} />
+                                        <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                          {isRTL ? "ابھی تک کوئی کسٹم تھیم محفوظ نہیں کی گئی۔" : "No saved custom themes yet."}
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto">
+                                          {isRTL ? "کسٹم گریڈینٹ اسٹوڈیو میں جا کر اپنی پسند کا نیا گریڈینٹ بنا کر محفوظ کریں۔" : "Craft your unique gradient or solid color in the Custom & Gradient Studio and save it here!"}
+                                        </p>
+                                        <button
+                                          type="button"
+                                          onClick={() => setCustomBgSubTab('custom')}
+                                          className="mt-3 px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-white shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                                        >
+                                          <LuPlus size={12} />
+                                          <span>Open Studio</span>
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {savedCustomThemes.map((savedTheme) => {
+                                          const isCurrentlyActive = sidebarCustomBg === savedTheme.bg;
+                                          return (
+                                            <div
+                                              key={savedTheme.id}
+                                              onClick={() => applyCustomSidebarBg(savedTheme.bg, savedTheme.name)}
+                                              className={`p-3 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 group ${
+                                                isCurrentlyActive
+                                                  ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 shadow-xs'
+                                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:shadow-2xs'
+                                              }`}
+                                            >
+                                              <div className="flex items-center gap-2.5 min-w-0">
+                                                <div
+                                                  className="w-10 h-10 rounded-xl shadow-2xs border border-white/20 shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
+                                                  style={{ background: savedTheme.bg }}
+                                                >
+                                                  {isCurrentlyActive && <LuCheck size={14} className="stroke-[3]" />}
+                                                </div>
+                                                <div className="min-w-0">
+                                                  <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                                    {savedTheme.name}
+                                                  </div>
+                                                  <div className="text-[10px] text-slate-400 capitalize flex items-center gap-1">
+                                                    <span className="capitalize">{savedTheme.type}</span>
+                                                    {savedTheme.date && <span>• {savedTheme.date}</span>}
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    applyCustomSidebarBg(savedTheme.bg, savedTheme.name);
+                                                  }}
+                                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition shadow-2xs cursor-pointer"
+                                                >
+                                                  Apply
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => handleDeleteSavedTheme(savedTheme.id, e)}
+                                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                                  title="Delete saved theme"
+                                                >
+                                                  <LuTrash2 size={13} />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* TAB 2: NAVBAR & BRAND ACCENT COLOR */}
+                            {sidebarActiveConfigTab === 'accent' && (
+                              <div className="space-y-4 animate-fadeIn">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuSparkles size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{isRTL ? "برانڈ کا بنیادی رنگ" : "Navbar & Brand Accent Color"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {isRTL ? "پیش نظارہ کریں اور ایکسنٹ رنگ محفوظ کرنے کے لیے کلک کریں۔" : "Controls top navbar buttons, active tab pills, badges, and primary accents across the ERP."}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {isAccentChanged && (
+                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                        Unapplied
+                                      </span>
+                                    )}
+                                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold">
+                                      <span
+                                        className="w-3 h-3 rounded-full border border-black/15 shadow-2xs shrink-0"
+                                        style={{ backgroundColor: selectedAccentColor }}
+                                      />
+                                      <span className="text-slate-700 dark:text-slate-200">
+                                        {selectedAccentColor.toUpperCase()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 24 Presets Grid */}
+                                <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-1.5 pt-1">
+                                  {PRESET_THEME_COLORS.map((c) => {
+                                    const isSelected = selectedAccentColor.toLowerCase() === c.hex.toLowerCase();
+                                    const isCurrentlyApplied = appliedAccentColor.toLowerCase() === c.hex.toLowerCase();
+
                                     return (
                                       <button
-                                        key={item.id}
+                                        key={`accent-preset-${c.hex}`}
                                         type="button"
-                                        onClick={() => handleSidebarThemeChange(item.id as SidebarThemeMode)}
-                                        className={`relative p-2.5 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col items-center justify-between text-center gap-1.5 group ${
+                                        onClick={() => handleAccentSelect(c.hex)}
+                                        className={`group relative h-9 rounded-xl transition-all duration-150 hover:scale-105 flex items-center justify-center cursor-pointer border ${
                                           isSelected
-                                            ? 'ring-2 ring-blue-500 border-blue-500 shadow-md scale-102'
-                                            : 'border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-500 hover:shadow-2xs'
+                                            ? 'ring-2 ring-offset-1 ring-slate-900 dark:ring-white border-transparent shadow-xs scale-105'
+                                            : 'border-black/10 dark:border-white/10'
                                         }`}
-                                        style={{ backgroundColor: item.bg }}
+                                        style={{ backgroundColor: c.hex }}
+                                        title={`${c.name} (${c.hex})${isCurrentlyApplied ? ' - Active' : ''}`}
                                       >
-                                        <span
-                                          className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10"
-                                          style={{ color: item.id === 'light' ? '#0F172A' : '#FFFFFF' }}
-                                        >
-                                          {item.badge}
-                                        </span>
-                                        <span className={`text-[11px] font-bold ${item.text}`}>
-                                          {item.name}
-                                        </span>
                                         {isSelected && (
-                                          <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] shadow-xs">
-                                            ✓
-                                          </span>
+                                          <LuCheck className="text-white drop-shadow-md text-xs stroke-[3]" />
+                                        )}
+                                        {!isSelected && isCurrentlyApplied && (
+                                          <span className="w-1 h-1 rounded-full bg-white/90 absolute bottom-1" />
                                         )}
                                       </button>
                                     );
                                   })}
                                 </div>
-                              </div>
 
-                              {/* CONTROL 2: LEFT SIDEBAR STYLE */}
-                              <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                                    {isRTL ? "۲۔ سائیڈبار کا لے آؤٹ اسٹائل منتخب کریں" : "2. Select Left Sidebar Style"}
-                                  </span>
-                                  <span className="text-[10px] font-mono text-slate-500">
-                                    Active: {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
+                                {/* Custom Color Wheel & Apply Bar */}
+                                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                                    <label
+                                      className="relative flex items-center justify-center cursor-pointer shrink-0"
+                                      title="Open color wheel"
+                                    >
+                                      <span
+                                        className="w-9 h-9 rounded-xl border border-black/15 shadow-xs block transition hover:scale-105"
+                                        style={{ backgroundColor: selectedAccentColor }}
+                                      />
+                                      <input
+                                        type="color"
+                                        value={selectedAccentColor}
+                                        onChange={(e) => handleAccentSelect(e.target.value)}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                      />
+                                    </label>
+
+                                    <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 w-32">
+                                      <span className="text-slate-400 select-none mr-1">#</span>
+                                      <input
+                                        type="text"
+                                        maxLength={6}
+                                        value={customAccentHex}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setCustomAccentHex(val);
+                                          const clean = val.replace(/[^0-9A-Fa-f]/g, '').trim();
+                                          if (clean.length === 3 || clean.length === 6) {
+                                            setSelectedAccentColor(`#${clean}`);
+                                          }
+                                        }}
+                                        placeholder="10B981"
+                                        className="w-full bg-transparent outline-none uppercase font-mono text-xs"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                    {isAccentChanged && (
+                                      <button
+                                        type="button"
+                                        onClick={handleResetAccentColor}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1"
+                                      >
+                                        <LuRotateCcw size={12} />
+                                        <span>Reset</span>
+                                      </button>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={handleApplyAccentColor}
+                                      className={`px-5 py-2 text-xs font-bold rounded-xl text-white shadow-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                                        isAccentChanged
+                                          ? 'ring-2 ring-offset-1 ring-emerald-500 hover:brightness-110 font-extrabold'
+                                          : 'hover:opacity-90'
+                                      }`}
+                                      style={{
+                                        backgroundColor: selectedAccentColor,
+                                        color: getContrastTextColor(selectedAccentColor),
+                                        border: getContrastTextColor(selectedAccentColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
+                                      }}
+                                    >
+                                      {accentAppliedRecently ? (
+                                        <>
+                                          <LuCheck size={14} className="stroke-[3]" />
+                                          <span>Applied!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <LuSparkles size={13} />
+                                          <span>{isRTL ? "رنگ لاگو کریں" : "Apply Accent Color"}</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* TAB 3: WORKSPACE NAVIGATION & LAYOUT */}
+                            {sidebarActiveConfigTab === 'layout' && (
+                              <div className="space-y-5 animate-fadeIn">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuLayers size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{isRTL ? "ورک اسپیس نیویگیشن اور لے آؤٹ" : "Workspace Navigation & Layout"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      Choose between a modern floating card layout or the classic edge-to-edge ERP interface.
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={handleResetLayoutToClassic}
+                                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                                  >
+                                    <LuRotateCcw size={13} />
+                                    <span>{isRTL ? "کلاسک موڈ پر واپس جائیں" : "Reset to Classic (Undo)"}</span>
+                                  </button>
+                                </div>
+
+                                {/* Quick Workspace Presets */}
+                                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div>
+                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                                      Quick Workspace Presets
+                                    </span>
+                                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                      Switch both Sidebar & Navbar together with 1 click:
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApplyPreset('floating')}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                        sidebarLayout === 'floating' && navbarLayout === 'floating'
+                                          ? 'bg-blue-600 text-white shadow-xs'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      <span>🚀 Full Floating</span>
+                                      {sidebarLayout === 'floating' && navbarLayout === 'floating' && <LuCheck size={12} />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApplyPreset('classic')}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                        sidebarLayout === 'classic' && navbarLayout === 'classic'
+                                          ? 'bg-blue-600 text-white shadow-xs'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      <span>🏛️ Full Classic</span>
+                                      {sidebarLayout === 'classic' && navbarLayout === 'classic' && <LuCheck size={12} />}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Granular Individual Controls */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {/* Left Sidebar Style */}
+                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-900 dark:text-white">Left Sidebar Style</span>
+                                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetSidebarLayout('floating')}
+                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
+                                          sidebarLayout === 'floating'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
+                                          {sidebarLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">Rounded detached card with shadow.</p>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetSidebarLayout('classic')}
+                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
+                                          sidebarLayout === 'classic'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
+                                          {sidebarLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">Original edge-to-edge flush sidebar.</p>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Top Navbar Style */}
+                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-900 dark:text-white">Top Navbar Style</span>
+                                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                        {navbarLayout === 'floating' ? 'Floating' : 'Classic'}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetNavbarLayout('floating')}
+                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
+                                          navbarLayout === 'floating'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
+                                          {navbarLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">Floating pill card with elevation.</p>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetNavbarLayout('classic')}
+                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
+                                          navbarLayout === 'classic'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
+                                          {navbarLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">Edge-to-edge full width navbar.</p>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* TAB 4: SMART DRAWER */}
+                            {sidebarActiveConfigTab === 'drawer' && (
+                              <div className="space-y-4 animate-fadeIn">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuMonitor size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{isRTL ? "سائیڈبار کھلنے اور بند رہنے کا انداز" : "Sidebar Default State & Interaction"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      Choose whether the sidebar stays permanently pinned open, or stays collapsed and auto-expands on hover/click.
+                                    </p>
+                                  </div>
+                                  <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+                                    {sidebarBehavior === 'closed' ? 'Auto-Drawer' : 'Always Opened'}
                                   </span>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                                   <button
                                     type="button"
-                                    onClick={() => handleSetSidebarLayout('floating')}
-                                    className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-start gap-2.5 ${
-                                      sidebarLayout === 'floating'
+                                    onClick={() => handleSetSidebarBehavior('opened')}
+                                    className={`p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-start gap-3.5 ${
+                                      sidebarBehavior === 'opened'
                                         ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/70 dark:bg-blue-950/30 shadow-xs'
-                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300'
                                     }`}
                                   >
-                                    <span className="text-xl shrink-0">🚀</span>
+                                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                      <LuMonitor size={18} />
+                                    </div>
                                     <div className="min-w-0 flex-1">
-                                      <div className="flex items-center justify-between mb-0.5">
+                                      <div className="flex items-center justify-between mb-1">
                                         <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                          {isRTL ? "فلوٹنگ کارڈ" : "Floating Card"}
+                                          {isRTL ? "مستقل کھلی رکھیں (پنڈ)" : "Always Opened (Pinned)"}
                                         </span>
-                                        {sidebarLayout === 'floating' && (
-                                          <LuCheck size={14} className="text-blue-600 dark:text-blue-400 stroke-[3]" />
+                                        {sidebarBehavior === 'opened' && (
+                                          <LuCheck size={14} className="text-blue-600 stroke-[3]" />
                                         )}
                                       </div>
-                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                                        {isRTL
-                                          ? "گول کونے (rounded-2xl) مع حاشیائی شیڈو۔ پرتعیش اور جدید شکل۔"
-                                          : "Rounded detached island card with ambient elevation and modern border."}
+                                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        {isRTL ? "سائیڈبار ہر وقت پوری چوڑائی کے ساتھ کھلی رہتی ہے۔" : "Sidebar remains fully expanded at all times for quick multi-tasking."}
                                       </p>
                                     </div>
                                   </button>
 
                                   <button
                                     type="button"
-                                    onClick={() => handleSetSidebarLayout('classic')}
-                                    className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-start gap-2.5 ${
-                                      sidebarLayout === 'classic'
+                                    onClick={() => handleSetSidebarBehavior('closed')}
+                                    className={`p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-start gap-3.5 ${
+                                      sidebarBehavior === 'closed'
                                         ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/70 dark:bg-blue-950/30 shadow-xs'
-                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300'
                                     }`}
                                   >
-                                    <span className="text-xl shrink-0">🏛️</span>
+                                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                      <LuLaptop size={18} />
+                                    </div>
                                     <div className="min-w-0 flex-1">
-                                      <div className="flex items-center justify-between mb-0.5">
+                                      <div className="flex items-center justify-between mb-1">
                                         <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                          {isRTL ? "کلاسک ایج" : "Classic Edge"}
+                                          {isRTL ? "بند رکھیں (آٹو ڈراور)" : "Keep Closed (Smart Drawer)"}
                                         </span>
-                                        {sidebarLayout === 'classic' && (
-                                          <LuCheck size={14} className="text-blue-600 dark:text-blue-400 stroke-[3]" />
+                                        {sidebarBehavior === 'closed' && (
+                                          <LuCheck size={14} className="text-blue-600 stroke-[3]" />
                                         )}
                                       </div>
-                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                                        {isRTL
-                                          ? "اسکرین کی دیوار سے جڑی ہوئی روایتی مکمل ایج ٹو ایج سائیڈبار۔"
-                                          : "Original edge-to-edge flush sidebar attached directly to the screen wall."}
+                                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        {isRTL ? "عام طور پر بند، ہوور یا کلک کرنے پر خود بخود کھلے۔" : "Collapses to compact icons. Automatically expands on hover or click."}
                                       </p>
                                     </div>
                                   </button>
                                 </div>
                               </div>
+                            )}
 
-                              {/* CONTROL 3: QUICK STATUS PREVIEW BAR */}
-                              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 flex-wrap gap-2">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                  <span>
-                                    Simulating <strong>{sidebarPreviewMode === 'opened' ? 'Expanded' : 'Compact'}</strong> sidebar view
-                                  </span>
+                            {/* TAB 5: SIDEBAR FONT & ICON COLOR */}
+                            {sidebarActiveConfigTab === 'colors' && (
+                              <div className="space-y-4 animate-fadeIn">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuPenLine size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{isRTL ? "سائیڈبار فونٹس اور آئکنز کا رنگ" : "Sidebar Font & Icon Color"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      Colors apply live to all navigation items, text, and icons in the sidebar.
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {wasSidebarAdjusted ? (
+                                      <span className="text-[10px] font-black uppercase text-amber-600 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 px-2 py-0.5 rounded-full">
+                                        Protected
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                        High Contrast
+                                      </span>
+                                    )}
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold">
+                                      <span
+                                        className="w-2.5 h-2.5 rounded-full border border-black/15 shrink-0"
+                                        style={{ backgroundColor: selectedSidebarColor }}
+                                      />
+                                      <span className="text-slate-700 dark:text-slate-200">
+                                        {selectedSidebarColor.toUpperCase()}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2 font-mono text-[10px]">
-                                  <span>Accent:</span>
-                                  <span
-                                    className="w-3 h-3 rounded-full inline-block border border-black/20"
-                                    style={{ backgroundColor: selectedAccentColor }}
-                                  />
-                                  <span>{selectedAccentColor.toUpperCase()}</span>
+
+                                {/* 24 Presets Grid */}
+                                <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-1.5 pt-1">
+                                  {PRESET_THEME_COLORS.map((c) => {
+                                    const isSelected = selectedSidebarColor.toLowerCase() === c.hex.toLowerCase();
+                                    const isCurrentlyApplied = appliedSidebarColor.toLowerCase() === c.hex.toLowerCase();
+
+                                    return (
+                                      <button
+                                        key={`sidebar-preset-${c.hex}`}
+                                        type="button"
+                                        onClick={() => handleSidebarSelect(c.hex)}
+                                        className={`group relative h-8 rounded-lg transition-all duration-150 hover:scale-105 flex items-center justify-center cursor-pointer border ${
+                                          isSelected
+                                            ? 'ring-2 ring-offset-1 ring-slate-900 dark:ring-white border-transparent shadow-xs scale-105'
+                                            : 'border-black/10 dark:border-white/10'
+                                        }`}
+                                        style={{ backgroundColor: c.hex }}
+                                        title={`${c.name} (${c.hex})${isCurrentlyApplied ? ' - Active' : ''}`}
+                                      >
+                                        {isSelected && (
+                                          <LuCheck className="text-white drop-shadow-md text-xs stroke-[3]" />
+                                        )}
+                                        {!isSelected && isCurrentlyApplied && (
+                                          <span className="w-1 h-1 rounded-full bg-white/90 absolute bottom-1" />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Custom Color Wheel & Apply Bar */}
+                                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                                    <label
+                                      className="relative flex items-center justify-center cursor-pointer shrink-0"
+                                      title="Open color wheel"
+                                    >
+                                      <span
+                                        className="w-8 h-8 rounded-lg border border-black/15 shadow-xs block transition hover:scale-105"
+                                        style={{ backgroundColor: selectedSidebarColor }}
+                                      />
+                                      <input
+                                        type="color"
+                                        value={selectedSidebarColor}
+                                        onChange={(e) => handleSidebarSelect(e.target.value)}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                      />
+                                    </label>
+
+                                    <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 w-28">
+                                      <span className="text-slate-400 select-none mr-1">#</span>
+                                      <input
+                                        type="text"
+                                        maxLength={6}
+                                        value={customSidebarHex}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setCustomSidebarHex(val);
+                                          const clean = val.replace(/[^0-9A-Fa-f]/g, '').trim();
+                                          if (clean.length === 3 || clean.length === 6) {
+                                            handleSidebarSelect(`#${clean}`);
+                                          }
+                                        }}
+                                        placeholder="1E293B"
+                                        className="w-full bg-transparent outline-none uppercase font-mono text-xs"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                    {isSidebarChanged && (
+                                      <button
+                                        type="button"
+                                        onClick={handleResetSidebarColor}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1"
+                                      >
+                                        <LuRotateCcw size={12} />
+                                        <span>Reset</span>
+                                      </button>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={handleApplySidebarColor}
+                                      className={`px-4 py-1.5 text-xs font-bold rounded-lg text-white shadow-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                                        isSidebarChanged
+                                          ? 'ring-2 ring-offset-1 ring-slate-800 hover:brightness-110 font-extrabold'
+                                          : 'hover:opacity-90'
+                                      }`}
+                                      style={{
+                                        backgroundColor: selectedSidebarColor,
+                                        color: getContrastTextColor(selectedSidebarColor),
+                                        border: getContrastTextColor(selectedSidebarColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
+                                      }}
+                                    >
+                                      {sidebarAppliedRecently ? (
+                                        <>
+                                          <LuCheck size={14} className="stroke-[3]" />
+                                          <span>Applied!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <LuLayers size={13} />
+                                          <span>Apply Color</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* SIDEBAR DEFAULT BEHAVIOR (OPENED VS CLOSED) */}
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                            {isRTL ? "سائیڈبار کھلنے اور بند رہنے کا انداز" : "Sidebar Default State & Interaction"}
-                          </h3>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                            Smart Drawer
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          {isRTL
-                            ? "منتخب کریں کہ آیا سائیڈبار مستقل طور پر کھلی رہے گی، یا ضرورت پڑنے پر کلک سے کھلے اور ماؤس ہٹانے پر خود بخود بند ہو جائے۔"
-                            : "Choose whether the sidebar stays permanently pinned open, or stays collapsed and auto-expands on click and auto-collapses on mouse leave."}
-                        </p>
-                      </div>
-
-                      <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                        {sidebarBehavior === 'closed' ? 'Keep Closed (Auto-Drawer)' : 'Always Opened (Pinned)'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* OPTION 1: KEEP OPENED */}
-                      <button
-                        type="button"
-                        onClick={() => handleSetSidebarBehavior('opened')}
-                        className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer flex items-start gap-3.5 text-left group ${
-                          sidebarBehavior === 'opened'
-                            ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 ring-3 ring-blue-500/20 shadow-sm'
-                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
-                      >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                          sidebarBehavior === 'opened'
-                            ? 'bg-blue-600 text-white shadow-xs'
-                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                        }`}>
-                          <LuMonitor size={20} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                              {isRTL ? "مستقل کھلی رکھیں (پنڈ)" : "Keep Opened (Pinned)"}
-                            </span>
-                            {sidebarBehavior === 'opened' && (
-                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-full border border-blue-300 dark:border-blue-800">
-                                Active
-                              </span>
                             )}
                           </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                            {isRTL
-                              ? "سائیڈبار ہر وقت پوری چوڑائی کے ساتھ کھلی رہتی ہے تاکہ تمام ماڈیولز ایک نظر میں نظر آئیں۔"
-                              : "Sidebar remains fully expanded at all times. Great for fast multi-tasking and quick reading."}
-                          </p>
                         </div>
-                      </button>
-
-                      {/* OPTION 2: KEEP CLOSED (AUTO-DRAWER) */}
-                      <button
-                        type="button"
-                        onClick={() => handleSetSidebarBehavior('closed')}
-                        className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer flex items-start gap-3.5 text-left group ${
-                          sidebarBehavior === 'closed'
-                            ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 ring-3 ring-blue-500/20 shadow-sm'
-                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
-                      >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                          sidebarBehavior === 'closed'
-                            ? 'bg-blue-600 text-white shadow-xs'
-                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                        }`}>
-                          <LuLaptop size={20} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                              {isRTL ? "بند رکھیں (کلک پر کھلے، ماؤس ہٹانے پر بند)" : "Keep Closed (Click to Open, Hover Out to Close)"}
-                            </span>
-                            {sidebarBehavior === 'closed' && (
-                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-full border border-blue-300 dark:border-blue-800">
-                                Active
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                            {isRTL
-                              ? "سائیڈبار عام طور پر بند رہتی ہے۔ سائیڈبار پر کلک کرنے سے کھل جاتی ہے، اور ماؤس ہٹاتے ہی خود بخود دوبارہ بند ہو جاتی ہے۔"
-                              : "Keeps the screen spacious & clean. Clicking the sidebar expands it to interact; moving your mouse away automatically collapses it back."}
-                          </p>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* SIDEBAR FONT & ICON COLOR THEME */}
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs transition-colors"
-                      style={{ backgroundColor: selectedSidebarColor }}
-                    >
-                      <LuLayers size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                        Sidebar Font & Icon Color
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Adjusts text and icon color for all navigation items in the left sidebar. Click <strong className="text-slate-700 dark:text-slate-200">Apply Sidebar Color</strong> to save.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {wasSidebarAdjusted ? (
-                      <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full">
-                        Contrast Protected
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-full">
-                        High Contrast
-                      </span>
-                    )}
-                    {isSidebarChanged && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        Unapplied Selection
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold">
-                      <span
-                        className="w-3 h-3 rounded-full border border-black/15 shadow-2xs shrink-0"
-                        style={{ backgroundColor: selectedSidebarColor }}
-                      />
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {selectedSidebarColor.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 24 Sidebar Presets */}
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Preset Options
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      {isRTL ? "پیش نظارہ کے لیے کسی بھی رنگ پر کلک کریں" : "Click any swatch to preview"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2.5">
-                    {PRESET_THEME_COLORS.map((c) => {
-                      const isSelected =
-                        selectedSidebarColor.toLowerCase() === c.hex.toLowerCase();
-                      const isCurrentlyApplied =
-                        appliedSidebarColor.toLowerCase() === c.hex.toLowerCase();
-
-                      return (
-                        <button
-                          key={`sidebar-${c.hex}`}
-                          type="button"
-                          onClick={() => handleSidebarSelect(c.hex)}
-                          className={`group relative h-11 rounded-xl transition-all duration-200 hover:scale-105 flex flex-col items-center justify-center cursor-pointer border ${
-                            isSelected
-                              ? 'ring-3 ring-offset-2 ring-slate-900 dark:ring-white border-transparent shadow-md scale-102'
-                              : 'border-black/10 dark:border-white/10 hover:shadow-xs'
-                          }`}
-                          style={{ backgroundColor: c.hex }}
-                          title={`Sidebar: ${c.name} (${c.hex})${isCurrentlyApplied ? ' - Currently Active' : ''}`}
-                        >
-                          {isSelected && (
-                            <LuCheck className="text-white drop-shadow-md text-base stroke-[3]" />
-                          )}
-                          {!isSelected && isCurrentlyApplied && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/80 shadow-xs absolute bottom-1.5" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Custom Sidebar Color & Action Bar */}
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex flex-col lg:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 w-full lg:w-auto">
-                    <label
-                      className="relative flex items-center justify-center cursor-pointer shrink-0"
-                      title="Open sidebar color wheel picker"
-                    >
-                      <span
-                        className="w-11 h-11 rounded-xl border border-black/15 shadow-sm block transition hover:scale-105"
-                        style={{ backgroundColor: selectedSidebarColor }}
-                      />
-                      <input
-                        type="color"
-                        value={selectedSidebarColor}
-                        onChange={(e) => handleSidebarSelect(e.target.value)}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                    </label>
-
-                    <div>
-                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                        <LuPenLine size={13} />
-                        <span>Custom Sidebar Hex</span>
                       </div>
-                      <span className="text-[11px] text-slate-400 dark:text-slate-400">
-                        Automatic contrast safety ensures icons and text stay readable
-                      </span>
-                    </div>
-                  </div>
-
-                  <form
-                    onSubmit={handleApplySidebarColor}
-                    className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-end"
-                  >
-                    <div className="flex items-center px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 shadow-2xs w-36">
-                      <span className="text-slate-400 select-none mr-1">#</span>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={customSidebarHex}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setCustomSidebarHex(val);
-                          const clean = val.replace(/[^0-9A-Fa-f]/g, '').trim();
-                          if (clean.length === 3 || clean.length === 6) {
-                            handleSidebarSelect(`#${clean}`);
-                          }
-                        }}
-                        placeholder="1E293B"
-                        className="w-full bg-transparent outline-none uppercase font-mono tracking-wider text-xs"
-                      />
-                    </div>
-
-                    {isSidebarChanged && (
-                      <button
-                        type="button"
-                        onClick={handleResetSidebarColor}
-                        className="px-3 py-2.5 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer flex items-center gap-1"
-                        title="Revert to active color"
-                      >
-                        <LuRotateCcw size={13} />
-                        <span>Reset</span>
-                      </button>
-                    )}
-
-                    {/* VIBRANT APPLY BUTTON FOR SIDEBAR */}
-                    <button
-                      type="submit"
-                      className={`px-5 py-2.5 text-xs font-bold rounded-xl text-white shadow-md transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
-                        isSidebarChanged
-                          ? 'ring-2 ring-offset-2 ring-slate-800 hover:brightness-110 shadow-slate-700/30 font-extrabold scale-102'
-                          : 'hover:opacity-90'
-                      }`}
-                      style={{
-                        backgroundColor: selectedSidebarColor,
-                        color: getContrastTextColor(selectedSidebarColor),
-                        border: getContrastTextColor(selectedSidebarColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
-                      }}
-                    >
-                      {sidebarAppliedRecently ? (
-                        <>
-                          <LuCheck size={16} className="stroke-[3]" />
-                          <span>Applied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <LuLayers size={15} />
-                          <span>Apply Sidebar Color</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Sidebar Navigation Live Preview Box */}
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Sidebar Navigation Preview
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      Showing preview of: <strong className="font-mono text-slate-600 dark:text-slate-300">{selectedSidebarColor}</strong>
-                    </span>
-                  </div>
-
-                  <div className="max-w-xs p-3 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                    <div
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
-                      style={{
-                        backgroundColor: `${selectedSidebarColor}20`,
-                        color: selectedSidebarColor,
-                      }}
-                    >
-                      <LuLayoutDashboard size={15} style={{ color: selectedSidebarColor }} />
-                      <span>Dashboard (Active)</span>
-                    </div>
-                    <div
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                      style={{ color: selectedSidebarColor }}
-                    >
-                      <LuReceipt size={15} style={{ color: selectedSidebarColor }} />
-                      <span>Sales & Invoices</span>
-                    </div>
-                    <div
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                      style={{ color: selectedSidebarColor }}
-                    >
-                      <LuPackage size={15} style={{ color: selectedSidebarColor }} />
-                      <span>Product Catalog</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              </div>
-            )}
-              </div>
-
-              {/* SECTION C: THEME MODE (LIGHT / DARK) */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
-                <div className="pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    {isRTL ? "انٹرفیس تھیم موڈ" : "Interface Theme Mode"}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Select your preferred appearance for the entire workspace.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* {isRTL ? "لائٹ موڈ" : "Light Mode"} Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof setColorMode === 'function') setColorMode('light');
-                    }}
-                    className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                      colorMode === 'light'
-                        ? 'border-primary ring-2 ring-primary/20 bg-primary/5 shadow-xs'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:border-slate-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
-                        colorMode === 'light'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-amber-100 text-amber-600'
-                      }`}
-                    >
-                      <LuSun size={20} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                        {isRTL ? "لائٹ موڈ" : "Light Mode"}
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {isRTL ? "صاف اور روشن دن کا انٹرفیس مع واضح کنٹراسٹ۔" : "Clean, bright daylight interface with sharp contrast."}
-                      </div>
-                    </div>
-                    {colorMode === 'light' && (
-                      <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
-                    )}
-                  </button>
-
-                  {/* {isRTL ? "ڈارک موڈ" : "Dark Mode"} Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof setColorMode === 'function') setColorMode('dark');
-                    }}
-                    className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                      colorMode === 'dark'
-                        ? 'border-primary ring-2 ring-primary/20 bg-primary/10 shadow-xs'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:border-slate-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
-                        colorMode === 'dark'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600'
-                      }`}
-                    >
-                      <LuMoon size={20} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                        {isRTL ? "ڈارک موڈ" : "Dark Mode"}
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {isRTL ? "آنکھوں کی حفاظت کے لیے پرسکون ڈارک موڈ۔" : "Sleek low-light aesthetic reducing eye strain."}
-                      </div>
-                    </div>
-                    {colorMode === 'dark' && (
-                      <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* SECTION D: WORKSPACE LAYOUT & NAVIGATION STYLE */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary text-white shadow-xs">
-                      <LuLayers size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                        {isRTL ? "ورک اسپیس نیویگیشن اور لے آؤٹ" : "Workspace Navigation & Layout"}
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Choose between a modern floating card layout or the classic edge-to-edge ERP interface.
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleResetLayoutToClassic}
-                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
-                    title="Undo customizations and restore original Classic layout"
-                  >
-                    <LuRotateCcw size={13} />
-                    <span>{isRTL ? "کلاسک موڈ پر واپس جائیں" : "Reset to Classic (Undo)"}</span>
-                  </button>
-                </div>
-
-                {/* Quick 1-Click Presets */}
-                <div className="mb-5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                      Quick Workspace Presets
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-400">
-                      Switch both Sidebar & Navbar together with 1 click:
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleApplyPreset('floating')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                        sidebarLayout === 'floating' && navbarLayout === 'floating'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary'
-                      }`}
-                    >
-                      <span>🚀 Full Floating</span>
-                      {sidebarLayout === 'floating' && navbarLayout === 'floating' && <LuCheck size={12} />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleApplyPreset('classic')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                        sidebarLayout === 'classic' && navbarLayout === 'classic'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary'
-                      }`}
-                    >
-                      <span>🏛️ Full Classic</span>
-                      {sidebarLayout === 'classic' && navbarLayout === 'classic' && <LuCheck size={12} />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Granular Individual Controls */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Custom 1: Sidebar Style */}
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <span>Left Sidebar Style</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
-                          Customizes the left navigation bar independently.
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSetSidebarLayout('floating')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
-                          sidebarLayout === 'floating'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🚀 {isRTL ? "فلوٹنگ کارڈ" : "Floating Card"}
-                          </span>
-                          {sidebarLayout === 'floating' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          {isRTL ? "گول کٹ آؤٹ ڈیزائن مع خوبصورت شیڈو۔" : "Rounded detached card with ambient elevation."}
-                        </p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSetSidebarLayout('classic')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
-                          sidebarLayout === 'classic'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🏛️ {isRTL ? "کلاسک ایج" : "Classic Edge"}
-                          </span>
-                          {sidebarLayout === 'classic' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          {isRTL ? "اصل مکمل اسکرین سائیڈبار۔" : "Original edge-to-edge flush sidebar."}
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Custom 2: Top Navbar Style */}
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <span>Top Navbar Style</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
-                          Customizes the top header bar independently.
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                        {navbarLayout === 'floating' ? 'Floating' : 'Classic'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSetNavbarLayout('floating')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
-                          navbarLayout === 'floating'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🚀 {isRTL ? "فلوٹنگ کارڈ" : "Floating Card"}
-                          </span>
-                          {navbarLayout === 'floating' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          {isRTL ? "گول فلوٹنگ پِل ڈیزائن مع شیڈو۔" : "Rounded floating pill card with elevation."}
-                        </p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSetNavbarLayout('classic')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
-                          navbarLayout === 'classic'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🏛️ {isRTL ? "کلاسک فل" : "Classic Full"}
-                          </span>
-                          {navbarLayout === 'classic' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          {isRTL ? "اصل مکمل چوڑائی والا نیوبار۔" : "Original edge-to-edge full width navbar."}
-                        </p>
-                      </button>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

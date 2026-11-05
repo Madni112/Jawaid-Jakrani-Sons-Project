@@ -5,11 +5,32 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import SearchableMultiSelect from '../../../components/SearchableMultiSelect';
+import {
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+} from '../../../constant/themeConfig';
+import { LuBarChart2, LuPrinter } from 'react-icons/lu';
 
 const StockReport = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { tenantId } = useAuth();
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+    };
+    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
+    };
+  }, []);
+
+  const isTheme2 = isNHTTheme2Active() || masterPreset === 'nht-2';
   const [loading, setLoading] = useState(true);
 
   const initialTab = Number(location.state?.activeTab || location.state?.tab || 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -172,21 +193,71 @@ const StockReport = () => {
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-black dark:text-bodydark text-xs antialiased font-sans relative">
-      <div>
-        <h2 className="text-xl font-bold text-black dark:text-white uppercase tracking-wider">Enterprise Stock Auditing Center</h2>
-        <p className="text-xs text-gray-400">Track structural inventory asset flows, location metrics, and ledger balances valuation</p>
-      </div>
+{isTheme2 ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 pb-1">
+          <div className="flex items-center gap-1.5 font-medium">
+            <span>Reports</span>
+            <span className="text-slate-400">/</span>
+            <span>Inventory Reports</span>
+            <span className="text-slate-400">/</span>
+            <span className="text-slate-900 dark:text-white font-bold">
+              {activeTab === 1 ? 'Stock Activity' :
+               activeTab === 2 ? 'Stock Balance' :
+               activeTab === 3 ? 'Stock Status' :
+               activeTab === 4 ? 'Stock Transfer' :
+               activeTab === 7 ? 'Category Valuation' : 'Location Stock'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Active Fiscal DB
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <h2 className="text-xl font-bold text-black dark:text-white uppercase tracking-wider">Enterprise Stock Auditing Center</h2>
+          <p className="text-xs text-gray-400">Track structural inventory asset flows, location metrics, and ledger balances valuation</p>
+        </div>
+      )}
 
-      <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[10px] uppercase text-gray-500">
-        <button type="button" onClick={() => handleTabChange(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Activity</button>
-        <button type="button" onClick={() => handleTabChange(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Balance</button>
-        <button type="button" onClick={() => handleTabChange(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Status</button>
-        <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Transfer</button>
-        <button type="button" onClick={() => handleTabChange(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Category Valuation</button>
-        <button type="button" onClick={() => handleTabChange(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Location Stock</button>
-      </div>
+      {isTheme2 ? (
+        <div className="flex flex-wrap items-center gap-2 pb-1">
+          {[
+            { id: 1, label: 'Stock Activity' },
+            { id: 2, label: 'Stock Balance' },
+            { id: 3, label: 'Stock Status' },
+            { id: 4, label: 'Stock Transfer' },
+            { id: 7, label: 'Category Valuation' },
+            { id: 8, label: 'Location Stock' }
+          ].map((tab: any) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleTabChange(tab.id)}
+              className={`px-4 py-2 rounded-full font-semibold text-xs whitespace-nowrap cursor-pointer transition ${
+                activeTab === tab.id
+                  ? 'bg-[#800020] text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+            >
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[10px] uppercase text-gray-500">
+          <button type="button" onClick={() => handleTabChange(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Activity</button>
+          <button type="button" onClick={() => handleTabChange(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Balance</button>
+          <button type="button" onClick={() => handleTabChange(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Status</button>
+          <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Transfer</button>
+          <button type="button" onClick={() => handleTabChange(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Category Valuation</button>
+          <button type="button" onClick={() => handleTabChange(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Location Stock</button>
+        </div>
+      )}
 
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+      <div className={`p-6 ${isTheme2 ? "rounded-2xl border border-slate-200/80 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900" : "rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark"}`}>
         <h3 className="font-bold text-sm text-black dark:text-white mb-4 uppercase tracking-wider text-primary">Report Criteria Specification</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
 
@@ -269,14 +340,38 @@ const StockReport = () => {
           )}
         </div>
 
-        <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex justify-end">
-          <button
-            type="button"
-            onClick={handleDispatchReportView}
-            className="rounded bg-primary py-2.5 px-12 font-black text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 cursor-pointer uppercase tracking-wider"
-          >
-            Show Report
-          </button>
+        <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isTheme2 && (
+              <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Financial Year 2026-27 (Active)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {isTheme2 && (
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold transition cursor-pointer"
+              >
+                <LuPrinter size={14} />
+                <span>Print</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleDispatchReportView}
+              className={`flex items-center gap-1.5 transition text-xs cursor-pointer ${
+                isTheme2
+                  ? 'bg-[#800020] hover:bg-[#6e001c] text-white px-8 py-2.5 rounded-xl font-bold shadow-xs'
+                  : 'rounded bg-primary py-2.5 px-12 font-black text-white hover:bg-opacity-90 shadow-sm h-9 uppercase tracking-wider'
+              }`}
+            >
+              {isTheme2 && <LuBarChart2 size={15} />}
+              <span>{isTheme2 ? 'Generate Statement' : 'Show Report'}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

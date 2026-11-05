@@ -45,6 +45,9 @@ import {
   getSavedSidebarColor,
   getSavedAccentColor,
   getContrastTextColor,
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
 } from '../../constant/themeConfig';
 
 export interface SettingsNavTab {
@@ -174,6 +177,21 @@ const Header = (props: {
     return () => {
       window.removeEventListener('uzair_jibran_navbar_layout_changed', updateNavbarMode);
       window.removeEventListener('storage', updateNavbarMode);
+    };
+  }, []);
+
+  // Master Theme Preset State (NHT Theme 1 vs NHT Theme 2 vs Custom)
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+    };
+    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
     };
   }, []);
 
@@ -484,8 +502,8 @@ const Header = (props: {
     <>
       <header
         className={`shrink-0 z-40 flex duration-200 ease-in-out transition-all ${
-          navbarMode === 'classic'
-            ? 'w-full rounded-none border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 shadow-2xs'
+          navbarMode === 'classic' || masterPreset === 'nht-2'
+            ? 'w-full rounded-none border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#0B0F17]/95 shadow-2xs'
             : 'w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#111827]/95 shadow-xs min-[751px]:shadow-md'
         }`}
       >
@@ -553,49 +571,79 @@ const Header = (props: {
              * STANDARD ERP NAVBAR: Mobile Menu, Portal Badge, New Sale, Search
              * ========================================================================= */
             <>
-              {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}
-              <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-                {/* Mobile Sidebar Toggle */}
-                <button
-                  aria-controls="sidebar"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    props.setSidebarOpen(!props.sidebarOpen);
-                  }}
-                  className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
-                >
-                  <MdMenu size={20} />
-                </button>
-
-                {/* Dynamic Portal & Branch Badge */}
-                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
-                  <span className="flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span className="text-[11px] font-extrabold text-primary uppercase tracking-wider">
-                    {portalCode}
-                  </span>
-                  <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
-                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[90px] xl:max-w-[130px]">
-                    {branchLabel === 'Portal Active' && isRTL ? 'پورٹل فعال' : branchLabel}
-                  </span>
+              {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button (or Amal Dashboard Title in Theme 2) */}
+              {(masterPreset === 'nht-2' || isNHTTheme2Active()) && location.pathname === '/dashboard' ? (
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    aria-controls="sidebar"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.setSidebarOpen(!props.sidebarOpen);
+                    }}
+                    className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
+                  >
+                    <MdMenu size={20} />
+                  </button>
+                  <div>
+                    <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
+                      Dashboard
+                    </h1>
+                    <p className="text-[10px] sm:text-[11px] text-slate-400">
+                      Last updated: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="hidden sm:flex p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ml-1"
+                    title="Reload"
+                  >
+                    <LuRefreshCw size={13} />
+                  </button>
                 </div>
+              ) : (
+                <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                  {/* Mobile Sidebar Toggle */}
+                  <button
+                    aria-controls="sidebar"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.setSidebarOpen(!props.sidebarOpen);
+                    }}
+                    className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
+                  >
+                    <MdMenu size={20} />
+                  </button>
 
-                {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
-                <Link
-                  to="/sales/invoice/add"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
-                  style={{
-                    backgroundColor: sidebarColor,
-                    color: getContrastTextColor(sidebarColor),
-                  }}
-                  title={isRTL ? 'نئی سیل انوائس بنائیں' : 'Create a New Sales Invoice'}
-                >
-                  <LuPlus className="text-sm stroke-[3]" />
-                  <span className="hidden md:inline">{isRTL ? 'نئی سیل' : 'New Sale'}</span>
-                </Link>
-              </div>
+                  {/* Dynamic Portal & Branch Badge */}
+                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-[11px] font-extrabold text-primary uppercase tracking-wider">
+                      {portalCode}
+                    </span>
+                    <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
+                    <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[90px] xl:max-w-[130px]">
+                      {branchLabel === 'Portal Active' && isRTL ? 'پورٹل فعال' : branchLabel}
+                    </span>
+                  </div>
+
+                  {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
+                  <Link
+                    to="/sales/invoice/add"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
+                    style={{
+                      backgroundColor: sidebarColor,
+                      color: getContrastTextColor(sidebarColor),
+                    }}
+                    title={isRTL ? 'نئی سیل انوائس بنائیں' : 'Create a New Sales Invoice'}
+                  >
+                    <LuPlus className="text-sm stroke-[3]" />
+                    <span className="hidden md:inline">{isRTL ? 'نئی سیل' : 'New Sale'}</span>
+                  </Link>
+                </div>
+              )}
 
               {/* Center: Command Palette / Quick Search Trigger */}
               <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-1 sm:mx-2 hidden md:block min-w-0">

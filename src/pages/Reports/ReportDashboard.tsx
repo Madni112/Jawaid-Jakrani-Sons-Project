@@ -39,6 +39,13 @@ import {
 } from 'react-icons/md';
 import { exportMultiSheetExcel, ExcelColumn } from '../../utils/excelExport';
 import { toast } from 'react-hot-toast';
+import AccountReport from './Account Report/AccountReport';
+import {
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+} from '../../constant/themeConfig';
+import { LuBarChart2, LuDownload, LuPrinter, LuSearch } from 'react-icons/lu';
 
 interface ReportItem {
   id: string;
@@ -537,6 +544,26 @@ const ReportDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { tenantId, businessName } = useAuth();
 
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+    };
+    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
+    };
+  }, []);
+
+  const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
+
+  if (isTheme2) {
+    return <AccountReport />;
+  }
+
   const [reportsList, setReportsList] = useState<ReportItem[]>(getInitialReports);
   const [categoriesList, setCategoriesList] = useState(getInitialCategories);
   const [searchQuery, setSearchQuery] = useState('');
@@ -814,96 +841,207 @@ const ReportDashboard: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs antialiased font-sans pb-16 pt-2">
       {/* ── BREADCRUMB & METADATA BAR ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] font-mono text-slate-500 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2 uppercase tracking-wider">
-          <span>Financial Accounting</span>
-          <span>&gt;</span>
-          <span>Operational Ledger</span>
-          <span>&gt;</span>
-          <span className="text-emerald-700 dark:text-emerald-400 font-bold">Standard Reports Hub</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800/60 font-semibold text-[10px]">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Ledger Synced Active</span>
+      {isTheme2 ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 pb-1">
+          <div className="flex items-center gap-1.5 font-medium">
+            <span>Reports</span>
+            <span className="text-slate-400">/</span>
+            <span>Overview</span>
+            <span className="text-slate-400">/</span>
+            <span className="text-slate-900 dark:text-white font-bold">Reports Directory</span>
           </div>
-          <div className="flex items-center gap-1 text-slate-400">
-            <MdAccessTime size={14} />
-            <span>Real-time DB</span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live DB Synced
+            </span>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] font-mono text-slate-500 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2 uppercase tracking-wider">
+            <span>Financial Accounting</span>
+            <span>&gt;</span>
+            <span>Operational Ledger</span>
+            <span>&gt;</span>
+            <span className="text-emerald-700 dark:text-emerald-400 font-bold">Standard Reports Hub</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800/60 font-semibold text-[10px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Ledger Synced Active</span>
+            </div>
+            <div className="flex items-center gap-1 text-slate-400">
+              <MdAccessTime size={14} />
+              <span>Real-time DB</span>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* ── HEADER BANNER ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner">
-            <MdAssessment size={28} />
+      {/* ── HEADER BANNER / CRITERIA SPECIFICATION CARD ── */}
+      {isTheme2 ? (
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white font-sans">
+                  Reports Directory
+                </h1>
+                <span className="bg-[#800020]/10 text-[#800020] dark:bg-[#800020]/30 dark:text-rose-200 font-bold px-2.5 py-0.5 rounded-full text-[11px] border border-[#800020]/20">
+                  {reportsList.length} Active Modules
+                </span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+                Select category criteria or search report modules to analyze fiscal metrics, transactions and inventory.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleBatchExport}
+                disabled={exporting}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold transition cursor-pointer"
+              >
+                <LuDownload size={14} />
+                <span>{exporting ? 'Exporting...' : 'CSV'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold transition cursor-pointer"
+              >
+                <LuPrinter size={14} />
+                <span>Print</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const firstReport = filteredReports[0];
+                  if (firstReport) handleNavigate(firstReport);
+                }}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[#800020] hover:bg-[#6e001c] text-white text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <LuBarChart2 size={14} />
+                <span>Generate</span>
+              </button>
+            </div>
           </div>
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white font-sans">
-                Reports Directory
-              </h1>
-              <span className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-md text-[11px] border border-emerald-200 dark:border-emerald-800/40">
-                {reportsList.length} Available
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="w-full sm:w-auto">
+              <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Financial Year 2026-27 (Active)
               </span>
             </div>
-            <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-              Drag report cards or whole category boxes to rearrange. Saved automatically in your browser.
-            </p>
+            <div className="w-full sm:flex-1 relative">
+              <LuSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search reports by name or keyword..."
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-[#800020]/20 focus:border-[#800020] outline-none transition text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                >
+                  <MdClear size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleResetOrder}
+              title="Reset layout and category positions to default"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium text-xs transition cursor-pointer shrink-0 border border-slate-200 dark:border-slate-700"
+            >
+              <MdRestartAlt size={15} />
+              <span>Reset Layout</span>
+            </button>
           </div>
         </div>
+      ) : (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner">
+              <MdAssessment size={28} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white font-sans">
+                  Reports Directory
+                </h1>
+                <span className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-md text-[11px] border border-emerald-200 dark:border-emerald-800/40">
+                  {reportsList.length} Available
+                </span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+                Drag report cards or whole category boxes to rearrange. Saved automatically in your browser.
+              </p>
+            </div>
+          </div>
 
-        {/* Global Search & Reset Order Controls */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto">
-          <button
-            type="button"
-            onClick={handleResetOrder}
-            title="Reset layout and category positions to default"
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 border border-slate-200 dark:border-slate-700"
-          >
-            <MdRestartAlt size={16} />
-            <span className="hidden sm:inline">Reset Layout</span>
-          </button>
+          <div className="flex items-center gap-2.5 w-full md:w-auto">
+            <button
+              type="button"
+              onClick={handleResetOrder}
+              title="Reset layout and category positions to default"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 border border-slate-200 dark:border-slate-700"
+            >
+              <MdRestartAlt size={16} />
+              <span className="hidden sm:inline">Reset Layout</span>
+            </button>
 
-          <div className="w-full md:w-80 relative">
-            <MdSearch size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search reports by name or keyword..."
-              className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
-              >
-                <MdClear size={14} />
-              </button>
-            )}
+            <div className="w-full md:w-80 relative">
+              <MdSearch size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search reports by name or keyword..."
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                >
+                  <MdClear size={14} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── CATEGORY FILTER TABS ── */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
         <button
           type="button"
           onClick={() => handleTabClick('all')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap cursor-pointer transition ${
+          className={`flex items-center gap-2 ${
+            isTheme2 ? 'px-4 py-2 rounded-full font-semibold' : 'px-3.5 py-2 rounded-xl font-bold'
+          } text-xs whitespace-nowrap cursor-pointer transition ${
             selectedCategory === 'all'
-              ? 'bg-emerald-700 text-white shadow-sm'
+              ? isTheme2
+                ? 'bg-[#800020] text-white shadow-xs'
+                : 'bg-emerald-700 text-white shadow-sm'
               : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
         >
-          <MdCategory size={15} />
+          {!isTheme2 && <MdCategory size={15} />}
           <span>All Reports</span>
           <span
             className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-              selectedCategory === 'all' ? 'bg-emerald-800/80 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              selectedCategory === 'all'
+                ? isTheme2
+                  ? 'bg-[#5c0017] text-white'
+                  : 'bg-emerald-800/80 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
             }`}
           >
             {categoryCounts.all}
@@ -917,17 +1055,25 @@ const ReportDashboard: React.FC = () => {
               key={cat.key}
               type="button"
               onClick={() => handleTabClick(cat.key)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap cursor-pointer transition ${
+              className={`flex items-center gap-2 ${
+                isTheme2 ? 'px-4 py-2 rounded-full font-semibold' : 'px-3.5 py-2 rounded-xl font-bold'
+              } text-xs whitespace-nowrap cursor-pointer transition ${
                 selectedCategory === cat.key
-                  ? 'bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/50'
+                  ? isTheme2
+                    ? 'bg-[#800020] text-white shadow-xs'
+                    : 'bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/50'
                   : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <CatIcon size={15} />
+              {!isTheme2 && <CatIcon size={15} />}
               <span>{cat.title}</span>
               <span
                 className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-                  selectedCategory === cat.key ? 'bg-emerald-800/80 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                  selectedCategory === cat.key
+                    ? isTheme2
+                      ? 'bg-[#5c0017] text-white'
+                      : 'bg-emerald-800/80 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                 }`}
               >
                 {categoryCounts[cat.key] || 0}
