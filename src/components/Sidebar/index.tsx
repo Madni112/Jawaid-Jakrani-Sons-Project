@@ -445,7 +445,7 @@ const SidebarItem = ({
 
   // Close opened flyout container on outside click (Theme 2)
   useEffect(() => {
-    if (masterPreset === 'nht-2' && sidebarOpen && openMenuId === menuUniqueKey) {
+    if (isTheme2 && sidebarOpen && openMenuId === menuUniqueKey) {
       const handleClickOutside = (e: MouseEvent) => {
         if (
           itemRef.current && !itemRef.current.contains(e.target as Node) &&
@@ -574,7 +574,7 @@ const SidebarItem = ({
                 onClick={(e) => {
                   e.preventDefault();
                   // In NHT Theme 2 when opened on desktop: Clicking opens the side flyout container!
-                  if (masterPreset === 'nht-2' && sidebarOpen && !isMobile) {
+                  if (isTheme2 && sidebarOpen && !isMobile) {
                     const isCurrentlyOpen = openMenuId === menuUniqueKey;
                     if (isCurrentlyOpen) {
                       setOpenMenuId(null);
@@ -626,7 +626,7 @@ const SidebarItem = ({
                       className="ml-auto transition-transform duration-200"
                       style={{ color: isTheme2 && isChildActive ? '#FFFFFF' : sidebarColor, opacity: 0.8 }}
                     >
-                      {masterPreset === 'nht-2' && !isMobile ? (
+                      {isTheme2 && !isMobile ? (
                         <FiChevronRight size={13} className={`transition-transform duration-200 ${openMenuId === menuUniqueKey ? (isRTL ? '-rotate-90' : 'rotate-90') : ''}`} />
                       ) : open ? (
                         <AiOutlineUp size={11} />
@@ -639,7 +639,7 @@ const SidebarItem = ({
               </NavLink>
 
               {/* Collapsible Sub-item Drawer (Theme 1 Accordion Mode) */}
-              {shouldShowLabels && (masterPreset !== 'nht-2' || isMobile) && (
+              {shouldShowLabels && (!isTheme2 || isMobile) && (
                 <div
                   className="transition-all duration-300 ease-in-out overflow-hidden transform pl-3 ml-2 border-l"
                   style={{
@@ -681,7 +681,7 @@ const SidebarItem = ({
         </SidebarLinkGroup>
 
         {/* NHT Theme 2: Opened Side Flyout Container on Click (Amal-style pure text menu) */}
-        {masterPreset === 'nht-2' && sidebarOpen && openMenuId === menuUniqueKey && !isMobile && typeof document !== 'undefined' && createPortal(
+        {isTheme2 && sidebarOpen && openMenuId === menuUniqueKey && !isMobile && typeof document !== 'undefined' && createPortal(
           <div
             ref={flyoutPanelRef}
             className={`fixed z-99999 min-w-[210px] max-w-[260px] rounded-xl border ${
@@ -1117,13 +1117,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             }`
       } ${
         sidebarOpen
-          ? `${masterPreset === 'nht-2' ? 'w-56' : 'w-72.5'} translate-x-0 visible ${layoutMode === 'classic' ? `border-r ${themeStyles.border}` : ''}`
+          ? `${isTheme2 ? 'w-56' : 'w-72.5'} translate-x-0 visible ${layoutMode === 'classic' ? `border-r ${themeStyles.border}` : ''}`
           : `w-0 -translate-x-full min-[751px]:w-18 ${layoutMode === 'floating' ? 'min-[751px]:translate-x-0' : `min-[751px]:translate-x-0 min-[751px]:border-r ${themeStyles.border}`} max-[750px]:invisible`
       }`}
     >
       {/* Brand Header */}
       <div className={`flex items-center shrink-0 border-b ${themeStyles.headerBorder} ${
-        sidebarOpen ? (masterPreset === 'nht-2' ? 'px-3 py-3.5' : 'px-5 py-4') : 'justify-center p-3'
+        sidebarOpen ? (isTheme2 ? 'px-3 py-3.5' : 'px-5 py-4') : 'justify-center p-3'
       }`}>
         {sidebarOpen ? (
           <NavLink

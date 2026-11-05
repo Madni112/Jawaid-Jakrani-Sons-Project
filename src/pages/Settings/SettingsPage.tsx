@@ -545,6 +545,7 @@ const SettingsPage: React.FC = () => {
     setMasterThemePreset('custom');
     if (typeof window !== 'undefined') {
       localStorage.setItem('jakwani_master_theme_preset', 'custom');
+      window.dispatchEvent(new Event('jakwani_master_theme_preset_changed'));
     }
   };
 
@@ -553,7 +554,7 @@ const SettingsPage: React.FC = () => {
       setSidebarLayout('floating');
       setSidebarLayoutMode('floating');
       setNavbarLayout('floating');
-      setNavbarLayoutMode('floating');
+      setNavbarLayoutMode('sticky');
 
       applyAccentColor('#06B6D4');
       setSelectedAccentColor('#06B6D4');
@@ -567,12 +568,16 @@ const SettingsPage: React.FC = () => {
 
       const safe = getSafeSidebarColor('#FFFFFF');
       setSelectedSidebarColor(safe.safeColor);
-      setSavedSidebarColor(safe.safeColor);
+      setAppliedSidebarColor(safe.safeColor);
       applySidebarColor(safe.safeColor);
       setCustomSidebarHex('FFFFFF');
 
       setMasterThemePreset('nht-1');
-      localStorage.setItem('jakwani_master_theme_preset', 'nht-1');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('jakwani_master_theme_preset', 'nht-1');
+        localStorage.setItem('jakwani_base_master_theme', 'nht-1');
+        window.dispatchEvent(new Event('jakwani_master_theme_preset_changed'));
+      }
 
       toast.success(
         isRTL ? '✨ NHT تھیم 1 (جدید فلوٹنگ لے آؤٹ) فعال ہو گئی!' : '✨ NHT Theme 1 (Modern Floating) activated!',
@@ -582,7 +587,7 @@ const SettingsPage: React.FC = () => {
       setSidebarLayout('classic');
       setSidebarLayoutMode('classic');
       setNavbarLayout('classic');
-      setNavbarLayoutMode('classic');
+      setNavbarLayoutMode('sticky');
 
       applyAccentColor('#800020');
       setSelectedAccentColor('#800020');
@@ -596,12 +601,16 @@ const SettingsPage: React.FC = () => {
 
       const safe = getSafeSidebarColor('#FFFFFF');
       setSelectedSidebarColor(safe.safeColor);
-      setSavedSidebarColor(safe.safeColor);
+      setAppliedSidebarColor(safe.safeColor);
       applySidebarColor(safe.safeColor);
       setCustomSidebarHex('FFFFFF');
 
       setMasterThemePreset('nht-2');
-      localStorage.setItem('jakwani_master_theme_preset', 'nht-2');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('jakwani_master_theme_preset', 'nht-2');
+        localStorage.setItem('jakwani_base_master_theme', 'nht-2');
+        window.dispatchEvent(new Event('jakwani_master_theme_preset_changed'));
+      }
 
       toast.success(
         isRTL ? '🏛️ NHT تھیم 2 (کلاسک ایگزیکٹو لے آؤٹ) فعال ہو گئی!' : '🏛️ NHT Theme 2 (Classic Executive) activated!',
@@ -1400,7 +1409,7 @@ const SettingsPage: React.FC = () => {
               style={{ backgroundColor: appliedAccentColor }}
             />
             <span className="text-slate-700 dark:text-slate-200">
-              {activeAppliedPreset ? activeAppliedPreset.name : 'Custom Active'}
+              {masterThemePreset === 'nht-1' ? 'NHT Theme 1 Active' : masterThemePreset === 'nht-2' ? 'NHT Theme 2 Active' : activeAppliedPreset ? activeAppliedPreset.name : 'Custom Active'}
             </span>
           </div>
         </div>
