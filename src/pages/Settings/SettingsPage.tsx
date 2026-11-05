@@ -418,7 +418,7 @@ const SettingsPage: React.FC = () => {
 
   const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('sidebar');
   const [sidebarPreviewMode, setSidebarPreviewMode] = useState<'opened' | 'closed'>('opened');
-  const [sidebarActiveConfigTab, setSidebarActiveConfigTab] = useState<'theme' | 'accent' | 'layout' | 'drawer' | 'colors'>('theme');
+  const [sidebarActiveConfigTab, setSidebarActiveConfigTab] = useState<'master-themes' | 'theme' | 'accent' | 'layout' | 'drawer' | 'colors'>('master-themes');
   const [previewHoverOpen, setPreviewHoverOpen] = useState<boolean>(false);
   const [previewColorDropdownOpen, setPreviewColorDropdownOpen] = useState<boolean>(true);
   const [colorMode, setColorMode] = useColorMode();
@@ -1535,79 +1535,6 @@ const SettingsPage: React.FC = () => {
           {/* TAB 2: THEME & APPEARANCE */}
           {activeTab === 'theme' && (
             <div className="space-y-6 animate-fadeIn">
-              {/* MASTER WORKSPACE THEME PRESETS (NHT Theme 1 / NHT Theme 2 / Custom) */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-5 shadow-sm">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex items-start sm:items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm transition-all"
-                      style={{ backgroundColor: selectedAccentColor }}
-                    >
-                      <LuLayers size={20} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                          {isRTL ? "ورک اسپیس تھیمز" : "Workspace Themes"}
-                        </h3>
-                        <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-full uppercase tracking-wider ${
-                          masterThemePreset === 'nht-1'
-                            ? 'bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-800'
-                            : masterThemePreset === 'nht-2'
-                            ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-800'
-                            : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800'
-                        }`}>
-                          {masterThemePreset === 'nht-1' ? 'NHT Theme 1 Active' : masterThemePreset === 'nht-2' ? 'NHT Theme 2 Active' : 'Custom Theme'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {masterThemePreset === 'nht-1'
-                          ? 'Modern floating card architecture with dynamic cyan branding.'
-                          : masterThemePreset === 'nht-2'
-                          ? 'Classic edge-to-edge flush rail layout with charcoal black sidebar and rich burgundy accent.'
-                          : 'Personalized workspace with your custom colors, gradients, and layout options.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 1-Click Theme Switcher Control */}
-                  <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 self-start lg:self-center shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleApplyMasterPreset('nht-1')}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer ${
-                        masterThemePreset === 'nht-1'
-                          ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/25 scale-[1.02]'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-300 shadow-xs" />
-                      <span>NHT Theme 1</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleApplyMasterPreset('nht-2')}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer ${
-                        masterThemePreset === 'nht-2'
-                          ? 'bg-[#800020] text-white shadow-md shadow-rose-950/30 scale-[1.02]'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-xs" />
-                      <span>NHT Theme 2</span>
-                    </button>
-
-                    {masterThemePreset === 'custom' && (
-                      <div className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1.5 animate-fadeIn">
-                        <LuSlidersHorizontal size={13} />
-                        <span>Custom</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
               {/* LIVE INTERACTIVE SIDEBAR & NAVBAR WORKSPACE STUDIO */}
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-6 shadow-sm">
                 {/* Header */}
@@ -1781,6 +1708,12 @@ const SettingsPage: React.FC = () => {
                             <div className="space-y-1.5">
                               {[
                                 {
+                                  id: 'master-themes',
+                                  label: isRTL ? 'ورک اسپیس تھیمز' : 'Workspace Themes',
+                                  icon: LuLayers,
+                                  badge: masterThemePreset === 'nht-1' ? 'Theme 1' : masterThemePreset === 'nht-2' ? 'Theme 2' : 'Custom',
+                                },
+                                {
                                   id: 'theme',
                                   label: isRTL ? 'سائیڈبار پس منظر تھیم' : 'Sidebar Background Theme',
                                   icon: LuPalette,
@@ -1789,7 +1722,7 @@ const SettingsPage: React.FC = () => {
                                 {
                                   id: 'layout',
                                   label: isRTL ? 'ورک اسپیس و لے آؤٹ' : 'Workspace & Layout',
-                                  icon: LuLayers,
+                                  icon: LuSlidersHorizontal,
                                   badge: sidebarLayout === 'floating' ? 'Floating' : 'Classic',
                                 },
                                 {
@@ -2146,6 +2079,319 @@ const SettingsPage: React.FC = () => {
 
                           {/* 2B. ACTIVE CONFIGURATION TAB CONTENT */}
                           <div className="flex-1 p-4 sm:p-6 overflow-y-auto max-h-[580px]">
+                            {/* TAB 0: MASTER WORKSPACE THEMES (NHT Theme 1 vs NHT Theme 2) */}
+                            {sidebarActiveConfigTab === 'master-themes' && (
+                              <div className="space-y-5 animate-fadeIn">
+                                {/* Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuLayers size={17} style={{ color: selectedAccentColor }} />
+                                      <span>{isRTL ? "ورک اسپیس تھیمز اور فن تعمیر" : "Workspace Themes & Architecture"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {isRTL
+                                        ? "کیوریٹڈ ورک اسپیس لے آؤٹ میں سے انتخاب کریں یا ہر ایک کا لائیو اسٹرکچر دیکھیں۔"
+                                        : "Select a curated workspace architecture preset with live structural skeleton preview."}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-xs font-mono font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                                      masterThemePreset === 'nht-1'
+                                        ? 'bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-800'
+                                        : masterThemePreset === 'nht-2'
+                                        ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-800'
+                                        : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800'
+                                    }`}>
+                                      {masterThemePreset === 'nht-1' ? 'NHT Theme 1 Active' : masterThemePreset === 'nht-2' ? 'NHT Theme 2 Active' : 'Custom Active'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* 16x16 / Square Skeleton Preview Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+                                  {/* THEME 1 CARD */}
+                                  <div
+                                    onClick={() => handleApplyMasterPreset('nht-1')}
+                                    className={`group relative rounded-2xl border-2 transition-all duration-200 cursor-pointer p-4 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md ${
+                                      masterThemePreset === 'nht-1'
+                                        ? 'border-cyan-500 bg-cyan-50/40 dark:bg-cyan-950/20 ring-2 ring-cyan-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-cyan-300 dark:hover:border-cyan-800 bg-white dark:bg-slate-900/60'
+                                    }`}
+                                  >
+                                    <div>
+                                      {/* Header row */}
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-3 h-3 rounded-full bg-cyan-400 shadow-xs" />
+                                          <h5 className="text-sm font-bold text-slate-900 dark:text-white">
+                                            NHT Theme 1
+                                          </h5>
+                                        </div>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 uppercase tracking-wider">
+                                          Modern Floating
+                                        </span>
+                                      </div>
+
+                                      {/* Skeleton UI Preview Frame */}
+                                      <div className="rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-900 p-2.5 shadow-inner mb-3 overflow-hidden select-none">
+                                        {/* Browser header dots */}
+                                        <div className="flex items-center gap-1 mb-2 pb-1.5 border-b border-slate-800">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500/80 inline-block" />
+                                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500/80 inline-block" />
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 inline-block" />
+                                          <span className="ml-2 text-[8px] font-mono text-slate-500">nht-theme-1.preview</span>
+                                        </div>
+
+                                        <div className="flex gap-2 h-32">
+                                          {/* Floating Sidebar Skeleton */}
+                                          <div className="w-20 bg-slate-800/90 rounded-lg p-1.5 flex flex-col justify-between border border-slate-700/70 shadow-xs shrink-0">
+                                            <div className="space-y-1.5">
+                                              {/* Brand Pill */}
+                                              <div className="flex items-center gap-1.5 pb-1 border-b border-slate-700/60">
+                                                <div className="w-3.5 h-3.5 rounded-md bg-cyan-500 shadow-xs shrink-0" />
+                                                <div className="w-8 h-1.5 rounded bg-slate-600" />
+                                              </div>
+                                              {/* Active item (Cyan Pill) */}
+                                              <div className="w-full h-3 rounded-md bg-cyan-500/90 flex items-center px-1 gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                                <div className="w-6 h-1 rounded bg-white/90" />
+                                              </div>
+                                              {/* Other nav items */}
+                                              <div className="w-full h-2.5 rounded bg-slate-700/60 flex items-center px-1">
+                                                <div className="w-5 h-1 rounded bg-slate-500" />
+                                              </div>
+                                              <div className="w-full h-2.5 rounded bg-slate-700/60 flex items-center px-1">
+                                                <div className="w-7 h-1 rounded bg-slate-500" />
+                                              </div>
+                                              <div className="w-full h-2.5 rounded bg-slate-700/60 flex items-center px-1">
+                                                <div className="w-4 h-1 rounded bg-slate-500" />
+                                              </div>
+                                            </div>
+                                            <div className="pt-1 border-t border-slate-700/60 flex items-center gap-1">
+                                              <div className="w-2.5 h-2.5 rounded-full bg-slate-600" />
+                                              <div className="w-6 h-1 rounded bg-slate-600" />
+                                            </div>
+                                          </div>
+
+                                          {/* Main Body Skeleton */}
+                                          <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                                            {/* Floating Navbar */}
+                                            <div className="h-5 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-between px-2">
+                                              <div className="flex items-center gap-1.5">
+                                                <div className="w-2 h-2 rounded bg-cyan-400" />
+                                                <div className="w-12 h-1.5 rounded bg-slate-600" />
+                                              </div>
+                                              <div className="w-8 h-2 rounded-full bg-cyan-500/80" />
+                                            </div>
+
+                                            {/* Content cards */}
+                                            <div className="flex-1 rounded-lg bg-slate-800/40 border border-slate-800 p-2 flex flex-col justify-between">
+                                              <div className="grid grid-cols-2 gap-1.5">
+                                                <div className="p-1.5 rounded-md bg-slate-800 border border-slate-700/60 space-y-1">
+                                                  <div className="w-6 h-1 rounded bg-slate-500" />
+                                                  <div className="w-10 h-2 rounded bg-cyan-400 font-bold" />
+                                                </div>
+                                                <div className="p-1.5 rounded-md bg-slate-800 border border-slate-700/60 space-y-1">
+                                                  <div className="w-6 h-1 rounded bg-slate-500" />
+                                                  <div className="w-8 h-2 rounded bg-slate-400" />
+                                                </div>
+                                              </div>
+                                              <div className="h-6 rounded bg-slate-800/90 border border-slate-700/50 p-1 flex items-center gap-1">
+                                                <div className="w-4 h-1 rounded bg-cyan-400" />
+                                                <div className="w-14 h-1 rounded bg-slate-600" />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                                        Modern floating architecture with rounded detached sidebar cards, top floating bar, and dynamic cyan theme accent.
+                                      </p>
+                                    </div>
+
+                                    {/* Action button */}
+                                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                        Floating Card Arch
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleApplyMasterPreset('nht-1');
+                                        }}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                          masterThemePreset === 'nht-1'
+                                            ? 'bg-cyan-500 text-white shadow-xs'
+                                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                        }`}
+                                      >
+                                        {masterThemePreset === 'nht-1' ? (
+                                          <>
+                                            <LuCheck size={13} />
+                                            <span>Active</span>
+                                          </>
+                                        ) : (
+                                          <span>Switch to Theme 1</span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* THEME 2 CARD */}
+                                  <div
+                                    onClick={() => handleApplyMasterPreset('nht-2')}
+                                    className={`group relative rounded-2xl border-2 transition-all duration-200 cursor-pointer p-4 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md ${
+                                      masterThemePreset === 'nht-2'
+                                        ? 'border-[#800020] bg-rose-950/10 dark:bg-rose-950/20 ring-2 ring-rose-900/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-800 bg-white dark:bg-slate-900/60'
+                                    }`}
+                                  >
+                                    <div>
+                                      {/* Header row */}
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-3 h-3 rounded-full bg-[#800020] shadow-xs" />
+                                          <h5 className="text-sm font-bold text-slate-900 dark:text-white">
+                                            NHT Theme 2
+                                          </h5>
+                                        </div>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-900 dark:text-rose-300 border border-rose-200 dark:border-rose-800 uppercase tracking-wider">
+                                          Classic Executive
+                                        </span>
+                                      </div>
+
+                                      {/* Skeleton UI Preview Frame (Amal-style classic rail + burgundy hero banner) */}
+                                      <div className="rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-neutral-950 p-2.5 shadow-inner mb-3 overflow-hidden select-none relative">
+                                        {/* Browser header dots */}
+                                        <div className="flex items-center gap-1 mb-2 pb-1.5 border-b border-neutral-800">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500/80 inline-block" />
+                                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500/80 inline-block" />
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 inline-block" />
+                                          <span className="ml-2 text-[8px] font-mono text-neutral-500">nht-theme-2.preview</span>
+                                        </div>
+
+                                        <div className="flex h-32 relative">
+                                          {/* Classic Flush Rail Sidebar Skeleton */}
+                                          <div className="w-20 bg-[#161618] -my-2.5 -ml-2.5 p-1.5 flex flex-col justify-between border-r border-neutral-800 shrink-0">
+                                            <div className="space-y-1">
+                                              {/* Brand Header */}
+                                              <div className="flex items-center gap-1.5 pb-1 border-b border-neutral-800">
+                                                <div className="w-3 h-3 rounded bg-neutral-800 border border-neutral-700 shrink-0" />
+                                                <div className="w-9 h-1.5 rounded bg-neutral-600" />
+                                              </div>
+                                              {/* Active item (Burgundy Pill) */}
+                                              <div className="w-full h-3 rounded bg-[#800020] flex items-center px-1 gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                                <div className="w-6 h-1 rounded bg-white" />
+                                              </div>
+                                              {/* Sidebar items with Chevrons > */}
+                                              <div className="w-full h-2.5 rounded hover:bg-white/5 flex items-center justify-between px-1">
+                                                <div className="w-5 h-1 rounded bg-neutral-500" />
+                                                <div className="text-[7px] text-neutral-500 font-bold">&gt;</div>
+                                              </div>
+                                              {/* Hovered item with Flyout indicator */}
+                                              <div className="w-full h-2.5 rounded bg-neutral-800/80 flex items-center justify-between px-1">
+                                                <div className="w-6 h-1 rounded bg-neutral-400" />
+                                                <div className="text-[7px] text-rose-400 font-bold">&gt;</div>
+                                              </div>
+                                              <div className="w-full h-2.5 rounded hover:bg-white/5 flex items-center justify-between px-1">
+                                                <div className="w-5 h-1 rounded bg-neutral-500" />
+                                                <div className="text-[7px] text-neutral-500 font-bold">&gt;</div>
+                                              </div>
+                                            </div>
+                                            <div className="pt-1 border-t border-neutral-800 flex items-center gap-1">
+                                              <div className="w-2.5 h-2.5 rounded bg-neutral-800" />
+                                              <div className="w-6 h-1 rounded bg-neutral-600" />
+                                            </div>
+                                          </div>
+
+                                          {/* Miniature 2-Tier Floating Flyout Simulation */}
+                                          <div className="absolute left-[70px] top-4 z-20 w-16 bg-[#1A1A1A] border border-neutral-700 rounded-lg p-1 shadow-xl flex flex-col gap-0.5 animate-fadeIn">
+                                            <div className="w-full h-2 rounded bg-[#800020] flex items-center px-1">
+                                              <div className="w-8 h-0.5 rounded bg-white" />
+                                            </div>
+                                            <div className="w-full h-1.5 rounded bg-neutral-800 px-1 flex items-center">
+                                              <div className="w-6 h-0.5 rounded bg-neutral-500" />
+                                            </div>
+                                            <div className="w-full h-1.5 rounded bg-neutral-800 px-1 flex items-center">
+                                              <div className="w-7 h-0.5 rounded bg-neutral-500" />
+                                            </div>
+                                          </div>
+
+                                          {/* Main Body Skeleton */}
+                                          <div className="flex-1 flex flex-col gap-1.5 pl-2.5 min-w-0">
+                                            {/* Burgundy Hero Banner Header */}
+                                            <div className="h-6 rounded-lg bg-[#800020] p-1.5 flex items-center justify-between text-white shadow-xs">
+                                              <div className="flex items-center gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-rose-300" />
+                                                <div className="w-14 h-1.5 rounded bg-white/90" />
+                                              </div>
+                                              <div className="w-6 h-2 rounded bg-white/20" />
+                                            </div>
+
+                                            {/* Summary 4-card metric tiles */}
+                                            <div className="grid grid-cols-2 gap-1 flex-1">
+                                              <div className="p-1 rounded bg-neutral-900 border border-neutral-800 flex flex-col justify-center">
+                                                <div className="w-4 h-1 rounded bg-neutral-600 mb-0.5" />
+                                                <div className="w-7 h-1.5 rounded bg-neutral-300" />
+                                              </div>
+                                              <div className="p-1 rounded bg-neutral-900 border border-neutral-800 flex flex-col justify-center">
+                                                <div className="w-4 h-1 rounded bg-neutral-600 mb-0.5" />
+                                                <div className="w-7 h-1.5 rounded bg-neutral-300" />
+                                              </div>
+                                              <div className="p-1 rounded bg-neutral-900 border border-neutral-800 flex flex-col justify-center">
+                                                <div className="w-4 h-1 rounded bg-neutral-600 mb-0.5" />
+                                                <div className="w-7 h-1.5 rounded bg-neutral-300" />
+                                              </div>
+                                              <div className="p-1 rounded bg-neutral-900 border border-neutral-800 flex flex-col justify-center">
+                                                <div className="w-4 h-1 rounded bg-neutral-600 mb-0.5" />
+                                                <div className="w-7 h-1.5 rounded bg-neutral-300" />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                                        Classic edge-to-edge flush rail layout with charcoal sidebar, 2-tier floating category dropdowns, burgundy hero banner, and clean reporting.
+                                      </p>
+                                    </div>
+
+                                    {/* Action button */}
+                                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                        Classic Edge Rail
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleApplyMasterPreset('nht-2');
+                                        }}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                          masterThemePreset === 'nht-2'
+                                            ? 'bg-[#800020] text-white shadow-xs'
+                                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                        }`}
+                                      >
+                                        {masterThemePreset === 'nht-2' ? (
+                                          <>
+                                            <LuCheck size={13} />
+                                            <span>Active</span>
+                                          </>
+                                        ) : (
+                                          <span>Switch to Theme 2</span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* TAB 1: SIDEBAR BACKGROUND THEME */}
                             {sidebarActiveConfigTab === 'theme' && (
                               <div className="space-y-4 animate-fadeIn">
