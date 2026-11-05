@@ -212,11 +212,9 @@ const Header = (props: {
   );
 
   useEffect(() => {
-    const p = searchParams.get('tab');
-    if (p) {
-      setActiveSettingsTab(p);
-    }
-  }, [searchParams]);
+    const p = searchParams.get('tab') || 'profile';
+    setActiveSettingsTab(p);
+  }, [location.pathname, searchParams]);
 
   useEffect(() => {
     const handleSettingsTabEvt = (e: any) => {

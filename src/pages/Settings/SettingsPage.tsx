@@ -361,9 +361,13 @@ const SettingsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    const p = new URLSearchParams(location.search).get('tab');
-    if (p && p !== activeTab) setActiveTabState(p);
+    const p = new URLSearchParams(location.search).get('tab') || 'profile';
+    if (p !== activeTab) setActiveTabState(p);
   }, [location.search]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('jakwani_settings_tab_changed', { detail: activeTab }));
+  }, [activeTab]);
 
   useEffect(() => {
     const handleSettingsTabChange = (e: any) => {
