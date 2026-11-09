@@ -66,8 +66,10 @@ const NHT2_REPORTS_CHILDREN = [
   },
 ];
 
-const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebarColor }: any) => {
+const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebarColor, sidebarThemeMode }: any) => {
   const [showSubFlyout, setShowSubFlyout] = useState(false);
+  const isLightFlyout = sidebarThemeMode === 'light';
+  const effectiveTextColor = isLightFlyout ? '#0F172A' : (sidebarColor || '#FFFFFF');
 
   if (item && item.children && Array.isArray(item.children)) {
     return (
@@ -77,16 +79,22 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
         onMouseLeave={() => setShowSubFlyout(false)}
       >
         <div
-          className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer pr-4"
-          style={{ color: sidebarColor }}
+          className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 cursor-pointer pr-4 ${
+            isLightFlyout ? 'hover:bg-slate-100 text-slate-800' : 'hover:bg-white/10 text-slate-100'
+          }`}
+          style={{ color: effectiveTextColor }}
         >
           <span className="truncate">{item.label}</span>
-          <AiOutlineRight size={10} className="shrink-0" style={{ color: sidebarColor }} />
+          <AiOutlineRight size={10} className="shrink-0" style={{ color: effectiveTextColor, opacity: 0.7 }} />
         </div>
 
         {showSubFlyout && (
           <div
-            className="absolute left-full top-0 -ml-1.5 z-99999 w-52 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#1E293B]/95 p-2 shadow-2xl backdrop-blur-md"
+            className={`absolute left-full top-0 -ml-1.5 z-99999 w-52 rounded-xl border p-2 shadow-2xl backdrop-blur-md ${
+              isLightFlyout
+                ? 'border-slate-200/90 bg-white/98 text-slate-800 shadow-xl'
+                : 'border-slate-700/90 bg-slate-900/95 text-slate-100 shadow-2xl'
+            }`}
             style={{ animation: 'sidebarFlyoutFadeIn 0.15s ease-out forwards' }}
           >
             <div className="absolute top-0 -left-3 w-3 h-full bg-transparent" />
@@ -99,6 +107,7 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
                   handleLinkClick={handleLinkClick}
                   getTenantPath={getTenantPath}
                   sidebarColor={sidebarColor}
+                  sidebarThemeMode={sidebarThemeMode}
                 />
               ))}
             </ul>
@@ -116,12 +125,14 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebar
       <NavLink
         to={destination}
         onClick={handleLinkClick}
-        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 hover:bg-slate-100 dark:hover:bg-slate-800 ${
+        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold duration-150 ${
+          isLightFlyout ? 'hover:bg-slate-100 text-slate-800' : 'hover:bg-white/10 text-slate-100'
+        } ${
           isActive ? 'shadow-xs font-bold' : ''
         }`}
         style={{
-          color: sidebarColor,
-          backgroundColor: isActive ? `${sidebarColor}20` : undefined,
+          color: effectiveTextColor,
+          backgroundColor: isActive ? `${effectiveTextColor}20` : undefined,
         }}
       >
         {item.label}
@@ -143,7 +154,9 @@ const SidebarItem = ({
   getTenantPath,
   sidebarColor,
   layoutMode,
+  sidebarThemeMode,
 }: any) => {
+  const effectiveThemeMode = sidebarThemeMode || getSidebarThemeMode();
   const itemRef = useRef<HTMLDivElement>(null);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [showFlyout, setShowFlyout] = useState(false);
@@ -308,6 +321,7 @@ const SidebarItem = ({
                         menuUniqueKey={`${menuUniqueKey}-${idx}`}
                         getTenantPath={getTenantPath}
                         sidebarColor={sidebarColor}
+                        sidebarThemeMode={effectiveThemeMode}
                       />
                     ))}
                   </ul>
@@ -319,7 +333,11 @@ const SidebarItem = ({
 
         {!sidebarOpen && showFlyout && !isMobile && (
           <div
-            className="fixed z-99999 w-56 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#1E293B]/95 p-2.5 shadow-2xl backdrop-blur-md"
+            className={`fixed z-99999 w-56 rounded-2xl border p-2.5 shadow-2xl backdrop-blur-md ${
+              effectiveThemeMode === 'light'
+                ? 'border-slate-200/90 bg-white/98 text-slate-800 shadow-xl'
+                : 'border-slate-700/90 bg-slate-900/95 text-slate-100 shadow-2xl'
+            }`}
             style={{
               top: `${flyoutTop}px`,
               left: `${flyoutLeft}px`,
@@ -334,8 +352,9 @@ const SidebarItem = ({
               }
             `}</style>
             <div
-              className="px-3 py-1.5 mb-1.5 border-b border-slate-100 dark:border-slate-800 font-bold text-[10px] uppercase tracking-wider text-left"
-              style={{ color: sidebarColor }}
+              className={`px-3 py-1.5 mb-1.5 border-b font-bold text-[10px] uppercase tracking-wider text-left ${
+                effectiveThemeMode === 'light' ? 'border-slate-200 text-slate-500' : 'border-slate-800 text-slate-400'
+              }`}
             >
               {item.label}
             </div>
@@ -348,6 +367,7 @@ const SidebarItem = ({
                   handleLinkClick={handleLinkClick}
                   getTenantPath={getTenantPath}
                   sidebarColor={sidebarColor}
+                  sidebarThemeMode={effectiveThemeMode}
                 />
               ))}
             </ul>
@@ -773,6 +793,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                     getTenantPath={getTenantPath}
                     sidebarColor={currentSidebarColor}
                     layoutMode={layoutMode}
+                    sidebarThemeMode={sidebarThemeMode}
                   />
                 ))
               }
