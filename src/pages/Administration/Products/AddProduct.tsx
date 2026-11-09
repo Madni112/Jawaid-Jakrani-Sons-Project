@@ -468,11 +468,15 @@ const AddProduct = () => {
               pieces_per_box: pcs,
               pcs_per_box: pcs,
               pieces_per_packing: pcs,
-              allow_loose_sales: Boolean(values.allowLooseSales),
-              loose_uom: values.allowLooseSales ? String(values.looseUom || 'PCS').trim().toUpperCase() : '',
-              loose_conversion_ratio: values.allowLooseSales ? Number(values.looseConversionRatio) || pcs : 1,
-              loose_purchase_price: values.allowLooseSales && values.loosePurchasePrice ? Number(values.loosePurchasePrice) : 0,
-              loose_sale_price: values.allowLooseSales && values.looseSalePrice ? Number(values.looseSalePrice) : 0,
+              allow_loose_sales: isTileCategory ? true : Boolean(values.allowLooseSales),
+              loose_uom: isTileCategory ? 'PCS' : (values.allowLooseSales ? String(values.looseUom || 'PCS').trim().toUpperCase() : ''),
+              loose_conversion_ratio: isTileCategory ? pcs : (values.allowLooseSales ? Number(values.looseConversionRatio) || pcs : 1),
+              loose_purchase_price: isTileCategory
+                ? (pcs > 0 ? Number(((Number(values.purchasePrice) || 0) / pcs).toFixed(2)) : 0)
+                : (values.allowLooseSales && values.loosePurchasePrice ? Number(values.loosePurchasePrice) : 0),
+              loose_sale_price: isTileCategory
+                ? (pcs > 0 ? Number(((Number(values.retailPrice) || 0) / pcs).toFixed(2)) : 0)
+                : (values.allowLooseSales && values.looseSalePrice ? Number(values.looseSalePrice) : 0),
               hs_code: finalHsCode,
               item_sr_no: finalItemSrNo,
               sro_schedule_no: values.sroScheduleNo?.trim() || '',
@@ -1416,8 +1420,9 @@ const AddProduct = () => {
                     </div>
                   </div>
 
-                  {/* ── LOOSE SELLING PILL SELECTOR & PRICING CONFIGURATION ── */}
-                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  {/* ── LOOSE SELLING PILL SELECTOR & PRICING CONFIGURATION (Standard products only; Tiles have native loose calculation) ── */}
+                  {!isTileCategory && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/80 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
                       <div>
                         <div className="flex items-center gap-2">
@@ -1764,6 +1769,7 @@ const AddProduct = () => {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
 
                 {/* FORM ACTIONS */}
