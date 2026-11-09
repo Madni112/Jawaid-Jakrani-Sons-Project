@@ -89,6 +89,7 @@ import StockReportPrint from '../pages/Reports/Stock Report/StockReportPrint';
 import AccountReportPrint from '../pages/Reports/Account Report/AccountReportPrint';
 import BalanceSheet from '../pages/Reports/BalanceSheet';
 import DedicatedReportFilter from '../pages/Reports/DedicatedReportFilter';
+import MainReports from '../pages/Reports/MainReports';
 import { EmployeesPage } from '../pages/Human Resources/Employees';
 import AddEmployee from '../pages/Human Resources/AddEmployee';
 import { AttendanceSheetPage } from '../pages/Human Resources/AttendanceSheet';
@@ -386,6 +387,12 @@ export const adminRoutes = [
     path: '/Reports/Reports-Dashboard',
     component: <ReportDashboard />,
     icon: MdAssessment
+  },
+  {
+    path: '/Reports/Main-Reports',
+    component: <MainReports />,
+    label: 'Main Reports',
+    hideFromSidebar: true
   },
   {
     path: '/Reports/Sales-Report',

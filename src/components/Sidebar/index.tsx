@@ -19,6 +19,8 @@ import {
   getSidebarBehaviorMode,
   MasterThemePreset,
   getMasterThemePreset,
+  getReportLayoutMode,
+  ReportLayoutMode,
   isNHTTheme2Active,
   getSavedAccentColor,
   getContrastTextColor,
@@ -34,6 +36,35 @@ interface SidebarProps {
   sidebarOpen: boolean;
   setSidebarOpen: (arg: boolean) => void;
 }
+
+
+// 6 Core Classic Reports for NHT Theme 2 / Classic Tree View
+const NHT2_REPORTS_CHILDREN = [
+  {
+    path: '/Reports/Reports-Dashboard?tab=combined-ledger',
+    label: 'Main Reports',
+    children: [
+      { path: '/Reports/Reports-Dashboard?tab=combined-ledger', label: 'All Parties' },
+      { path: '/Reports/Reports-Dashboard?tab=profit-loss', label: 'Profit & Loss' },
+      { path: '/Reports/Reports-Dashboard?tab=expense-report', label: 'Expense Report' },
+      { path: '/Reports/Reports-Dashboard?tab=daily-book', label: 'DailyBook' },
+    ],
+  },
+  {
+    path: '/Reports/Reports-Dashboard?tab=customer-ledger',
+    label: 'Sale Reports',
+    children: [
+      { path: '/Reports/Reports-Dashboard?tab=customer-ledger', label: 'Customer Ledger' },
+    ],
+  },
+  {
+    path: '/Reports/Reports-Dashboard?tab=vendor-ledger',
+    label: 'Purchase Reports',
+    children: [
+      { path: '/Reports/Reports-Dashboard?tab=vendor-ledger', label: 'Vendor Ledger' },
+    ],
+  },
+];
 
 const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath, sidebarColor }: any) => {
   const [showSubFlyout, setShowSubFlyout] = useState(false);

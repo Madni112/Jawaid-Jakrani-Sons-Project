@@ -1,3 +1,11 @@
+import MainReports from './MainReports';
+import {
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+  getReportLayoutMode,
+  ReportLayoutMode,
+} from '../../constant/themeConfig';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../Context/Auth';
@@ -621,6 +629,29 @@ const getInitialCategories = () => {
 };
 
 const ReportDashboard: React.FC = () => {
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+  const [reportLayout, setReportLayout] = useState<ReportLayoutMode>(() => getReportLayoutMode());
+
+  useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+      setReportLayout(getReportLayoutMode());
+    };
+    window.addEventListener('al_muhammad_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('al_muhammad_report_layout_mode_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('al_muhammad_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('al_muhammad_report_layout_mode_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
+    };
+  }, []);
+
+  const isClassicReport = reportLayout === 'classic';
+
+  if (isClassicReport) {
+    return <MainReports />;
+  }
   const navigate = useNavigate();
   const { tenantId, businessName } = useAuth();
 
