@@ -5,7 +5,24 @@ import { AiOutlineUp, AiOutlineDown, AiOutlineRight, AiOutlineArrowLeft } from '
 import { LuLogOut, LuChevronLeft, LuChevronRight } from 'react-icons/lu';
 import { useModal } from '../../Context/Modal';
 import { useAuth } from '../../Context/Auth';
-import { PRESET_THEME_COLORS, applySidebarColor, getSavedSidebarColor, getSafeSidebarColor, SidebarLayoutMode, getSidebarLayoutMode, getSavedAccentColor, getContrastTextColor } from '../../constant/themeConfig';
+import {
+  PRESET_THEME_COLORS,
+  applySidebarColor,
+  getSavedSidebarColor,
+  getSafeSidebarColor,
+  SidebarLayoutMode,
+  getSidebarLayoutMode,
+  SidebarThemeMode,
+  getSidebarThemeMode,
+  isDarkModeActive,
+  SidebarBehaviorMode,
+  getSidebarBehaviorMode,
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+  getSavedAccentColor,
+  getContrastTextColor,
+} from '../../constant/themeConfig';
 import LogoDark from '../../images/logo/logo-dark.png';
 import LogoLight from '../../images/logo/logo-light.png';
 import IconDark from '../../images/logo/icon-dark.png';
@@ -406,29 +423,79 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
   // Sidebar Layout Mode (Floating Modern vs Classic Edge)
   const [layoutMode, setLayoutMode] = useState<SidebarLayoutMode>(getSidebarLayoutMode());
+  const [sidebarThemeMode, setSidebarThemeMode] = useState<SidebarThemeMode>(() => getSidebarThemeMode());
+  const [customSidebarBg, setCustomSidebarBg] = useState<string>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_custom_bg') || '' : '';
+  });
+  const [sidebarBehaviorMode, setSidebarBehaviorMode] = useState<SidebarBehaviorMode>(() => getSidebarBehaviorMode());
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const updateLayoutMode = () => {
       setLayoutMode(getSidebarLayoutMode());
     };
-    window.addEventListener('zoaib_ali_sidebar_layout_changed', updateLayoutMode);
+    window.addEventListener('al_muhammad_sidebar_layout_changed', updateLayoutMode);
     window.addEventListener('storage', updateLayoutMode);
     return () => {
-      window.removeEventListener('zoaib_ali_sidebar_layout_changed', updateLayoutMode);
+      window.removeEventListener('al_muhammad_sidebar_layout_changed', updateLayoutMode);
       window.removeEventListener('storage', updateLayoutMode);
     };
   }, []);
 
   useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+    };
+    window.addEventListener('al_muhammad_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('al_muhammad_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateSidebarTheme = () => {
+      setSidebarThemeMode(getSidebarThemeMode());
+      setCustomSidebarBg(localStorage.getItem('alm_sidebar_custom_bg') || '');
+    };
+    window.addEventListener('al_muhammad_sidebar_theme_changed', updateSidebarTheme);
+    window.addEventListener('al_muhammad_theme_suite_changed', updateSidebarTheme);
+    window.addEventListener('storage', updateSidebarTheme);
+    return () => {
+      window.removeEventListener('al_muhammad_sidebar_theme_changed', updateSidebarTheme);
+      window.removeEventListener('al_muhammad_theme_suite_changed', updateSidebarTheme);
+      window.removeEventListener('storage', updateSidebarTheme);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateBehavior = () => {
+      setSidebarBehaviorMode(getSidebarBehaviorMode());
+    };
+    window.addEventListener('al_muhammad_sidebar_behavior_changed', updateBehavior);
+    window.addEventListener('storage', updateBehavior);
+    return () => {
+      window.removeEventListener('al_muhammad_sidebar_behavior_changed', updateBehavior);
+      window.removeEventListener('storage', updateBehavior);
+    };
+  }, []);
+
+  useEffect(() => {
     const updateColors = () => {
-      const raw = localStorage.getItem('zoaib_ali_sidebar_raw_color') || getSavedSidebarColor();
-      const res = applySidebarColor(raw);
+      const inDark = isDarkModeActive();
+      const raw = localStorage.getItem('alm_sidebar_raw_color') || getSavedSidebarColor(inDark);
+      const res = getSafeSidebarColor(raw, inDark);
       setCurrentSidebarColor(res.safeColor);
     };
 
     updateColors();
 
-    window.addEventListener('zoaib_ali_sidebar_color_changed', updateColors);
+    window.addEventListener('al_muhammad_sidebar_color_changed', updateColors);
+    window.addEventListener('al_muhammad_sidebar_theme_changed', updateColors);
+    window.addEventListener('al_muhammad_theme_suite_changed', updateColors);
     window.addEventListener('color-mode-changed', updateColors);
     window.addEventListener('storage', updateColors);
 
@@ -440,7 +507,9 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
     return () => {
-      window.removeEventListener('zoaib_ali_sidebar_color_changed', updateColors);
+      window.removeEventListener('al_muhammad_sidebar_color_changed', updateColors);
+      window.removeEventListener('al_muhammad_sidebar_theme_changed', updateColors);
+      window.removeEventListener('al_muhammad_theme_suite_changed', updateColors);
       window.removeEventListener('color-mode-changed', updateColors);
       window.removeEventListener('storage', updateColors);
       observer.disconnect();
@@ -453,6 +522,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
   const isMobile = windowWidth <= 750;
 
   return (
@@ -463,7 +533,33 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
       <aside
         ref={sidebar}
-        className={`flex flex-col bg-white duration-300 ease-in-out dark:bg-[#111827] shadow-xl ${
+        onClick={() => {
+          if (!sidebarOpen && !isMobile && sidebarBehaviorMode === 'closed') {
+            if (collapseTimeoutRef.current) {
+              clearTimeout(collapseTimeoutRef.current);
+              collapseTimeoutRef.current = null;
+            }
+            setSidebarOpen(true);
+          }
+        }}
+        onMouseEnter={() => {
+          if (collapseTimeoutRef.current) {
+            clearTimeout(collapseTimeoutRef.current);
+            collapseTimeoutRef.current = null;
+          }
+        }}
+        onMouseLeave={() => {
+          if (sidebarOpen && !isMobile && sidebarBehaviorMode === 'closed') {
+            if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
+            collapseTimeoutRef.current = setTimeout(() => {
+              setSidebarOpen(false);
+            }, 220);
+          }
+        }}
+        style={{
+          background: customSidebarBg || undefined,
+        }}
+        className={`flex flex-col bg-white duration-300 ease-in-out dark:bg-[#111827] shadow-xl ${!sidebarOpen && sidebarBehaviorMode === 'closed' ? 'cursor-pointer' : ''} ${
           isMobile
             ? 'fixed left-0 top-0 z-99999 h-screen block'
             : `min-[751px]:relative min-[751px]:shrink-0 min-[751px]:z-30 ${
@@ -473,7 +569,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               }`
         } ${
           sidebarOpen
-            ? `w-72.5 translate-x-0 visible ${layoutMode === 'classic' ? 'border-r border-slate-200/80 dark:border-slate-800/80' : ''}`
+            ? `${isTheme2 ? 'w-56' : 'w-72.5'} translate-x-0 visible ${layoutMode === 'classic' ? 'border-r border-slate-200/80 dark:border-slate-800/80' : ''}`
             : `w-0 -translate-x-full min-[751px]:w-18 ${layoutMode === 'floating' ? 'min-[751px]:transform-none' : 'min-[751px]:translate-x-0'} max-[750px]:invisible ${layoutMode === 'classic' ? 'min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80' : ''}`
         }`}
       >

@@ -35,38 +35,299 @@ export const PRESET_THEME_COLORS: ThemeColor[] = [
   { name: 'Bronze Cinnamon', hex: '#9A3412' },
   { name: 'Slate Blue', hex: '#475569' },
   { name: 'Dark Charcoal', hex: '#1E293B' },
+  { name: 'Pure White', hex: '#FFFFFF' },
+  { name: 'Pitch Black', hex: '#000000' },
 ];
 
-export const DEFAULT_THEME_COLOR = '#059669';
+export const DEFAULT_THEME_COLOR = '#4F46E5'; // Cobalt / Electric Blue for Modern SaaS look
+
+export type SidebarThemeMode = 'light' | 'dark' | 'navy' | 'emerald' | 'charcoal';
+
+export interface CuratedThemeSuite {
+  id: string;
+  name: string;
+  urName: string;
+  isRecommended?: boolean;
+  badge?: string;
+  tagline: string;
+  urTagline: string;
+  sidebarTheme: SidebarThemeMode;
+  sidebarBg: string;
+  sidebarBorder: string;
+  sidebarTextColor: string;
+  accentColor: string;
+  accentName: string;
+  previewBg: string;
+  description: string;
+  urDescription: string;
+}
+
+export const CURATED_THEME_SUITES: CuratedThemeSuite[] = [
+  {
+    id: 'unified-light',
+    name: 'Unified Clean Light',
+    urName: 'یونیفائیڈ کلین لائٹ',
+    isRecommended: true,
+    badge: 'Recommended • Modern Minimalist',
+    tagline: 'Clean white canvas • Eliminates floating island effect',
+    urTagline: 'صاف و شفاف وائٹ کینوس • جدید ترین اور واضح انداز',
+    sidebarTheme: 'light',
+    sidebarBg: '#FFFFFF',
+    sidebarBorder: '#E2E8F0',
+    sidebarTextColor: '#0F172A',
+    accentColor: '#2563EB', // Cobalt Blue
+    accentName: 'Electric Blue',
+    previewBg: '#F8FAFC',
+    description: 'Removes the dark floating island look. Clean white sidebar with subtle border and vivid electric blue accents for a modern Apple/Stripe feel.',
+    urDescription: 'سائیڈبار کو خوبصورت سفید رنگ اور واضح نیلی پٹیوں کے ساتھ یکجا کرتا ہے تاکہ پورا سسٹم جدید اور پڑھنے میں آسان لگے۔',
+  },
+  {
+    id: 'executive-navy',
+    name: 'Executive Deep Navy & Ice Blue',
+    urName: 'ایگزیکٹو ڈیپ نیوی اور آئس بلیو',
+    badge: 'Executive Corporate',
+    tagline: 'Deep corporate midnight navy with crisp ice blue accents',
+    urTagline: 'کارپوریٹ گہرا نیوی نیلا اور چمکدار آئس بلیو رنگ',
+    sidebarTheme: 'navy',
+    sidebarBg: '#0F172A',
+    sidebarBorder: '#1E293B',
+    sidebarTextColor: '#F8FAFC',
+    accentColor: '#0284C7', // Sky Blue
+    accentName: 'Sky Blue',
+    previewBg: '#F8FAFC',
+    description: 'Prestigious corporate deep navy sidebar paired with bright sky blue accents for an authoritative executive look.',
+    urDescription: 'باوقار اور گہرا نیوی سائیڈبار جو کہ نیلے ایکسنٹ کے ساتھ پرکشش انتظامی شکل دیتا ہے۔',
+  },
+  {
+    id: 'emerald-pearl',
+    name: 'Emerald Slate & Pearl',
+    urName: 'زمرد اور پرل کلوتھ تھیم',
+    badge: 'Cloth Merchant Heritage',
+    tagline: 'Rich jewel-toned dark emerald with fresh green accents',
+    urTagline: 'کپڑے کے تاجروں کا روایتی باوقار زمردی سبز انداز',
+    sidebarTheme: 'emerald',
+    sidebarBg: '#0A1A18',
+    sidebarBorder: '#064E3B',
+    sidebarTextColor: '#ECFDF5',
+    accentColor: '#059669', // Emerald Green
+    accentName: 'Emerald Green',
+    previewBg: '#F8FAFC',
+    description: 'Bespoke deep botanical emerald sidebar reflecting textile tradition with crisp emerald jewel tones.',
+    urDescription: 'کپڑے اور پارچہ بافی کی شان کے عین مطابق گہرا زمردی سبز سائیڈبار اور شفاف موتی جیسے سفید صفحات۔',
+  },
+  {
+    id: 'warm-charcoal',
+    name: 'Warm Charcoal & Amber Gold',
+    urName: 'وارم چارکول اور گولڈ تھیم',
+    badge: 'Artisan Luxury',
+    tagline: 'Warm stone charcoal sidebar paired with rich amber gold',
+    urTagline: 'نفیس پتھریلا چارکول اور سنہرا عنبر',
+    sidebarTheme: 'charcoal',
+    sidebarBg: '#1C1917',
+    sidebarBorder: '#292524',
+    sidebarTextColor: '#FAF7F2',
+    accentColor: '#D97706', // Amber Gold
+    accentName: 'Amber Gold',
+    previewBg: '#FAF7F2',
+    description: 'Warm stone charcoal sidebar with warm gold highlights for a tailored, artisanal luxury experience.',
+    urDescription: 'قدرتی گرم چارکول رنگ کا سائیڈبار اور سنہری بٹن جو کہ شاہانہ اور نفیس تاثر پیش کرتے ہیں۔',
+  },
+  {
+    id: 'classic-midnight',
+    name: 'Classic Midnight Obsidian',
+    urName: 'کلاسک مڈ نائٹ ابسیڈین',
+    badge: 'Original Classic',
+    tagline: 'High-contrast floating dark sidebar with neon cyan accents',
+    urTagline: 'اصل کلاسک سیاہ سائیڈبار اور چمکدار سیان رنگ',
+    sidebarTheme: 'dark',
+    sidebarBg: '#0B0F17',
+    sidebarBorder: '#1E293B',
+    sidebarTextColor: '#FFFFFF',
+    accentColor: '#06B6D4', // Vibrant Cyan
+    accentName: 'Vibrant Cyan',
+    previewBg: '#F8FAFC',
+    description: 'The original bold floating black sidebar with glowing vibrant cyan accents.',
+    urDescription: 'شروع کا روایتی ڈارک فلوٹنگ سائیڈبار جس کے ساتھ روشن سیان رنگ کے بٹن موجود ہیں۔',
+  },
+];
+
+export function getSidebarThemeMode(): SidebarThemeMode {
+  if (typeof window === 'undefined') return 'dark';
+  const customBg = localStorage.getItem('alm_sidebar_custom_bg');
+  if (customBg) {
+    const lower = customBg.toLowerCase().trim();
+    return (lower === '#ffffff' || lower === '#fff' || lower === 'white') ? 'light' : 'dark';
+  }
+  const stored = localStorage.getItem('alm_sidebar_theme_mode') || localStorage.getItem('alm_sidebar_theme_mode');
+  if (stored && ['light', 'dark', 'navy', 'emerald', 'charcoal'].includes(stored)) {
+    return stored as SidebarThemeMode;
+  }
+  return 'dark';
+}
+
+export function setSidebarThemeMode(mode: SidebarThemeMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('alm_sidebar_theme_mode', mode);
+    localStorage.setItem('alm_sidebar_theme_mode', mode);
+    window.dispatchEvent(new Event('al_muhammad_sidebar_theme_changed'));
+  }
+}
+
+export function isSidebarBackgroundLight(isDarkMode?: boolean): boolean {
+  if (typeof window !== 'undefined') {
+    const customBg = localStorage.getItem('alm_sidebar_custom_bg');
+    if (customBg) {
+      const lower = customBg.toLowerCase().trim();
+      if (lower === '#ffffff' || lower === '#fff' || lower === 'white' || lower.includes('rgb(255, 255, 255)')) {
+        return true;
+      }
+      return false;
+    }
+  }
+  const mode = getSidebarThemeMode();
+  return mode === 'light';
+}
+
+export function applyThemeSuite(suiteId: string): boolean {
+  const suite = CURATED_THEME_SUITES.find((s) => s.id === suiteId);
+  if (!suite) return false;
+
+  setSidebarThemeMode(suite.sidebarTheme);
+  const targetColor = suite.sidebarTheme === 'light' ? suite.sidebarTextColor : '#FFFFFF';
+  applySidebarColor(targetColor);
+  applyAccentColor(suite.accentColor);
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('alm_active_theme_suite', suiteId);
+    window.dispatchEvent(new Event('al_muhammad_theme_suite_changed'));
+    window.dispatchEvent(new Event('al_muhammad_sidebar_theme_changed'));
+    window.dispatchEvent(new Event('alm_sidebar_color_changed'));
+    window.dispatchEvent(new Event('al_muhammad_theme_color_changed'));
+  }
+  return true;
+}
+
+export function getActiveThemeSuiteId(): string {
+  if (typeof window === 'undefined') return 'unified-light';
+  const saved = localStorage.getItem('alm_active_theme_suite');
+  if (saved && CURATED_THEME_SUITES.some((s) => s.id === saved)) {
+    return saved;
+  }
+  const currentSidebarTheme = getSidebarThemeMode();
+  if (currentSidebarTheme === 'light') return 'unified-light';
+  if (currentSidebarTheme === 'navy') return 'executive-navy';
+  if (currentSidebarTheme === 'emerald') return 'emerald-pearl';
+  if (currentSidebarTheme === 'charcoal') return 'warm-charcoal';
+  return 'classic-midnight';
+}
+
+export type SidebarBehaviorMode = 'opened' | 'closed'; // 'opened' = Always Keep Opened; 'closed' = Keep Closed (Auto-expand on click & collapse on mouse out)
+
+export function getSidebarBehaviorMode(): SidebarBehaviorMode {
+  if (typeof window === 'undefined') return 'opened';
+  const stored = localStorage.getItem('alm_sidebar_behavior_mode');
+  return stored === 'closed' ? 'closed' : 'opened';
+}
+
+export function setSidebarBehaviorMode(mode: SidebarBehaviorMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('alm_sidebar_behavior_mode', mode);
+    window.dispatchEvent(new Event('al_muhammad_sidebar_behavior_changed'));
+  }
+}
 
 export type SidebarLayoutMode = 'floating' | 'classic';
 
 export function getSidebarLayoutMode(): SidebarLayoutMode {
   if (typeof window === 'undefined') return 'floating';
-  return (localStorage.getItem('zoaib_ali_sidebar_layout_mode') as SidebarLayoutMode) || 'floating';
+  return (localStorage.getItem('alm_sidebar_layout_mode') as SidebarLayoutMode) || 'floating';
 }
 
 export function setSidebarLayoutMode(mode: SidebarLayoutMode) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('zoaib_ali_sidebar_layout_mode', mode);
-    window.dispatchEvent(new Event('zoaib_ali_sidebar_layout_changed'));
+    localStorage.setItem('alm_sidebar_layout_mode', mode);
+    window.dispatchEvent(new Event('al_muhammad_sidebar_layout_changed'));
   }
 }
 
 export type NavbarLayoutMode = 'sticky' | 'normal';
 
+export type MasterThemePreset = 'nht-1' | 'nht-2' | 'custom';
+
+export function getMasterThemePreset(): MasterThemePreset {
+  if (typeof window === 'undefined') return 'nht-1';
+  const saved = localStorage.getItem('alm_master_theme_preset') as MasterThemePreset;
+  if (saved === 'nht-1' || saved === 'nht-2' || saved === 'custom') return saved;
+  const sLayout = getSidebarLayoutMode();
+  const nLayout = getNavbarLayoutMode();
+  const accent = (localStorage.getItem('alm_accent_color') || '').toUpperCase();
+  const customBg = localStorage.getItem('alm_sidebar_custom_bg') || '';
+  const sTheme = getSidebarThemeMode();
+
+  if (sLayout === 'classic' && (accent === '#800020' || sTheme === 'charcoal' || customBg === '#1A1A1A')) {
+    return 'nht-2';
+  }
+  if (sLayout === 'floating' && (accent === '#06B6D4' || !customBg)) {
+    return 'nht-1';
+  }
+  return 'custom';
+}
+
+export function setMasterThemePreset(preset: MasterThemePreset) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('alm_master_theme_preset', preset);
+    if (preset === 'nht-1' || preset === 'nht-2') {
+      localStorage.setItem('alm_base_master_theme', preset);
+    }
+    window.dispatchEvent(new Event('alm_master_theme_preset_changed'));
+  }
+}
+
+export type ReportLayoutMode = 'modern' | 'classic';
+
+export function getReportLayoutMode(): ReportLayoutMode {
+  if (typeof window === 'undefined') return 'classic';
+  const stored = localStorage.getItem('alm_report_layout_mode');
+  if (stored === 'modern' || stored === 'classic') return stored;
+  // Default according to master theme preset if not explicitly overridden
+  return isNHTTheme2Active() ? 'classic' : 'modern';
+}
+
+export function setReportLayoutMode(mode: ReportLayoutMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('alm_report_layout_mode', mode);
+    window.dispatchEvent(new Event('alm_report_layout_mode_changed'));
+  }
+}
+
+export function isNHTTheme2Active(): boolean {
+  if (typeof window === 'undefined') return false;
+  const preset = getMasterThemePreset();
+  if (preset === 'nht-2') return true;
+  if (preset === 'custom') {
+    const base = localStorage.getItem('alm_base_master_theme');
+    if (base === 'nht-2') return true;
+    const sLayout = getSidebarLayoutMode();
+    const accent = (localStorage.getItem('alm_accent_color') || '').toUpperCase();
+    const customBg = localStorage.getItem('alm_sidebar_custom_bg') || '';
+    if (sLayout === 'classic' && (accent === '#800020' || customBg === '#1A1A1A')) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function getNavbarLayoutMode(): NavbarLayoutMode {
   if (typeof window === 'undefined') return 'sticky';
-  return (localStorage.getItem('zoaib_ali_navbar_layout_mode') as NavbarLayoutMode) || 'sticky';
+  return (localStorage.getItem('alm_navbar_layout_mode') as NavbarLayoutMode) || 'sticky';
 }
 
 export function setNavbarLayoutMode(mode: NavbarLayoutMode) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('zoaib_ali_navbar_layout_mode', mode);
-    window.dispatchEvent(new Event('zoaib_ali_navbar_layout_changed'));
+    localStorage.setItem('alm_navbar_layout_mode', mode);
+    window.dispatchEvent(new Event('al_muhammad_navbar_layout_changed'));
   }
 }
-
 
 export function getContrastTextColor(hexColor?: string): '#FFFFFF' | '#0F172A' {
   if (!hexColor) return '#FFFFFF';
@@ -97,7 +358,7 @@ export function getContrastTextColor(hexColor?: string): '#FFFFFF' | '#0F172A' {
  * In Dark Mode: pitch-dark accents resolve to #F8FAFC so they are never invisible.
  */
 export function getSafeAccentTextColor(hexColor?: string, isDarkMode?: boolean): string {
-  if (!hexColor) return '#059669';
+  if (!hexColor) return DEFAULT_THEME_COLOR;
   const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
   const contrast = getContrastTextColor(hexColor);
   if (!inDark && contrast === '#0F172A') {
@@ -119,16 +380,16 @@ export function getSafeAccentTextColor(hexColor?: string, isDarkMode?: boolean):
 export function applyAccentColor(hexColor: string) {
   if (!hexColor) return;
   try {
-    localStorage.setItem('zoaib_ali_accent_color', hexColor);
+    localStorage.setItem('alm_accent_color', hexColor);
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('zoaib_ali_theme_color_changed'));
+      window.dispatchEvent(new Event('al_muhammad_theme_color_changed'));
     }
   } catch (_) {}
 
   if (typeof document !== 'undefined') {
     document.documentElement.style.setProperty('--color-primary', hexColor);
     const hex = hexColor.replace('#', '');
-    let r = 5, g = 150, b = 105;
+    let r = 6, g = 182, b = 212;
     if (hex.length === 6) {
       r = parseInt(hex.substring(0, 2), 16);
       g = parseInt(hex.substring(2, 4), 16);
@@ -166,10 +427,10 @@ export function applyAccentColor(hexColor: string) {
     const darkerHex = `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
 
     // Dynamic style tag that globally overrides brand primary classes to the active accent color
-    let styleTag = document.getElementById('zoaib-ali-dynamic-theme');
+    let styleTag = document.getElementById('alm-dynamic-theme');
     if (!styleTag) {
       styleTag = document.createElement('style');
-      styleTag.id = 'zoaib-ali-dynamic-theme';
+      styleTag.id = 'alm-dynamic-theme';
       document.head.appendChild(styleTag);
     }
 
@@ -223,12 +484,6 @@ export function applyAccentColor(hexColor: string) {
 
       /* Light / Translucent Background Tints */
       .bg-emerald-50,
-      .bg-emerald-100,
-      .bg-emerald-200,
-      .bg-emerald-50\/70,
-      .bg-emerald-50\/50,
-      .bg-emerald-50\/30,
-      .bg-emerald-100\/60,
       .bg-emerald-50\\/80,
       .bg-emerald-600\\/10,
       .bg-emerald-500\\/10,
@@ -241,6 +496,12 @@ export function applyAccentColor(hexColor: string) {
       .bg-primary\\/10,
       .bg-primary\\/5 {
         background-color: rgba(${r}, ${g}, ${b}, 0.1) !important;
+      }
+
+      .bg-emerald-600\\/70,
+      .bg-emerald-600\\/80,
+      .bg-primary\\/70 {
+        background-color: rgba(${r}, ${g}, ${b}, 0.75) !important;
       }
 
       /* Dark Mode Translucent Backgrounds */
@@ -264,8 +525,6 @@ export function applyAccentColor(hexColor: string) {
       }
 
       /* Text Colors: Light Mode Contrast-Guarded */
-      html:not(.dark) .text-emerald-900,
-      html:not(.dark) .text-emerald-800,
       html:not(.dark) .text-emerald-600,
       html:not(.dark) .text-emerald-500,
       html:not(.dark) .text-emerald-700,
@@ -277,10 +536,6 @@ export function applyAccentColor(hexColor: string) {
       }
 
       /* Text Colors: Dark Mode Contrast-Guarded */
-      html.dark .text-emerald-900,
-      html.dark .text-emerald-800,
-      html.dark .text-emerald-300,
-      html.dark .text-emerald-200,
       html.dark .text-emerald-600,
       html.dark .text-emerald-500,
       html.dark .text-emerald-400,
@@ -316,12 +571,6 @@ export function applyAccentColor(hexColor: string) {
 
       /* Borders */
       .border-emerald-600,
-      .border-emerald-500\/80,
-      .border-emerald-500\/60,
-      .border-emerald-400,
-      .border-emerald-300,
-      .border-emerald-200,
-      .border-emerald-100,
       .border-emerald-500,
       .border-emerald-500\\/20,
       .border-teal-600,
@@ -368,7 +617,11 @@ export function applyAccentColor(hexColor: string) {
 
 export function getSavedAccentColor(): string {
   if (typeof window === 'undefined') return DEFAULT_THEME_COLOR;
-  return localStorage.getItem('zoaib_ali_accent_color') || DEFAULT_THEME_COLOR;
+  const stored = localStorage.getItem('alm_accent_color');
+  if (!stored || stored === '#059669' || stored === '#10B981' || stored === '#6366F1') {
+    return DEFAULT_THEME_COLOR;
+  }
+  return stored;
 }
 
 export function isThemeColorPickerEnabled(): boolean {
@@ -384,7 +637,7 @@ export function setThemeColorPickerEnabled(enabled: boolean) {
   }
 }
 
-export const DEFAULT_SIDEBAR_COLOR = '#475569';
+export const DEFAULT_SIDEBAR_COLOR = '#FFFFFF'; // Crisp white high-contrast for black sidebar
 
 export function isDarkModeActive(): boolean {
   if (typeof document === 'undefined') return false;
@@ -397,85 +650,93 @@ export function isDarkModeActive(): boolean {
 }
 
 /**
- * Ensures a color has sufficient contrast against the sidebar background
- * so that text and icons are NEVER invisible in either light or dark mode.
+ * Ensures a color has sufficient contrast against the sidebar background.
+ * - In Light Mode (App): Sidebar is BLACK (#0B0F17) -> Font CAN be white! Blocks black/dark invisible colors.
+ * - In Dark Mode (App): Sidebar is WHITE (#FFFFFF) -> Font CAN be black! Blocks white/light invisible colors.
  */
 export function getSafeSidebarColor(hexColor: string, isDarkMode?: boolean): { safeColor: string; wasAdjusted: boolean } {
-  if (!hexColor) return { safeColor: DEFAULT_SIDEBAR_COLOR, wasAdjusted: false };
+  const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
+  const isLightBg = isSidebarBackgroundLight(inDark);
+  const defaultFallback = isLightBg ? '#0F172A' : '#FFFFFF';
+
+  if (!hexColor) return { safeColor: defaultFallback, wasAdjusted: false };
   
   let cleanHex = hexColor.replace('#', '').trim();
   if (cleanHex.length === 3) {
     cleanHex = cleanHex.split('').map(c => c + c).join('');
   }
   if (cleanHex.length !== 6 || !/^[0-9A-Fa-f]{6}$/.test(cleanHex)) {
-    return { safeColor: DEFAULT_SIDEBAR_COLOR, wasAdjusted: false };
+    return { safeColor: defaultFallback, wasAdjusted: false };
+  }
+
+  // If sidebar is NOT light (it's dark, navy, charcoal, or a custom gradient):
+  // White (#FFFFFF) and light colors are ALWAYS valid and readable! Never block white!
+  if (!isLightBg) {
+    if (cleanHex.toUpperCase() === 'FFFFFF') {
+      return { safeColor: '#FFFFFF', wasAdjusted: false };
+    }
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    // Block only pure pitch black or completely dark unreadable font colors on dark background
+    if (luminance <= 0.08) {
+      return { safeColor: '#FFFFFF', wasAdjusted: true };
+    }
+    return { safeColor: `#${cleanHex}`, wasAdjusted: false };
+  }
+
+  // If sidebar is LIGHT background (#FFFFFF):
+  // Block white-on-white text:
+  if (cleanHex.toUpperCase() === 'FFFFFF') {
+    return { safeColor: '#0F172A', wasAdjusted: true };
   }
 
   const r = parseInt(cleanHex.substring(0, 2), 16);
   const g = parseInt(cleanHex.substring(2, 4), 16);
   const b = parseInt(cleanHex.substring(4, 6), 16);
-
-  // Relative luminance
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
-  const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
-
-  if (inDark) {
-    // DARK MODE: Background is #111827.
-    // Text/icons MUST be bright enough (luminance >= 0.38) to be clearly visible against dark background!
-    if (luminance < 0.38) {
-      if (luminance <= 0.15) {
-        // Pure black or very dark charcoal -> shift to clean, high-contrast light slate/white
-        return { safeColor: '#F8FAFC', wasAdjusted: true };
-      }
-      // For chromatic colors (e.g. dark blue, dark red), boost brightness to a visible hue
-      const scale = 0.52 / Math.max(0.01, luminance);
-      const safeR = Math.min(255, Math.max(0, Math.round(r * scale + (255 - r) * 0.35)));
-      const safeG = Math.min(255, Math.max(0, Math.round(g * scale + (255 - g) * 0.35)));
-      const safeB = Math.min(255, Math.max(0, Math.round(b * scale + (255 - b) * 0.35)));
-      const safeHex = `#${safeR.toString(16).padStart(2, '0')}${safeG.toString(16).padStart(2, '0')}${safeB.toString(16).padStart(2, '0')}`;
-      return { safeColor: safeHex, wasAdjusted: true };
-    }
-  } else {
-    // LIGHT MODE: Background is #FFFFFF.
-    // Text/icons MUST be dark enough (luminance <= 0.65) to be clearly visible against white!
-    if (luminance > 0.65) {
-      if (luminance >= 0.88) {
-        // Pure white or very light -> shift to crisp, high-contrast dark charcoal/black
-        return { safeColor: '#0F172A', wasAdjusted: true };
-      }
-      // For chromatic colors (e.g. pastel lime, pale cyan), darken proportionally to a readable tone
-      const scale = 0.45 / luminance;
-      const safeR = Math.min(255, Math.max(0, Math.round(r * scale)));
-      const safeG = Math.min(255, Math.max(0, Math.round(g * scale)));
-      const safeB = Math.min(255, Math.max(0, Math.round(b * scale)));
-      const safeHex = `#${safeR.toString(16).padStart(2, '0')}${safeG.toString(16).padStart(2, '0')}${safeB.toString(16).padStart(2, '0')}`;
-      return { safeColor: safeHex, wasAdjusted: true };
-    }
+  if (luminance >= 0.85) {
+    return { safeColor: '#0F172A', wasAdjusted: true };
   }
 
   return { safeColor: `#${cleanHex}`, wasAdjusted: false };
 }
 
 export function getSavedSidebarColor(isDarkMode?: boolean): string {
-  if (typeof window === 'undefined') return DEFAULT_SIDEBAR_COLOR;
-  const raw = localStorage.getItem('zoaib_ali_sidebar_raw_color') 
-    || localStorage.getItem('zoaib_ali_sidebar_color') 
-    || DEFAULT_SIDEBAR_COLOR;
+  const inDark = typeof isDarkMode === 'boolean' ? isDarkMode : isDarkModeActive();
+  const isLightBg = isSidebarBackgroundLight(inDark);
+  const defaultFallback = isLightBg ? '#0F172A' : '#FFFFFF';
+  if (typeof window === 'undefined') return defaultFallback;
+
+  const raw = localStorage.getItem('alm_sidebar_raw_color') 
+    || localStorage.getItem('alm_sidebar_color');
+
+  // If cached value was an invisible color for current background mode, reset to proper default
+  if (isLightBg && (raw === '#FFFFFF' || raw === '#F8FAFC' || raw === '#F1F5F9' || !raw)) {
+    return '#0F172A';
+  }
+  if (!isLightBg && (raw === '#0F172A' || raw === '#1E293B' || raw === '#475569' || raw === '#000000' || !raw)) {
+    return '#FFFFFF';
+  }
+
   return getSafeSidebarColor(raw, isDarkMode).safeColor;
 }
 
 export function applySidebarColor(hexColor: string, isDarkMode?: boolean): { safeColor: string; wasAdjusted: boolean } {
   if (!hexColor) return { safeColor: DEFAULT_SIDEBAR_COLOR, wasAdjusted: false };
+  const prevColor = typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_color') : null;
+
   try {
-    localStorage.setItem('zoaib_ali_sidebar_raw_color', hexColor);
+    localStorage.setItem('alm_sidebar_raw_color', hexColor);
   } catch (_) {}
 
   const { safeColor, wasAdjusted } = getSafeSidebarColor(hexColor, isDarkMode);
   try {
-    localStorage.setItem('zoaib_ali_sidebar_color', safeColor);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('zoaib_ali_sidebar_color_changed'));
+    localStorage.setItem('alm_sidebar_color', safeColor);
+    if (typeof window !== 'undefined' && prevColor !== safeColor) {
+      window.dispatchEvent(new Event('alm_sidebar_color_changed'));
     }
   } catch (_) {}
 

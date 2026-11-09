@@ -3,13 +3,29 @@ import { useLocation } from 'react-router-dom';
 import Header from '../components/Header/index';
 import Sidebar from '../components/Sidebar/index';
 import Footer from '../components/Footer/index';
+import { getSidebarBehaviorMode, getMasterThemePreset, MasterThemePreset } from '../constant/themeConfig';
 
 const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isSettingsPage = /(^|\/)settings\/?$/i.test(location.pathname);
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updatePreset = () => setMasterPreset(getMasterThemePreset());
+    window.addEventListener('al_muhammad_theme_preset_changed', updatePreset);
+    window.addEventListener('storage', updatePreset);
+    return () => {
+      window.removeEventListener('al_muhammad_theme_preset_changed', updatePreset);
+      window.removeEventListener('storage', updatePreset);
+    };
+  }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
+      const behavior = getSidebarBehaviorMode();
+      if (behavior === 'closed') {
+        return false;
+      }
       const saved = localStorage.getItem('sidebar_expanded');
       if (saved !== null) {
         return saved === 'true';
@@ -28,6 +44,20 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       return nextVal;
     });
   };
+
+  useEffect(() => {
+    const handleBehaviorChange = () => {
+      const behavior = getSidebarBehaviorMode();
+      if (behavior === 'closed') {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+
+    window.addEventListener('al_muhammad_sidebar_behavior_changed', handleBehaviorChange);
+    return () => window.removeEventListener('al_muhammad_sidebar_behavior_changed', handleBehaviorChange);
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -65,7 +95,9 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
               {/* Subtle top ambient emerald glow */}
               <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-emerald-500/5 via-teal-500/5 to-transparent dark:from-emerald-950/20 dark:via-teal-950/10 dark:to-transparent" />
               
-              <div className="relative mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-8 w-full">
+              <div className={`relative mx-auto p-4 md:p-6 2xl:p-8 w-full ${
+                masterPreset === 'nht-2' ? 'w-full max-w-full 2xl:max-w-full px-4 md:px-8 2xl:px-12' : 'max-w-screen-2xl'
+              }`}>
                 {children}
               </div>
             </main>

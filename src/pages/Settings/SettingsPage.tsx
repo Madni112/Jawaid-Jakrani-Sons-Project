@@ -14,6 +14,9 @@ import {
   LuSparkles,
   LuLayers,
   LuSlidersHorizontal,
+  LuPanelLeftOpen,
+  LuPanelLeftClose,
+  LuContrast,
   LuLayoutDashboard,
   LuReceipt,
   LuPackage,
@@ -65,12 +68,30 @@ import {
   getSafeSidebarColor,
   getContrastTextColor,
   isDarkModeActive,
+  isSidebarBackgroundLight,
   SidebarLayoutMode,
   getSidebarLayoutMode,
   setSidebarLayoutMode,
   NavbarLayoutMode,
   getNavbarLayoutMode,
   setNavbarLayoutMode,
+  SidebarThemeMode,
+  getSidebarThemeMode,
+  setSidebarThemeMode,
+  CuratedThemeSuite,
+  CURATED_THEME_SUITES,
+  applyThemeSuite,
+  getActiveThemeSuiteId,
+  SidebarBehaviorMode,
+  getSidebarBehaviorMode,
+  setSidebarBehaviorMode,
+  MasterThemePreset,
+  getMasterThemePreset,
+  setMasterThemePreset,
+  ReportLayoutMode,
+  getReportLayoutMode,
+  setReportLayoutMode,
+  isNHTTheme2Active,
 } from '../../constant/themeConfig';
 import {
   fetchSystemMasterConfig,
@@ -320,8 +341,315 @@ const SettingsPage: React.FC = () => {
   const setActiveTab = (tabId: string) => {
     setSearchParams({ tab: tabId });
   };
-  const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('navbar');
+    const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('sidebar');
+  const [sidebarPreviewMode, setSidebarPreviewMode] = useState<'opened' | 'closed'>('opened');
+  const [sidebarActiveConfigTab, setSidebarActiveConfigTab] = useState<'master-themes' | 'theme' | 'accent' | 'layout' | 'drawer' | 'colors'>('master-themes');
+  const [previewHoverOpen, setPreviewHoverOpen] = useState<boolean>(false);
+  const [previewColorDropdownOpen, setPreviewColorDropdownOpen] = useState<boolean>(true);
   const [colorMode, setColorMode] = useColorMode();
+
+  // Curated Theme Suites & Sidebar Background State
+  const [activeSuiteId, setActiveSuiteId] = useState<string>(() => getActiveThemeSuiteId());
+  const [sidebarThemeMode, setSidebarThemeModeState] = useState<SidebarThemeMode>(() => getSidebarThemeMode());
+
+  // Custom Sidebar Background (Gradient / Solid) & Saved Themes State
+  const [sidebarCustomBg, setSidebarCustomBg] = useState<string>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_custom_bg') || '' : '';
+  });
+
+  interface SavedSidebarTheme {
+    id: string;
+    name: string;
+    bg: string;
+    type: 'gradient' | 'solid';
+    stop1?: string;
+    stop2?: string;
+    angle?: number;
+    date?: string;
+  }
+
+  const [savedCustomThemes, setSavedCustomThemes] = useState<SavedSidebarTheme[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('alm_saved_sidebar_themes');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const parseBgCss = (bg: string) => {
+    if (!bg) {
+      return { type: 'solid' as const, stop1: '#0F172A', stop2: '#1E3A8A', angle: 135, solid: '#0F172A' };
+    }
+    const gradientMatch = bg.match(/linear-gradient\(\s*(\d+)deg\s*,\s*([^,]+)\s*,\s*([^)]+)\)/i);
+    if (gradientMatch) {
+      const angle = parseInt(gradientMatch[1], 10) || 135;
+      const s1 = gradientMatch[2].replace(/\s*\d+%/g, '').trim();
+      const s2 = gradientMatch[3].replace(/\s*\d+%/g, '').trim();
+      return {
+        type: 'gradient' as const,
+        angle,
+        stop1: s1.startsWith('#') ? s1 : '#0F172A',
+        stop2: s2.startsWith('#') ? s2 : '#1E3A8A',
+        solid: s1,
+      };
+    }
+    return {
+      type: 'solid' as const,
+      stop1: bg.startsWith('#') ? bg : '#0F172A',
+      stop2: '#1E3A8A',
+      angle: 135,
+      solid: bg.startsWith('#') ? bg : '#0F172A',
+    };
+  };
+
+  const initialParsed = parseBgCss(
+    (typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_custom_bg') : '') || '#0F172A'
+  );
+
+  const [customBgSubTab, setCustomBgSubTab] = useState<'presets' | 'custom' | 'saved'>('presets');
+  const [customBgType, setCustomBgType] = useState<'gradient' | 'solid'>(initialParsed.type);
+  const [customColorStop1, setCustomColorStop1] = useState<string>(initialParsed.stop1);
+  const [customColorStop2, setCustomColorStop2] = useState<string>(initialParsed.stop2);
+  const [customGradientAngle, setCustomGradientAngle] = useState<number>(initialParsed.angle);
+  const [customSolidColor, setCustomSolidColor] = useState<string>(initialParsed.solid);
+  const [customThemeName, setCustomThemeName] = useState<string>('');
+
+  const syncStudioWithActiveBg = () => {
+    const currentBg = sidebarCustomBg || (
+      sidebarThemeMode === 'light' ? '#FFFFFF' :
+      sidebarThemeMode === 'navy' ? '#0F172A' :
+      sidebarThemeMode === 'emerald' ? '#0A1A18' :
+      sidebarThemeMode === 'charcoal' ? '#1C1917' :
+      sidebarThemeMode === 'dark' ? '#0B0F17' : '#0B0F17'
+    );
+    const parsed = parseBgCss(currentBg);
+    setCustomBgType(parsed.type);
+    setCustomColorStop1(parsed.stop1);
+    setCustomColorStop2(parsed.stop2);
+    setCustomGradientAngle(parsed.angle);
+    setCustomSolidColor(parsed.solid);
+  };
+
+  const SUGGESTED_THEME_NAMES = [
+    'Midnight Aurora',
+    'Royal Velvet',
+    'Emerald Matrix',
+    'Deep Ocean Abyss',
+    'Sunset Ember',
+    'Nordic Glacier',
+    'Titanium Horizon',
+    'Cosmic Obsidian',
+    'Imperial Plum',
+    'Golden Charcoal',
+    'Electric Dusk',
+    'Cyber Teal',
+  ];
+
+  // Master Themes: NHT Theme 1 (Modern Floating) vs NHT Theme 2 (Classic Executive) vs Custom
+  type MasterThemePreset = 'nht-1' | 'nht-2' | 'custom';
+
+  const [masterThemePreset, setMasterThemePreset] = useState<MasterThemePreset>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('alm_master_theme_preset') as MasterThemePreset;
+      if (saved === 'nht-1' || saved === 'nht-2' || saved === 'custom') return saved;
+    }
+    const sLayout = getSidebarLayoutMode();
+    const nLayout = getNavbarLayoutMode();
+    const accent = (typeof window !== 'undefined' ? localStorage.getItem('alm_accent_color') || '' : '').toUpperCase();
+    const customBg = typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_custom_bg') || '' : '';
+    const sTheme = getSidebarThemeMode();
+
+    if (sLayout === 'classic' && nLayout === 'classic' && (accent === '#800020' || sTheme === 'charcoal' || customBg === '#1A1A1A')) {
+      return 'nht-2';
+    }
+    if (sLayout === 'floating' && nLayout === 'floating' && (accent === '#06B6D4' || !customBg)) {
+      return 'nht-1';
+    }
+    return 'custom';
+  });
+
+  const markAsCustom = () => {
+    setMasterThemePreset('custom');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('alm_master_theme_preset', 'custom');
+      window.dispatchEvent(new Event('alm_master_theme_preset_changed'));
+    }
+  };
+
+  const handleApplyMasterPreset = (preset: 'nht-1' | 'nht-2', variantAccent?: string) => {
+    if (preset === 'nht-1') {
+      setSidebarLayout('floating');
+      setSidebarLayoutMode('floating');
+      setNavbarLayout('floating');
+      setNavbarLayoutMode('sticky');
+
+      applyAccentColor('#4F46E5');
+      setSelectedAccentColor('#4F46E5');
+      setAppliedAccentColor('#4F46E5');
+      setCustomAccentHex('4F46E5');
+
+      setSidebarThemeMode('dark');
+      setSidebarThemeModeState('dark');
+      localStorage.removeItem('alm_sidebar_custom_bg');
+      setSidebarCustomBg('');
+
+      const safe = getSafeSidebarColor('#FFFFFF');
+      setSelectedSidebarColor(safe.safeColor);
+      setAppliedSidebarColor(safe.safeColor);
+      applySidebarColor(safe.safeColor);
+      setCustomSidebarHex('FFFFFF');
+
+      setMasterThemePreset('nht-1');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('alm_master_theme_preset', 'nht-1');
+        localStorage.setItem('alm_base_master_theme', 'nht-1');
+        window.dispatchEvent(new Event('alm_master_theme_preset_changed'));
+      }
+
+      toast.success(
+        '✨ NHT Theme 1 (Modern Floating) activated!',
+        { id: 'master-theme-toast' }
+      );
+    } else {
+      setSidebarLayout('classic');
+      setSidebarLayoutMode('classic');
+      setNavbarLayout('classic');
+      setNavbarLayoutMode('sticky');
+
+      applyAccentColor('#800020');
+      setSelectedAccentColor('#800020');
+      setAppliedAccentColor('#800020');
+      setCustomAccentHex('800020');
+
+      setSidebarThemeMode('charcoal');
+      setSidebarThemeModeState('charcoal');
+      localStorage.setItem('alm_sidebar_custom_bg', '#1A1A1A');
+      setSidebarCustomBg('#1A1A1A');
+
+      const safe = getSafeSidebarColor('#FFFFFF');
+      setSelectedSidebarColor(safe.safeColor);
+      setAppliedSidebarColor(safe.safeColor);
+      applySidebarColor(safe.safeColor);
+      setCustomSidebarHex('FFFFFF');
+
+      setMasterThemePreset('nht-2');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('alm_master_theme_preset', 'nht-2');
+        localStorage.setItem('alm_base_master_theme', 'nht-2');
+        window.dispatchEvent(new Event('alm_master_theme_preset_changed'));
+      }
+
+      toast.success(
+        '🏛️ NHT Theme 2 (Classic Executive) activated!',
+        { id: 'master-theme-toast' }
+      );
+    }
+    triggerFeedbackSound('success');
+  };
+
+  const applyCustomSidebarBg = (bgCss: string, themeName?: string) => {
+    markAsCustom();
+    setSidebarCustomBg(bgCss);
+    localStorage.setItem('alm_sidebar_custom_bg', bgCss);
+    window.dispatchEvent(new Event('al_muhammad_sidebar_theme_changed'));
+    triggerFeedbackSound('success');
+    if (themeName) {
+      toast.success(
+        isRTL ? `سائیڈبار کا پس منظر: ${themeName}` : `Applied "${themeName}" to sidebar!`,
+        { id: 'sidebar-theme-toast' }
+      );
+    }
+  };
+
+  const handleSaveCustomTheme = () => {
+    const bgCss = customBgType === 'gradient'
+      ? `linear-gradient(${customGradientAngle}deg, ${customColorStop1} 0%, ${customColorStop2} 100%)`
+      : customSolidColor;
+
+    const finalName = customThemeName.trim() || (customBgType === 'gradient' ? 'Custom Gradient' : 'Custom Solid');
+    const newTheme: SavedSidebarTheme = {
+      id: 'theme_' + Date.now(),
+      name: finalName,
+      bg: bgCss,
+      type: customBgType,
+      stop1: customColorStop1,
+      stop2: customColorStop2,
+      angle: customGradientAngle,
+      date: new Date().toLocaleDateString(),
+    };
+
+    const updated = [newTheme, ...savedCustomThemes.filter(t => t.name !== finalName)];
+    setSavedCustomThemes(updated);
+    localStorage.setItem('alm_saved_sidebar_themes', JSON.stringify(updated));
+
+    applyCustomSidebarBg(bgCss, finalName);
+    setCustomThemeName('');
+  };
+
+  const handleDeleteSavedTheme = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = savedCustomThemes.filter(t => t.id !== id);
+    setSavedCustomThemes(updated);
+    localStorage.setItem('alm_saved_sidebar_themes', JSON.stringify(updated));
+    toast.success('Removed saved theme');
+  };
+
+  const handleApplyThemeSuite = (suite: CuratedThemeSuite) => {
+    markAsCustom();
+    applyThemeSuite(suite.id);
+    setActiveSuiteId(suite.id);
+    setSelectedAccentColor(suite.accentColor);
+    setAppliedAccentColor(suite.accentColor);
+    setCustomAccentHex(suite.accentColor.replace('#', ''));
+    
+    const isDark = isDarkModeActive();
+    const effectiveTextColor = isDark ? '#FFFFFF' : suite.sidebarTextColor;
+    setSelectedSidebarColor(effectiveTextColor);
+    setAppliedSidebarColor(effectiveTextColor);
+    setCustomSidebarHex(effectiveTextColor.replace('#', ''));
+    setSidebarThemeModeState(suite.sidebarTheme);
+    triggerFeedbackSound('success');
+    toast.success(
+      isRTL
+        ? `${suite.name} تھیم کامیابی سے لاگو ہو گئی!`
+        : `Applied "${suite.name}" theme suite!`,
+      { id: 'theme-suite-toast' }
+    );
+  };
+
+  const [sidebarBehavior, setSidebarBehavior] = useState<SidebarBehaviorMode>(() => getSidebarBehaviorMode());
+
+  const handleSetSidebarBehavior = (mode: SidebarBehaviorMode) => {
+    setSidebarBehavior(mode);
+    setSidebarBehaviorMode(mode);
+    triggerFeedbackSound('success');
+    toast.success(
+      mode === 'closed'
+        ? (isRTL ? '✨ سمارٹ آٹو کوولاپس: سائیڈبار کلک پر کھلے گی، ماؤس ہٹانے پر خود بند ہو جائے گی' : '✨ Auto-Collapse active: Click sidebar to expand, hover out to close!')
+        : ('📌 Pinned Sidebar active: Sidebar remains permanently opened.'),
+      { id: 'sidebar-behavior-toast' }
+    );
+  };
+
+  const handleSidebarThemeChange = (mode: SidebarThemeMode) => {
+    markAsCustom();
+    setSidebarCustomBg('');
+    localStorage.removeItem('alm_sidebar_custom_bg');
+    setSidebarThemeMode(mode);
+    setSidebarThemeModeState(mode);
+    const safe = getSafeSidebarColor(selectedSidebarColor);
+    applySidebarColor(safe.safeColor);
+    setSelectedSidebarColor(safe.safeColor);
+    setAppliedSidebarColor(safe.safeColor);
+    setCustomSidebarHex(safe.safeColor.replace('#', ''));
+    triggerFeedbackSound('success');
+    toast.success(
+      `Sidebar background set to ${mode.toUpperCase()}!`,
+      { id: 'sidebar-theme-toast' }
+    );
+  };
 
   // Primary Accent Color State
   const [appliedAccentColor, setAppliedAccentColor] = useState<string>(getSavedAccentColor());
@@ -340,33 +668,48 @@ const SettingsPage: React.FC = () => {
   const [wasSidebarAdjusted, setWasSidebarAdjusted] = useState<boolean>(false);
   const [sidebarAppliedRecently, setSidebarAppliedRecently] = useState<boolean>(false);
 
-  // Layout Styles: Sidebar (Floating vs Classic) & Navbar (Sticky vs Normal)
+  // Layout Styles: Sidebar (Floating vs Classic) & Navbar (Sticky vs Normal) & Reports (Modern vs Classic)
   const [sidebarLayout, setSidebarLayout] = useState<SidebarLayoutMode>(() => getSidebarLayoutMode());
   const [navbarLayout, setNavbarLayout] = useState<NavbarLayoutMode>(() => getNavbarLayoutMode());
+  const [reportLayout, setReportLayout] = useState<ReportLayoutMode>(() => getReportLayoutMode());
+
+  const handleSetReportLayout = (mode: ReportLayoutMode) => {
+    setReportLayout(mode);
+    setReportLayoutMode(mode);
+    toast.success(
+      mode === 'modern'
+        ? '📊 Modern Reports Hub Directory activated!'
+        : '🏛️ Classic Nested Reports System activated!',
+      { id: 'report-layout-toast' }
+    );
+  };
 
   const handleSetSidebarLayout = (mode: SidebarLayoutMode) => {
+    markAsCustom();
     setSidebarLayout(mode);
     setSidebarLayoutMode(mode);
     toast.success(
       mode === 'floating'
         ? '🚀 Floating Modern Sidebar activated!'
-        : '🏛️ Classic Edge Sidebar activated!',
+        : '🏛️ {"Classic Edge"} Sidebar activated!',
       { id: 'sidebar-layout-toast' }
     );
   };
 
   const handleSetNavbarLayout = (mode: NavbarLayoutMode) => {
+    markAsCustom();
     setNavbarLayout(mode);
     setNavbarLayoutMode(mode);
     toast.success(
       mode === 'floating'
         ? '🚀 Floating Modern Navbar activated!'
-        : '🏛️ Classic Full-Width Navbar activated!',
+        : '🏛️ {"Classic Full"}-Width Navbar activated!',
       { id: 'navbar-layout-toast' }
     );
   };
 
   const handleApplyPreset = (mode: 'floating' | 'classic') => {
+    markAsCustom();
     setSidebarLayout(mode);
     setSidebarLayoutMode(mode);
     setNavbarLayout(mode);
@@ -374,7 +717,7 @@ const SettingsPage: React.FC = () => {
     toast.success(
       mode === 'floating'
         ? '🚀 Full Floating Workspace (Sidebar & Navbar) activated!'
-        : '🏛️ Full Classic Edge Workspace (Sidebar & Navbar) activated!',
+        : '🏛️ Full {"Classic Edge"} Workspace (Sidebar & Navbar) activated!',
       { id: 'preset-layout-toast' }
     );
   };
@@ -1026,6 +1369,20 @@ const SettingsPage: React.FC = () => {
     }
 
     const isDark = isDarkModeActive();
+    if ((hexToApply.toUpperCase() === '#FFFFFF' || hexToApply.toUpperCase() === '#FFF') && !isSidebarBackgroundLight(isDark)) {
+      localStorage.setItem('alm_sidebar_color', '#FFFFFF');
+      localStorage.setItem('alm_sidebar_raw_color', '#FFFFFF');
+      window.dispatchEvent(new Event('al_muhammad_sidebar_color_changed'));
+      setAppliedSidebarColor('#FFFFFF');
+      setSelectedSidebarColor('#FFFFFF');
+      setCustomSidebarHex('FFFFFF');
+      setWasSidebarAdjusted(false);
+      setSidebarAppliedRecently(true);
+      toast.success('Sidebar font & icon color applied!');
+      setTimeout(() => setSidebarAppliedRecently(false), 2500);
+      return;
+    }
+
     const result = applySidebarColor(hexToApply, isDark);
     setAppliedSidebarColor(result.safeColor);
     setSelectedSidebarColor(result.safeColor);
@@ -1206,815 +1563,2008 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 2: THEME & APPEARANCE */}
+                    {/* TAB 2: THEME & APPEARANCE */}
           {activeTab === 'theme' && (
             <div className="space-y-6 animate-fadeIn">
-              {/* UNIFIED BRAND & SIDEBAR COLOR CONTAINER */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-sm overflow-hidden animate-fadeIn">
-                {/* INTEGRATED TABS HEADER (INSIDE CONTAINER, NO GAP) */}
-                <div className="p-3 sm:px-6 sm:py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 w-full sm:w-auto">
-                  {/* SUB-TAB 1: NAVBAR & BRAND ACCENT */}
-                  <button
-                    type="button"
-                    onClick={() => setThemeSubTab('navbar')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
-                      themeSubTab === 'navbar'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
-                      style={{ backgroundColor: selectedAccentColor }}
-                    />
-                    <span>Navbar & Brand Accent</span>
-                    {isAccentChanged && (
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
-                    )}
-                  </button>
-
-                  {/* SUB-TAB 2: SIDEBAR */}
-                  <button
-                    type="button"
-                    onClick={() => setThemeSubTab('sidebar')}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex-1 sm:flex-initial justify-center select-none ${
-                      themeSubTab === 'sidebar'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80 scale-102'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shadow-2xs shrink-0"
-                      style={{ backgroundColor: selectedSidebarColor }}
-                    />
-                    <span>Sidebar</span>
-                    {isSidebarChanged && (
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Unapplied changes" />
-                    )}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-500 dark:text-slate-400 self-end sm:self-auto">
-                  <span>Customizing:</span>
-                  <strong className="text-slate-800 dark:text-slate-200 font-bold">
-                    {themeSubTab === 'navbar' ? 'Navbar & Brand Accent' : 'Sidebar Colors'}
-                  </strong>
-                </div>
-                </div>
-
-                {/* CONTAINER BODY: ACTIVE COLOR SETTINGS */}
-                <div className="p-6">
-                  {/* SECTION A: ACCENT COLOR THEME */}
-                  {themeSubTab === 'navbar' && (
-                    <div className="animate-fadeIn">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs transition-colors border border-slate-200/80 dark:border-slate-700/80"
-                      style={{
-                        backgroundColor: selectedAccentColor,
-                        color: getContrastTextColor(selectedAccentColor),
-                      }}
-                    >
-                      <LuSparkles size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                        Brand Accent Color
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Select a color to preview, then click <strong className="text-slate-700 dark:text-slate-200">Apply Accent Color</strong> to save changes.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {isAccentChanged && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        Unapplied Selection
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold">
-                      <span
-                        className="w-3 h-3 rounded-full border border-black/15 shadow-2xs shrink-0"
-                        style={{ backgroundColor: selectedAccentColor }}
-                      />
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {selectedAccentColor.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 24 Presets Grid */}
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Preset Palette ({PRESET_THEME_COLORS.length} Colors)
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      Click any swatch to preview
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2.5">
-                    {PRESET_THEME_COLORS.map((c) => {
-                      const isSelected =
-                        selectedAccentColor.toLowerCase() === c.hex.toLowerCase();
-                      const isCurrentlyApplied =
-                        appliedAccentColor.toLowerCase() === c.hex.toLowerCase();
-
-                      return (
-                        <button
-                          key={c.hex}
-                          type="button"
-                          onClick={() => handleAccentSelect(c.hex)}
-                          className={`group relative h-11 rounded-xl transition-all duration-200 hover:scale-105 flex flex-col items-center justify-center cursor-pointer border ${
-                            isSelected
-                              ? 'ring-3 ring-offset-2 ring-slate-900 dark:ring-white border-transparent shadow-md scale-102'
-                              : 'border-black/10 dark:border-white/10 hover:shadow-xs'
-                          }`}
-                          style={{ backgroundColor: c.hex }}
-                          title={`${c.name} (${c.hex})${isCurrentlyApplied ? ' - Currently Active' : ''}`}
-                        >
-                          {isSelected && (
-                            <LuCheck className="text-white drop-shadow-md text-base stroke-[3]" />
-                          )}
-                          {!isSelected && isCurrentlyApplied && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/80 shadow-xs absolute bottom-1.5" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Custom Accent Color & Action Bar */}
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex flex-col lg:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 w-full lg:w-auto">
-                    <label
-                      className="relative flex items-center justify-center cursor-pointer shrink-0"
-                      title="Open color wheel picker"
-                    >
-                      <span
-                        className="w-11 h-11 rounded-xl border border-black/15 shadow-sm block transition hover:scale-105"
-                        style={{ backgroundColor: selectedAccentColor }}
-                      />
-                      <input
-                        type="color"
-                        value={selectedAccentColor}
-                        onChange={(e) => handleAccentSelect(e.target.value)}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                    </label>
-
-                    <div>
-                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                        <LuPenLine size={13} />
-                        <span>Custom Accent Hex</span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 dark:text-slate-400">
-                        Pick from the color wheel or type any hex
-                      </span>
-                    </div>
-                  </div>
-
-                  <form
-                    onSubmit={handleApplyAccentColor}
-                    className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-end"
-                  >
-                    <div className="flex items-center px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 shadow-2xs w-36">
-                      <span className="text-slate-400 select-none mr-1">#</span>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={customAccentHex}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setCustomAccentHex(val);
-                          const clean = val.replace(/[^0-9A-Fa-f]/g, '').trim();
-                          if (clean.length === 3 || clean.length === 6) {
-                            setSelectedAccentColor(`#${clean}`);
-                          }
-                        }}
-                        placeholder="10B981"
-                        className="w-full bg-transparent outline-none uppercase font-mono tracking-wider text-xs"
-                      />
-                    </div>
-
-                    {isAccentChanged && (
-                      <button
-                        type="button"
-                        onClick={handleResetAccentColor}
-                        className="px-3 py-2.5 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer flex items-center gap-1"
-                        title="Revert to active color"
-                      >
-                        <LuRotateCcw size={13} />
-                        <span>Reset</span>
-                      </button>
-                    )}
-
-                    {/* VIBRANT & HIGHLY VISIBLE APPLY BUTTON */}
-                    <button
-                      type="submit"
-                      className={`px-5 py-2.5 text-xs font-bold rounded-xl text-white shadow-md transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
-                        isAccentChanged
-                          ? 'ring-2 ring-offset-2 ring-emerald-500 hover:brightness-110 shadow-emerald-600/30 font-extrabold scale-102'
-                          : 'hover:opacity-90'
-                      }`}
-                      style={{
-                        backgroundColor: selectedAccentColor,
-                        color: getContrastTextColor(selectedAccentColor),
-                        border: getContrastTextColor(selectedAccentColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
-                      }}
-                    >
-                      {accentAppliedRecently ? (
-                        <>
-                          <LuCheck size={16} className="stroke-[3]" />
-                          <span>Applied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <LuSparkles size={15} />
-                          <span>Apply Accent Color</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Live UI Interactive Preview */}
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Live UI Preview
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      Showing preview of: <strong className="font-mono text-slate-600 dark:text-slate-300">{selectedAccentColor}</strong>
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-700/50">
-                    <button
-                      type="button"
-                      className="px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors"
-                      style={{
-                        backgroundColor: selectedAccentColor,
-                        color: getContrastTextColor(selectedAccentColor),
-                        border: getContrastTextColor(selectedAccentColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
-                      }}
-                    >
-                      Primary Button
-                    </button>
-                    <span
-                      className="px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
-                      style={{
-                        backgroundColor:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '#F1F5F9'
-                            : `${selectedAccentColor}1A`,
-                        color:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '#0F172A'
-                            : selectedAccentColor,
-                        border:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '1px solid #CBD5E1'
-                            : undefined,
-                      }}
-                    >
-                      Badge Highlight
-                    </span>
-                    <div
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-colors"
-                      style={{
-                        borderColor:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '#94A3B8'
-                            : `${selectedAccentColor}60`,
-                        color:
-                          getContrastTextColor(selectedAccentColor) === '#0F172A' && !isDarkModeActive()
-                            ? '#0F172A'
-                            : selectedAccentColor,
-                      }}
-                    >
-                      Outline Element
-                    </div>
-                  </div>
-                </div>
-
-                      {/* SECTION C: THEME MODE (LIGHT / DARK) - ONLY FOR TAB 1 */}
-                      <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-                        <div className="pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                          <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                            Interface Theme Mode
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Select your preferred appearance for the entire workspace.
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {/* Light Mode Card */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (typeof setColorMode === 'function') setColorMode('light');
-                            }}
-                            className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                              colorMode === 'light'
-                                ? 'border-primary ring-2 ring-primary/20 bg-primary/5 shadow-xs'
-                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:border-slate-300'
-                            }`}
-                          >
-                            <div
-                              className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
-                                colorMode === 'light'
-                                  ? 'bg-primary text-white shadow-xs'
-                                  : 'bg-amber-100 text-amber-600'
-                              }`}
-                            >
-                              <LuSun size={20} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                                Light Mode
-                              </div>
-                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Clean, bright daylight interface with sharp contrast.
-                              </div>
-                            </div>
-                            {colorMode === 'light' && (
-                              <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
-                            )}
-                          </button>
-
-                          {/* Dark Mode Card */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (typeof setColorMode === 'function') setColorMode('dark');
-                            }}
-                            className={`flex items-center gap-4 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                              colorMode === 'dark'
-                                ? 'border-primary ring-2 ring-primary/20 bg-primary/10 shadow-xs'
-                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:border-slate-300'
-                            }`}
-                          >
-                            <div
-                              className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
-                                colorMode === 'dark'
-                                  ? 'bg-primary text-white shadow-xs'
-                                  : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600'
-                              }`}
-                            >
-                              <LuMoon size={20} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                                Dark Mode
-                              </div>
-                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Sleek low-light aesthetic reducing eye strain.
-                              </div>
-                            </div>
-                            {colorMode === 'dark' && (
-                              <LuCheck className="text-primary text-lg shrink-0 stroke-[3]" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SECTION B: SIDEBAR FONT & ICON COLOR */}
-                  {themeSubTab === 'sidebar' && (
-                    <div className="animate-fadeIn">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-xs transition-colors"
-                      style={{ backgroundColor: selectedSidebarColor }}
-                    >
-                      <LuLayers size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                        Sidebar Font & Icon Color
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Adjusts text and icon color for all navigation items in the left sidebar. Click <strong className="text-slate-700 dark:text-slate-200">Apply Sidebar Color</strong> to save.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {wasSidebarAdjusted ? (
-                      <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full">
-                        Contrast Protected
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-full">
-                        High Contrast
-                      </span>
-                    )}
-                    {isSidebarChanged && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        Unapplied Selection
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold">
-                      <span
-                        className="w-3 h-3 rounded-full border border-black/15 shadow-2xs shrink-0"
-                        style={{ backgroundColor: selectedSidebarColor }}
-                      />
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {selectedSidebarColor.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 24 Sidebar Presets */}
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Preset Options
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      Click any swatch to preview
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2.5">
-                    {PRESET_THEME_COLORS.map((c) => {
-                      const isSelected =
-                        selectedSidebarColor.toLowerCase() === c.hex.toLowerCase();
-                      const isCurrentlyApplied =
-                        appliedSidebarColor.toLowerCase() === c.hex.toLowerCase();
-
-                      return (
-                        <button
-                          key={`sidebar-${c.hex}`}
-                          type="button"
-                          onClick={() => handleSidebarSelect(c.hex)}
-                          className={`group relative h-11 rounded-xl transition-all duration-200 hover:scale-105 flex flex-col items-center justify-center cursor-pointer border ${
-                            isSelected
-                              ? 'ring-3 ring-offset-2 ring-slate-900 dark:ring-white border-transparent shadow-md scale-102'
-                              : 'border-black/10 dark:border-white/10 hover:shadow-xs'
-                          }`}
-                          style={{ backgroundColor: c.hex }}
-                          title={`Sidebar: ${c.name} (${c.hex})${isCurrentlyApplied ? ' - Currently Active' : ''}`}
-                        >
-                          {isSelected && (
-                            <LuCheck className="text-white drop-shadow-md text-base stroke-[3]" />
-                          )}
-                          {!isSelected && isCurrentlyApplied && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/80 shadow-xs absolute bottom-1.5" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Custom Sidebar Color & Action Bar */}
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex flex-col lg:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 w-full lg:w-auto">
-                    <label
-                      className="relative flex items-center justify-center cursor-pointer shrink-0"
-                      title="Open sidebar color wheel picker"
-                    >
-                      <span
-                        className="w-11 h-11 rounded-xl border border-black/15 shadow-sm block transition hover:scale-105"
-                        style={{ backgroundColor: selectedSidebarColor }}
-                      />
-                      <input
-                        type="color"
-                        value={selectedSidebarColor}
-                        onChange={(e) => handleSidebarSelect(e.target.value)}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                    </label>
-
-                    <div>
-                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                        <LuPenLine size={13} />
-                        <span>Custom Sidebar Hex</span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 dark:text-slate-400">
-                        Automatic contrast safety ensures icons and text stay readable
-                      </span>
-                    </div>
-                  </div>
-
-                  <form
-                    onSubmit={handleApplySidebarColor}
-                    className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-end"
-                  >
-                    <div className="flex items-center px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 shadow-2xs w-36">
-                      <span className="text-slate-400 select-none mr-1">#</span>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={customSidebarHex}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setCustomSidebarHex(val);
-                          const clean = val.replace(/[^0-9A-Fa-f]/g, '').trim();
-                          if (clean.length === 3 || clean.length === 6) {
-                            handleSidebarSelect(`#${clean}`);
-                          }
-                        }}
-                        placeholder="1E293B"
-                        className="w-full bg-transparent outline-none uppercase font-mono tracking-wider text-xs"
-                      />
-                    </div>
-
-                    {isSidebarChanged && (
-                      <button
-                        type="button"
-                        onClick={handleResetSidebarColor}
-                        className="px-3 py-2.5 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer flex items-center gap-1"
-                        title="Revert to active color"
-                      >
-                        <LuRotateCcw size={13} />
-                        <span>Reset</span>
-                      </button>
-                    )}
-
-                    {/* VIBRANT APPLY BUTTON FOR SIDEBAR */}
-                    <button
-                      type="submit"
-                      className={`px-5 py-2.5 text-xs font-bold rounded-xl text-white shadow-md transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
-                        isSidebarChanged
-                          ? 'ring-2 ring-offset-2 ring-slate-800 hover:brightness-110 shadow-slate-700/30 font-extrabold scale-102'
-                          : 'hover:opacity-90'
-                      }`}
-                      style={{
-                        backgroundColor: selectedSidebarColor,
-                        color: getContrastTextColor(selectedSidebarColor),
-                        border: getContrastTextColor(selectedSidebarColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
-                      }}
-                    >
-                      {sidebarAppliedRecently ? (
-                        <>
-                          <LuCheck size={16} className="stroke-[3]" />
-                          <span>Applied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <LuLayers size={15} />
-                          <span>Apply Sidebar Color</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Sidebar Navigation Live Preview Box */}
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Sidebar Navigation Preview
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      Showing preview of: <strong className="font-mono text-slate-600 dark:text-slate-300">{selectedSidebarColor}</strong>
-                    </span>
-                  </div>
-
-                  <div className="max-w-xs p-3 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                    <div
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
-                      style={{
-                        backgroundColor: `${selectedSidebarColor}20`,
-                        color: selectedSidebarColor,
-                      }}
-                    >
-                      <LuLayoutDashboard size={15} style={{ color: selectedSidebarColor }} />
-                      <span>Dashboard (Active)</span>
-                    </div>
-                    <div
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                      style={{ color: selectedSidebarColor }}
-                    >
-                      <LuReceipt size={15} style={{ color: selectedSidebarColor }} />
-                      <span>Sales & Invoices</span>
-                    </div>
-                    <div
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                      style={{ color: selectedSidebarColor }}
-                    >
-                      <LuPackage size={15} style={{ color: selectedSidebarColor }} />
-                      <span>Product Catalog</span>
-                    </div>
-                  </div>
-                </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* SECTION D: WORKSPACE LAYOUT & NAVIGATION STYLE */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary text-white shadow-xs">
-                      <LuLayers size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                        Workspace Navigation & Layout
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Choose between a modern floating card layout or the classic edge-to-edge ERP interface.
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleResetLayoutToClassic}
-                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
-                    title="Undo customizations and restore original Classic layout"
-                  >
-                    <LuRotateCcw size={13} />
-                    <span>Reset to Classic (Undo)</span>
-                  </button>
-                </div>
-
-                {/* Quick 1-Click Presets */}
-                <div className="mb-5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* LIVE INTERACTIVE SIDEBAR & NAVBAR WORKSPACE STUDIO */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-6 shadow-sm">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
                   <div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                      Quick Workspace Presets
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-400">
-                      Switch both Sidebar & Navbar together with 1 click:
-                    </span>
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-8 h-8 rounded-xl flex items-center justify-center shadow-2xs text-white transition-colors"
+                        style={{ backgroundColor: selectedAccentColor }}
+                      >
+                        <LuSparkles size={16} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                          {"Workspace Theme & Layout Studio"}
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {"Click any tab in the preview sidebar to customize background, brand accent, layout, drawer behavior, and colors live."}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleApplyPreset('floating')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                        sidebarLayout === 'floating' && navbarLayout === 'floating'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary'
-                      }`}
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+                      Theme: {masterThemePreset === 'nht-1' ? 'NHT Theme 1' : masterThemePreset === 'nht-2' ? 'NHT Theme 2' : 'Custom'}
+                    </span>
+                    <span
+                      className="text-xs font-mono font-bold px-3 py-1 rounded-lg border text-white shadow-2xs"
+                      style={{ backgroundColor: selectedAccentColor }}
                     >
-                      <span>🚀 Full Floating</span>
-                      {sidebarLayout === 'floating' && navbarLayout === 'floating' && <LuCheck size={12} />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleApplyPreset('classic')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                        sidebarLayout === 'classic' && navbarLayout === 'classic'
-                          ? 'bg-primary text-white shadow-xs'
-                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary'
-                      }`}
-                    >
-                      <span>🏛️ Full Classic</span>
-                      {sidebarLayout === 'classic' && navbarLayout === 'classic' && <LuCheck size={12} />}
-                    </button>
+                      Accent: {selectedAccentColor.toUpperCase()}
+                    </span>
+                    <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 uppercase">
+                      {sidebarLayout === 'floating' ? 'Floating Card' : 'Classic Edge'}
+                    </span>
                   </div>
                 </div>
 
-                {/* Granular Individual Controls */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Custom 1: Sidebar Style */}
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <span>Left Sidebar Style</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
-                          Customizes the left navigation bar independently.
-                        </p>
+                {/* LIVE STUDIO SIMULATION FRAME */}
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 text-slate-100 shadow-lg overflow-hidden">
+                  {/* Top Window Bar */}
+                  <div className="px-4 py-2.5 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
                       </div>
-                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'}
+                      <span className="text-[11px] font-mono text-slate-400 ml-2 hidden sm:inline">
+                        Live ERP Workspace Preview & Configurator
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* OPENED / CLOSED PREVIEW TOGGLES */}
+                    <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-slate-800/90 border border-slate-700/80">
                       <button
                         type="button"
-                        onClick={() => handleSetSidebarLayout('floating')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
-                          sidebarLayout === 'floating'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                        onClick={() => setSidebarPreviewMode('opened')}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150 cursor-pointer ${
+                          sidebarPreviewMode === 'opened'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🚀 Floating Card
-                          </span>
-                          {sidebarLayout === 'floating' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Rounded detached card with ambient elevation.
-                        </p>
+                        <LuPanelLeftOpen size={13} />
+                        <span>{"Opened View"}</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => handleSetSidebarLayout('classic')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
-                          sidebarLayout === 'classic'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                        onClick={() => setSidebarPreviewMode('closed')}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150 cursor-pointer ${
+                          sidebarPreviewMode === 'closed'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🏛️ Classic Edge
-                          </span>
-                          {sidebarLayout === 'classic' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Original edge-to-edge flush sidebar.
-                        </p>
+                        <LuPanelLeftClose size={13} />
+                        <span>{"Closed View"}</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Custom 2: Top Navbar Style */}
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <span>Top Navbar Style</span>
+                  {/* Interactive Canvas Workspace */}
+                  {(() => {
+                    const isLight = !sidebarCustomBg && sidebarThemeMode === 'light';
+                    const sidebarBg = sidebarCustomBg || (
+                      sidebarThemeMode === 'light' ? '#FFFFFF' :
+                      sidebarThemeMode === 'navy' ? '#0F172A' :
+                      sidebarThemeMode === 'emerald' ? '#0A1A18' :
+                      sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17'
+                    );
+
+                    const sidebarTextColor = isLight ? '#0F172A' : '#FFFFFF';
+                    const sidebarSubTextColor = isLight ? '#64748B' : '#94A3B8';
+                    const sidebarBorderColor = isLight ? '#E2E8F0' : '#1E293B';
+
+                    const isEffectiveOpened =
+                      sidebarPreviewMode === 'opened' || (sidebarBehavior === 'closed' && previewHoverOpen);
+
+                    return (
+                      <div className="relative flex flex-col md:flex-row min-h-[580px] overflow-hidden bg-slate-100 dark:bg-[#070A0F] text-slate-900 dark:text-slate-100 transition-colors">
+                        {/* 1. SIMULATED INTERACTIVE SIDEBAR (ACTS AS TABS) */}
+                        <div
+                          onMouseEnter={() => {
+                            if (sidebarBehavior === 'closed' && sidebarPreviewMode === 'closed') {
+                              setPreviewHoverOpen(true);
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            if (previewHoverOpen) {
+                              setPreviewHoverOpen(false);
+                            }
+                          }}
+                          style={{
+                            background: sidebarBg,
+                            color: isLight ? '#0F172A' : '#FFFFFF',
+                            borderColor: sidebarBorderColor,
+                          }}
+                          className={`transition-all duration-300 flex flex-col justify-between shrink-0 select-none ${
+                            sidebarLayout === 'floating'
+                              ? 'm-2.5 rounded-2xl border shadow-xl'
+                              : 'm-0 rounded-none border-r border-t-0 border-b-0 border-l-0 shadow-sm'
+                          } ${
+                            isEffectiveOpened
+                              ? 'w-full md:w-64 p-3.5'
+                              : 'w-full md:w-16 p-2 items-center'
+                          }`}
+                        >
+                          {/* Top Brand Header */}
+                          <div>
+                            {isEffectiveOpened ? (
+                              <div className="flex items-center gap-2.5 pb-3 mb-3 border-b" style={{ borderColor: sidebarBorderColor }}>
+                                <div
+                                  className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-xs cursor-pointer transition hover:scale-105"
+                                  style={{ backgroundColor: selectedAccentColor }}
+                                  onClick={() => setSidebarPreviewMode(sidebarPreviewMode === 'opened' ? 'closed' : 'opened')}
+                                  title="Toggle expanded/compact view"
+                                >
+                                  JJS
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-black tracking-wide truncate">
+                                    AL MUHAMMADI
+                                  </div>
+                                  <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
+                                    Enterprise ERP
+                                  </div>
+                                </div>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-bold border border-blue-500/20">
+                                  Tabs
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="pb-3 mb-3 border-b flex justify-center w-full" style={{ borderColor: sidebarBorderColor }}>
+                                <div
+                                  className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white shadow-xs cursor-pointer transition hover:scale-105"
+                                  style={{ backgroundColor: selectedAccentColor }}
+                                  onClick={() => setSidebarPreviewMode('opened')}
+                                  title="Click to expand sidebar"
+                                >
+                                  JJS
+                                </div>
+                              </div>
+                            )}
+
+                            {/* SIDEBAR NAVIGATION TABS & DROPDOWN */}
+                            <div className="space-y-1.5">
+                              {[
+                                {
+                                  id: 'master-themes',
+                                  label: 'Workspace Themes',
+                                  icon: LuLayers,
+                                  badge: masterThemePreset === 'nht-1' ? 'Theme 1' : masterThemePreset === 'nht-2' ? 'Theme 2' : 'Custom',
+                                },
+                                {
+                                  id: 'theme',
+                                  label: 'Sidebar Background Theme',
+                                  icon: LuPalette,
+                                  badge: sidebarThemeMode.toUpperCase(),
+                                },
+                                {
+                                  id: 'layout',
+                                  label: 'Workspace & Layout',
+                                  icon: LuSlidersHorizontal,
+                                  badge: sidebarLayout === 'floating' ? 'Floating' : 'Classic',
+                                },
+                                {
+                                  id: 'drawer',
+                                  label: 'Drawer Behavior',
+                                  icon: LuMonitor,
+                                  badge: sidebarBehavior === 'closed' ? 'Auto' : 'Pinned',
+                                },
+                              ].map((tab) => {
+                                const isActive = sidebarActiveConfigTab === tab.id;
+                                const TabIcon = tab.icon;
+
+                                return (
+                                  <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setSidebarActiveConfigTab(tab.id as any)}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer group text-left ${
+                                      !isEffectiveOpened ? 'justify-center px-0' : 'justify-between'
+                                    }`}
+                                    style={{
+                                      backgroundColor: isActive
+                                        ? (isLight ? `${selectedAccentColor}18` : `${selectedAccentColor}28`)
+                                        : 'transparent',
+                                      color: isActive
+                                        ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                        : selectedSidebarColor,
+                                      border: isActive ? `1px solid ${selectedAccentColor}45` : '1px solid transparent',
+                                    }}
+                                    title={tab.label}
+                                  >
+                                    <div className="flex items-center gap-2.5 truncate">
+                                      <TabIcon
+                                        size={17}
+                                        className="shrink-0 transition-transform group-hover:scale-110"
+                                        style={{ color: isActive ? selectedAccentColor : selectedSidebarColor }}
+                                      />
+                                      {isEffectiveOpened && (
+                                        <span className="truncate">{tab.label}</span>
+                                      )}
+                                    </div>
+                                    {isEffectiveOpened && (
+                                      <span
+                                        className="text-[9px] font-mono px-1.5 py-0.5 rounded-md truncate max-w-[65px]"
+                                        style={{
+                                          backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)',
+                                          color: isActive ? (isLight ? selectedAccentColor : '#FFFFFF') : selectedSidebarColor,
+                                          opacity: 0.85,
+                                        }}
+                                      >
+                                        {tab.badge}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+
+                              {/* 4. COLOR DROPDOWN (Contains Navbar & Brand Accent + Sidebar Font & Icon Color) */}
+                              {(() => {
+                                const isColorActive = sidebarActiveConfigTab === 'accent' || sidebarActiveConfigTab === 'colors';
+
+                                return (
+                                  <div className="space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!isEffectiveOpened) {
+                                          if (sidebarActiveConfigTab === 'accent') {
+                                            setSidebarActiveConfigTab('colors');
+                                          } else {
+                                            setSidebarActiveConfigTab('accent');
+                                          }
+                                          return;
+                                        }
+                                        setPreviewColorDropdownOpen(!previewColorDropdownOpen);
+                                        if (!isColorActive) {
+                                          setSidebarActiveConfigTab('accent');
+                                          setPreviewColorDropdownOpen(true);
+                                        }
+                                      }}
+                                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer group text-left ${
+                                        !isEffectiveOpened ? 'justify-center px-0' : 'justify-between'
+                                      }`}
+                                      style={{
+                                        backgroundColor: isColorActive
+                                          ? (isLight ? `${selectedAccentColor}14` : `${selectedAccentColor}22`)
+                                          : 'transparent',
+                                        color: isColorActive
+                                          ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                          : selectedSidebarColor,
+                                        border: isColorActive ? `1px solid ${selectedAccentColor}35` : '1px solid transparent',
+                                      }}
+                                      title={"Color (Navbar & Sidebar Colors)"}
+                                    >
+                                      <div className="flex items-center gap-2.5 truncate">
+                                        <LuSparkles
+                                          size={17}
+                                          className="shrink-0 transition-transform group-hover:scale-110"
+                                          style={{ color: isColorActive ? selectedAccentColor : selectedSidebarColor }}
+                                        />
+                                        {isEffectiveOpened && (
+                                          <span className="truncate">{"Color"}</span>
+                                        )}
+                                      </div>
+
+                                      {isEffectiveOpened && (
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <div className="flex items-center -space-x-1">
+                                            <span
+                                              className="w-2.5 h-2.5 rounded-full ring-1 ring-white/40 shadow-2xs"
+                                              style={{ backgroundColor: selectedAccentColor }}
+                                              title={`Navbar Accent: ${selectedAccentColor}`}
+                                            />
+                                            <span
+                                              className="w-2.5 h-2.5 rounded-full ring-1 ring-white/40 shadow-2xs"
+                                              style={{ backgroundColor: selectedSidebarColor }}
+                                              title={`Sidebar Color: ${selectedSidebarColor}`}
+                                            />
+                                          </div>
+                                          <LuChevronDown
+                                            size={14}
+                                            className={`transition-transform duration-200 stroke-[2.5] ${
+                                              previewColorDropdownOpen ? 'rotate-180' : ''
+                                            }`}
+                                            style={{ color: isColorActive ? selectedAccentColor : selectedSidebarColor }}
+                                          />
+                                        </div>
+                                      )}
+                                    </button>
+
+                                    {/* DROPDOWN SUB-ITEMS */}
+                                    {isEffectiveOpened && previewColorDropdownOpen && (
+                                      <div
+                                        className="space-y-1 pl-3.5 ml-3.5 border-l transition-all duration-200"
+                                        style={{ borderColor: sidebarBorderColor }}
+                                      >
+                                        {/* Sub-item A: Navbar & Brand Accent Color */}
+                                        <button
+                                          type="button"
+                                          onClick={() => setSidebarActiveConfigTab('accent')}
+                                          className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[11px] font-bold transition cursor-pointer text-left group"
+                                          style={{
+                                            backgroundColor: sidebarActiveConfigTab === 'accent'
+                                              ? (isLight ? `${selectedAccentColor}20` : `${selectedAccentColor}35`)
+                                              : 'transparent',
+                                            color: sidebarActiveConfigTab === 'accent'
+                                              ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                              : selectedSidebarColor,
+                                            border: sidebarActiveConfigTab === 'accent'
+                                              ? `1px solid ${selectedAccentColor}50`
+                                              : '1px solid transparent',
+                                          }}
+                                          title={"Navbar & Brand Accent Color"}
+                                        >
+                                          <div className="flex items-center gap-2 truncate">
+                                            <span
+                                              className="w-2 h-2 rounded-full shrink-0 shadow-2xs transition-transform group-hover:scale-125"
+                                              style={{ backgroundColor: selectedAccentColor }}
+                                            />
+                                            <span className="truncate">
+                                              {"Navbar & Brand Accent Color"}
+                                            </span>
+                                          </div>
+                                          <span
+                                            className="text-[9px] font-mono px-1 py-0.5 rounded truncate shrink-0"
+                                            style={{
+                                              backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)',
+                                              color: sidebarActiveConfigTab === 'accent'
+                                                ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                                : selectedSidebarColor,
+                                              opacity: 0.9,
+                                            }}
+                                          >
+                                            {selectedAccentColor.toUpperCase()}
+                                          </span>
+                                        </button>
+
+                                        {/* Sub-item B: Sidebar Font & Icon Color */}
+                                        <button
+                                          type="button"
+                                          onClick={() => setSidebarActiveConfigTab('colors')}
+                                          className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[11px] font-bold transition cursor-pointer text-left group"
+                                          style={{
+                                            backgroundColor: sidebarActiveConfigTab === 'colors'
+                                              ? (isLight ? `${selectedAccentColor}20` : `${selectedAccentColor}35`)
+                                              : 'transparent',
+                                            color: sidebarActiveConfigTab === 'colors'
+                                              ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                              : selectedSidebarColor,
+                                            border: sidebarActiveConfigTab === 'colors'
+                                              ? `1px solid ${selectedAccentColor}50`
+                                              : '1px solid transparent',
+                                          }}
+                                          title={"Sidebar Font & Icon Color"}
+                                        >
+                                          <div className="flex items-center gap-2 truncate">
+                                            <span
+                                              className="w-2 h-2 rounded-full shrink-0 shadow-2xs transition-transform group-hover:scale-125"
+                                              style={{ backgroundColor: selectedSidebarColor }}
+                                            />
+                                            <span className="truncate">
+                                              {"Sidebar Font & Icon Color"}
+                                            </span>
+                                          </div>
+                                          <span
+                                            className="text-[9px] font-mono px-1 py-0.5 rounded truncate shrink-0"
+                                            style={{
+                                              backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)',
+                                              color: sidebarActiveConfigTab === 'colors'
+                                                ? (isLight ? selectedAccentColor : '#FFFFFF')
+                                                : selectedSidebarColor,
+                                              opacity: 0.9,
+                                            }}
+                                          >
+                                            {selectedSidebarColor.toUpperCase()}
+                                          </span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* Bottom Profile / Logout */}
+                          <div className="pt-3 border-t mt-3" style={{ borderColor: sidebarBorderColor }}>
+                            {isEffectiveOpened ? (
+                              <div className="flex items-center justify-between text-[11px]">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-2xs"
+                                    style={{ backgroundColor: selectedAccentColor }}
+                                  >
+                                    SA
+                                  </div>
+                                  <div className="truncate font-bold" style={{ color: selectedSidebarColor }}>
+                                    Super Admin
+                                  </div>
+                                </div>
+                                <LuLogOut size={13} style={{ color: selectedSidebarColor, opacity: 0.7 }} />
+                              </div>
+                            ) : (
+                              <div className="flex justify-center">
+                                <div
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                                  style={{ backgroundColor: selectedAccentColor }}
+                                >
+                                  SA
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
-                          Customizes the top header bar independently.
-                        </p>
+
+                        {/* 2. RIGHT PANEL: SIMULATED TOP NAVBAR + ACTIVE CONFIG TAB CONTENT */}
+                        <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-[#0B0F17] overflow-hidden">
+                          {/* 2A. SIMULATED LIVE ERP TOP NAVBAR */}
+                          <div className="p-2 sm:p-3 border-b border-slate-200/80 dark:border-slate-800">
+                            <div
+                              className={`transition-all duration-300 flex items-center justify-between gap-3 p-2.5 backdrop-blur-md select-none ${
+                                navbarLayout === 'floating'
+                                  ? 'rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-md bg-white/95 dark:bg-[#111827]/95'
+                                  : 'rounded-none border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827]'
+                              }`}
+                            >
+                              {/* Left: Brand Badge & Route */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full animate-pulse shadow-xs shrink-0"
+                                  style={{ backgroundColor: selectedAccentColor }}
+                                  title="Portal Active indicator"
+                                />
+                                <span className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-100 hidden sm:inline">
+                                  ALM • Portal Active
+                                </span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                  Theme Studio
+                                </span>
+                              </div>
+
+                              {/* Center: Search Input Mockup */}
+                              <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-[11px] text-slate-400 font-mono w-60 border border-slate-200/60 dark:border-slate-700/60">
+                                <LuSearch size={12} />
+                                <span className="truncate">Search invoices... (Ctrl+K)</span>
+                              </div>
+
+                              {/* Right: + New Sale Action Button, Interface Theme Mode Toggle & User */}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  className="px-3 py-1.5 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer flex items-center gap-1 active:scale-95"
+                                  style={{
+                                    backgroundColor: selectedAccentColor,
+                                    color: getContrastTextColor(selectedAccentColor),
+                                  }}
+                                  title="New Sale button reflects your selected accent color"
+                                >
+                                  <span>+ New Sale</span>
+                                </button>
+
+                                {/* INTERFACE THEME MODE (LIGHT / DARK) TOGGLE */}
+                                <div className="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (typeof setColorMode === 'function') setColorMode('light');
+                                    }}
+                                    title={"Switch to Light Mode"}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                      colorMode === 'light'
+                                        ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200'
+                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    <LuSun size={13} className={colorMode === 'light' ? 'text-amber-500' : ''} />
+                                    <span className="hidden sm:inline">{"Light"}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (typeof setColorMode === 'function') setColorMode('dark');
+                                    }}
+                                    title={"Switch to Dark Mode"}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                      colorMode === 'dark'
+                                        ? 'bg-slate-900 text-white shadow-xs ring-1 ring-slate-700'
+                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    <LuMoon size={13} className={colorMode === 'dark' ? 'text-indigo-400' : ''} />
+                                    <span className="hidden sm:inline">{"Dark"}</span>
+                                  </button>
+                                </div>
+
+                                <span className="text-[10px] text-slate-400 font-mono hidden lg:inline">
+                                  06:22 PM
+                                </span>
+
+                                <div className="flex items-center gap-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+                                  <div
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                                    style={{ backgroundColor: selectedAccentColor }}
+                                  >
+                                    SA
+                                  </div>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 hidden sm:inline truncate max-w-[100px]">
+                                    Super Admin
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 2B. ACTIVE CONFIGURATION TAB CONTENT */}
+                          <div className="flex-1 p-4 sm:p-6 overflow-y-auto max-h-[580px]">
+                            {/* TAB 0: MASTER WORKSPACE THEMES (NHT Theme 1 vs NHT Theme 2) */}
+                            {sidebarActiveConfigTab === 'master-themes' && (
+                              <div className="space-y-5 animate-fadeIn">
+                                {/* Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuLayers size={17} style={{ color: selectedAccentColor }} />
+                                      <span>{"Workspace Themes & Architecture"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {"Select a curated workspace architecture preset with live structural skeleton preview."}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-xs font-mono font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                                      masterThemePreset === 'nht-1'
+                                        ? 'bg-cyan-100 dark:bg-indigo-950/80 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-800'
+                                        : masterThemePreset === 'nht-2'
+                                        ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-800'
+                                        : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800'
+                                    }`}>
+                                      {masterThemePreset === 'nht-1' ? 'NHT Theme 1 Active' : masterThemePreset === 'nht-2' ? 'NHT Theme 2 Active' : 'Custom Active'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* 16x16 / Square Skeleton Preview Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+                                  {/* THEME 1 CARD */}
+                                  <div
+                                    onClick={() => handleApplyMasterPreset('nht-1')}
+                                    className={`group relative rounded-2xl border-2 transition-all duration-200 cursor-pointer p-4 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md ${
+                                      masterThemePreset === 'nht-1'
+                                        ? 'border-cyan-500 bg-cyan-50/40 dark:bg-indigo-950/20 ring-2 ring-cyan-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-cyan-300 dark:hover:border-cyan-800 bg-white dark:bg-slate-900/60'
+                                    }`}
+                                  >
+                                    <div>
+                                      {/* Header row */}
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-3 h-3 rounded-full bg-indigo-500 shadow-xs" />
+                                          <h5 className="text-sm font-bold text-slate-900 dark:text-white">
+                                            NHT Theme 1
+                                          </h5>
+                                        </div>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-cyan-800 uppercase tracking-wider">
+                                          Modern Floating
+                                        </span>
+                                      </div>
+
+                                      {/* Skeleton UI Preview Frame */}
+                                      <div className="rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-900 p-2.5 shadow-inner mb-3 overflow-hidden select-none">
+                                        {/* Browser header dots */}
+                                        <div className="flex items-center gap-1 mb-2 pb-1.5 border-b border-slate-800">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500/80 inline-block" />
+                                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500/80 inline-block" />
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 inline-block" />
+                                          <span className="ml-2 text-[8px] font-mono text-slate-500">nht-theme-1.preview</span>
+                                        </div>
+
+                                        <div className="flex gap-2 h-32">
+                                          {/* Floating Sidebar Skeleton */}
+                                          <div className="w-20 bg-slate-800/90 rounded-lg p-1.5 flex flex-col justify-between border border-slate-700/70 shadow-xs shrink-0">
+                                            <div className="space-y-1.5">
+                                              {/* Brand Pill */}
+                                              <div className="flex items-center gap-1.5 pb-1 border-b border-slate-700/60">
+                                                <div className="w-3.5 h-3.5 rounded-md bg-indigo-600 shadow-xs shrink-0" />
+                                                <div className="w-8 h-1.5 rounded bg-slate-600" />
+                                              </div>
+                                              {/* Active item (Cyan Pill) */}
+                                              <div className="w-full h-3 rounded-md bg-indigo-600/90 flex items-center px-1 gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                                <div className="w-6 h-1 rounded bg-white/90" />
+                                              </div>
+                                              {/* Other nav items */}
+                                              <div className="w-full h-2.5 rounded bg-slate-700/60 flex items-center px-1">
+                                                <div className="w-5 h-1 rounded bg-slate-500" />
+                                              </div>
+                                              <div className="w-full h-2.5 rounded bg-slate-700/60 flex items-center px-1">
+                                                <div className="w-7 h-1 rounded bg-slate-500" />
+                                              </div>
+                                              <div className="w-full h-2.5 rounded bg-slate-700/60 flex items-center px-1">
+                                                <div className="w-4 h-1 rounded bg-slate-500" />
+                                              </div>
+                                            </div>
+                                            <div className="pt-1 border-t border-slate-700/60 flex items-center gap-1">
+                                              <div className="w-2.5 h-2.5 rounded-full bg-slate-600" />
+                                              <div className="w-6 h-1 rounded bg-slate-600" />
+                                            </div>
+                                          </div>
+
+                                          {/* Main Body Skeleton */}
+                                          <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                                            {/* Floating Navbar */}
+                                            <div className="h-5 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-between px-2">
+                                              <div className="flex items-center gap-1.5">
+                                                <div className="w-2 h-2 rounded bg-indigo-500" />
+                                                <div className="w-12 h-1.5 rounded bg-slate-600" />
+                                              </div>
+                                              <div className="w-8 h-2 rounded-full bg-indigo-600/80" />
+                                            </div>
+
+                                            {/* Content cards */}
+                                            <div className="flex-1 rounded-lg bg-slate-800/40 border border-slate-800 p-2 flex flex-col justify-between">
+                                              <div className="grid grid-cols-2 gap-1.5">
+                                                <div className="p-1.5 rounded-md bg-slate-800 border border-slate-700/60 space-y-1">
+                                                  <div className="w-6 h-1 rounded bg-slate-500" />
+                                                  <div className="w-10 h-2 rounded bg-indigo-500 font-bold" />
+                                                </div>
+                                                <div className="p-1.5 rounded-md bg-slate-800 border border-slate-700/60 space-y-1">
+                                                  <div className="w-6 h-1 rounded bg-slate-500" />
+                                                  <div className="w-8 h-2 rounded bg-slate-400" />
+                                                </div>
+                                              </div>
+                                              <div className="h-6 rounded bg-slate-800/90 border border-slate-700/50 p-1 flex items-center gap-1">
+                                                <div className="w-4 h-1 rounded bg-indigo-500" />
+                                                <div className="w-14 h-1 rounded bg-slate-600" />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                                        Modern floating architecture with rounded detached sidebar cards, top floating bar, and dynamic royal indigo theme accent.
+                                      </p>
+                                    </div>
+
+                                    {/* Action button */}
+                                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                        Floating Card Arch
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleApplyMasterPreset('nht-1');
+                                        }}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                          masterThemePreset === 'nht-1'
+                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                        }`}
+                                      >
+                                        {masterThemePreset === 'nht-1' ? (
+                                          <>
+                                            <LuCheck size={13} />
+                                            <span>Active</span>
+                                          </>
+                                        ) : (
+                                          <span>Switch to Theme 1</span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* THEME 2 CARD */}
+                                  <div
+                                    onClick={() => handleApplyMasterPreset('nht-2')}
+                                    className={`group relative rounded-2xl border-2 transition-all duration-200 cursor-pointer p-4 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md ${
+                                      masterThemePreset === 'nht-2'
+                                        ? 'border-[#800020] bg-rose-950/10 dark:bg-rose-950/20 ring-2 ring-rose-900/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-800 bg-white dark:bg-slate-900/60'
+                                    }`}
+                                  >
+                                    <div>
+                                      {/* Header row */}
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="w-3 h-3 rounded-full bg-[#800020] shadow-xs" />
+                                          <h5 className="text-sm font-bold text-slate-900 dark:text-white">
+                                            NHT Theme 2
+                                          </h5>
+                                        </div>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-900 dark:text-rose-300 border border-rose-200 dark:border-rose-800 uppercase tracking-wider">
+                                          Classic Executive
+                                        </span>
+                                      </div>
+
+                                      {/* Skeleton UI Preview Frame (Amal-style classic rail + burgundy hero banner) */}
+                                      <div className="rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-neutral-950 p-2.5 shadow-inner mb-3 overflow-hidden select-none relative">
+                                        {/* Browser header dots */}
+                                        <div className="flex items-center gap-1 mb-2 pb-1.5 border-b border-neutral-800">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500/80 inline-block" />
+                                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500/80 inline-block" />
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 inline-block" />
+                                          <span className="ml-2 text-[8px] font-mono text-neutral-500">nht-theme-2.preview</span>
+                                        </div>
+
+                                        <div className="flex h-32 relative">
+                                          {/* Classic Flush Rail Sidebar Skeleton */}
+                                          <div className="w-20 bg-[#161618] -my-2.5 -ml-2.5 p-1.5 flex flex-col justify-between border-r border-neutral-800 shrink-0">
+                                            <div className="space-y-1">
+                                              {/* Brand Header */}
+                                              <div className="flex items-center gap-1.5 pb-1 border-b border-neutral-800">
+                                                <div className="w-3 h-3 rounded bg-neutral-800 border border-neutral-700 shrink-0" />
+                                                <div className="w-9 h-1.5 rounded bg-neutral-600" />
+                                              </div>
+                                              {/* Active item (Burgundy Pill) */}
+                                              <div className="w-full h-3 rounded bg-[#800020] flex items-center px-1 gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                                <div className="w-6 h-1 rounded bg-white" />
+                                              </div>
+                                              {/* Sidebar items with Chevrons > */}
+                                              <div className="w-full h-2.5 rounded hover:bg-white/5 flex items-center justify-between px-1">
+                                                <div className="w-5 h-1 rounded bg-neutral-500" />
+                                                <div className="text-[7px] text-neutral-500 font-bold">&gt;</div>
+                                              </div>
+                                              {/* Hovered item with Flyout indicator */}
+                                              <div className="w-full h-2.5 rounded bg-neutral-800/80 flex items-center justify-between px-1">
+                                                <div className="w-6 h-1 rounded bg-neutral-400" />
+                                                <div className="text-[7px] text-rose-400 font-bold">&gt;</div>
+                                              </div>
+                                              <div className="w-full h-2.5 rounded hover:bg-white/5 flex items-center justify-between px-1">
+                                                <div className="w-5 h-1 rounded bg-neutral-500" />
+                                                <div className="text-[7px] text-neutral-500 font-bold">&gt;</div>
+                                              </div>
+                                            </div>
+                                            <div className="pt-1 border-t border-neutral-800 flex items-center gap-1">
+                                              <div className="w-2.5 h-2.5 rounded bg-neutral-800" />
+                                              <div className="w-6 h-1 rounded bg-neutral-600" />
+                                            </div>
+                                          </div>
+
+                                          {/* Miniature 2-Tier Floating Flyout Simulation */}
+                                          <div className="absolute left-[70px] top-4 z-20 w-16 bg-[#1A1A1A] border border-neutral-700 rounded-lg p-1 shadow-xl flex flex-col gap-0.5 animate-fadeIn">
+                                            <div className="w-full h-2 rounded bg-[#800020] flex items-center px-1">
+                                              <div className="w-8 h-0.5 rounded bg-white" />
+                                            </div>
+                                            <div className="w-full h-1.5 rounded bg-neutral-800 px-1 flex items-center">
+                                              <div className="w-6 h-0.5 rounded bg-neutral-500" />
+                                            </div>
+                                            <div className="w-full h-1.5 rounded bg-neutral-800 px-1 flex items-center">
+                                              <div className="w-7 h-0.5 rounded bg-neutral-500" />
+                                            </div>
+                                          </div>
+
+                                          {/* Main Body Skeleton */}
+                                          <div className="flex-1 flex flex-col gap-1.5 pl-2.5 min-w-0">
+                                            {/* Burgundy Hero Banner Header */}
+                                            <div className="h-6 rounded-lg bg-[#800020] p-1.5 flex items-center justify-between text-white shadow-xs">
+                                              <div className="flex items-center gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-rose-300" />
+                                                <div className="w-14 h-1.5 rounded bg-white/90" />
+                                              </div>
+                                              <div className="w-6 h-2 rounded bg-white/20" />
+                                            </div>
+
+                                            {/* Summary 4-card metric tiles */}
+                                            <div className="grid grid-cols-2 gap-1 flex-1">
+                                              <div className="p-1 rounded bg-neutral-900 border border-neutral-800 flex flex-col justify-center">
+                                                <div className="w-4 h-1 rounded bg-neutral-600 mb-0.5" />
+                                                <div className="w-7 h-1.5 rounded bg-neutral-300" />
+                                              </div>
+                                              <div className="p-1 rounded bg-neutral-900 border border-neutral-800 flex flex-col justify-center">
+                                                <div className="w-4 h-1 rounded bg-neutral-600 mb-0.5" />
+                                                <div className="w-7 h-1.5 rounded bg-neutral-300" />
+                                              </div>
+                                              <div className="p-1 rounded bg-neutral-900 border border-neutral-800 flex flex-col justify-center">
+                                                <div className="w-4 h-1 rounded bg-neutral-600 mb-0.5" />
+                                                <div className="w-7 h-1.5 rounded bg-neutral-300" />
+                                              </div>
+                                              <div className="p-1 rounded bg-neutral-900 border border-neutral-800 flex flex-col justify-center">
+                                                <div className="w-4 h-1 rounded bg-neutral-600 mb-0.5" />
+                                                <div className="w-7 h-1.5 rounded bg-neutral-300" />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                                        Classic edge-to-edge flush rail layout with charcoal sidebar, 2-tier floating category dropdowns, executive hero banner, and clean reporting.
+                                      </p>
+                                    </div>
+
+                                    {/* Action button & Color Variant Chips */}
+                                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1">
+                                          Palette:
+                                        </span>
+                                        {[
+                                          { name: 'Option A: Imperial Gold', hex: '#D97706', label: 'Gold (Option A)' },
+                                          { name: 'Option B: Burgundy', hex: '#800020', label: 'Burgundy' },
+                                          { name: 'Option C: Midnight Cobalt', hex: '#1D4ED8', label: 'Cobalt' },
+                                          { name: 'Option D: Royal Violet', hex: '#7C3AED', label: 'Violet' },
+                                          { name: 'Option E: Bronze', hex: '#B45309', label: 'Bronze' },
+                                        ].map((variant) => {
+                                          const isVariantActive = masterThemePreset === 'nht-2' && selectedAccentColor.toUpperCase() === variant.hex.toUpperCase();
+                                          return (
+                                            <button
+                                              key={variant.hex}
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleApplyMasterPreset('nht-2', variant.hex);
+                                              }}
+                                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                                                isVariantActive
+                                                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 ring-1 ring-amber-400 shadow-2xs font-black'
+                                                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
+                                              }`}
+                                              title={variant.name}
+                                            >
+                                              <span className="w-2 h-2 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: variant.hex }} />
+                                              <span>{variant.label}</span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleApplyMasterPreset('nht-2', '#D97706');
+                                        }}
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 self-end sm:self-auto ${
+                                          masterThemePreset === 'nht-2'
+                                            ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                        }`}
+                                      >
+                                        {masterThemePreset === 'nht-2' ? (
+                                          <>
+                                            <LuCheck size={13} />
+                                            <span>Active (Theme 2)</span>
+                                          </>
+                                        ) : (
+                                          <span>Switch to Theme 2</span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* TAB 1: SIDEBAR BACKGROUND THEME */}
+                            {sidebarActiveConfigTab === 'theme' && (
+                              <div className="space-y-4 animate-fadeIn">
+                                {/* Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-800">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuPalette size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{"Sidebar Background Theme & Gradients"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {"Choose from 12 curated themes, or craft and save your own custom gradients."}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+                                      {sidebarCustomBg ? 'Custom Theme' : `Preset: ${sidebarThemeMode}`}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Studio Sub-tabs: Curated Themes | Custom & Gradient | Saved Themes */}
+                                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 w-fit flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => setCustomBgSubTab('presets')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                                      customBgSubTab === 'presets'
+                                        ? 'bg-white dark:bg-slate-900 text-primary shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    <LuPalette size={13} />
+                                    <span>{"Curated Themes"} (12)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCustomBgSubTab('custom');
+                                      syncStudioWithActiveBg();
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                                      customBgSubTab === 'custom'
+                                        ? 'bg-white dark:bg-slate-900 text-primary shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    <LuSparkles size={13} />
+                                    <span>{"Custom & Gradient Studio"}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCustomBgSubTab('saved')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                                      customBgSubTab === 'saved'
+                                        ? 'bg-white dark:bg-slate-900 text-primary shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    <LuBookmark size={13} />
+                                    <span>{"Saved Themes"} ({savedCustomThemes.length})</span>
+                                  </button>
+                                </div>
+
+                                {/* VIEW 1: CURATED THEMES (12 OPTIONS) */}
+                                {customBgSubTab === 'presets' && (
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1 animate-fadeIn">
+                                    {[
+                                      { id: 'light', name: 'Clean White', bg: '#FFFFFF', text: 'text-slate-900', badge: 'Minimal' },
+                                      { id: 'navy', name: 'Executive Navy', bg: '#0F172A', text: 'text-white', badge: 'Corporate' },
+                                      { id: 'emerald', name: 'Rich Emerald', bg: '#0A1A18', text: 'text-white', badge: 'Heritage' },
+                                      { id: 'charcoal', name: 'Warm Charcoal', bg: '#1C1917', text: 'text-white', badge: 'Artisan' },
+                                      { id: 'dark', name: 'Classic Dark', bg: '#0B0F17', text: 'text-white', badge: 'Original' },
+                                      { id: 'indigo', name: 'Midnight Indigo', bg: '#0C1033', text: 'text-white', badge: 'Indigo' },
+                                      { id: 'burgundy', name: 'Royal Velvet', bg: '#200D1F', text: 'text-white', badge: 'Velvet' },
+                                      { id: 'slate', name: 'Nordic Slate', bg: '#1E293B', text: 'text-white', badge: 'Titanium' },
+                                      { id: 'pine', name: 'Forest Pine', bg: '#061D15', text: 'text-white', badge: 'Botanic' },
+                                      { id: 'pitch', name: 'Obsidian Pitch', bg: '#050508', text: 'text-white', badge: 'Carbon' },
+                                      { id: 'ember', name: 'Sunset Ember', bg: '#23120C', text: 'text-white', badge: 'Sunset' },
+                                      { id: 'ocean', name: 'Deep Ocean', bg: '#071A24', text: 'text-white', badge: 'Oceanic' },
+                                    ].map((item) => {
+                                      const isSelected = !sidebarCustomBg && sidebarThemeMode === item.id;
+                                      return (
+                                        <button
+                                          key={item.id}
+                                          type="button"
+                                          onClick={() => {
+                                            if (['light', 'navy', 'emerald', 'charcoal', 'dark'].includes(item.id)) {
+                                              handleSidebarThemeChange(item.id as SidebarThemeMode);
+                                            } else {
+                                              applyCustomSidebarBg(item.bg, item.name);
+                                            }
+                                          }}
+                                          className={`relative p-3 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col items-center justify-between text-center gap-2 group h-24 ${
+                                            isSelected || sidebarCustomBg === item.bg
+                                              ? 'ring-2 ring-blue-500 border-blue-500 shadow-md scale-102'
+                                              : 'border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-500 hover:shadow-2xs'
+                                          }`}
+                                          style={{ backgroundColor: item.bg }}
+                                        >
+                                          <span
+                                            className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10"
+                                            style={{ color: item.id === 'light' ? '#0F172A' : '#FFFFFF' }}
+                                          >
+                                            {item.badge}
+                                          </span>
+                                          <span className={`text-xs font-bold leading-tight ${item.text}`}>
+                                            {item.name}
+                                          </span>
+                                          {(isSelected || sidebarCustomBg === item.bg) && (
+                                            <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shadow-xs">
+                                              ✓
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* VIEW 2: CUSTOM & GRADIENT STUDIO */}
+                                {customBgSubTab === 'custom' && (
+                                  <div className="space-y-4 pt-1 animate-fadeIn">
+                                    {/* Current Active Background Status & Quick Sync Card */}
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between gap-3 flex-wrap">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <div
+                                          className="w-10 h-10 rounded-xl shadow-xs border border-white/20 shrink-0 flex items-center justify-center text-white"
+                                          style={{
+                                            background: sidebarCustomBg || (
+                                              sidebarThemeMode === 'light' ? '#FFFFFF' :
+                                              sidebarThemeMode === 'navy' ? '#0F172A' :
+                                              sidebarThemeMode === 'emerald' ? '#0A1A18' :
+                                              sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17'
+                                            ),
+                                          }}
+                                        >
+                                          <LuCheck size={15} className="stroke-[3]" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-primary flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                            <span>Current Active Background</span>
+                                          </div>
+                                          <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                            {sidebarCustomBg
+                                              ? (sidebarCustomBg.includes('gradient') ? 'Custom Linear Gradient Active' : `Custom Color Active: ${sidebarCustomBg}`)
+                                              : `Preset Active: ${sidebarThemeMode.toUpperCase()}`}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={syncStudioWithActiveBg}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:border-primary hover:text-primary transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                        title="Load current active background into studio controls"
+                                      >
+                                        <LuRotateCcw size={12} />
+                                        <span>Load Active into Studio</span>
+                                      </button>
+                                    </div>
+
+                                    {/* Gradient vs Solid Toggle */}
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {"Background Type:"}
+                                      </span>
+                                      <div className="flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                        <button
+                                          type="button"
+                                          onClick={() => setCustomBgType('gradient')}
+                                          className={`px-3 py-1 rounded-md text-xs font-bold transition cursor-pointer ${
+                                            customBgType === 'gradient'
+                                              ? 'bg-primary text-white shadow-xs'
+                                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                          }`}
+                                        >
+                                          🌈 {"Linear Gradient"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setCustomBgType('solid')}
+                                          className={`px-3 py-1 rounded-md text-xs font-bold transition cursor-pointer ${
+                                            customBgType === 'solid'
+                                              ? 'bg-primary text-white shadow-xs'
+                                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                          }`}
+                                        >
+                                          ⬛ {"Solid Color"}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Gradient Controls or Solid Color Controls */}
+                                    {customBgType === 'gradient' ? (
+                                      <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                          {/* Stop 1 */}
+                                          <div className="space-y-1.5">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                              Gradient Color 1 (Start Stop)
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              <input
+                                                type="color"
+                                                value={customColorStop1}
+                                                onChange={(e) => setCustomColorStop1(e.target.value)}
+                                                className="w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white dark:bg-slate-800"
+                                              />
+                                              <input
+                                                type="text"
+                                                value={customColorStop1.toUpperCase()}
+                                                onChange={(e) => setCustomColorStop1(e.target.value)}
+                                                maxLength={7}
+                                                className="w-28 px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* Stop 2 */}
+                                          <div className="space-y-1.5">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                              Gradient Color 2 (End Stop)
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              <input
+                                                type="color"
+                                                value={customColorStop2}
+                                                onChange={(e) => setCustomColorStop2(e.target.value)}
+                                                className="w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white dark:bg-slate-800"
+                                              />
+                                              <input
+                                                type="text"
+                                                value={customColorStop2.toUpperCase()}
+                                                onChange={(e) => setCustomColorStop2(e.target.value)}
+                                                maxLength={7}
+                                                className="w-28 px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Angle Presets */}
+                                        <div className="space-y-1.5">
+                                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            Gradient Angle & Flow Direction
+                                          </span>
+                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            {[
+                                              { angle: 135, label: 'Diagonal 135°' },
+                                              { angle: 180, label: 'Vertical 180°' },
+                                              { angle: 90, label: 'Horizontal 90°' },
+                                              { angle: 45, label: 'Angled 45°' },
+                                            ].map((preset) => (
+                                              <button
+                                                key={preset.angle}
+                                                type="button"
+                                                onClick={() => setCustomGradientAngle(preset.angle)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                                                  customGradientAngle === preset.angle
+                                                    ? 'border-primary bg-primary/10 text-primary font-bold'
+                                                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                                                }`}
+                                              >
+                                                {preset.label}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+
+                                        {/* Live Preview Box & Quick Apply */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                          <div className="flex items-center gap-3">
+                                            <div
+                                              className="w-24 h-11 rounded-xl shadow-xs border border-white/20 flex items-center justify-center text-white text-[10px] font-bold tracking-wider"
+                                              style={{
+                                                background: `linear-gradient(${customGradientAngle}deg, ${customColorStop1} 0%, ${customColorStop2} 100%)`,
+                                              }}
+                                            >
+                                              Preview
+                                            </div>
+                                            <span className="text-xs font-mono text-slate-500 truncate max-w-[200px]">
+                                              {customColorStop1} → {customColorStop2} ({customGradientAngle}°)
+                                            </span>
+                                          </div>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const bg = `linear-gradient(${customGradientAngle}deg, ${customColorStop1} 0%, ${customColorStop2} 100%)`;
+                                              applyCustomSidebarBg(bg, 'Custom Gradient');
+                                            }}
+                                            className="px-4 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                                          >
+                                            <LuSparkles size={13} />
+                                            <span>Test Live on Sidebar</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+                                        <div className="space-y-1.5">
+                                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                            Custom Solid Background Color
+                                          </span>
+                                          <div className="flex items-center gap-3">
+                                            <input
+                                              type="color"
+                                              value={customSolidColor}
+                                              onChange={(e) => setCustomSolidColor(e.target.value)}
+                                              className="w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 cursor-pointer p-0.5 bg-white dark:bg-slate-800"
+                                            />
+                                            <input
+                                              type="text"
+                                              value={customSolidColor.toUpperCase()}
+                                              onChange={(e) => setCustomSolidColor(e.target.value)}
+                                              maxLength={7}
+                                              className="w-28 px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => applyCustomSidebarBg(customSolidColor, 'Custom Solid')}
+                                              className="px-4 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                                            >
+                                              <LuSparkles size={13} />
+                                              <span>Test Live on Sidebar</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* SAVE CUSTOM THEME & SUGGESTED NAMES */}
+                                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+                                      <div>
+                                        <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                          <LuSave size={13} className="text-primary" />
+                                          <span>{"Save this Theme & Pick a Suggested Name:"}</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                          {"Click any suggested name pill below to quickly autofill, or type your own:"}
+                                        </p>
+                                      </div>
+
+                                      {/* Suggested Names Pills */}
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {SUGGESTED_THEME_NAMES.map((name) => (
+                                          <button
+                                            key={name}
+                                            type="button"
+                                            onClick={() => setCustomThemeName(name)}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
+                                              customThemeName === name
+                                                ? 'bg-primary text-white border-primary shadow-xs'
+                                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary'
+                                            }`}
+                                          >
+                                            ✨ {name}
+                                          </button>
+                                        ))}
+                                      </div>
+
+                                      {/* Save Input & Button */}
+                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                                        <input
+                                          type="text"
+                                          value={customThemeName}
+                                          onChange={(e) => setCustomThemeName(e.target.value)}
+                                          placeholder="Enter theme name (e.g. Midnight Aurora)..."
+                                          className="flex-1 px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={handleSaveCustomTheme}
+                                          className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                                        >
+                                          <LuSave size={13} />
+                                          <span>{"Save & Apply Theme"}</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* VIEW 3: SAVED CUSTOM THEMES */}
+                                {customBgSubTab === 'saved' && (
+                                  <div className="space-y-3 pt-1 animate-fadeIn">
+                                    {savedCustomThemes.length === 0 ? (
+                                      <div className="p-8 text-center rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-300 dark:border-slate-700">
+                                        <LuBookmark className="mx-auto text-slate-400 mb-2" size={24} />
+                                        <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                          {"No saved custom themes yet."}
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto">
+                                          {"Craft your unique gradient or solid color in the Custom & Gradient Studio and save it here!"}
+                                        </p>
+                                        <button
+                                          type="button"
+                                          onClick={() => setCustomBgSubTab('custom')}
+                                          className="mt-3 px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-white shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                                        >
+                                          <LuPlus size={12} />
+                                          <span>Open Studio</span>
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {savedCustomThemes.map((savedTheme) => {
+                                          const isCurrentlyActive = sidebarCustomBg === savedTheme.bg;
+                                          return (
+                                            <div
+                                              key={savedTheme.id}
+                                              onClick={() => applyCustomSidebarBg(savedTheme.bg, savedTheme.name)}
+                                              className={`p-3 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 group ${
+                                                isCurrentlyActive
+                                                  ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 shadow-xs'
+                                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:shadow-2xs'
+                                              }`}
+                                            >
+                                              <div className="flex items-center gap-2.5 min-w-0">
+                                                <div
+                                                  className="w-10 h-10 rounded-xl shadow-2xs border border-white/20 shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
+                                                  style={{ background: savedTheme.bg }}
+                                                >
+                                                  {isCurrentlyActive && <LuCheck size={14} className="stroke-[3]" />}
+                                                </div>
+                                                <div className="min-w-0">
+                                                  <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                                    {savedTheme.name}
+                                                  </div>
+                                                  <div className="text-[10px] text-slate-400 capitalize flex items-center gap-1">
+                                                    <span className="capitalize">{savedTheme.type}</span>
+                                                    {savedTheme.date && <span>• {savedTheme.date}</span>}
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    applyCustomSidebarBg(savedTheme.bg, savedTheme.name);
+                                                  }}
+                                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition shadow-2xs cursor-pointer"
+                                                >
+                                                  Apply
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => handleDeleteSavedTheme(savedTheme.id, e)}
+                                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                                  title="Delete saved theme"
+                                                >
+                                                  <LuTrash2 size={13} />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* TAB 2: NAVBAR & BRAND ACCENT COLOR */}
+                            {sidebarActiveConfigTab === 'accent' && (
+                              <div className="space-y-4 animate-fadeIn">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuSparkles size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{"Navbar & Brand Accent Color"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {"Controls top navbar buttons, active tab pills, badges, and primary accents across the ERP."}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {isAccentChanged && (
+                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                        Unapplied
+                                      </span>
+                                    )}
+                                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold">
+                                      <span
+                                        className="w-3 h-3 rounded-full border border-black/15 shadow-2xs shrink-0"
+                                        style={{ backgroundColor: selectedAccentColor }}
+                                      />
+                                      <span className="text-slate-700 dark:text-slate-200">
+                                        {selectedAccentColor.toUpperCase()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 24 Presets Grid */}
+                                <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-1.5 pt-1">
+                                  {PRESET_THEME_COLORS.map((c) => {
+                                    const isSelected = selectedAccentColor.toLowerCase() === c.hex.toLowerCase();
+                                    const isCurrentlyApplied = appliedAccentColor.toLowerCase() === c.hex.toLowerCase();
+
+                                    return (
+                                      <button
+                                        key={`accent-preset-${c.hex}`}
+                                        type="button"
+                                        onClick={() => handleAccentSelect(c.hex)}
+                                        className={`group relative h-9 rounded-xl transition-all duration-150 hover:scale-105 flex items-center justify-center cursor-pointer border ${
+                                          isSelected
+                                            ? 'ring-2 ring-offset-1 ring-slate-900 dark:ring-white border-transparent shadow-xs scale-105'
+                                            : 'border-black/10 dark:border-white/10'
+                                        }`}
+                                        style={{ backgroundColor: c.hex }}
+                                        title={`${c.name} (${c.hex})${isCurrentlyApplied ? ' - Active' : ''}`}
+                                      >
+                                        {isSelected && (
+                                          <LuCheck className="text-white drop-shadow-md text-xs stroke-[3]" />
+                                        )}
+                                        {!isSelected && isCurrentlyApplied && (
+                                          <span className="w-1 h-1 rounded-full bg-white/90 absolute bottom-1" />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Custom Color Wheel & Apply Bar */}
+                                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                                    <label
+                                      className="relative flex items-center justify-center cursor-pointer shrink-0"
+                                      title="Open color wheel"
+                                    >
+                                      <span
+                                        className="w-9 h-9 rounded-xl border border-black/15 shadow-xs block transition hover:scale-105"
+                                        style={{ backgroundColor: selectedAccentColor }}
+                                      />
+                                      <input
+                                        type="color"
+                                        value={selectedAccentColor}
+                                        onChange={(e) => handleAccentSelect(e.target.value)}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                      />
+                                    </label>
+
+                                    <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 w-32">
+                                      <span className="text-slate-400 select-none mr-1">#</span>
+                                      <input
+                                        type="text"
+                                        maxLength={6}
+                                        value={customAccentHex}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setCustomAccentHex(val);
+                                          const clean = val.replace(/[^0-9A-Fa-f]/g, '').trim();
+                                          if (clean.length === 3 || clean.length === 6) {
+                                            setSelectedAccentColor(`#${clean}`);
+                                          }
+                                        }}
+                                        placeholder="10B981"
+                                        className="w-full bg-transparent outline-none uppercase font-mono text-xs"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                    {isAccentChanged && (
+                                      <button
+                                        type="button"
+                                        onClick={handleResetAccentColor}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1"
+                                      >
+                                        <LuRotateCcw size={12} />
+                                        <span>Reset</span>
+                                      </button>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={handleApplyAccentColor}
+                                      className={`px-5 py-2 text-xs font-bold rounded-xl text-white shadow-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                                        isAccentChanged
+                                          ? 'ring-2 ring-offset-1 ring-emerald-500 hover:brightness-110 font-extrabold'
+                                          : 'hover:opacity-90'
+                                      }`}
+                                      style={{
+                                        backgroundColor: selectedAccentColor,
+                                        color: getContrastTextColor(selectedAccentColor),
+                                        border: getContrastTextColor(selectedAccentColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
+                                      }}
+                                    >
+                                      {accentAppliedRecently ? (
+                                        <>
+                                          <LuCheck size={14} className="stroke-[3]" />
+                                          <span>Applied!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <LuSparkles size={13} />
+                                          <span>{"Apply Accent Color"}</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* TAB 3: WORKSPACE NAVIGATION & LAYOUT */}
+                            {sidebarActiveConfigTab === 'layout' && (
+                              <div className="space-y-5 animate-fadeIn">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuLayers size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{"Workspace Navigation & Layout"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      Choose between a modern floating card layout or the classic edge-to-edge ERP interface.
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={handleResetLayoutToClassic}
+                                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                                  >
+                                    <LuRotateCcw size={13} />
+                                    <span>{"Reset to Classic (Undo)"}</span>
+                                  </button>
+                                </div>
+
+                                {/* Quick Workspace Presets */}
+                                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div>
+                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                                      Quick Workspace Presets
+                                    </span>
+                                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                      Switch both Sidebar & Navbar together with 1 click:
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApplyPreset('floating')}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                        sidebarLayout === 'floating' && navbarLayout === 'floating'
+                                          ? 'bg-blue-600 text-white shadow-xs'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      <span>🚀 Full Floating</span>
+                                      {sidebarLayout === 'floating' && navbarLayout === 'floating' && <LuCheck size={12} />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApplyPreset('classic')}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                        sidebarLayout === 'classic' && navbarLayout === 'classic'
+                                          ? 'bg-blue-600 text-white shadow-xs'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      <span>🏛️ Full Classic</span>
+                                      {sidebarLayout === 'classic' && navbarLayout === 'classic' && <LuCheck size={12} />}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Granular Individual Controls */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {/* Left Sidebar Style */}
+                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-900 dark:text-white">Left Sidebar Style</span>
+                                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetSidebarLayout('floating')}
+                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
+                                          sidebarLayout === 'floating'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
+                                          {sidebarLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">Rounded detached card with shadow.</p>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetSidebarLayout('classic')}
+                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
+                                          sidebarLayout === 'classic'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
+                                          {sidebarLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">Original edge-to-edge flush sidebar.</p>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Top Navbar Style */}
+                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-900 dark:text-white">Top Navbar Style</span>
+                                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                        {navbarLayout === 'floating' ? 'Floating' : 'Classic'}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetNavbarLayout('floating')}
+                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
+                                          navbarLayout === 'floating'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
+                                          {navbarLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">Floating pill card with elevation.</p>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetNavbarLayout('classic')}
+                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
+                                          navbarLayout === 'classic'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
+                                          {navbarLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 leading-tight">Edge-to-edge full width navbar.</p>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Reports Layout Style */}
+                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white block">Reports Layout & Navigation</span>
+                                        <p className="text-[11px] text-slate-400">Switch between visual reports directory or classic nested sidebar tree.</p>
+                                      </div>
+                                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                        {reportLayout === 'modern' ? 'Modern Hub' : 'Classic Tree'}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                      {/* Modern Reports Hub Card */}
+                                      <div
+                                        onClick={() => handleSetReportLayout('modern')}
+                                        className={`p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between select-none ${
+                                          reportLayout === 'modern'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/30 dark:bg-blue-950/20 shadow-md'
+                                            : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        {/* 16:10 / 16:9 Aspect Ratio Interactive Skeleton Preview Frame */}
+                                        <div className="w-full aspect-[16/10] rounded-xl bg-[#0F172A] border border-slate-700/80 p-2 flex flex-col justify-between overflow-hidden shadow-inner mb-2.5 relative">
+                                          {/* Mini Top Filter Bar */}
+                                          <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-slate-700/60">
+                                            <div className="flex items-center gap-1">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                              <span className="w-10 h-1 rounded bg-slate-500" />
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              <span className="w-6 h-1.5 rounded-full bg-indigo-600/30 border border-cyan-400/40" />
+                                              <span className="w-5 h-1.5 rounded-full bg-slate-700" />
+                                            </div>
+                                          </div>
+                                          {/* Mini Draggable Report Cards Grid (Theme 1 style) */}
+                                          <div className="grid grid-cols-3 gap-1.5 flex-1 pt-1.5">
+                                            <div className="p-1 rounded bg-slate-800/90 border border-slate-700 flex flex-col justify-between shadow-2xs">
+                                              <div className="w-3 h-3 rounded bg-indigo-600/20 text-cyan-400 flex items-center justify-center text-[7px] font-black">📊</div>
+                                              <div className="w-7 h-1 rounded bg-slate-300 mt-1" />
+                                              <div className="w-4 h-0.5 rounded bg-slate-500 mt-0.5" />
+                                            </div>
+                                            <div className="p-1 rounded bg-slate-800/90 border border-slate-700 flex flex-col justify-between shadow-2xs">
+                                              <div className="w-3 h-3 rounded bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[7px] font-black">💰</div>
+                                              <div className="w-8 h-1 rounded bg-slate-300 mt-1" />
+                                              <div className="w-5 h-0.5 rounded bg-slate-500 mt-0.5" />
+                                            </div>
+                                            <div className="p-1 rounded bg-slate-800/90 border border-slate-700 flex flex-col justify-between shadow-2xs">
+                                              <div className="w-3 h-3 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-[7px] font-black">📦</div>
+                                              <div className="w-6 h-1 rounded bg-slate-300 mt-1" />
+                                              <div className="w-4 h-0.5 rounded bg-slate-500 mt-0.5" />
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                                            <span>📊</span> Modern Reports Hub
+                                          </span>
+                                          {reportLayout === 'modern' && <LuCheck size={14} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">Visual interactive cards directory with live search & filters.</p>
+                                      </div>
+
+                                      {/* Classic Nested Tree Card */}
+                                      <div
+                                        onClick={() => handleSetReportLayout('classic')}
+                                        className={`p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between select-none ${
+                                          reportLayout === 'classic'
+                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/30 dark:bg-blue-950/20 shadow-md'
+                                            : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        {/* 16:10 / 16:9 Aspect Ratio Interactive Skeleton Preview Frame */}
+                                        <div className="w-full aspect-[16/10] rounded-xl bg-[#141416] border border-neutral-700/80 p-2 flex overflow-hidden shadow-inner mb-2.5 relative">
+                                          {/* Sidebar with flyout tree indicator */}
+                                          <div className="w-14 bg-[#1C1C1E] -my-2 -ml-2 p-1.5 flex flex-col justify-between border-r border-neutral-800 shrink-0">
+                                            <div className="space-y-1">
+                                              <div className="w-7 h-1 rounded bg-neutral-600 mb-1" />
+                                              <div className="w-full h-2.5 rounded bg-[#800020] flex items-center px-1">
+                                                <div className="w-5 h-0.5 rounded bg-white" />
+                                              </div>
+                                              <div className="w-full h-2 rounded bg-neutral-800/80 flex items-center justify-between px-1">
+                                                <div className="w-6 h-0.5 rounded bg-neutral-400" />
+                                                <span className="text-[6px] text-rose-400">&gt;</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          {/* Floating Flyout Simulation */}
+                                          <div className="absolute left-[54px] top-3 z-10 w-16 bg-[#222226] border border-neutral-700 rounded-lg p-1 shadow-lg flex flex-col gap-0.5">
+                                            <div className="w-full h-1.5 rounded bg-[#800020] px-1 flex items-center">
+                                              <div className="w-7 h-0.5 rounded bg-white" />
+                                            </div>
+                                            <div className="w-full h-1.5 rounded bg-neutral-800 px-1 flex items-center">
+                                              <div className="w-8 h-0.5 rounded bg-neutral-400" />
+                                            </div>
+                                          </div>
+                                          {/* Main direct report sheet preview */}
+                                          <div className="flex-1 flex flex-col justify-between pl-20 min-w-0">
+                                            <div className="h-4 rounded bg-[#800020] p-1 flex items-center justify-between text-white">
+                                              <div className="w-8 h-1 rounded bg-white" />
+                                              <div className="w-4 h-1 rounded bg-white/40" />
+                                            </div>
+                                            <div className="space-y-1 py-1">
+                                              <div className="w-full h-1 rounded bg-neutral-800" />
+                                              <div className="w-3/4 h-1 rounded bg-neutral-800" />
+                                              <div className="w-full h-1 rounded bg-neutral-800" />
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                                            <span>🏛️</span> Classic Nested Tree
+                                          </span>
+                                          {reportLayout === 'classic' && <LuCheck size={14} className="text-blue-600 stroke-[3]" />}
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">Multi-level flyout sidebar tree with direct tabbed generators.</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* TAB 4: SMART DRAWER */}
+                            {sidebarActiveConfigTab === 'drawer' && (
+                              <div className="space-y-4 animate-fadeIn">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuMonitor size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{"Sidebar Default State & Interaction"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      Choose whether the sidebar stays permanently pinned open, or stays collapsed and auto-expands on hover/click.
+                                    </p>
+                                  </div>
+                                  <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+                                    {sidebarBehavior === 'closed' ? 'Auto-Drawer' : 'Always Opened'}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetSidebarBehavior('opened')}
+                                    className={`p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-start gap-3.5 ${
+                                      sidebarBehavior === 'opened'
+                                        ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/70 dark:bg-blue-950/30 shadow-xs'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                      <LuMonitor size={18} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                          {"Always Opened (Pinned)"}
+                                        </span>
+                                        {sidebarBehavior === 'opened' && (
+                                          <LuCheck size={14} className="text-blue-600 stroke-[3]" />
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        {"Sidebar remains fully expanded at all times for quick multi-tasking."}
+                                      </p>
+                                    </div>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetSidebarBehavior('closed')}
+                                    className={`p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-start gap-3.5 ${
+                                      sidebarBehavior === 'closed'
+                                        ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/70 dark:bg-blue-950/30 shadow-xs'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                      <LuLaptop size={18} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                          {"Keep Closed (Smart Drawer)"}
+                                        </span>
+                                        {sidebarBehavior === 'closed' && (
+                                          <LuCheck size={14} className="text-blue-600 stroke-[3]" />
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        {"Collapses to compact icons. Automatically expands on hover or click."}
+                                      </p>
+                                    </div>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* TAB 5: SIDEBAR FONT & ICON COLOR */}
+                            {sidebarActiveConfigTab === 'colors' && (
+                              <div className="space-y-4 animate-fadeIn">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+                                  <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                      <LuPenLine size={16} style={{ color: selectedAccentColor }} />
+                                      <span>{"Sidebar Font & Icon Color"}</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      Colors apply live to all navigation items, text, and icons in the sidebar.
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {wasSidebarAdjusted ? (
+                                      <span className="text-[10px] font-black uppercase text-amber-600 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 px-2 py-0.5 rounded-full">
+                                        Protected
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                        High Contrast
+                                      </span>
+                                    )}
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold">
+                                      <span
+                                        className="w-2.5 h-2.5 rounded-full border border-black/15 shrink-0"
+                                        style={{ backgroundColor: selectedSidebarColor }}
+                                      />
+                                      <span className="text-slate-700 dark:text-slate-200">
+                                        {selectedSidebarColor.toUpperCase()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 24 Presets Grid */}
+                                <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-1.5 pt-1">
+                                  {PRESET_THEME_COLORS.map((c) => {
+                                    const isSelected = selectedSidebarColor.toLowerCase() === c.hex.toLowerCase();
+                                    const isCurrentlyApplied = appliedSidebarColor.toLowerCase() === c.hex.toLowerCase();
+
+                                    return (
+                                      <button
+                                        key={`sidebar-preset-${c.hex}`}
+                                        type="button"
+                                        onClick={() => handleSidebarSelect(c.hex)}
+                                        className={`group relative h-8 rounded-lg transition-all duration-150 hover:scale-105 flex items-center justify-center cursor-pointer border ${
+                                          isSelected
+                                            ? 'ring-2 ring-offset-1 ring-slate-900 dark:ring-white border-transparent shadow-xs scale-105'
+                                            : 'border-black/10 dark:border-white/10'
+                                        }`}
+                                        style={{ backgroundColor: c.hex }}
+                                        title={`${c.name} (${c.hex})${isCurrentlyApplied ? ' - Active' : ''}`}
+                                      >
+                                        {isSelected && (
+                                          <LuCheck className="text-white drop-shadow-md text-xs stroke-[3]" />
+                                        )}
+                                        {!isSelected && isCurrentlyApplied && (
+                                          <span className="w-1 h-1 rounded-full bg-white/90 absolute bottom-1" />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Custom Color Wheel & Apply Bar */}
+                                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                                    <label
+                                      className="relative flex items-center justify-center cursor-pointer shrink-0"
+                                      title="Open color wheel"
+                                    >
+                                      <span
+                                        className="w-8 h-8 rounded-lg border border-black/15 shadow-xs block transition hover:scale-105"
+                                        style={{ backgroundColor: selectedSidebarColor }}
+                                      />
+                                      <input
+                                        type="color"
+                                        value={selectedSidebarColor}
+                                        onChange={(e) => handleSidebarSelect(e.target.value)}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                      />
+                                    </label>
+
+                                    <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 w-28">
+                                      <span className="text-slate-400 select-none mr-1">#</span>
+                                      <input
+                                        type="text"
+                                        maxLength={6}
+                                        value={customSidebarHex}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setCustomSidebarHex(val);
+                                          const clean = val.replace(/[^0-9A-Fa-f]/g, '').trim();
+                                          if (clean.length === 3 || clean.length === 6) {
+                                            handleSidebarSelect(`#${clean}`);
+                                          }
+                                        }}
+                                        placeholder="1E293B"
+                                        className="w-full bg-transparent outline-none uppercase font-mono text-xs"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                    {isSidebarChanged && (
+                                      <button
+                                        type="button"
+                                        onClick={handleResetSidebarColor}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1"
+                                      >
+                                        <LuRotateCcw size={12} />
+                                        <span>Reset</span>
+                                      </button>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={handleApplySidebarColor}
+                                      className={`px-4 py-1.5 text-xs font-bold rounded-lg text-white shadow-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                                        isSidebarChanged
+                                          ? 'ring-2 ring-offset-1 ring-slate-800 hover:brightness-110 font-extrabold'
+                                          : 'hover:opacity-90'
+                                      }`}
+                                      style={{
+                                        backgroundColor: selectedSidebarColor,
+                                        color: getContrastTextColor(selectedSidebarColor),
+                                        border: getContrastTextColor(selectedSidebarColor) === '#0F172A' ? '1px solid #CBD5E1' : undefined,
+                                      }}
+                                    >
+                                      {sidebarAppliedRecently ? (
+                                        <>
+                                          <LuCheck size={14} className="stroke-[3]" />
+                                          <span>Applied!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <LuLayers size={13} />
+                                          <span>Apply Color</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                        {navbarLayout === 'floating' ? 'Floating' : 'Classic'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSetNavbarLayout('floating')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
-                          navbarLayout === 'floating'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🚀 Floating Card
-                          </span>
-                          {navbarLayout === 'floating' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Rounded floating pill card with elevation.
-                        </p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSetNavbarLayout('classic')}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[85px] ${
-                          navbarLayout === 'classic'
-                            ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-xs'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            🏛️ Classic Full
-                          </span>
-                          {navbarLayout === 'classic' && (
-                            <LuCheck className="text-primary text-sm stroke-[3]" />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-400 leading-tight">
-                          Original edge-to-edge full width navbar.
-                        </p>
-                      </button>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
           )}
+
 
           {/* TAB: INVENTORY & STOCK GOVERNANCE */}
           {activeTab === 'stock_control' && (() => {
