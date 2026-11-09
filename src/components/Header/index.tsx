@@ -29,6 +29,7 @@ import {
   LuPalette,
   LuCreditCard,
   LuHardDrive,
+  LuTrash2,
 } from 'react-icons/lu';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
