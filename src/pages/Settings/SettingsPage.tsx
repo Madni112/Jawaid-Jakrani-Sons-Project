@@ -4495,6 +4495,116 @@ const SettingsPage: React.FC = () => {
           {activeTab === 'workflow_logistics' && (
             <WorkflowSettingsTab isRTL={isRTL} />
           )}
+      
+{/* FACTORY RESET CONFIRMATION MODAL */}
+                {showFactoryResetModal && (
+                  <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-boxdark rounded-2xl shadow-2xl border-2 border-red-400 dark:border-red-800 w-full max-w-xl p-6 overflow-hidden animate-in zoom-in-95 duration-200 space-y-5">
+                      
+                      {/* Modal Header */}
+                      <div className="flex items-start gap-4 pb-4 border-b border-stroke dark:border-strokedark">
+                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl shrink-0">
+                          <LuShieldAlert />
+                        </div>
+                        <div>
+                          <h3 className="font-black text-lg text-red-600 dark:text-red-400">
+                            Authorize ERP Factory Reset
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            This action will completely zero out all inventory, sales, purchases, and ledger balances for AL Muhammadi.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Safety Banner */}
+                      <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2.5">
+                        <LuCheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-600" />
+                        <div>
+                          <strong>Automatic Safety Backup Guarantee:</strong> A full Excel & JSON snapshot will automatically be generated, downloaded to your computer, and vaulted in <code>/dev/master/reset-backups</code>.
+                        </div>
+                      </div>
+
+                      {/* Inputs Form */}
+                      <div className="space-y-4 text-xs">
+                        <div>
+                          <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">
+                            1. Enter Developer Master Authorization Password <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="password"
+                            value={resetEnteredPassword}
+                            onChange={(e) => setResetEnteredPassword(e.target.value)}
+                            placeholder="Given by developer in /dev/master"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-red-500 focus:outline-hidden font-mono"
+                          />
+                          <span className="text-[10px] text-slate-400 mt-0.5 block">Managed in /dev/master under Apex Security.</span>
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">
+                            2. Type <span className="text-red-600 font-mono font-black">CONFIRM RESET</span> to confirm <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={resetConfirmPhrase}
+                            onChange={(e) => setResetConfirmPhrase(e.target.value)}
+                            placeholder="Type CONFIRM RESET exactly"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-red-500 focus:outline-hidden font-mono"
+                          />
+                        </div>
+
+                        <div className="pt-2 border-t border-stroke dark:border-strokedark">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={resetWipeMaster}
+                              onChange={(e) => setResetWipeMaster(e.target.checked)}
+                              className="rounded border-stroke text-red-600 focus:ring-red-500"
+                            />
+                            <span className="text-xs text-slate-600 dark:text-slate-300">
+                              Also wipe product & customer master catalog (Blank slate mode)
+                            </span>
+                          </label>
+                        </div>
+
+                        {resetStepStatus && (
+                          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                            <LuRefreshCw className="animate-spin" size={14} />
+                            <span>{resetStepStatus}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Modal Actions */}
+                      <div className="pt-4 border-t border-stroke dark:border-strokedark flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          disabled={isResettingErp}
+                          onClick={() => setShowFactoryResetModal(false)}
+                          className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={
+                            isResettingErp ||
+                            !resetEnteredPassword ||
+                            resetConfirmPhrase.trim().toUpperCase() !== 'CONFIRM RESET'
+                          }
+                          onClick={handleExecuteFactoryReset}
+                          className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-red-600/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <LuTrash2 size={14} />
+                          <span>{isResettingErp ? 'Backing Up & Resetting...' : 'Execute Factory Reset'}</span>
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
       </div>
     </div>
   );

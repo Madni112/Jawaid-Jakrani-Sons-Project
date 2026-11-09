@@ -65,6 +65,7 @@ export const SETTINGS_NAV_TABS: SettingsNavTab[] = [
   { id: 'sound_effects', label: 'Audio', urLabel: 'آڈیو', icon: LuVolume2 },
   { id: 'backup', label: 'Data Backup', urLabel: 'ڈیٹا بیک اپ', icon: LuHardDrive },
   { id: 'workflow_logistics', label: 'Gate Pass & Workflow', urLabel: 'گیٹ پاس و ورک فلو', icon: LuSlidersHorizontal },
+  { id: 'alm_factory_reset', label: 'Factory Reset ERP', urLabel: 'فیکٹری ری سیٹ', icon: LuTrash2 },
 ];
 
 export interface GlobalSearchItem {
@@ -529,6 +530,7 @@ const Header = (props: {
                   {SETTINGS_NAV_TABS.filter((tab) => !canAccessSetting || canAccessSetting(tab.id)).map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeSettingsTab === tab.id;
+                    const isDanger = tab.id === 'alm_factory_reset';
                     const tabTitle = isRTL ? tab.urLabel : tab.label;
                     return (
                       <button
@@ -538,16 +540,20 @@ const Header = (props: {
                         title={`${tabTitle} (Shift + ← / →)`}
                         className={`flex items-center gap-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer shrink-0 select-none ${
                           isActive
-                            ? 'bg-primary text-white shadow-md ring-1 ring-primary/40 px-3.5 py-1.5'
+                            ? isDanger
+                              ? 'bg-red-600 text-white shadow-md ring-1 ring-red-400 px-3.5 py-1.5'
+                              : 'bg-primary text-white shadow-md ring-1 ring-primary/40 px-3.5 py-1.5'
+                            : isDanger
+                            ? 'text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 w-8.5 h-8.5 justify-center'
                             : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-700/70 w-8.5 h-8.5 justify-center'
                         }`}
                         style={
-                          isActive && accentColor && (accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff')
+                          isActive && !isDanger && accentColor && (accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff')
                             ? { color: '#0F172A', border: '1px solid #CBD5E1' }
                             : undefined
                         }
                       >
-                        <TabIcon size={16} className="shrink-0" />
+                        <TabIcon size={16} className={`shrink-0 ${!isActive && isDanger ? 'text-red-500' : ''}`} />
                         {isActive && <span className="animate-fadeIn">{tabTitle}</span>}
                       </button>
                     );
