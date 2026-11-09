@@ -17,6 +17,8 @@ import {
   LuPanelLeftOpen,
   LuPanelLeftClose,
   LuContrast,
+  LuBookmark,
+  LuPlus,
   LuLayoutDashboard,
   LuReceipt,
   LuPackage,

@@ -553,6 +553,103 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  
+  const themeStyles = (() => {
+    switch (sidebarThemeMode) {
+      case 'light':
+        return {
+          bg: 'bg-white',
+          text: 'text-slate-800',
+          border: 'border-slate-200/90 dark:border-slate-700/80',
+          headerBorder: 'border-slate-100 dark:border-slate-200/80',
+          dividerBorder: 'border-slate-200/90',
+          toggleBg: 'bg-white',
+          toggleBorder: 'border-slate-200 dark:border-slate-300',
+          toggleText: 'text-slate-500 hover:text-slate-900',
+          hoverBg: 'hover:bg-slate-100/90',
+          itemHover: 'hover:bg-slate-100/90',
+          logoutHover: 'hover:bg-rose-50 hover:text-rose-600',
+          shadow: layoutMode === 'floating' ? 'shadow-xl shadow-slate-200/70 dark:shadow-2xl dark:shadow-black/60' : 'shadow-md',
+          brandCard: 'bg-slate-50 border-slate-200',
+          brandText: 'text-slate-900',
+          brandSub: 'text-slate-500',
+        };
+      case 'navy':
+        return {
+          bg: 'bg-[#0F172A]',
+          text: 'text-slate-100',
+          border: 'border-slate-800/90',
+          headerBorder: 'border-slate-800/80',
+          dividerBorder: 'border-slate-800/90',
+          toggleBg: 'bg-[#0F172A]',
+          toggleBorder: 'border-slate-700',
+          toggleText: 'text-slate-400 hover:text-white',
+          hoverBg: 'hover:bg-slate-800/80',
+          itemHover: 'hover:bg-white/10',
+          logoutHover: 'hover:bg-rose-500/20 hover:text-rose-400',
+          shadow: 'shadow-2xl shadow-slate-950/60',
+          brandCard: 'bg-slate-900 border-slate-800',
+          brandText: 'text-white',
+          brandSub: 'text-slate-400',
+        };
+      case 'emerald':
+        return {
+          bg: 'bg-[#0A1A18]',
+          text: 'text-slate-100',
+          border: 'border-emerald-950/80',
+          headerBorder: 'border-emerald-950/70',
+          dividerBorder: 'border-emerald-950/80',
+          toggleBg: 'bg-[#0A1A18]',
+          toggleBorder: 'border-emerald-900/80',
+          toggleText: 'text-emerald-300/70 hover:text-white',
+          hoverBg: 'hover:bg-emerald-950/60',
+          itemHover: 'hover:bg-white/10',
+          logoutHover: 'hover:bg-rose-500/20 hover:text-rose-400',
+          shadow: 'shadow-2xl shadow-emerald-950/50',
+          brandCard: 'bg-[#061412] border-emerald-900/50',
+          brandText: 'text-white',
+          brandSub: 'text-emerald-400/80',
+        };
+      case 'charcoal':
+        return {
+          bg: 'bg-[#1C1917]',
+          text: 'text-slate-100',
+          border: 'border-stone-800/90',
+          headerBorder: 'border-stone-800/70',
+          dividerBorder: 'border-stone-800/90',
+          toggleBg: 'bg-[#1C1917]',
+          toggleBorder: 'border-stone-700',
+          toggleText: 'text-stone-400 hover:text-white',
+          hoverBg: 'hover:bg-stone-800/80',
+          itemHover: 'hover:bg-white/10',
+          logoutHover: 'hover:bg-rose-500/20 hover:text-rose-400',
+          shadow: 'shadow-2xl shadow-stone-950/60',
+          brandCard: 'bg-stone-900 border-stone-800',
+          brandText: 'text-white',
+          brandSub: 'text-stone-400',
+        };
+      case 'dark':
+      default:
+        return {
+          bg: 'bg-[#0B0F17]',
+          text: 'text-slate-100',
+          border: 'border-slate-800/90',
+          headerBorder: 'border-slate-800/80',
+          dividerBorder: 'border-slate-800/90',
+          toggleBg: 'bg-[#0B0F17]',
+          toggleBorder: 'border-slate-700/80',
+          toggleText: 'text-slate-400 hover:text-white',
+          hoverBg: 'hover:bg-slate-800/80',
+          itemHover: 'hover:bg-white/10',
+          logoutHover: 'hover:bg-rose-500/20 hover:text-rose-400',
+          shadow: 'shadow-2xl',
+          brandCard: 'bg-slate-900 border-slate-800',
+          brandText: 'text-white',
+          brandSub: 'text-slate-400',
+        };
+    }
+  })();
+
   const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
   const isMobile = windowWidth <= 750;
 
@@ -590,23 +687,23 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
         style={{
           background: customSidebarBg || undefined,
         }}
-        className={`flex flex-col bg-white duration-300 ease-in-out dark:bg-[#111827] shadow-xl ${!sidebarOpen && sidebarBehaviorMode === 'closed' ? 'cursor-pointer' : ''} ${
+        className={`flex flex-col ${customSidebarBg ? '' : themeStyles.bg} ${themeStyles.text} duration-300 ease-in-out select-none ${themeStyles.shadow} ${!sidebarOpen && sidebarBehaviorMode === 'closed' ? 'cursor-pointer' : ''} ${
           isMobile
             ? 'fixed left-0 top-0 z-99999 h-screen block'
             : `min-[751px]:relative min-[751px]:shrink-0 min-[751px]:z-30 ${
                 layoutMode === 'floating'
-                  ? `min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 min-[751px]:shadow-2xl min-[751px]:overflow-visible`
-                  : 'min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80'
+                  ? `min-[751px]:self-start min-[751px]:my-3 min-[751px]:ml-3 min-[751px]:h-fit min-[751px]:max-h-[calc(100vh-1.5rem)] min-[751px]:rounded-2xl min-[751px]:border min-[751px]:border-transparent min-[751px]:shadow-2xl min-[751px]:overflow-visible`
+                  : 'min-[751px]:h-screen min-[751px]:rounded-none min-[751px]:border-r min-[751px]:border-transparent'
               }`
         } ${
           sidebarOpen
             ? `${isTheme2 ? 'w-56' : 'w-72.5'} translate-x-0 visible ${layoutMode === 'classic' ? 'border-r border-slate-200/80 dark:border-slate-800/80' : ''}`
-            : `w-0 -translate-x-full min-[751px]:w-18 ${layoutMode === 'floating' ? 'min-[751px]:transform-none' : 'min-[751px]:translate-x-0'} max-[750px]:invisible ${layoutMode === 'classic' ? 'min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80' : ''}`
+            : `w-0 -translate-x-full min-[751px]:w-18 ${layoutMode === 'floating' ? 'min-[751px]:transform-none' : 'min-[751px]:translate-x-0'} max-[750px]:invisible ${layoutMode === 'classic' ? 'min-[751px]:border-r min-[751px]:border-transparent' : ''}`
         }`}
       >
 
         {/* Brand Header */}
-        <div className={`flex items-center justify-between gap-2 py-5 border-b border-slate-200/80 dark:border-slate-800/80 min-h-[76px] duration-300 ${sidebarOpen ? 'px-6' : 'px-0 min-[751px]:px-2 justify-center'}`} >
+        <div className={`flex items-center justify-between gap-2 py-5 border-b ${themeStyles.headerBorder} min-h-[76px] duration-300 ${sidebarOpen ? 'px-6' : 'px-0 min-[751px]:px-2 justify-center'}`} >
           {(sidebarOpen || isMobile) ? (
             <div className="flex items-center justify-between w-full">
               <NavLink className="flex items-center gap-3.5 group" to="/">
@@ -619,7 +716,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 <div className="text-left">
                   <div className="flex items-center gap-1.5 leading-tight">
                     <span className="text-[20px] font-black text-primary tracking-tight">{brand.brandWord1}</span>
-                    <span className="text-[20px] font-black text-slate-800 dark:text-slate-100 tracking-tight">{brand.brandWord2}</span>
+                    <span className={`text-[20px] font-black tracking-tight ${themeStyles.brandText}`}>{brand.brandWord2}</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-[12px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">{brand.brandSuffix}</span>
