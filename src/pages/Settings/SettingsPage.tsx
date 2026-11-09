@@ -825,6 +825,54 @@ const SettingsPage: React.FC = () => {
   // System Master Permissions State
   const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(null);
 
+  // AL Muhammadi Factory Reset ERP State & Handlers
+  const [showFactoryResetModal, setShowFactoryResetModal] = useState(false);
+  const [resetEnteredPassword, setResetEnteredPassword] = useState('');
+  const [resetConfirmPhrase, setResetConfirmPhrase] = useState('');
+  const [resetWipeMaster, setResetWipeMaster] = useState(false);
+  const [isResettingErp, setIsResettingErp] = useState(false);
+  const [resetStepStatus, setResetStepStatus] = useState<string>('');
+
+  const handleExecuteFactoryReset = async () => {
+    const requiredPw = (systemConfig?.alm_reset_password || 'ALM-RESET-MASTER-2026').trim();
+    if (resetEnteredPassword.trim() !== requiredPw) {
+      toast.error('Invalid Developer Master Password. Please check /dev/master.');
+      triggerFeedbackSound('error', userEmail);
+      return;
+    }
+
+    if (resetConfirmPhrase.trim().toUpperCase() !== 'CONFIRM RESET') {
+      toast.error('Please type "CONFIRM RESET" exactly to proceed.');
+      return;
+    }
+
+    try {
+      setIsResettingErp(true);
+      setResetStepStatus('Initiating safe ERP Factory Reset...');
+      const res = await executeErpFactoryReset(userEmail || 'Super Admin', resetWipeMaster);
+      if (res.success) {
+        toast.success(res.message, { duration: 6000 });
+        triggerFeedbackSound('success', userEmail);
+        setShowFactoryResetModal(false);
+        setResetEnteredPassword('');
+        setResetConfirmPhrase('');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        toast.error(res.message || 'Factory reset failed.');
+        triggerFeedbackSound('error', userEmail);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Factory reset error.');
+      triggerFeedbackSound('error', userEmail);
+    } finally {
+      setIsResettingErp(false);
+      setResetStepStatus('');
+    }
+  };
+
+
   // Customer Credit Limits State
   const [customers, setCustomers] = useState<any[]>([]);
   const [creditLimits, setCreditLimits] = useState<Record<string, number>>({});
