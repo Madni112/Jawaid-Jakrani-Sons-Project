@@ -7,19 +7,18 @@ import { getSidebarBehaviorMode, getMasterThemePreset, MasterThemePreset } from 
 
 const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const isSettingsPage = /(^|\/)settings\/?$/i.test(location.pathname);
+  const isSettings = location.pathname.toLowerCase().startsWith('/settings');
   const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
 
   useEffect(() => {
     const updatePreset = () => setMasterPreset(getMasterThemePreset());
-    window.addEventListener('al_muhammad_theme_preset_changed', updatePreset);
+    window.addEventListener('jakwani_master_theme_preset_changed', updatePreset);
     window.addEventListener('storage', updatePreset);
     return () => {
-      window.removeEventListener('al_muhammad_theme_preset_changed', updatePreset);
+      window.removeEventListener('jakwani_master_theme_preset_changed', updatePreset);
       window.removeEventListener('storage', updatePreset);
     };
   }, []);
-
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const behavior = getSidebarBehaviorMode();
@@ -55,8 +54,8 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       }
     };
 
-    window.addEventListener('al_muhammad_sidebar_behavior_changed', handleBehaviorChange);
-    return () => window.removeEventListener('al_muhammad_sidebar_behavior_changed', handleBehaviorChange);
+    window.addEventListener('jakwani_sidebar_behavior_changed', handleBehaviorChange);
+    return () => window.removeEventListener('jakwani_sidebar_behavior_changed', handleBehaviorChange);
   }, []);
 
   useEffect(() => {
@@ -64,11 +63,16 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       if (window.innerWidth <= 750) {
         setSidebarOpen(false);
       } else {
-        const saved = localStorage.getItem('sidebar_expanded');
-        if (saved !== null) {
-          setSidebarOpen(saved === 'true');
+        const behavior = getSidebarBehaviorMode();
+        if (behavior === 'closed') {
+          setSidebarOpen(false);
         } else {
-          setSidebarOpen(true);
+          const saved = localStorage.getItem('sidebar_expanded');
+          if (saved !== null) {
+            setSidebarOpen(saved === 'true');
+          } else {
+            setSidebarOpen(true);
+          }
         }
       }
     };
@@ -81,23 +85,18 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
     <div className="bg-[#F8FAFC] dark:bg-[#0B0F17] text-slate-700 dark:text-slate-200 min-h-screen font-sans selection:bg-emerald-600 selection:text-white">
       <div className="flex h-screen overflow-hidden relative w-full">
         
-        {/* Hide Main ERP Sidebar when in Settings page */}
-        {!isSettingsPage && (
-          <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={handleSetSidebarOpen} />
-        )}
+        {!isSettings && <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={handleSetSidebarOpen} />}
 
         {/* Content Column: Fixed Header on top, scrollable content underneath */}
         <div className="relative flex flex-1 flex-col h-screen overflow-hidden duration-300 ease-in-out w-full min-w-0">
           <Header sidebarOpen={sidebarOpen} setSidebarOpen={handleSetSidebarOpen} />
 
           <div className="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden w-full">
-            <main className="flex-1 bg-[#F8FAFC] dark:bg-[#0B0F17] w-full relative pb-4">
-              {/* Subtle top ambient emerald glow */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-emerald-500/5 via-teal-500/5 to-transparent dark:from-emerald-950/20 dark:via-teal-950/10 dark:to-transparent" />
+            <main className="flex-1 bg-[#F8FAFC] dark:bg-[#0B0F17] w-full relative">
+              {/* Subtle top ambient cyan glow */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-primary/5 via-primary/5 to-transparent dark:from-primary/15 dark:via-primary/5 dark:to-transparent" />
               
-              <div className={`relative mx-auto p-4 md:p-6 2xl:p-8 w-full ${
-                masterPreset === 'nht-2' ? 'w-full max-w-full 2xl:max-w-full px-4 md:px-8 2xl:px-12' : 'max-w-screen-2xl'
-              }`}>
+              <div className={`relative mx-auto ${masterPreset === 'nht-2' ? 'w-full max-w-full px-4 md:px-6 2xl:px-8 py-4 sm:py-6' : 'max-w-screen-2xl p-4 md:p-6 2xl:p-8 w-full'}`}>
                 {children}
               </div>
             </main>

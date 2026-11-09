@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdPrint, MdArrowBack, MdFileDownload, MdTableChart, MdViewList, MdWarning, MdCheckCircle, MdErrorOutline, MdFormatListBulleted } from 'react-icons/md';
@@ -27,20 +27,6 @@ const StockReportPrint = () => {
         filters.viewMode === 'detailed' ? 'detailed' : 'summary'
     );
     const [activeStatusContainerTab, setActiveStatusContainerTab] = useState<string>('out_of_stock');
-
-    // 🏷️ Tab 3 As-Of-Date Stock Status Report Pill Selectors
-    const [showZeroStock, setShowZeroStock] = useState<boolean>(
-        filters.showZeroStock !== undefined ? Boolean(filters.showZeroStock) : false
-    );
-    const [showAmount, setShowAmount] = useState<boolean>(
-        filters.showAmount !== undefined ? Boolean(filters.showAmount) : false
-    );
-    const [showPurchasePrice, setShowPurchasePrice] = useState<boolean>(
-        filters.showPurchasePrice !== undefined ? Boolean(filters.showPurchasePrice) : true
-    );
-    const [showSalePrice, setShowSalePrice] = useState<boolean>(
-        filters.showSalePrice !== undefined ? Boolean(filters.showSalePrice) : true
-    );
 
     // Helper to construct the 3-tier category hierarchy tree from any row subset
     const buildCategoryTreeFromRows = (rows: any[]) => {
@@ -286,21 +272,17 @@ const StockReportPrint = () => {
     }, [reportRows]);
 
     const activeDisplayRows = useMemo(() => {
-        let rows = reportRows;
-        if (activeTab === 3 && !showZeroStock) {
-            rows = rows.filter(r => Number(r.computed_true_stock || 0) > 0);
-        }
         if (activeViewMode === 'detailed') {
             if (activeTab === 7) {
-                return rows;
+                return reportRows;
             }
             if (activeTab !== 4 && activeStatusContainerTab !== 'all') {
                 const grp = statusGroups.find(g => g.key === activeStatusContainerTab);
-                return grp ? grp.items : rows;
+                return grp ? grp.items : reportRows;
             }
         }
-        return rows;
-    }, [activeViewMode, activeTab, activeStatusContainerTab, statusGroups, reportRows, showZeroStock]);
+        return reportRows;
+    }, [activeViewMode, activeTab, activeStatusContainerTab, statusGroups, reportRows]);
 
     const paginatedRows = useMemo(() => {
         if (isPrinting || pageSize === 'all') return activeDisplayRows;
@@ -388,7 +370,7 @@ const StockReportPrint = () => {
                     prodQuery = prodQuery.or(`category.in.(${leafList}),sub_sub_category.in.(${leafList})`);
                 }
 
-                const { data: baseProducts, error: prodError } = await fetchAllPages(prodQuery);
+                const { data: baseProducts, error: prodError } = await prodQuery;
                 if (prodError) throw prodError;
 
                 // 2. Fetch raw tables for Tab 3 (Multi-location Breakdown) and Tab 8 (Location Ledger)
@@ -396,13 +378,13 @@ const StockReportPrint = () => {
                 let dbLocsData: any[] = [], transfersData: any[] = [];
                 if (activeTab === 8 || activeTab === 3) {
                     const [os, p, s, pr, sr, dbLocsRes, transRes] = await Promise.all([
-                        fetchAllPages(supabase.from('opening_stocks').select('*')),
-                        fetchAllPages(supabase.from('supplier_purchases').select('*')),
-                        fetchAllPages(supabase.from('sales_invoices').select('*')),
-                        fetchAllPages(supabase.from('purchase_returns').select('*')),
-                        fetchAllPages(supabase.from('sales_returns').select('*')),
+                        supabase.from('opening_stocks').select('*'),
+                        supabase.from('supplier_purchases').select('*'),
+                        supabase.from('sales_invoices').select('*'),
+                        supabase.from('purchase_returns').select('*'),
+                        supabase.from('sales_returns').select('*'),
                         supabase.from('inventory_locations').select('id, name, location_type'),
-                        fetchAllPages(supabase.from('stock_transfers').select('*'))
+                        supabase.from('stock_transfers').select('*')
                     ]);
                     openStocks = os.data || [];
                     purchases = p.data || [];
@@ -852,68 +834,6 @@ const StockReportPrint = () => {
                     { header: 'Valuation (Rs.)', key: 'calculated_valuation', width: 20, type: 'currency' }
                 ];
                 exportData = reportRows.map((r, i) => ({ idx: i + 1, ...r }));
-            } else if (activeTab === 3) {
-                columns = [
-                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
-                    { header: 'Product Stock Asset Identifier', key: 'product_name', width: 32 },
-                    { header: 'Brand', key: 'bin', width: 16 },
-                    { header: 'Parent Category', key: 'sub_sub_category', width: 20 },
-                    { header: 'Sub Category', key: 'sub_category', width: 20 },
-                    { header: 'Leaf Category', key: 'category', width: 20 },
-                    { header: 'Warehouse Location', key: 'warehouse', width: 20 },
-                    { header: 'Stock Availability Status', key: 'status', width: 16, alignment: 'center' },
-                    { header: 'Dynamic Remaining Quantity', key: 'qty', width: 18, type: 'number', alignment: 'right' }
-                ];
-                if (showAmount && showPurchasePrice) {
-                    columns.push(
-                        { header: 'Purchase Price (PKR)', key: 'purchase_price', width: 18, type: 'currency', alignment: 'right' },
-                        { header: 'Total Purchase Amount (PKR)', key: 'total_purchase_amount', width: 22, type: 'currency', alignment: 'right' }
-                    );
-                }
-                if (showAmount && showSalePrice) {
-                    columns.push(
-                        { header: 'Sale Price (PKR)', key: 'sale_price', width: 18, type: 'currency', alignment: 'right' },
-                        { header: 'Total Sale Amount (PKR)', key: 'total_sale_amount', width: 22, type: 'currency', alignment: 'right' }
-                    );
-                }
-
-                exportData = [];
-                activeDisplayRows.forEach((r) => {
-                    const rawBreakdowns = (r.locationBreakdown && r.locationBreakdown.length > 0)
-                        ? r.locationBreakdown
-                        : [{ location: formatLocation(r.warehouse_location || r.location), qty: Number(r.computed_true_stock || 0) }];
-                    const breakdowns = !showZeroStock
-                        ? (rawBreakdowns.filter((b: any) => Number(b.qty || 0) > 0).length > 0 ? rawBreakdowns.filter((b: any) => Number(b.qty || 0) > 0) : rawBreakdowns)
-                        : rawBreakdowns;
-
-                    breakdowns.forEach((b: any) => {
-                        const bQty = Number(b.qty || 0);
-                        const status = bQty <= 0 ? 'Out of Stock' : bQty <= 10 ? 'Low Stock' : 'In Stock';
-                        const purchPrice = Number(r.purchase_price || 0);
-                        const salePrice = Number(r.retail_price || r.sale_price || 0);
-
-                        const rowData: any = {
-                            idx: exportData.length + 1,
-                            product_name: r.product_name,
-                            bin: r.bin || '-',
-                            sub_sub_category: r.sub_sub_category || '-',
-                            sub_category: r.sub_category || '-',
-                            category: r.category || '-',
-                            warehouse: b.location,
-                            status,
-                            qty: bQty
-                        };
-                        if (showAmount && showPurchasePrice) {
-                            rowData.purchase_price = purchPrice;
-                            rowData.total_purchase_amount = bQty * purchPrice;
-                        }
-                        if (showAmount && showSalePrice) {
-                            rowData.sale_price = salePrice;
-                            rowData.total_sale_amount = bQty * salePrice;
-                        }
-                        exportData.push(rowData);
-                    });
-                });
             } else if (activeTab === 4) {
                 columns = [
                     { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
@@ -1100,100 +1020,6 @@ const StockReportPrint = () => {
             <div className="print-root-container w-full bg-white p-4 space-y-6 print:p-0 print:space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50 p-3 rounded border print-hidden-element print:hidden">
                     <button type="button" onClick={() => navigate(-1)} className="flex items-center gap-2 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Back to Report Filter</button>
-
-                    {/* 🏷️ Interactive Pill Selectors for Tab 3: As-Of-Date Stock Status Report */}
-                    {activeTab === 3 && (
-                        <div className="flex items-center gap-2 flex-wrap">
-                            {/* Pill 1: Show Zero Stock Products */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowZeroStock(prev => !prev);
-                                    setCurrentPage(1);
-                                }}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border shadow-xs ${
-                                    showZeroStock
-                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-400 font-black ring-2 ring-emerald-400/20'
-                                        : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'
-                                }`}
-                            >
-                                <span className={`w-2 h-2 rounded-full ${showZeroStock ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                                <span>Show Zero Stock Products</span>
-                                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${showZeroStock ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-100 text-slate-500'}`}>
-                                    {showZeroStock ? 'ON' : 'OFF'}
-                                </span>
-                            </button>
-
-                            {/* Pill 2: Show Amount and Total Amount (Master Toggle) */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowAmount(prev => {
-                                        const next = !prev;
-                                        if (next && !showPurchasePrice && !showSalePrice) {
-                                            setShowPurchasePrice(true);
-                                            setShowSalePrice(true);
-                                        }
-                                        return next;
-                                    });
-                                }}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border shadow-xs ${
-                                    showAmount
-                                        ? 'bg-purple-50 text-purple-800 border-purple-400 font-black ring-2 ring-purple-400/20'
-                                        : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'
-                                }`}
-                            >
-                                <span className={`w-2 h-2 rounded-full ${showAmount ? 'bg-purple-500 animate-pulse' : 'bg-slate-400'}`} />
-                                <span>Show Amount & Total Amount</span>
-                                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${showAmount ? 'bg-purple-200 text-purple-900' : 'bg-slate-100 text-slate-500'}`}>
-                                    {showAmount ? 'ON' : 'OFF'}
-                                </span>
-                            </button>
-
-                            {/* Sub-Pills when Show Amount is ON */}
-                            {showAmount && (
-                                <div className="flex items-center gap-1.5 bg-purple-50/80 p-1 rounded-full border border-purple-200 transition-all">
-                                    <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider px-1.5">Valuation:</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowPurchasePrice(prev => {
-                                                const next = !prev;
-                                                if (!next && !showSalePrice) return prev;
-                                                return next;
-                                            });
-                                        }}
-                                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
-                                            showPurchasePrice
-                                                ? 'bg-blue-600 text-white border-blue-600 font-black shadow-xs'
-                                                : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        <span>Purchase Price</span>
-                                        {showPurchasePrice && <span>✓</span>}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowSalePrice(prev => {
-                                                const next = !prev;
-                                                if (!next && !showPurchasePrice) return prev;
-                                                return next;
-                                            });
-                                        }}
-                                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
-                                            showSalePrice
-                                                ? 'bg-emerald-600 text-white border-emerald-600 font-black shadow-xs'
-                                                : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        <span>Sale Price</span>
-                                        {showSalePrice && <span>✓</span>}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
 
                     {/* View Switcher Toggle (Exclusively for Tab 7: Category-Wise Stock Valuation Ledger) */}
                     {activeTab === 7 && (
@@ -1568,18 +1394,6 @@ const StockReportPrint = () => {
                                             <th rowSpan={2} className="p-2 border border-slate-300">Warehouse Location</th>
                                             <th rowSpan={2} className="p-2 border border-slate-300 text-center">Stock Availability Status</th>
                                             <th rowSpan={2} className="p-2 border border-slate-300 text-right pr-3">Dynamic Remaining Quantity</th>
-                                            {showAmount && showPurchasePrice && (
-                                                <>
-                                                    <th rowSpan={2} className="p-2 border border-slate-300 text-right pr-2 bg-blue-50/70 text-blue-950 font-black whitespace-nowrap">Purchase Price</th>
-                                                    <th rowSpan={2} className="p-2 border border-slate-300 text-right pr-3 bg-blue-50/70 text-blue-950 font-black whitespace-nowrap">Total Purchase Amount</th>
-                                                </>
-                                            )}
-                                            {showAmount && showSalePrice && (
-                                                <>
-                                                    <th rowSpan={2} className="p-2 border border-slate-300 text-right pr-2 bg-emerald-50/70 text-emerald-950 font-black whitespace-nowrap">Sale Price</th>
-                                                    <th rowSpan={2} className="p-2 border border-slate-300 text-right pr-3 bg-emerald-50/70 text-emerald-950 font-black whitespace-nowrap">Total Sale Amount</th>
-                                                </>
-                                            )}
                                         </tr>
                                         <tr>
                                             <th className="p-1 border border-slate-300 text-center font-bold bg-slate-50 text-[9px]">Parent</th>
@@ -1589,12 +1403,9 @@ const StockReportPrint = () => {
                                     </thead>
                                     <tbody>
                                         {paginatedRows.map((row, idx) => {
-                                            const rawBreakdowns: Array<{ location: string; qty: number }> = (row.locationBreakdown && row.locationBreakdown.length > 0)
+                                            const breakdowns: Array<{ location: string; qty: number }> = (row.locationBreakdown && row.locationBreakdown.length > 0)
                                                 ? row.locationBreakdown
                                                 : [{ location: formatLocation(row.warehouse_location || row.location), qty: Number(row.computed_true_stock || 0) }];
-                                            const breakdowns = !showZeroStock
-                                                ? (rawBreakdowns.filter(b => Number(b.qty || 0) > 0).length > 0 ? rawBreakdowns.filter(b => Number(b.qty || 0) > 0) : rawBreakdowns)
-                                                : rawBreakdowns;
 
                                             return (
                                                 <tr key={row.id || idx} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
@@ -1659,50 +1470,6 @@ const StockReportPrint = () => {
                                                             })}
                                                         </div>
                                                     </td>
-
-                                                    {/* Purchase Price & Total Purchase Amount */}
-                                                    {showAmount && showPurchasePrice && (
-                                                        <>
-                                                            <td className="p-2 border border-slate-300 text-right pr-2 font-mono font-bold text-slate-800 align-middle whitespace-nowrap">
-                                                                {Number(row.purchase_price || 0) > 0 ? `Rs. ${Number(row.purchase_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                                                            </td>
-                                                            <td className="p-0 border border-slate-300 align-top bg-blue-50/10">
-                                                                <div className="divide-y divide-slate-300 h-full flex flex-col justify-stretch">
-                                                                    {breakdowns.map((b, bIdx) => {
-                                                                        const bQty = Number(b.qty || 0);
-                                                                        const bPurchAmt = bQty * Number(row.purchase_price || 0);
-                                                                        return (
-                                                                            <div key={bIdx} className="p-2 pr-3 text-right text-blue-900 font-mono font-black flex-1 flex items-center justify-end min-h-[34px] whitespace-nowrap">
-                                                                                {bPurchAmt !== 0 ? `Rs. ${bPurchAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </td>
-                                                        </>
-                                                    )}
-
-                                                    {/* Sale Price & Total Sale Amount */}
-                                                    {showAmount && showSalePrice && (
-                                                        <>
-                                                            <td className="p-2 border border-slate-300 text-right pr-2 font-mono font-bold text-slate-800 align-middle whitespace-nowrap">
-                                                                {Number(row.retail_price || row.sale_price || 0) > 0 ? `Rs. ${Number(row.retail_price || row.sale_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                                                            </td>
-                                                            <td className="p-0 border border-slate-300 align-top bg-emerald-50/10">
-                                                                <div className="divide-y divide-slate-300 h-full flex flex-col justify-stretch">
-                                                                    {breakdowns.map((b, bIdx) => {
-                                                                        const bQty = Number(b.qty || 0);
-                                                                        const bSaleAmt = bQty * Number(row.retail_price || row.sale_price || 0);
-                                                                        return (
-                                                                            <div key={bIdx} className="p-2 pr-3 text-right text-emerald-900 font-mono font-black flex-1 flex items-center justify-end min-h-[34px] whitespace-nowrap">
-                                                                                {bSaleAmt !== 0 ? `Rs. ${bSaleAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </td>
-                                                        </>
-                                                    )}
                                                 </tr>
                                             );
                                         })}
@@ -1712,43 +1479,11 @@ const StockReportPrint = () => {
                                             <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
                                                 <td colSpan={8} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
                                                 <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{paginatedRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
-                                                {showAmount && showPurchasePrice && (
-                                                    <>
-                                                        <td className="p-2 border border-slate-300 text-center text-gray-400 font-mono">-</td>
-                                                        <td className="p-2 border border-slate-300 text-right pr-3 text-blue-900 font-black text-xs whitespace-nowrap">
-                                                            Rs. {paginatedRows.reduce((s, r) => s + ((r.computed_true_stock || 0) * Number(r.purchase_price || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                    </>
-                                                )}
-                                                {showAmount && showSalePrice && (
-                                                    <>
-                                                        <td className="p-2 border border-slate-300 text-center text-gray-400 font-mono">-</td>
-                                                        <td className="p-2 border border-slate-300 text-right pr-3 text-emerald-900 font-black text-xs whitespace-nowrap">
-                                                            Rs. {paginatedRows.reduce((s, r) => s + ((r.computed_true_stock || 0) * Number(r.retail_price || r.sale_price || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                    </>
-                                                )}
                                             </tr>
                                         )}
                                         <tr className="bg-slate-100 border-t-2 border-slate-400 font-black font-mono text-xs">
-                                            <td colSpan={8} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Available Units (All {activeDisplayRows.length} Records):</td>
-                                            <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{activeDisplayRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
-                                            {showAmount && showPurchasePrice && (
-                                                <>
-                                                    <td className="p-2 border border-slate-300 text-center text-gray-400 font-mono">-</td>
-                                                    <td className="p-2 border border-slate-300 text-right pr-3 text-blue-950 font-black text-xs whitespace-nowrap">
-                                                        Rs. {activeDisplayRows.reduce((s, r) => s + ((r.computed_true_stock || 0) * Number(r.purchase_price || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                    </td>
-                                                </>
-                                            )}
-                                            {showAmount && showSalePrice && (
-                                                <>
-                                                    <td className="p-2 border border-slate-300 text-center text-gray-400 font-mono">-</td>
-                                                    <td className="p-2 border border-slate-300 text-right pr-3 text-emerald-950 font-black text-xs whitespace-nowrap">
-                                                        Rs. {activeDisplayRows.reduce((s, r) => s + ((r.computed_true_stock || 0) * Number(r.retail_price || r.sale_price || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                    </td>
-                                                </>
-                                            )}
+                                            <td colSpan={8} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Available Units (All {reportRows.length} Records):</td>
+                                            <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
                                         </tr>
                                     </tfoot>
                                 </table>

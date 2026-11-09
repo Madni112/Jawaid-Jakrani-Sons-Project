@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -23,7 +23,61 @@ import {
   MdPrint
 } from 'react-icons/md';
 import { FiPrinter } from 'react-icons/fi';
-import { logActivity } from '../../../service/auditLogger';
+
+// Helper to resolve or auto-register Vendor Chart of Accounts (2010-XXXX)
+const resolveVendorCoaAccount = async (vendorName: string, vendorsList: any[] = []) => {
+  const cleanName = (vendorName || '').trim();
+  if (!cleanName) return { code: '2010-001', title: 'Demo Vendor' };
+
+  const matched = vendorsList.find(v =>
+    (v.vendor_name || v.supplier_name || v.name || '').trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  const existingCode = matched?.vendor_code || matched?.supplier_code || matched?.coa_code;
+  if (existingCode && String(existingCode).startsWith('2010-')) {
+    return { code: String(existingCode).trim(), title: matched.vendor_name || cleanName };
+  }
+
+  try {
+    const { data: coaRows } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code, account_title')
+      .ilike('account_title', cleanName)
+      .limit(1);
+
+    if (coaRows && coaRows.length > 0 && coaRows[0].account_code) {
+      return { code: coaRows[0].account_code, title: coaRows[0].account_title || cleanName };
+    }
+
+    const { data: allVendCoa } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code')
+      .ilike('account_code', '2010-%');
+
+    let maxSeq = 0;
+    (allVendCoa || []).forEach(r => {
+      const match = String(r.account_code || '').match(/2010-(\d+)/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    });
+
+    const nextCode = `2010-${String(maxSeq + 1).padStart(3, '0')}`;
+    await supabase.from('chart_of_accounts').insert([{
+      account_code: nextCode,
+      account_title: cleanName,
+      category_code: '2. LIABILITIES',
+      sub_category_code: 'Current Liabilities',
+      control_code: 'Vendor',
+      notes: `Vendor account for ${cleanName} (Auto-registered from Purchase Return)`
+    }]);
+
+    return { code: nextCode, title: cleanName };
+  } catch (err) {
+    console.warn('resolveVendorCoaAccount error:', err);
+    return { code: '2010-001', title: cleanName };
+  }
+};
 
 const DropdownPortal = ({ children, anchorEl, isOpen, minWidth = 280, maxWidth }: any) => {
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -57,7 +111,7 @@ const DropdownPortal = ({ children, anchorEl, isOpen, minWidth = 280, maxWidth }
 };
 
 const AddPurchaseReturn = () => {
-  const { tenantId, user } = useAuth();
+  const { tenantId } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -177,20 +231,14 @@ const AddPurchaseReturn = () => {
         setLocations(normalizedLocs);
 
         // 3. Fetch Products
-        const { data: prodData } = await fetchAllPages(supabase.from('products').select('*').order('product_name', { ascending: true }));
+        const { data: prodData } = await supabase.from('products').select('*').order('product_name', { ascending: true });
         setProductList(prodData || []);
 
         // Load the stock ledger snapshot once (reused for every row's availability check)
         fetchStockDataset().then(setStockDataset).catch(() => setStockDataset(null));
 
         // 4. Fetch Banks
-        const { data: rawBankData } = await supabase.from('banks').select('*');
-        const bankData = (rawBankData || []).map((b: any) => ({
-          ...b,
-          bankName: b.bankName || b.bankname || '',
-          accountTitle: b.accountTitle || b.accounttitle || b.account_title || '',
-          accountNumber: b.accountNumber || b.accountnumber || ''
-        }));
+        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
         if (bankData) setBankAccountsList(bankData);
 
         // 5. Fetch Purchases
@@ -661,20 +709,6 @@ const AddPurchaseReturn = () => {
                   .eq('id', editData.id);
                 if (updateErr) throw updateErr;
 
-                // Log audit activity
-                logActivity({
-                  action: 'UPDATE',
-                  tableName: 'purchase_returns',
-                  details: {
-                    return_no: values.returnNo || editData.id,
-                    vendor_name: selectedVendorName,
-                    amount: totalPayable,
-                    total_amount: totalPayable,
-                    event: 'Updated Purchase Return'
-                  },
-                  performedBy: user?.name || user?.email || 'User'
-                });
-
                 // Deduct new return stock (-)
                 for (const newItem of values.items) {
                   const nQty = Number(newItem.qty || 0);
@@ -699,20 +733,6 @@ const AddPurchaseReturn = () => {
                 if (insertErr) throw insertErr;
                 savedRecordId = insertedRecord?.id;
 
-                // Log audit activity
-                logActivity({
-                  action: 'INSERT',
-                  tableName: 'purchase_returns',
-                  details: {
-                    return_no: values.returnNo || savedRecordId,
-                    vendor_name: selectedVendorName,
-                    amount: totalPayable,
-                    total_amount: totalPayable,
-                    event: 'Created Purchase Return'
-                  },
-                  performedBy: user?.name || user?.email || 'User'
-                });
-
                 // Deduct stock (-)
                 for (const item of values.items) {
                   const qty = Number(item.qty || 0);
@@ -726,6 +746,113 @@ const AddPurchaseReturn = () => {
 
                   // warehouse_inventory retired — formula-based stock is source of truth
                 }
+              }
+
+              // --- 3. AUTO-POST FINANCIAL VOUCHERS (PRV & VRV) ---
+              try {
+                const vendorAcc = await resolveVendorCoaAccount(values.vendorName, vendors);
+                const returnIdent = values.returnNo;
+
+                // A. Delete any previously auto-generated vouchers for this return (on edit)
+                await supabase
+                  .from('financial_vouchers')
+                  .delete()
+                  .eq('original_invoice_no', returnIdent);
+
+                // B. Auto-post PRV (Purchase Return Voucher) for the Goods Returned Value
+                if (grossReturnSum > 0) {
+                  const prvNo = `PRV-${returnIdent.replace(/^PR-?|^RTN-?/i, '')}`;
+                  await supabase
+                    .from('financial_vouchers')
+                    .insert([{
+                      voucher_no: prvNo,
+                      voucher_type: 'Purchase Return Voucher',
+                      voucher_date: values.returnDate,
+                      customerName: values.vendorName,
+                      customer_name: values.vendorName,
+                      original_invoice_no: returnIdent,
+                      narration: `Purchase return goods credit for ${returnIdent} | Vendor: ${values.vendorName} | Warehouse: ${values.sourceWarehouse}${values.remarks ? ` | Remarks: ${values.remarks}` : ''}`,
+                      notes: `Auto-generated Purchase Return Voucher for ${returnIdent}`,
+                      total_amount: grossReturnSum,
+                      items: [
+                        {
+                          accountCode: vendorAcc.code,
+                          description: `Debit Vendor ${values.vendorName} (${vendorAcc.title}) on goods return`,
+                          debit: grossReturnSum,
+                          credit: 0
+                        },
+                        {
+                          accountCode: '5010-002',
+                          description: `Credit Purchase Return / Inventory adjustment for ${returnIdent}`,
+                          debit: 0,
+                          credit: grossReturnSum
+                        }
+                      ],
+                      metadata: {
+                        preset: 'PRV',
+                        auto_generated: true,
+                        moduleSource: 'purchase_return',
+                        returnNo: returnIdent,
+                        vendorName: values.vendorName,
+                        totalAmount: grossReturnSum
+                      }
+                    }]);
+                }
+
+                // C. Auto-post VRV (Vendor Receive Voucher) if immediate Cash/Bank refund was collected
+                if (totalRefundCollected > 0) {
+                  const vrvNo = `VRV-${returnIdent.replace(/^PR-?|^RTN-?/i, '')}`;
+                  const selectedBankObj = bankAccountsList.find(b => String(b.id) === String(values.selectedBankId) || String(b.bankName) === String(values.selectedBankId));
+                  const cashPortion = values.paymentTerm === 'Split' ? cashRefund : (values.paymentTerm === 'By Cash' ? totalRefundCollected : 0);
+                  const bankPortion = values.paymentTerm === 'Split' ? bankRefund : (values.paymentTerm === 'By Bank' ? totalRefundCollected : 0);
+
+                  const refundItems = [
+                    ...(cashPortion > 0 ? [{
+                      accountCode: '1010-001',
+                      description: `Cash received from vendor refund for ${returnIdent}`,
+                      debit: cashPortion,
+                      credit: 0
+                    }] : []),
+                    ...(bankPortion > 0 ? [{
+                      accountCode: '1020-001',
+                      description: `Bank deposit from vendor refund (${selectedBankObj?.bankName || 'Bank'}) for ${returnIdent}`,
+                      debit: bankPortion,
+                      credit: 0
+                    }] : []),
+                    {
+                      accountCode: vendorAcc.code,
+                      description: `Credit Vendor ${values.vendorName} (${vendorAcc.title}) on refund settlement`,
+                      debit: 0,
+                      credit: totalRefundCollected
+                    }
+                  ];
+
+                  await supabase
+                    .from('financial_vouchers')
+                    .insert([{
+                      voucher_no: vrvNo,
+                      voucher_type: 'Vendor Receive Voucher',
+                      voucher_date: values.returnDate,
+                      customerName: values.vendorName,
+                      customer_name: values.vendorName,
+                      original_invoice_no: returnIdent,
+                      narration: `Vendor refund received on return ${returnIdent} | Mode: ${values.paymentTerm} | Amount: Rs. ${totalRefundCollected}`,
+                      notes: `Auto-generated Vendor Receive Voucher for return ${returnIdent}`,
+                      total_amount: totalRefundCollected,
+                      items: refundItems,
+                      metadata: {
+                        preset: 'VRV',
+                        auto_generated: true,
+                        moduleSource: 'purchase_return',
+                        returnNo: returnIdent,
+                        cashAmount: cashPortion,
+                        bankAmount: bankPortion,
+                        paymentTerm: values.paymentTerm
+                      }
+                    }]);
+                }
+              } catch (vErr) {
+                console.warn('Auto-post financial vouchers for purchase return error:', vErr);
               }
 
               toast.success(isEditMode ? 'Purchase Return updated successfully!' : 'Purchase Return (Debit Note) logged successfully!');
@@ -1084,7 +1211,11 @@ const AddPurchaseReturn = () => {
                                       String(matchedProduct.scenario_name || '').toLowerCase().includes('tile')
                                     ) && (rawPcs > 1 || String(matchedProduct.scenario_name || '').toLowerCase().includes('tile'))
                                   );
-                                  const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
+                                  const allowLoose = Boolean(matchedProduct?.allow_loose_sales || isTile);
+                                  const looseRatio = Number(matchedProduct?.loose_conversion_ratio || rawPcs || (isTile ? 4 : 1)) || 1;
+                                  const pcsPerBox = looseRatio > 1 ? looseRatio : (isTile ? 4 : 1);
+                                  const bulkUnitLabel = matchedProduct?.uom || (isTile ? 'Box' : 'Unit');
+                                  const looseUnitLabel = matchedProduct?.loose_uom || (isTile ? 'Pcs' : 'Units');
                                   const uomString = matchedProduct ? matchedProduct.uom : (item.uom || 'NOS');
 
                                   return (
@@ -1485,6 +1616,72 @@ const AddPurchaseReturn = () => {
                                               </div>
                                             );
                                           })()
+                                        ) : allowLoose && pcsPerBox > 1 ? (
+                                          /* DUAL UNIT INPUT FOR GENERAL LOOSE SELLABLE PRODUCTS (KG+GM, LTR+ML, BOX+PCS) */
+                                          (() => {
+                                            const currentQty = Number(item.qty || 0);
+                                            const bulkCount = Math.floor(currentQty);
+                                            const looseCount = Math.round((currentQty - bulkCount) * pcsPerBox);
+
+                                            return (
+                                              <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-stroke dark:border-strokedark shadow-inner">
+                                                  {/* BULK UNIT INPUT */}
+                                                  <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-primary shadow-sm">
+                                                    <input
+                                                      type="text"
+                                                      inputMode="numeric"
+                                                      onKeyDown={blockInvalidChar}
+                                                      value={bulkCount === 0 ? '' : bulkCount}
+                                                      placeholder="0"
+                                                      onChange={(e) => {
+                                                        const val = e.target.value.trim();
+                                                        const newBulk = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                        const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                        const combinedQty = Number((newBulk + currentLoose / pcsPerBox).toFixed(3));
+                                                        setFieldValue(`items.${idx}.qty`, combinedQty);
+                                                      }}
+                                                      className="w-full bg-transparent text-center font-black text-sm text-primary outline-none min-w-[36px]"
+                                                    />
+                                                    <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">{bulkUnitLabel}</span>
+                                                  </div>
+
+                                                  <span className="text-gray-400 font-black text-sm select-none">+</span>
+
+                                                  {/* LOOSE SUB-UNIT INPUT */}
+                                                  <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-emerald-500 shadow-sm">
+                                                    <input
+                                                      type="text"
+                                                      inputMode="numeric"
+                                                      onKeyDown={blockInvalidChar}
+                                                      value={looseCount === 0 ? '' : looseCount}
+                                                      placeholder={`${pcsPerBox}`}
+                                                      onChange={(e) => {
+                                                        const val = e.target.value.trim();
+                                                        const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                        const currentBulk = Math.floor(Number(item.qty || 0));
+
+                                                        const extraBulk = Math.floor(enteredLoose / pcsPerBox);
+                                                        const remLoose = enteredLoose % pcsPerBox;
+                                                        const finalBulk = currentBulk + extraBulk;
+                                                        const combinedQty = remLoose > 0
+                                                          ? Number((finalBulk + remLoose / pcsPerBox).toFixed(3))
+                                                          : finalBulk;
+
+                                                        setFieldValue(`items.${idx}.qty`, combinedQty);
+                                                      }}
+                                                      className="w-full bg-transparent text-center font-black text-sm text-emerald-600 dark:text-emerald-400 outline-none min-w-[36px]"
+                                                    />
+                                                    <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">{looseUnitLabel}</span>
+                                                  </div>
+                                                </div>
+
+                                                <div className="text-center font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                                                  Total: <strong>{currentQty}</strong> {bulkUnitLabel} ({bulkCount} {bulkUnitLabel} + {looseCount} {looseUnitLabel})
+                                                </div>
+                                              </div>
+                                            );
+                                          })()
                                         ) : (
                                           /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
                                           (() => {
@@ -1554,6 +1751,11 @@ const AddPurchaseReturn = () => {
                                           value={item.rate}
                                           className="w-full rounded border border-stroke dark:border-strokedark bg-white dark:bg-boxdark p-1.5 text-right font-bold font-mono text-xs outline-none focus:border-primary text-black dark:text-white"
                                         />
+                                        {((isTile || allowLoose) && pcsPerBox > 1) && (
+                                          <div className="text-[10px] text-gray-400 dark:text-gray-500 font-mono text-right mt-1">
+                                            ≈ Rs. {(Number(matchedProduct?.loose_purchase_price) > 0 ? Number(matchedProduct.loose_purchase_price) : (Number(item.rate || 0) / pcsPerBox)).toFixed(2)} / {looseUnitLabel}
+                                          </div>
+                                        )}
                                       </td>
 
                                       {/* Discount Columns */}

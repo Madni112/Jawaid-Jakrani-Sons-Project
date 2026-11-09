@@ -22,6 +22,63 @@ import {
   MdKeyboardArrowDown
 } from 'react-icons/md';
 
+// Helper to resolve or auto-register Vendor Chart of Accounts (2010-XXXX)
+const resolveVendorCoaAccount = async (vendorName: string, vendorsList: any[] = []) => {
+  const cleanName = (vendorName || '').trim();
+  if (!cleanName) return { code: '2010-001', title: 'Demo Vendor' };
+
+  // 1. Match from vendorsList
+  const matched = vendorsList.find(v =>
+    (v.vendor_name || v.supplier_name || v.name || '').trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  const existingCode = matched?.vendor_code || matched?.supplier_code || matched?.coa_code;
+  if (existingCode && String(existingCode).startsWith('2010-')) {
+    return { code: String(existingCode).trim(), title: matched.vendor_name || cleanName };
+  }
+
+  // 2. Query chart_of_accounts
+  try {
+    const { data: coaRows } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code, account_title')
+      .ilike('account_title', cleanName)
+      .limit(1);
+
+    if (coaRows && coaRows.length > 0 && coaRows[0].account_code) {
+      return { code: coaRows[0].account_code, title: coaRows[0].account_title || cleanName };
+    }
+
+    const { data: allVendCoa } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code')
+      .ilike('account_code', '2010-%');
+
+    let maxSeq = 0;
+    (allVendCoa || []).forEach(r => {
+      const match = String(r.account_code || '').match(/2010-(\d+)/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    });
+
+    const nextCode = `2010-${String(maxSeq + 1).padStart(3, '0')}`;
+    await supabase.from('chart_of_accounts').insert([{
+      account_code: nextCode,
+      account_title: cleanName,
+      category_code: '2. LIABILITIES',
+      sub_category_code: 'Current Liabilities',
+      control_code: 'Vendor',
+      notes: `Vendor account for ${cleanName} (Auto-registered from Purchase Payment)`
+    }]);
+
+    return { code: nextCode, title: cleanName };
+  } catch (err) {
+    console.warn('resolveVendorCoaAccount in purchase receipt error:', err);
+    return { code: '2010-001', title: cleanName };
+  }
+};
+
 function AddPurchaseReceipt() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -103,13 +160,7 @@ function AddPurchaseReceipt() {
         setVendorOptions(normalizedVendors);
 
         // 2. Fetch Banks & COA
-        const { data: rawBankData } = await supabase.from('banks').select('*');
-        const bankData = (rawBankData || []).map((b: any) => ({
-          ...b,
-          bankName: b.bankName || b.bankname || '',
-          accountTitle: b.accountTitle || b.accounttitle || b.account_title || '',
-          accountNumber: b.accountNumber || b.accountnumber || ''
-        }));
+        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
         const { data: coaData } = await supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code');
 
         if (bankData) setBankAccounts(bankData);
@@ -146,7 +197,21 @@ function AddPurchaseReceipt() {
 
           calculateVendorBalances(vName, poRef, purData || [], editData.id);
         } else {
-          setGeneratedVoucherNo(`PR-${Math.floor(100000 + Math.random() * 900000)}`);
+          // Fetch highest VPV number
+          const { data: vpvRows } = await supabase
+            .from('financial_vouchers')
+            .select('voucher_no')
+            .ilike('voucher_no', 'VPV-%');
+
+          let maxVpvSeq = 0;
+          (vpvRows || []).forEach(v => {
+            const match = String(v.voucher_no || '').match(/VPV-(\d+)/i);
+            if (match && match[1]) {
+              const num = parseInt(match[1], 10);
+              if (num > maxVpvSeq) maxVpvSeq = num;
+            }
+          });
+          setGeneratedVoucherNo(`VPV-${String(maxVpvSeq + 1).padStart(3, '0')}`);
         }
       } catch (err: any) {
         console.error(err.message);
@@ -527,10 +592,9 @@ function AddPurchaseReceipt() {
             setLoading(true);
 
             // 1. Resolve Chart of Accounts
-            const cashCoa = coaAccounts.find((c: any) =>
-              String(c.control_code || '').toLowerCase().includes('cash') ||
-              String(c.account_title || '').toLowerCase().includes('cash')
-            );
+            const vendorAcc = await resolveVendorCoaAccount(selectedVendor, vendorOptions);
+            const vendorAccountCode = vendorAcc.code;
+            const cashAccountCode = '1010-001';
 
             const selectedBankObj = bankAccounts.find((b: any) => String(b.id) === String(values.selectedBankId) || String(b.bankName) === String(values.selectedBankId));
             const bankCoa = coaAccounts.find((c: any) =>
@@ -541,39 +605,29 @@ function AddPurchaseReceipt() {
               )) ||
               String(c.control_code || '').toLowerCase().includes('bank')
             );
-
-            const payCoa = coaAccounts.find((c: any) =>
-              String(c.control_code || '').toLowerCase().includes('creditor') ||
-              String(c.control_code || '').toLowerCase().includes('payable') ||
-              String(c.account_title || '').toLowerCase().includes('payable') ||
-              String(c.account_title || '').toLowerCase().includes('creditor')
-            );
-
-            const vendorAccountCode = payCoa ? String(payCoa.account_code) : (cashCoa ? String(cashCoa.account_code) : '2010');
-            const cashAccountCode = cashCoa ? String(cashCoa.account_code) : '1010';
-            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1015');
+            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1020-001');
 
             let balancedJournalItems: any[] = [];
-            let voucherTypeRecord = 'Cash Payment Voucher';
+            let voucherTypeRecord = 'Vendor Payment Voucher';
 
             if (values.voucherType === 'By Cash') {
-              voucherTypeRecord = 'Cash Payment Voucher';
+              voucherTypeRecord = 'Vendor Payment Voucher';
               balancedJournalItems = [
-                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
-                { accountCode: cashAccountCode, description: `Fund disbursed via ${values.voucherNo}`, debit: 0, credit: finalAmount }
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor} (${vendorAcc.title})`, debit: finalAmount, credit: 0 },
+                { accountCode: cashAccountCode, description: `Cash disbursement via ${values.voucherNo}`, debit: 0, credit: finalAmount }
               ];
             } else if (values.voucherType === 'By Bank') {
-              voucherTypeRecord = 'Bank Payment Voucher';
+              voucherTypeRecord = 'Vendor Payment Voucher';
               balancedJournalItems = [
-                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
-                { accountCode: bankAccountCode, description: `Fund disbursed via ${values.voucherNo}`, debit: 0, credit: finalAmount }
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor} (${vendorAcc.title})`, debit: finalAmount, credit: 0 },
+                { accountCode: bankAccountCode, description: `Bank disbursement via ${values.voucherNo} (${selectedBankObj?.bankName || 'Bank'})`, debit: 0, credit: finalAmount }
               ];
             } else {
-              voucherTypeRecord = 'Cash & Bank Payment Voucher';
+              voucherTypeRecord = 'Vendor Payment Voucher';
               balancedJournalItems = [
-                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor} (${vendorAcc.title})`, debit: finalAmount, credit: 0 },
                 ...(cashPortion > 0 ? [{ accountCode: cashAccountCode, description: `Cash disbursement via ${values.voucherNo}`, debit: 0, credit: cashPortion }] : []),
-                ...(bankPortion > 0 ? [{ accountCode: bankAccountCode, description: `Bank disbursement via ${values.voucherNo}`, debit: 0, credit: bankPortion }] : [])
+                ...(bankPortion > 0 ? [{ accountCode: bankAccountCode, description: `Bank disbursement via ${values.voucherNo} (${selectedBankObj?.bankName || 'Bank'})`, debit: 0, credit: bankPortion }] : [])
               ];
             }
 
@@ -596,6 +650,8 @@ function AddPurchaseReceipt() {
               total_amount: finalAmount,
               items: balancedJournalItems,
               metadata: { 
+                preset: 'VPV',
+                auto_generated: Boolean(selectedPurchaseNo),
                 selectedBankId: (values.voucherType === 'By Bank' || values.voucherType === 'Split') ? values.selectedBankId : null,
                 selectedBankTitle: selectedBankObj ? `${selectedBankObj.bankName} - ${selectedBankObj.accountTitle}` : null,
                 linkedPurchaseNo: selectedPurchaseNo || null,

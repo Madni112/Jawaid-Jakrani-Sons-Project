@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { useAuth } from '../../../Context/Auth';
+import { useLanguage, getUrduText } from '../../../Context/LanguageContext';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import Spinner from '../../../ui/Spinner';
@@ -100,6 +101,7 @@ const MasterBadge = ({ exists }: { exists: boolean }) => {
 
 const BulkProductUpload = () => {
   const { userName, userEmail, tenantId } = useAuth();
+  const { isRTL } = useLanguage();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -596,20 +598,14 @@ const BulkProductUpload = () => {
           return;
         }
 
-        // 1. Fetch current database catalog, categories, brands, and prints for comparison (all pages, no 1000 limit)
+        // 1. Fetch current database catalog, categories, brands, and prints for comparison
         const [productsRes, catsRes, brandsRes, printsRes] = await Promise.all([
-          fetchAllPages(
-            supabase
-              .from('products')
-              .select('id, product_name, item_sr_no, purchase_price, retail_price, category')
-          ),
-          fetchAllPages(
-            tenantId
-              ? supabase.from('inventory_categories').select('*').eq('tenant_id', tenantId)
-              : supabase.from('inventory_categories').select('*')
-          ),
-          fetchAllPages(supabase.from('inventory_brands').select('*')),
-          fetchAllPages(supabase.from('inventory_prints').select('*')),
+          supabase
+            .from('products')
+            .select('id, product_name, item_sr_no, purchase_price, retail_price, category'),
+          supabase.from('inventory_categories').select('*'),
+          supabase.from('inventory_brands').select('*'),
+          supabase.from('inventory_prints').select('*'),
         ]);
 
         if (productsRes.error) throw productsRes.error;
@@ -618,43 +614,21 @@ const BulkProductUpload = () => {
         setExistingBrands(brandsRes.data || []);
         setExistingPrints(printsRes.data || []);
 
-        // Helper to normalize strings (strips bracket spaces, punctuation spacing, case)
-        const normalizeStr = (s: string) =>
-          String(s || '')
-            .replace(/[\.\-\s]*(a39|shop)\s*$/i, '')
-            .replace(/\s*[\(\[\{]\s*/g, '(')
-            .replace(/\s*[\)\]\}]\s*/g, ')')
-            .replace(/\s*[\/\\]\s*/g, '/')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toLowerCase();
-
-        // Build database lookup maps
+        // Build database lookup maps (lowercase trimmed 2-layer composite: Code + Name)
         const dbByComposite = new Map<string, any>();
-        const dbByCode = new Map<string, any>();
-        const dbByNormComposite = new Map<string, any>();
 
         (dbProducts || []).forEach((p: any) => {
-          const rawCode = String(p.item_sr_no || '').trim().toLowerCase();
-          const rawName = String(p.product_name || '').replace(/\s+/g, ' ').trim().toLowerCase();
-          const normName = normalizeStr(p.product_name);
-
-          if (rawCode) {
-            dbByCode.set(rawCode, p);
-          }
-          if (rawCode || rawName) {
-            dbByComposite.set(`${rawCode}:::${rawName}`, p);
-          }
-          if (rawCode || normName) {
-            dbByNormComposite.set(`${rawCode}:::${normName}`, p);
+          const codeKey = String(p.item_sr_no || '').trim().toLowerCase();
+          const nameKey = String(p.product_name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          if (codeKey || nameKey) {
+            dbByComposite.set(`${codeKey}:::${nameKey}`, p);
           }
         });
 
         const suffixRegex = /[\.\-\s]*(a39|shop)\s*$/i;
 
-        // In-file duplicate tracking maps
-        const fileSeenComposite = new Map<string, number>();
-        const fileSeenCode = new Map<string, number>();
+        // In-file duplicate tracking map (2-Layer: Code + Description)
+        const fileSeenComposite = new Map<string, number>(); // compositeKey -> first 1-based row index
 
         const parsedTileList: ProcessedRow[] = [];
         const parsedOtherList: ProcessedRow[] = [];
@@ -673,26 +647,16 @@ const BulkProductUpload = () => {
 
           const codeKey = cleanCode.toLowerCase();
           const nameKey = cleanName.toLowerCase();
-          const normName = normalizeStr(cleanName);
           const compositeKey = `${codeKey}:::${nameKey}`;
-          const normCompositeKey = `${codeKey}:::${normName}`;
 
           // Brand extraction
           const rawBrand = String(
             row['BRAND'] || row['BRAND / BIN'] || row['BIN'] || ''
           ).trim();
 
-          // Category fields (tolerant to typos like Parant / Pareent / Sub Categry)
+          // Category fields (tolerant to typos like Pareent category / Sub Categry)
           const rawParentCat = String(
-            row['PARENT CATEGORY'] ||
-            row['PAREENT CATEGORY'] ||
-            row['PARANT CATEGORY'] ||
-            row['PARRENT CATEGORY'] ||
-            row['PARENT_CATEGORY'] ||
-            row['PARANT_CATEGORY'] ||
-            row['PARENT'] ||
-            row['PARANT'] ||
-            ''
+            row['PARENT CATEGORY'] || row['PAREENT CATEGORY'] || row['PARENT_CATEGORY'] || row['PARENT'] || ''
           ).trim();
           const rawSubCat = String(
             row['SUB CATEGORY'] || row['SUB CATEGRY'] || row['SUB_CATEGORY'] || row['SUB'] || ''
@@ -710,19 +674,8 @@ const BulkProductUpload = () => {
           );
           const piecesPerBox = rawPcs > 0 ? rawPcs : 1;
 
-          const rawWVal = row['WIDTH'] || row['W'] || row['WIDTH (CM)'] || row['TILE WIDTH'] || row['WIDTH(CM)'] || 0;
-          const rawHVal = row['HEIGHT'] || row['H'] || row['HEIGHT (CM)'] || row['TILE HEIGHT'] || row['HEIGHT(CM)'] || row['LENGTH'] || 0;
-          let rawW = Number(rawWVal);
-          let rawH = Number(rawHVal);
-
-          // Auto-infer dimensions from Category (e.g. "40 x 40") or Description (e.g. "40x40") if missing
-          if ((!rawW || !rawH) && (cleanCategory || cleanName)) {
-            const dimMatch = `${cleanCategory} ${cleanName}`.match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
-            if (dimMatch) {
-              if (!rawH) rawH = Number(dimMatch[1]) || 0;
-              if (!rawW) rawW = Number(dimMatch[2]) || 0;
-            }
-          }
+          const rawW = Number(row['WIDTH'] || row['W'] || 0);
+          const rawH = Number(row['HEIGHT'] || row['H'] || 0);
 
           // Numeric prices and minimum
           const rawPur = parseFloat(
@@ -737,12 +690,7 @@ const BulkProductUpload = () => {
           ) || 0;
 
           // Check if this row is a tile product:
-          const isTileRow =
-            rawParentCat.toLowerCase().includes('tile') ||
-            rawSubCat.toLowerCase().includes('tile') ||
-            cleanName.toLowerCase().includes('tile') ||
-            String(row['PIECES PER BOX'] || row['PIECES_PER_BOX'] || row['PCS PER BOX'] || row['PCS/BOX'] || row['PACKING'] || '').trim() !== '' ||
-            (rawW > 0 && rawH > 0);
+          const isTileRow = rawParentCat.toLowerCase().includes('tile');
           const rawUom = String(row['UOM'] || (isTileRow ? 'BOX' : 'PCS')).trim() || (isTileRow ? 'BOX' : 'PCS');
 
           // Tile metric calculations (width & height in cm)
@@ -774,34 +722,23 @@ const BulkProductUpload = () => {
             status = 'invalid';
             statusReason = 'Missing product description / name';
           }
-          // Check 2: Duplicate in File (Code match OR Description match)
-          else if (codeKey && fileSeenCode.has(codeKey)) {
+          // Check 2: Duplicate in File (2-Layer: Code AND Description both duplicate)
+          else if (fileSeenComposite.has(compositeKey)) {
             status = 'duplicate_in_file';
-            matchedFileRowIndex = fileSeenCode.get(codeKey);
-            statusReason = `Duplicate: Code "${cleanCode}" matches Row #${matchedFileRowIndex} in this file`;
-          } else if (fileSeenComposite.has(compositeKey) || fileSeenComposite.has(normCompositeKey)) {
-            status = 'duplicate_in_file';
-            matchedFileRowIndex = fileSeenComposite.get(compositeKey) || fileSeenComposite.get(normCompositeKey);
-            statusReason = `Duplicate: Description matches Row #${matchedFileRowIndex} in this file`;
+            matchedFileRowIndex = fileSeenComposite.get(compositeKey);
+            statusReason = `Duplicate: Both Code ("${cleanCode || 'None'}") and Description match Row #${matchedFileRowIndex} in this file`;
           }
-          // Check 3: Duplicate in Database (Code match OR Normalized Description match)
-          else if (codeKey && dbByCode.has(codeKey)) {
-            const matched = dbByCode.get(codeKey);
+          // Check 3: Duplicate in Database (2-Layer: Code AND Description both duplicate)
+          else if (dbByComposite.has(compositeKey)) {
+            const matched = dbByComposite.get(compositeKey);
             status = 'duplicate_in_db';
             matchedDbProduct = matched;
-            statusReason = `Already in Database: Code "${cleanCode}" matches "${matched.product_name}" (DB ID #${matched.id})`;
-          } else if (dbByComposite.has(compositeKey) || dbByNormComposite.has(normCompositeKey)) {
-            const matched = dbByComposite.get(compositeKey) || dbByNormComposite.get(normCompositeKey);
-            status = 'duplicate_in_db';
-            matchedDbProduct = matched;
-            statusReason = `Already in Database: Description matches "${matched.product_name}" (DB ID #${matched.id})`;
+            statusReason = `Already in Database: Both Code and Description match "${matched.product_name}" (DB ID #${matched.id})`;
           }
 
           // Register in seen map if clean
           if (status !== 'duplicate_in_file' && status !== 'invalid') {
-            if (codeKey) fileSeenCode.set(codeKey, rowIndex);
             fileSeenComposite.set(compositeKey, rowIndex);
-            fileSeenComposite.set(normCompositeKey, rowIndex);
           }
 
           const processedItem: ProcessedRow = {
@@ -1044,9 +981,7 @@ const BulkProductUpload = () => {
     let createdPrints = 0;
 
     // 1. Fetch latest categories
-    let catQuery = supabase.from('inventory_categories').select('*');
-    if (tenantId) catQuery = catQuery.eq('tenant_id', tenantId);
-    const { data: latestCats } = await fetchAllPages(catQuery);
+    const { data: latestCats } = await supabase.from('inventory_categories').select('*');
     const catList: any[] = latestCats ? [...latestCats] : [];
 
     // In-memory maps for hierarchy tracking
@@ -1076,7 +1011,7 @@ const BulkProductUpload = () => {
     });
 
     // 2. Fetch latest brands
-    const { data: latestBrands } = await fetchAllPages(supabase.from('inventory_brands').select('*'));
+    const { data: latestBrands } = await supabase.from('inventory_brands').select('*');
     const brandMap = new Map<string, any>();
     (latestBrands || []).forEach(b => {
       brandMap.set(String(b.name || '').trim().toLowerCase(), b);
@@ -1085,7 +1020,7 @@ const BulkProductUpload = () => {
     // 3. Fetch latest prints
     const printMap = new Map<string, any>();
     try {
-      const { data: latestPrints } = await fetchAllPages(supabase.from('inventory_prints').select('*'));
+      const { data: latestPrints } = await supabase.from('inventory_prints').select('*');
       (latestPrints || []).forEach(p => {
         const lower = String(p.name || '').trim().toLowerCase();
         if (p.category_id) {
@@ -1229,15 +1164,13 @@ const BulkProductUpload = () => {
 
     // Refresh existing states in component
     try {
-      let finalCatQuery = supabase.from('inventory_categories').select('*');
-      if (tenantId) finalCatQuery = finalCatQuery.eq('tenant_id', tenantId);
-      const { data: refreshedCats } = await fetchAllPages(finalCatQuery);
+      const { data: refreshedCats } = await supabase.from('inventory_categories').select('*');
       if (refreshedCats) setExistingCategories(refreshedCats);
 
-      const { data: refreshedBrands } = await fetchAllPages(supabase.from('inventory_brands').select('*'));
+      const { data: refreshedBrands } = await supabase.from('inventory_brands').select('*');
       if (refreshedBrands) setExistingBrands(refreshedBrands);
 
-      const { data: refreshedPrints } = await fetchAllPages(supabase.from('inventory_prints').select('*'));
+      const { data: refreshedPrints } = await supabase.from('inventory_prints').select('*');
       if (refreshedPrints) setExistingPrints(refreshedPrints);
     } catch (e) {}
 
@@ -1346,31 +1279,10 @@ const BulkProductUpload = () => {
           updatePayload.bin = r.print || r.brand;
         }
         if (r.minimumStock > 0) updatePayload.min_stock_alert = r.minimumStock;
-        // Tile dimensions, packing, and description update
-        const w = r.tileWidth || 0;
-        const h = r.tileHeight || 0;
-        const pcs = (r.piecesPerBox && r.piecesPerBox > 0)
-          ? r.piecesPerBox
-          : (r.matchedDbProduct?.pieces_per_box || 1);
-
-        if (mode === 'TILES' || (w > 0 && h > 0) || pcs > 1) {
-          if (r.piecesPerBox) {
-            updatePayload.pieces_per_box = r.piecesPerBox;
-            updatePayload.pcs_per_box = r.piecesPerBox;
-            updatePayload.pieces_per_packing = r.piecesPerBox;
-          }
-          if (w > 0 && h > 0) {
-            const sqMPerPiece = (w / 100) * (h / 100);
-            const sqMPerBox = sqMPerPiece * pcs;
-            const sizeStr = `${w}×${h} cm`;
-            const printStr = r.print || r.matchedDbProduct?.bin || '';
-            const brandStr = r.brand || r.matchedDbProduct?.brand || '';
-            updatePayload.scenario_name = 'Tile Metric';
-            updatePayload.product_description = `[TILE PRODUCT] Size: ${sizeStr} | Box: ${pcs} pcs (${sqMPerBox.toFixed(4)} sq.m / box) | Finish/Print: ${printStr} | Brand: ${brandStr}`;
-            if (!updatePayload.category && !r.matchedDbProduct?.category) {
-              updatePayload.category = `${w}x${h}`;
-            }
-          }
+        if (mode === 'TILES' && r.piecesPerBox) {
+          updatePayload.pieces_per_box = r.piecesPerBox;
+          updatePayload.pcs_per_box = r.piecesPerBox;
+          updatePayload.pieces_per_packing = r.piecesPerBox;
         }
 
         if (Object.keys(updatePayload).length > 0) {
@@ -1616,10 +1528,10 @@ const BulkProductUpload = () => {
         <div>
           <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <MdCloudUpload className="text-emerald-600 text-2xl" />
-            Bulk Product Upload with Smart Duplicate Protection
+            {isRTL ? "بلک پروڈکٹ اپلوڈ مع ڈپلیکیٹ پروٹیکشن" : "Bulk Product Upload with Smart Duplicate Protection"}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Imports Excel/CSV files with auto-detection of tiles vs standard products and full duplicate protection.
+            {isRTL ? "ایکسل یا CSV فائل سے پروڈکٹس اور ٹائلز اپلوڈ کریں مع مکمل ڈپلیکیٹ پروٹیکشن۔" : "Imports Excel/CSV files with auto-detection of tiles vs standard products and full duplicate protection."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1628,14 +1540,14 @@ const BulkProductUpload = () => {
               onClick={handleReset}
               className="px-3.5 py-2 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark hover:bg-slate-100 dark:hover:bg-meta-4 text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5 cursor-pointer"
             >
-              <MdRefresh className="text-sm" /> Choose Another File
+              <MdRefresh className="text-sm" /> {isRTL ? "دوسری فائل منتخب کریں" : "Choose Another File"}
             </button>
           )}
           <button
             onClick={() => navigate('/Administration/Products/List')}
             className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition flex items-center gap-1.5 cursor-pointer"
           >
-            <MdArrowBack /> Products List
+            {isRTL ? "پروڈکٹس لسٹ" : "Products List"} <MdArrowBack className={isRTL ? "rotate-180" : ""} />
           </button>
         </div>
       </div>
@@ -1652,12 +1564,12 @@ const BulkProductUpload = () => {
           }`}
         >
           <MdLayers className="text-base" />
-          <span>Upload Other Products</span>
+          <span>{isRTL ? "دیگر پروڈکٹس اپلوڈ کریں" : "Upload Other Products"}</span>
           {otherRows.length > 0 && (
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
               activeTab === 'OTHER' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
             }`}>
-              {otherRows.length} items
+              {otherRows.length} {isRTL ? "آئٹمز" : "items"}
             </span>
           )}
         </button>
@@ -1672,12 +1584,12 @@ const BulkProductUpload = () => {
           }`}
         >
           <MdSquareFoot className="text-base" />
-          <span>Upload Tile Products</span>
+          <span>{isRTL ? "ٹائل پروڈکٹس اپلوڈ کریں" : "Upload Tile Products"}</span>
           {tileRows.length > 0 && (
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
               activeTab === 'TILES' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
             }`}>
-              {tileRows.length} items
+              {tileRows.length} {isRTL ? "آئٹمز" : "items"}
             </span>
           )}
         </button>
@@ -1698,12 +1610,14 @@ const BulkProductUpload = () => {
 
           <div className="max-w-md mx-auto space-y-1">
             <h3 className="text-base font-bold text-black dark:text-white">
-              {activeTab === 'TILES'
-                ? 'Upload Tile Products Excel or CSV Sheet'
-                : 'Upload General Products Excel or CSV Sheet'}
+              {isRTL
+                ? (activeTab === 'TILES' ? 'ٹائل پروڈکٹس کی ایکسل یا CSV فائل اپلوڈ کریں' : 'جنرل پروڈکٹس کی ایکسل یا CSV فائل اپلوڈ کریں')
+                : (activeTab === 'TILES' ? 'Upload Tile Products Excel or CSV Sheet' : 'Upload General Products Excel or CSV Sheet')}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Smart auto-routing: If you upload tiles under Other Products (or non-tiles under Tiles), the system will automatically redirect and separate them across both tabs!
+              {isRTL
+                ? 'اسمارٹ آٹو راؤٹنگ: اگر آپ ایک ہی فائل میں ٹائلز اور دیگر پروڈکٹس دونوں اپلوڈ کریں گے تو سسٹم خودکار طور پر الگ الگ کر دے گا۔'
+                : 'Smart auto-routing: If you upload tiles under Other Products (or non-tiles under Tiles), the system will automatically redirect and separate them across both tabs!'}
             </p>
           </div>
 
@@ -1711,14 +1625,14 @@ const BulkProductUpload = () => {
           <div className="max-w-2xl mx-auto bg-slate-50 dark:bg-meta-4/20 p-5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Supported Columns in {activeTab === 'TILES' ? 'Tile' : 'Standard'} Excel:
+                {isRTL ? `ایکسل فائل کے کالمز (${activeTab === 'TILES' ? 'ٹائلز' : 'معیاری'}):` : `Supported Columns in ${activeTab === 'TILES' ? 'Tile' : 'Standard'} Excel:`}
               </span>
               <button
                 type="button"
                 onClick={activeTab === 'TILES' ? handleDownloadTileTemplate : handleDownloadOtherTemplate}
                 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
               >
-                <MdFileDownload className="text-sm" /> Download Sample Template
+                <MdFileDownload className="text-sm" /> {isRTL ? "سیمپل ٹیمپلیٹ ڈاؤنلوڈ کریں" : "Download Sample Template"}
               </button>
             </div>
 
@@ -1744,7 +1658,7 @@ const BulkProductUpload = () => {
                     key={col}
                     className="bg-white dark:bg-boxdark border border-stroke dark:border-strokedark px-2.5 py-1 rounded-lg font-mono font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    {col}
+                    {isRTL ? getUrduText(col) : col}
                   </span>
                 ))
               ) : (
@@ -1753,26 +1667,26 @@ const BulkProductUpload = () => {
                     key={col}
                     className="bg-white dark:bg-boxdark border border-stroke dark:border-strokedark px-2.5 py-1 rounded-lg font-mono font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    {col}
+                    {isRTL ? getUrduText(col) : col}
                   </span>
                 ))
               )}
             </div>
 
-            <div className="text-[11px] text-teal-700 dark:text-teal-300 bg-teal-50/80 dark:bg-teal-950/40 p-2.5 rounded-xl border border-teal-200 dark:border-teal-800/50 text-left space-y-1">
+            <div className={`text-[11px] text-teal-700 dark:text-teal-300 bg-teal-50/80 dark:bg-teal-950/40 p-2.5 rounded-xl border border-teal-200 dark:border-teal-800/50 space-y-1 ${isRTL ? 'text-right' : 'text-left'}`}>
               <div className="font-bold flex items-center gap-1">
-                <span>⚡</span> Intelligent Auto-Routing & Mixed Lists:
+                <span>⚡</span> {isRTL ? "اسمارٹ آٹو راؤٹنگ اور پروڈکٹ کلاسیفکیشن:" : "Intelligent Auto-Routing & Mixed Lists:"}
               </div>
-              <ul className="list-disc list-inside space-y-0.5 text-[10px] text-slate-600 dark:text-slate-300 pl-1">
-                <li>If you mistakenly upload a <strong>Tile file</strong> in the Other Products tab, it will automatically redirect to the <strong>Tile Products</strong> tab.</li>
-                <li>If a file contains <strong>both tiles and other products</strong> (e.g. 5 others & 5 tiles), it automatically places each in its respective tab!</li>
-                <li>2-Layer Duplicate Protection: Duplicate is triggered only if <strong>both Code AND Description match</strong>.</li>
+              <ul className={`list-disc list-inside space-y-0.5 text-[10px] text-slate-600 dark:text-slate-300 ${isRTL ? 'pr-1' : 'pl-1'}`}>
+                <li>{isRTL ? <>اگر آپ غلطی سے <strong>ٹائل فائل</strong> دوسرے ٹیب میں اپلوڈ کریں گے تو سسٹم خودکار طور پر درست ٹیب پر بھیج دے گا۔</> : <>If you mistakenly upload a <strong>Tile file</strong> in the Other Products tab, it will automatically redirect to the <strong>Tile Products</strong> tab.</>}</li>
+                <li>{isRTL ? <>اگر فائل میں <strong>ٹائلز اور دیگر پروڈکٹس دونوں</strong> ہوں تو دونوں خودکار طور پر الگ الگ ہو جائیں گی۔</> : <>If a file contains <strong>both tiles and other products</strong> (e.g. 5 others & 5 tiles), it automatically places each in its respective tab!</>}</li>
+                <li>{isRTL ? <>ڈپلیکیٹ پروٹیکشن: ڈپلیکیٹ تب متحرک ہوتا ہے جب <strong>کوڈ اور نام دونوں ایک جیسے ہوں</strong>۔</> : <>2-Layer Duplicate Protection: Duplicate is triggered only if <strong>both Code AND Description match</strong>.</>}</li>
               </ul>
             </div>
 
             <div className="pt-2 flex items-center justify-center gap-3">
               <label className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-md">
-                <MdCloudUpload className="text-base" /> Browse Excel File (.xlsx, .csv)
+                <MdCloudUpload className="text-base" /> {isRTL ? "ایکسل فائل منتخب کریں (.xlsx, .csv)" : "Browse Excel File (.xlsx, .csv)"}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1787,7 +1701,7 @@ const BulkProductUpload = () => {
                 onClick={activeTab === 'TILES' ? handleDownloadTileTemplate : handleDownloadOtherTemplate}
                 className="inline-flex items-center gap-1.5 px-4 py-3 bg-white dark:bg-boxdark hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-stroke dark:border-strokedark text-xs font-bold rounded-xl transition cursor-pointer shadow-2xs"
               >
-                <MdFileDownload className="text-base text-emerald-600" /> Download Template
+                <MdFileDownload className="text-base text-emerald-600" /> {isRTL ? "ٹیمپلیٹ ڈاؤنلوڈ کریں" : "Download Template"}
               </button>
             </div>
           </div>

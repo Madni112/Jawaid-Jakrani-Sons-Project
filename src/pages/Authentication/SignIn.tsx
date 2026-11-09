@@ -9,7 +9,7 @@ import { getBrandConfig } from '../../utils/brand';
 import DarkModeSwitcher from '../../components/Header/DarkModeSwitcher';
 import { MdLockOutline } from 'react-icons/md';
 
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 const SignIn: React.FC = () => {
   const brand = getBrandConfig();
@@ -20,10 +20,13 @@ const SignIn: React.FC = () => {
   // Check active tenant slug if coming from a tenant link (e.g. /bashir/signin)
   const activeTenantSlug = detectPortalTenant();
 
-  // If user is already authenticated with a valid Supabase User ID for this tenant, redirect to dashboard!
-  const currentTenant = String(tenantId || '').toLowerCase().trim();
-  if (currentUser?.id && currentTenant && activeTenantSlug && currentTenant === activeTenantSlug.toLowerCase().trim()) {
-    return <Navigate to={`/${currentTenant}`} replace />;
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const currentTenant = String(tenantId || 'uzair').toLowerCase().trim();
+
+  // If user is already authenticated, redirect immediately to dashboard
+  if (currentUser?.id || isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
   }
 
 
@@ -48,6 +51,7 @@ const SignIn: React.FC = () => {
         setLoading(true);
         setAuthError(null);
         await login(values.email, values.password);
+        navigate('/dashboard', { replace: true });
       } catch (error: any) {
         setAuthError(error.message || 'An error occurred during sign in');
       } finally {
@@ -66,11 +70,9 @@ const SignIn: React.FC = () => {
       <header className="w-full backdrop-blur-md bg-white/90 dark:bg-[#0B0F17]/90 border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-50">
         <div className="flex items-center justify-between px-4 py-3.5 md:px-6 2xl:px-11 max-w-7xl mx-auto w-full">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-800 flex items-center justify-center shadow-lg shadow-emerald-600/30 border border-emerald-400/40 relative overflow-hidden select-none shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20 pointer-events-none" />
-              <span className="relative z-10 font-cinzel font-black tracking-widest text-[15px] text-white dark:text-[#0B0F17] leading-none pl-0.5">
-                {brand.code}
-              </span>
+            <div className="w-11 h-11 rounded-2xl bg-white dark:bg-[#0B0F17] p-1.5 border border-slate-200/80 dark:border-slate-800 shadow-md flex items-center justify-center shrink-0">
+              <img src={IconDark} alt="Logo" className="w-full h-full object-contain hidden dark:block" />
+              <img src={IconLight} alt="Logo" className="w-full h-full object-contain block dark:hidden" />
             </div>
             <div className="flex items-center gap-1.5 leading-tight">
               <span className="text-[19px] font-black text-emerald-600 dark:text-emerald-400">{brand.brandWord1} {brand.brandWord2}</span>
@@ -88,6 +90,12 @@ const SignIn: React.FC = () => {
         <div className="w-full max-w-md bg-white dark:bg-[#0F1622] rounded-3xl shadow-xl border border-slate-200/80 dark:border-slate-800 p-8 sm:p-10 backdrop-blur-md">
           
           <div className="text-center mb-7">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-2.5 border border-slate-200/80 dark:border-slate-700/60 shadow-md flex items-center justify-center">
+                <img src={IconDark} alt="Logo" className="w-full h-full object-contain hidden dark:block" />
+                <img src={IconLight} alt="Logo" className="w-full h-full object-contain block dark:hidden" />
+              </div>
+            </div>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
               Sign In to Your Account
             </h2>
@@ -150,7 +158,7 @@ const SignIn: React.FC = () => {
             <button
               type="submit"
               className={`w-full cursor-pointer rounded-xl p-3.5 text-xs font-extrabold text-white transition-all duration-200 shadow-md hover:shadow-lg mt-3 flex items-center justify-center ${
-                loading ? 'bg-emerald-600/70 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                loading ? 'opacity-75 cursor-not-allowed bg-emerald-600' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20 hover:-translate-y-0.5'
               }`}
               disabled={loading}
             >

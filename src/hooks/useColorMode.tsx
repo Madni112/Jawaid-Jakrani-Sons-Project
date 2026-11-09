@@ -7,19 +7,19 @@ const useColorMode = () => {
   useEffect(() => {
     const className = 'dark';
     const bodyClass = window.document.body.classList;
-    const htmlClass = window.document.documentElement.classList;
+    const docClass = window.document.documentElement.classList;
 
     if (colorMode === 'dark') {
       bodyClass.add(className);
-      htmlClass.add(className);
+      docClass.add(className);
     } else {
       bodyClass.remove(className);
-      htmlClass.remove(className);
+      docClass.remove(className);
     }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('color-mode-changed', { detail: colorMode }));
-      window.dispatchEvent(new Event('zoaib_ali_sidebar_color_changed'));
+      window.dispatchEvent(new Event('uzair_jibran_sidebar_color_changed'));
     }
   }, [colorMode]);
 

@@ -1,5 +1,4 @@
 import React, { createContext, useContext } from 'react';
-import { getBrandConfig } from '../utils/brand';
 
 export interface TenantContextType {
   tenantSlug: string;
@@ -7,12 +6,10 @@ export interface TenantContextType {
   tenantName: string;
 }
 
-const defaultBrand = getBrandConfig();
-
 const TenantContext = createContext<TenantContextType>({
   tenantSlug: 'default',
   branchId: 1,
-  tenantName: defaultBrand.fullName
+  tenantName: 'AL MUHAMMADI'
 });
 
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -21,7 +18,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       value={{
         tenantSlug: 'default',
         branchId: 1,
-        tenantName: defaultBrand.fullName
+        tenantName: 'AL MUHAMMADI'
       }}
     >
       {children}

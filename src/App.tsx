@@ -1,6 +1,7 @@
 import { Toaster, useToasterStore } from 'react-hot-toast';
 import Navigation from './Navigation/Routing';
 import { ModalProvider } from './Context/Modal';
+import { LanguageProvider } from './Context/LanguageContext';
 import { useEffect, useRef } from 'react';
 import { initializeSocket } from './service/socket';
 import { AuthProvider, useAuth } from './Context/Auth';
@@ -42,37 +43,29 @@ function App() {
     applyAccentColor(getSavedAccentColor());
     initializeSocket();
   }, []);
+
   return (
     <AuthProvider>
-      <ModalProvider>
-        <Navigation />
-        <Toaster
-          position="top-center"
-          containerStyle={{ zIndex: 999999 }}
-          toastOptions={{
-            duration: 4000,
-            style: {
-              fontSize: '13px',
-              fontWeight: 500,
-              padding: '12px 16px',
-              borderRadius: '8px',
-              maxWidth: '500px',
-            },
-            success: {
-              duration: 3500,
-            },
-            error: {
-              duration: 5000,
-            },
-          }}
-        />
-        <ToastSoundHandler />
-        <Alert />
-      </ModalProvider>
+      <LanguageProvider>
+        <ModalProvider>
+          <Navigation />
+          <Toaster
+            position="top-right"
+            reverseOrder={false}
+            containerClassName="overflow-auto"
+            toastOptions={{
+              style: {
+                background: '#333',
+                color: '#fff',
+              },
+            }}
+          />
+          <ToastSoundHandler />
+          <Alert />
+        </ModalProvider>
+      </LanguageProvider>
     </AuthProvider>
   );
 }
 
 export default App;
-
-

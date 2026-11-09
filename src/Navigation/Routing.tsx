@@ -1,21 +1,25 @@
+import ErpResetBackupsPage from '../pages/Developer/ErpResetBackupsPage';
 import React, { useEffect } from 'react';
-import { Route, Routes, useLocation, Navigate, useParams } from 'react-router-dom';
+import { Route, Routes, useLocation, Navigate } from 'react-router-dom';
 import Loader from '../common/Loader';
 import SignIn from '../pages/Authentication/SignIn';
+import CompanyLanding from '../pages/Landing/CompanyLanding';
 import DeveloperDashboard from '../pages/Developer/DeveloperDashboard';
-import ErpResetBackupsPage from '../pages/Developer/ErpResetBackupsPage';
 import DefaultLayout from '../layout/DefaultLayout';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NotFound from '../pages/Error/NotFound';
 import SettingsPage from '../pages/Settings/SettingsPage';
+import POSTerminal from '../pages/POS/POSTerminal';
+import POSTerminalsManager from '../pages/POS/POSTerminalsManager';
+import POSLogin from '../pages/POS/POSLogin';
 import { useAuth } from '../Context/Auth';
 
 /**
- * Universal Route Guard for all ERP Sub-pages
+ * Universal Route Guard for all ERP Sub-pages (Single Business System)
  */
 const AppRouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
-  const { pathname } = useLocation();
+  const { pathname, search, hash } = useLocation();
 
   if (loading) {
     return <Loader />;
@@ -25,15 +29,37 @@ const AppRouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     return <Navigate to="/signin" replace />;
   }
 
-  // Auto-correct any corrupt nested prefixes (e.g. /purchase/Reports/Reports-Dashboard -> /Reports/Reports-Dashboard)
   const segments = pathname.split('/').filter(Boolean);
+
+  // 1. Single-business rule: Strip any legacy tenant prefix (e.g. /uzair/..., /tenant=...)
+  if (segments.length > 0) {
+    const first = segments[0].toLowerCase();
+    const isTenantSegment = first === 'uzair' || first.startsWith('tenant=') || first.startsWith('tenant-');
+    if (isTenantSegment) {
+      const rest = segments.slice(1).join('/');
+      const cleanPath = rest ? `/${rest}` : '/dashboard';
+      return <Navigate to={`${cleanPath}${search}${hash}`} replace state={location.state} />;
+    }
+  }
+
+  // 2. Auto-correct any corrupt nested prefixes (e.g. /purchase/Reports/Reports-Dashboard -> /Reports/Reports-Dashboard)
   const reservedPrefixes = ['purchase', 'sales', 'reports', 'registration', 'administration', 'dashboard', 'human-resources', 'human-resource', 'hr', 'crm'];
   if (segments.length >= 2 && reservedPrefixes.includes(segments[0].toLowerCase()) && reservedPrefixes.includes(segments[1].toLowerCase())) {
     const cleanPath = `/${segments.slice(1).join('/')}`;
-    return <Navigate to={cleanPath} replace />;
+    return <Navigate to={`${cleanPath}${search}${hash}`} replace state={location.state} />;
   }
 
   return <>{children}</>;
+};
+
+/**
+ * Strips legacy tenant prefixes from URLs and redirects to canonical paths
+ */
+const LegacyTenantRedirect: React.FC = () => {
+  const { pathname, search, hash } = useLocation();
+  const segments = pathname.split('/').filter(Boolean);
+  const cleanPath = segments.length > 1 ? `/${segments.slice(1).join('/')}` : '/dashboard';
+  return <Navigate to={`${cleanPath}${search}${hash}`} replace />;
 };
 
 function Navigation() {
@@ -55,9 +81,6 @@ function Navigation() {
       const flat: any[] = [];
 
       if (route.path && route.component) {
-        const cleanSub = route.path.replace(/^\//, '');
-
-        // 1. Direct standard ERP route
         flat.push(
           <Route
             key={`direct-${index}-${route.path}`}
@@ -69,21 +92,6 @@ function Navigation() {
             }
           />
         );
-
-        // 2. Legacy tenant-prefixed route fallback (e.g. /bashir/sales/invoice/list -> same component)
-        if (cleanSub) {
-          flat.push(
-            <Route
-              key={`tenant-${index}-${route.path}`}
-              path={`/:tenantPath/${cleanSub}`}
-              element={
-                <AppRouteGuard>
-                  <DefaultLayout>{route.component}</DefaultLayout>
-                </AppRouteGuard>
-              }
-            />
-          );
-        }
       }
 
       if (route.children) {
@@ -96,49 +104,82 @@ function Navigation() {
 
   return (
     <Routes>
-      {/* 1. ROOT PORTAL URL: Authenticated -> Dashboard, Unauthenticated -> Single Universal SignIn */}
+      {/* 1. PUBLIC ENTERPRISE LANDING PAGE */}
+      <Route path="/" element={<CompanyLanding />} />
+      <Route path="/landing" element={<CompanyLanding />} />
+
+      {/* 1.5. DASHBOARD ROUTE */}
       <Route
-        path="/"
+        path="/dashboard"
         element={
-          isAuthenticated ? (
+          <AppRouteGuard>
             <DefaultLayout>
               <Dashboard />
             </DefaultLayout>
-          ) : (
-            <SignIn />
-          )
+          </AppRouteGuard>
         }
       />
 
       {/* 2. UNIVERSAL SIGN-IN & LOGIN ROUTES */}
       <Route
         path="/signin"
-        element={isAuthenticated ? <Navigate to="/" replace /> : <SignIn />}
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignIn />}
       />
       <Route
         path="/login"
-        element={isAuthenticated ? <Navigate to="/" replace /> : <SignIn />}
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignIn />}
       />
 
       {/* 3. SUPER ADMIN & EMPLOYEE ROLE MANAGEMENT CONSOLE */}
       <Route path="/dev/master" element={<DeveloperDashboard />} />
-      <Route path="/dev/master/reset-backups" element={<ErpResetBackupsPage />} />
       <Route path="/Administration/Roles" element={<DeveloperDashboard />} />
       <Route path="/Administration/Users" element={<DeveloperDashboard />} />
 
-      {/* 4. SETTINGS & PREFERENCES */}
+      {/* 3.7. POS TERMINALS & COUNTER MANAGEMENT (ERP ADMIN) */}
       <Route
-        path="/settings"
+        path="/pos/terminals"
         element={
           <AppRouteGuard>
             <DefaultLayout>
-              <SettingsPage />
+              <POSTerminalsManager />
             </DefaultLayout>
           </AppRouteGuard>
         }
       />
+
+      {/* 3.8. DEDICATED ATELIER POS TERMINAL & LOGIN (e.g. /pos1, /pos1/terminal) */}
       <Route
-        path="/:tenantPath/settings"
+        path="/:posSlug/terminal"
+        element={
+          <AppRouteGuard>
+            <POSTerminal />
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/pos/:posSlug/terminal"
+        element={
+          <AppRouteGuard>
+            <POSTerminal />
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/pos/terminal"
+        element={<Navigate to="/pos1" replace />}
+      />
+      <Route
+        path="/pos/:posSlug"
+        element={<POSLogin />}
+      />
+      <Route
+        path="/pos"
+        element={<Navigate to="/pos1" replace />}
+      />
+
+      {/* 4. SETTINGS & PREFERENCES */}
+      <Route
+        path="/settings"
         element={
           <AppRouteGuard>
             <DefaultLayout>
@@ -158,21 +199,20 @@ function Navigation() {
       <Route path="/Sales/Invoice" element={<Navigate to="/Sales/Invoice/List" replace />} />
       <Route path="/sales/invoices" element={<Navigate to="/Sales/Invoice/List" replace />} />
 
-      {/* 5. LEGACY TENANT GATE REDIRECTS (Gracefully redirects any old links) */}
-      <Route path="/:tenantPath/signin" element={<Navigate to="/signin" replace />} />
-      <Route path="/:tenantPath/login" element={<Navigate to="/signin" replace />} />
-      <Route
-        path="/:tenantPath"
-        element={
-          isAuthenticated ? (
-            <DefaultLayout>
-              <Dashboard />
-            </DefaultLayout>
-          ) : (
-            <SignIn />
-          )
-        }
-      />
+      {/* 5. SINGLE BUSINESS REDIRECTS (Immediately strips /uzair or any tenant prefix) */}
+      <Route path="/uzair" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/uzair/dashboard" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/uzair/signin" element={<Navigate to="/signin" replace />} />
+      <Route path="/uzair/login" element={<Navigate to="/signin" replace />} />
+      <Route path="/uzair/settings" element={<Navigate to="/settings" replace />} />
+      <Route path="/uzair/*" element={<LegacyTenantRedirect />} />
+      <Route path="/tenant=:slug/*" element={<LegacyTenantRedirect />} />
+      <Route path="/tenant=:slug" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/tenant-:slug/*" element={<LegacyTenantRedirect />} />
+      <Route path="/tenant-:slug" element={<Navigate to="/dashboard" replace />} />
+
+      {/* 5.5. DYNAMIC POS COUNTER DIRECT URL (e.g. /pos1, /pos2) */}
+      <Route path="/:posSlug" element={<POSLogin />} />
 
       {/* 6. 404 NOT FOUND */}
       <Route

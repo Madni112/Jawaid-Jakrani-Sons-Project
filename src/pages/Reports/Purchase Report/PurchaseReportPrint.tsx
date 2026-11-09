@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import {
@@ -52,7 +52,7 @@ const PurchaseReportPrint = () => {
       const sCat = meta?.sub_category || '';
       const pcsPerBox = Number(meta?.pieces_per_box || meta?.pcs_per_box || meta?.pieces_per_packing || 0);
       const isTile = Boolean(
-        String(pCat).toLowerCase().includes('tile') || 
+        String(pCat).toLowerCase().includes('tile') ||
         String(sCat).toLowerCase().includes('tile') ||
         String(meta?.scenario_name || '').toLowerCase().includes('tile') ||
         pcsPerBox > 1
@@ -97,7 +97,7 @@ const PurchaseReportPrint = () => {
         const sCat = meta?.sub_category || '';
         const pcsPerBox = Number(meta?.pieces_per_box || meta?.pcs_per_box || meta?.pieces_per_packing || 0);
         const isTile = Boolean(
-          String(pCat).toLowerCase().includes('tile') || 
+          String(pCat).toLowerCase().includes('tile') ||
           String(sCat).toLowerCase().includes('tile') ||
           String(meta?.scenario_name || '').toLowerCase().includes('tile') ||
           pcsPerBox > 1
@@ -272,9 +272,9 @@ const PurchaseReportPrint = () => {
         setLoading(true);
 
         const [prodRes, purRes, retRes, catRes, venRes] = await Promise.all([
-          fetchAllPages(supabase.from('products').select('*')),
-          fetchAllPages(supabase.from('supplier_purchases').select('*').order('id', { ascending: true })),
-          fetchAllPages(supabase.from('purchase_returns').select('*').order('id', { ascending: true })),
+          supabase.from('products').select('*'),
+          supabase.from('supplier_purchases').select('*').order('id', { ascending: true }),
+          supabase.from('purchase_returns').select('*').order('id', { ascending: true }),
           supabase.from('inventory_categories').select('id, name, parent_id'),
           supabase.from('vendors').select('id, vendor_name, name, vendor_code, vendorCode, page_no, pageNo')
         ]);
@@ -368,8 +368,8 @@ const PurchaseReportPrint = () => {
 
           const sku = matched?.sku || matched?.item_sr_no || '-';
           const isTile = Boolean(
-            String(pCat).toLowerCase().includes('tile') || 
-            String(sCat).toLowerCase().includes('tile') || 
+            String(pCat).toLowerCase().includes('tile') ||
+            String(sCat).toLowerCase().includes('tile') ||
             String(lCat).toLowerCase().includes('tile') ||
             Number(matched?.pieces_per_box || matched?.pcs_per_box || 0) > 1
           );
@@ -441,9 +441,9 @@ const PurchaseReportPrint = () => {
             if (!matchesSubSub) return false;
           }
           if (brandList.length > 0) {
-            const matchesBrand = brandList.some(b => 
-              brand.toLowerCase().includes(b) || 
-              b.includes(brand.toLowerCase()) || 
+            const matchesBrand = brandList.some(b =>
+              brand.toLowerCase().includes(b) ||
+              b.includes(brand.toLowerCase()) ||
               pKey.includes(b)
             );
             if (!matchesBrand) return false;
@@ -1331,25 +1331,23 @@ const PurchaseReportPrint = () => {
           >
             <MdArrowBack size={16} /> Back to Report Filter
           </button>
-          
+
           <div className="flex items-center gap-2 flex-wrap">
             {(rType === 'category-purchases' || rType === 'product-purchase-history' || rType === 'purchase-invoice-detail') && (
               <div className="flex items-center bg-white p-0.5 rounded border border-gray-300 shadow-2xs mr-2">
                 <button
                   type="button"
                   onClick={() => handleViewModeChange('summary')}
-                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
-                    activeViewMode === 'summary' ? 'bg-primary text-white' : 'text-gray-600 hover:text-black'
-                  }`}
+                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition cursor-pointer ${activeViewMode === 'summary' ? 'bg-primary text-white' : 'text-gray-600 hover:text-black'
+                    }`}
                 >
                   <MdTableChart size={14} /> Summary View
                 </button>
                 <button
                   type="button"
                   onClick={() => handleViewModeChange('detailed')}
-                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
-                    activeViewMode === 'detailed' ? 'bg-primary text-white' : 'text-gray-600 hover:text-black'
-                  }`}
+                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition cursor-pointer ${activeViewMode === 'detailed' ? 'bg-primary text-white' : 'text-gray-600 hover:text-black'
+                    }`}
                 >
                   <MdViewList size={14} /> Detailed View
                 </button>
@@ -1423,7 +1421,7 @@ const PurchaseReportPrint = () => {
                   printColorAdjust: 'exact'
                 }}
               >
-                {getBrandConfig().code}
+                ZAC
               </span>
             </div>
           </div>
@@ -1843,11 +1841,11 @@ const PurchaseReportPrint = () => {
                                         <td className="p-1 border border-slate-300 font-sans text-slate-600">{tx.warehouse}</td>
                                         <td className="p-1 border border-slate-300 text-right font-bold text-slate-900">{tx.qty.toLocaleString()} {tx.uom}</td>
                                         <td className="p-1 border border-slate-300 text-right font-semibold text-slate-700">Rs. {Number(tx.rate).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                      <td className="p-1 border border-slate-300 text-right pr-2 font-black text-emerald-800">Rs. {Number(tx.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                      <td className="p-1 border border-slate-300 text-center uppercase text-[9px] font-bold text-slate-600">{tx.payment_term}</td>
-                                    </tr>
-                                  );
-                                })}
+                                        <td className="p-1 border border-slate-300 text-right pr-2 font-black text-emerald-800">Rs. {Number(tx.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-1 border border-slate-300 text-center uppercase text-[9px] font-bold text-slate-600">{tx.payment_term}</td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </td>

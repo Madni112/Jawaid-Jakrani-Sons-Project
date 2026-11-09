@@ -35,7 +35,7 @@ const PurchaseReceiptList = () => {
       const { data, error } = await supabase
         .from('financial_vouchers')
         .select('*')
-        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher')
+        .or('voucher_type.ilike.%Vendor Payment%,voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher')
         .order('id', { ascending: false });
 
       if (error) throw error;

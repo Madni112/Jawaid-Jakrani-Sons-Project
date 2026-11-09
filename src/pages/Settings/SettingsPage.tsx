@@ -1,5 +1,6 @@
+import { executeErpFactoryReset } from '../../utils/erpResetManager';
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LuUser,
   LuPalette,
@@ -14,11 +15,6 @@ import {
   LuSparkles,
   LuLayers,
   LuSlidersHorizontal,
-  LuPanelLeftOpen,
-  LuPanelLeftClose,
-  LuContrast,
-  LuBookmark,
-  LuPlus,
   LuLayoutDashboard,
   LuReceipt,
   LuPackage,
@@ -50,16 +46,35 @@ import {
   LuRadio,
   LuCpu,
   LuGlobe,
+  LuStore,
+  LuPrinter,
+  LuEye,
+  LuPanelLeftClose,
+  LuPanelLeftOpen,
+  LuPanelLeft,
   LuTrash2,
-  LuArrowLeft,
+  LuPlus,
+  LuBookmark,
 } from 'react-icons/lu';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { supabase, fetchAllPages } from '../../Context/supabaseClient';
+import {
+  recordDeviceHeartbeat,
+  fetchAllDevices,
+  revokeDevice,
+  revokeAllOtherDevices,
+  detectDeviceDetails,
+  getPersistentDeviceId,
+  getClientIp,
+  UserDevice,
+  formatLastOnline,
+} from '../../utils/deviceTracker';
+import { supabase } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
-import { getBrandConfig, detectIsAlm } from '../../utils/brand';
-import { executeErpFactoryReset } from '../../utils/erpResetManager';
+import { useLanguage } from '../../Context/LanguageContext';
+import { getBrandConfig } from '../../utils/brand';
+import WorkflowSettingsTab from './WorkflowSettingsTab';
 import useColorMode from '../../hooks/useColorMode';
 import {
   PRESET_THEME_COLORS,
@@ -70,7 +85,6 @@ import {
   getSafeSidebarColor,
   getContrastTextColor,
   isDarkModeActive,
-  isSidebarBackgroundLight,
   SidebarLayoutMode,
   getSidebarLayoutMode,
   setSidebarLayoutMode,
@@ -87,20 +101,14 @@ import {
   SidebarBehaviorMode,
   getSidebarBehaviorMode,
   setSidebarBehaviorMode,
-  MasterThemePreset,
-  getMasterThemePreset,
-  setMasterThemePreset,
   ReportLayoutMode,
   getReportLayoutMode,
   setReportLayoutMode,
-  isNHTTheme2Active,
 } from '../../constant/themeConfig';
 import {
   fetchSystemMasterConfig,
-  saveSystemMasterConfig,
   canUserBackup,
   canUserEditCreditLimit,
-  isNegativeStockAllowed,
   SystemMasterConfig,
 } from '../../utils/systemPermissions';
 import {
@@ -126,48 +134,70 @@ interface TabItem {
   icon: React.ElementType;
 }
 
-const BASE_SETTINGS_TABS: TabItem[] = [
+const SETTINGS_TABS: TabItem[] = [
+  {
+    id: 'alm_factory_reset',
+    label: 'Factory Reset ERP',
+    urLabel: 'فیکٹری ری سیٹ',
+    description: 'Wipe all data and reset to 0',
+    urDescription: 'ڈیٹا ری سیٹ کریں',
+    icon: LuTrash2,
+  },
   {
     id: 'profile',
     label: 'Profile',
+    urLabel: 'پروفائل',
     description: 'Personal info & company details',
+    urDescription: 'ذاتی معلومات اور کمپنی تفصیلات',
     icon: LuUser,
   },
   {
     id: 'security_devices',
     label: 'Login Devices & Security',
+    urLabel: 'لاگ ان ڈیوائسز اور سیکیورٹی',
     description: 'Workstations, active sessions & remote logout',
+    urDescription: 'فعال سیشنز اور ریموٹ لاگ آؤٹ',
     icon: LuShieldCheck,
   },
   {
     id: 'theme',
     label: 'Theme & Appearance',
+    urLabel: 'تھیم اور ظاہری شکل',
     description: 'Accent colors, sidebar styles & mode',
+    urDescription: 'رنگ، سائیڈبار اسٹائل اور موڈ',
     icon: LuPalette,
-  },
-  {
-    id: 'stock_control',
-    label: 'Inventory & Stock Governance',
-    description: 'Negative stock allowance & billing guards',
-    icon: LuPackage,
   },
   {
     id: 'credit_limits',
     label: 'Customer Credit Limits',
+    urLabel: 'کسٹمر کریڈٹ لمٹس',
     description: 'Monitor customer borrowing boundaries',
+    urDescription: 'کسٹمر ادھار کی حدود کی نگرانی',
     icon: LuCreditCard,
   },
   {
     id: 'sound_effects',
     label: 'Audio & Sound Effects',
+    urLabel: 'آواز اور آڈیو اثرات',
     description: 'POS audio feedback for billing & scanning',
+    urDescription: 'بلنگ اور اسکیننگ پر آڈیو فیڈ بیک',
     icon: LuVolume2,
   },
   {
     id: 'backup',
     label: 'Data Backup & Export',
+    urLabel: 'ڈیٹا بیک اپ اور ایکسپورٹ',
     description: 'Export records & complete ERP snapshots',
+    urDescription: 'ریکارڈز اور مکمل بیک اپ اسنیپ شاٹس',
     icon: LuHardDrive,
+  },
+  {
+    id: 'workflow_logistics',
+    label: 'Gate Pass & Logistics Workflow',
+    urLabel: 'گیٹ پاس اور ورک فلو ترتیبات',
+    description: 'Inward challan & delivery challan approval controls',
+    urDescription: 'انووارڈ اور ڈلیوری چالان کی ترتیبات',
+    icon: LuSlidersHorizontal,
   },
 ];
 
@@ -336,14 +366,78 @@ const SoundToneCard: React.FC<SoundToneCardProps> = ({
 };
 
 const SettingsPage: React.FC = () => {
-  const { userEmail, role, businessName } = useAuth();
+  const { userEmail, role, businessName, tenantId } = useAuth();
+  const { isRTL } = useLanguage();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'profile';
+  const location = useLocation();
+  const searchTab = new URLSearchParams(location.search).get('tab');
+  const [activeTab, setActiveTabState] = useState<string>(searchTab || 'profile');
+
   const setActiveTab = (tabId: string) => {
-    setSearchParams({ tab: tabId });
+    setActiveTabState(tabId);
+    const newParams = new URLSearchParams(location.search);
+    newParams.set('tab', tabId);
+    navigate(`?${newParams.toString()}`, { replace: true });
+    window.dispatchEvent(new CustomEvent('jakwani_settings_tab_changed', { detail: tabId }));
   };
-    const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('sidebar');
+
+  useEffect(() => {
+    const p = new URLSearchParams(location.search).get('tab') || 'profile';
+    if (p !== activeTab) setActiveTabState(p);
+  }, [location.search]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('jakwani_settings_tab_changed', { detail: activeTab }));
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handleSettingsTabChange = (e: any) => {
+      if (e.detail && e.detail !== activeTab) {
+        setActiveTabState(e.detail);
+      }
+    };
+    window.addEventListener('jakwani_settings_tab_changed', handleSettingsTabChange);
+    return () => window.removeEventListener('jakwani_settings_tab_changed', handleSettingsTabChange);
+  }, [activeTab]);
+
+  // Keyboard Shortcut: Shift + Left / Right Arrow to cycle between Settings Tabs
+  useEffect(() => {
+    const tabOrder = ['profile', 'security_devices', 'theme', 'credit_limits', 'sound_effects', 'backup'];
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.shiftKey) return;
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      if (isInput) return;
+
+      e.preventDefault();
+
+      const currentIndex = tabOrder.indexOf(activeTab);
+      const total = tabOrder.length;
+      if (currentIndex === -1) return;
+
+      let nextIndex = currentIndex;
+      if (e.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % total;
+      } else if (e.key === 'ArrowLeft') {
+        nextIndex = (currentIndex - 1 + total) % total;
+      }
+
+      setActiveTab(tabOrder[nextIndex]);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab]);
+
+  const [themeSubTab, setThemeSubTab] = useState<'navbar' | 'sidebar'>('sidebar');
   const [sidebarPreviewMode, setSidebarPreviewMode] = useState<'opened' | 'closed'>('opened');
   const [sidebarActiveConfigTab, setSidebarActiveConfigTab] = useState<'master-themes' | 'theme' | 'accent' | 'layout' | 'drawer' | 'colors'>('master-themes');
   const [previewHoverOpen, setPreviewHoverOpen] = useState<boolean>(false);
@@ -356,7 +450,7 @@ const SettingsPage: React.FC = () => {
 
   // Custom Sidebar Background (Gradient / Solid) & Saved Themes State
   const [sidebarCustomBg, setSidebarCustomBg] = useState<string>(() => {
-    return typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_custom_bg') || '' : '';
+    return typeof window !== 'undefined' ? localStorage.getItem('jakwani_sidebar_custom_bg') || '' : '';
   });
 
   interface SavedSidebarTheme {
@@ -373,7 +467,7 @@ const SettingsPage: React.FC = () => {
   const [savedCustomThemes, setSavedCustomThemes] = useState<SavedSidebarTheme[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem('alm_saved_sidebar_themes');
+      const raw = localStorage.getItem('jakwani_saved_sidebar_themes');
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -407,7 +501,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const initialParsed = parseBgCss(
-    (typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_custom_bg') : '') || '#0F172A'
+    (typeof window !== 'undefined' ? localStorage.getItem('jakwani_sidebar_custom_bg') : '') || '#0F172A'
   );
 
   const [customBgSubTab, setCustomBgSubTab] = useState<'presets' | 'custom' | 'saved'>('presets');
@@ -454,13 +548,13 @@ const SettingsPage: React.FC = () => {
 
   const [masterThemePreset, setMasterThemePreset] = useState<MasterThemePreset>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('alm_master_theme_preset') as MasterThemePreset;
+      const saved = localStorage.getItem('jakwani_master_theme_preset') as MasterThemePreset;
       if (saved === 'nht-1' || saved === 'nht-2' || saved === 'custom') return saved;
     }
     const sLayout = getSidebarLayoutMode();
     const nLayout = getNavbarLayoutMode();
-    const accent = (typeof window !== 'undefined' ? localStorage.getItem('alm_accent_color') || '' : '').toUpperCase();
-    const customBg = typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_custom_bg') || '' : '';
+    const accent = (typeof window !== 'undefined' ? localStorage.getItem('uzair_jibran_accent_color') || '' : '').toUpperCase();
+    const customBg = typeof window !== 'undefined' ? localStorage.getItem('jakwani_sidebar_custom_bg') || '' : '';
     const sTheme = getSidebarThemeMode();
 
     if (sLayout === 'classic' && nLayout === 'classic' && (accent === '#800020' || sTheme === 'charcoal' || customBg === '#1A1A1A')) {
@@ -475,26 +569,26 @@ const SettingsPage: React.FC = () => {
   const markAsCustom = () => {
     setMasterThemePreset('custom');
     if (typeof window !== 'undefined') {
-      localStorage.setItem('alm_master_theme_preset', 'custom');
-      window.dispatchEvent(new Event('alm_master_theme_preset_changed'));
+      localStorage.setItem('jakwani_master_theme_preset', 'custom');
+      window.dispatchEvent(new Event('jakwani_master_theme_preset_changed'));
     }
   };
 
-  const handleApplyMasterPreset = (preset: 'nht-1' | 'nht-2', variantAccent?: string) => {
+  const handleApplyMasterPreset = (preset: 'nht-1' | 'nht-2') => {
     if (preset === 'nht-1') {
       setSidebarLayout('floating');
       setSidebarLayoutMode('floating');
       setNavbarLayout('floating');
       setNavbarLayoutMode('sticky');
 
-      applyAccentColor('#4F46E5');
-      setSelectedAccentColor('#4F46E5');
-      setAppliedAccentColor('#4F46E5');
-      setCustomAccentHex('4F46E5');
+      applyAccentColor('#06B6D4');
+      setSelectedAccentColor('#06B6D4');
+      setAppliedAccentColor('#06B6D4');
+      setCustomAccentHex('06B6D4');
 
       setSidebarThemeMode('dark');
       setSidebarThemeModeState('dark');
-      localStorage.removeItem('alm_sidebar_custom_bg');
+      localStorage.removeItem('jakwani_sidebar_custom_bg');
       setSidebarCustomBg('');
 
       const safe = getSafeSidebarColor('#FFFFFF');
@@ -505,13 +599,13 @@ const SettingsPage: React.FC = () => {
 
       setMasterThemePreset('nht-1');
       if (typeof window !== 'undefined') {
-        localStorage.setItem('alm_master_theme_preset', 'nht-1');
-        localStorage.setItem('alm_base_master_theme', 'nht-1');
-        window.dispatchEvent(new Event('alm_master_theme_preset_changed'));
+        localStorage.setItem('jakwani_master_theme_preset', 'nht-1');
+        localStorage.setItem('jakwani_base_master_theme', 'nht-1');
+        window.dispatchEvent(new Event('jakwani_master_theme_preset_changed'));
       }
 
       toast.success(
-        '✨ NHT Theme 1 (Modern Floating) activated!',
+        isRTL ? '✨ NHT تھیم 1 (جدید فلوٹنگ لے آؤٹ) فعال ہو گئی!' : '✨ NHT Theme 1 (Modern Floating) activated!',
         { id: 'master-theme-toast' }
       );
     } else {
@@ -527,7 +621,7 @@ const SettingsPage: React.FC = () => {
 
       setSidebarThemeMode('charcoal');
       setSidebarThemeModeState('charcoal');
-      localStorage.setItem('alm_sidebar_custom_bg', '#1A1A1A');
+      localStorage.setItem('jakwani_sidebar_custom_bg', '#1A1A1A');
       setSidebarCustomBg('#1A1A1A');
 
       const safe = getSafeSidebarColor('#FFFFFF');
@@ -538,13 +632,13 @@ const SettingsPage: React.FC = () => {
 
       setMasterThemePreset('nht-2');
       if (typeof window !== 'undefined') {
-        localStorage.setItem('alm_master_theme_preset', 'nht-2');
-        localStorage.setItem('alm_base_master_theme', 'nht-2');
-        window.dispatchEvent(new Event('alm_master_theme_preset_changed'));
+        localStorage.setItem('jakwani_master_theme_preset', 'nht-2');
+        localStorage.setItem('jakwani_base_master_theme', 'nht-2');
+        window.dispatchEvent(new Event('jakwani_master_theme_preset_changed'));
       }
 
       toast.success(
-        '🏛️ NHT Theme 2 (Classic Executive) activated!',
+        isRTL ? '🏛️ NHT تھیم 2 (کلاسک ایگزیکٹو لے آؤٹ) فعال ہو گئی!' : '🏛️ NHT Theme 2 (Classic Executive) activated!',
         { id: 'master-theme-toast' }
       );
     }
@@ -554,8 +648,8 @@ const SettingsPage: React.FC = () => {
   const applyCustomSidebarBg = (bgCss: string, themeName?: string) => {
     markAsCustom();
     setSidebarCustomBg(bgCss);
-    localStorage.setItem('alm_sidebar_custom_bg', bgCss);
-    window.dispatchEvent(new Event('al_muhammad_sidebar_theme_changed'));
+    localStorage.setItem('jakwani_sidebar_custom_bg', bgCss);
+    window.dispatchEvent(new Event('jakwani_sidebar_theme_changed'));
     triggerFeedbackSound('success');
     if (themeName) {
       toast.success(
@@ -584,7 +678,7 @@ const SettingsPage: React.FC = () => {
 
     const updated = [newTheme, ...savedCustomThemes.filter(t => t.name !== finalName)];
     setSavedCustomThemes(updated);
-    localStorage.setItem('alm_saved_sidebar_themes', JSON.stringify(updated));
+    localStorage.setItem('jakwani_saved_sidebar_themes', JSON.stringify(updated));
 
     applyCustomSidebarBg(bgCss, finalName);
     setCustomThemeName('');
@@ -594,7 +688,7 @@ const SettingsPage: React.FC = () => {
     e.stopPropagation();
     const updated = savedCustomThemes.filter(t => t.id !== id);
     setSavedCustomThemes(updated);
-    localStorage.setItem('alm_saved_sidebar_themes', JSON.stringify(updated));
+    localStorage.setItem('jakwani_saved_sidebar_themes', JSON.stringify(updated));
     toast.success('Removed saved theme');
   };
 
@@ -615,7 +709,7 @@ const SettingsPage: React.FC = () => {
     triggerFeedbackSound('success');
     toast.success(
       isRTL
-        ? `${suite.name} تھیم کامیابی سے لاگو ہو گئی!`
+        ? `${suite.urName} تھیم کامیابی سے لاگو ہو گئی!`
         : `Applied "${suite.name}" theme suite!`,
       { id: 'theme-suite-toast' }
     );
@@ -630,7 +724,7 @@ const SettingsPage: React.FC = () => {
     toast.success(
       mode === 'closed'
         ? (isRTL ? '✨ سمارٹ آٹو کوولاپس: سائیڈبار کلک پر کھلے گی، ماؤس ہٹانے پر خود بند ہو جائے گی' : '✨ Auto-Collapse active: Click sidebar to expand, hover out to close!')
-        : ('📌 Pinned Sidebar active: Sidebar remains permanently opened.'),
+        : (isRTL ? '📌 مستقل کھلی سائیڈبار لاگو کر دی گئی' : '📌 Pinned Sidebar active: Sidebar remains permanently opened.'),
       { id: 'sidebar-behavior-toast' }
     );
   };
@@ -638,7 +732,7 @@ const SettingsPage: React.FC = () => {
   const handleSidebarThemeChange = (mode: SidebarThemeMode) => {
     markAsCustom();
     setSidebarCustomBg('');
-    localStorage.removeItem('alm_sidebar_custom_bg');
+    localStorage.removeItem('jakwani_sidebar_custom_bg');
     setSidebarThemeMode(mode);
     setSidebarThemeModeState(mode);
     const safe = getSafeSidebarColor(selectedSidebarColor);
@@ -648,7 +742,7 @@ const SettingsPage: React.FC = () => {
     setCustomSidebarHex(safe.safeColor.replace('#', ''));
     triggerFeedbackSound('success');
     toast.success(
-      `Sidebar background set to ${mode.toUpperCase()}!`,
+      isRTL ? 'سائیڈبار کا پس منظر تبدیل کر دیا گیا' : `Sidebar background set to ${mode.toUpperCase()}!`,
       { id: 'sidebar-theme-toast' }
     );
   };
@@ -693,7 +787,7 @@ const SettingsPage: React.FC = () => {
     toast.success(
       mode === 'floating'
         ? '🚀 Floating Modern Sidebar activated!'
-        : '🏛️ {"Classic Edge"} Sidebar activated!',
+        : '🏛️ {isRTL ? "کلاسک ایج" : "Classic Edge"} Sidebar activated!',
       { id: 'sidebar-layout-toast' }
     );
   };
@@ -705,7 +799,7 @@ const SettingsPage: React.FC = () => {
     toast.success(
       mode === 'floating'
         ? '🚀 Floating Modern Navbar activated!'
-        : '🏛️ {"Classic Full"}-Width Navbar activated!',
+        : '🏛️ {isRTL ? "کلاسک فل" : "Classic Full"}-Width Navbar activated!',
       { id: 'navbar-layout-toast' }
     );
   };
@@ -719,7 +813,7 @@ const SettingsPage: React.FC = () => {
     toast.success(
       mode === 'floating'
         ? '🚀 Full Floating Workspace (Sidebar & Navbar) activated!'
-        : '🏛️ Full {"Classic Edge"} Workspace (Sidebar & Navbar) activated!',
+        : '🏛️ Full {isRTL ? "کلاسک ایج" : "Classic Edge"} Workspace (Sidebar & Navbar) activated!',
       { id: 'preset-layout-toast' }
     );
   };
@@ -730,131 +824,6 @@ const SettingsPage: React.FC = () => {
 
   // System Master Permissions State
   const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(null);
-  // Negative Stock Settings & Correction Modal State
-  const [savingStockPolicy, setSavingStockPolicy] = useState(false);
-  const [checkingStockViolations, setCheckingStockViolations] = useState(false);
-  const [showStockCorrectionModal, setShowStockCorrectionModal] = useState(false);
-  
-  // AL Muhammadi Factory Reset State
-  const isAlmPortal = detectIsAlm();
-  const settingsTabsList = isAlmPortal
-    ? [
-        ...BASE_SETTINGS_TABS,
-        {
-          id: 'alm_factory_reset',
-          label: 'Factory Reset ERP',
-          description: 'Wipe all data and reset to 0',
-          icon: LuTrash2,
-        },
-      ]
-    : BASE_SETTINGS_TABS;
-  const [showFactoryResetModal, setShowFactoryResetModal] = useState(false);
-  const [resetEnteredPassword, setResetEnteredPassword] = useState('');
-  const [resetConfirmPhrase, setResetConfirmPhrase] = useState('');
-  const [resetWipeMaster, setResetWipeMaster] = useState(false);
-  const [isResettingErp, setIsResettingErp] = useState(false);
-  const [resetStepStatus, setResetStepStatus] = useState<string>('');
-  const [negativeProductsList, setNegativeProductsList] = useState<any[]>([]);
-
-
-  const handleExecuteFactoryReset = async () => {
-    const requiredPw = (systemConfig?.alm_reset_password || 'ALM-RESET-MASTER-2026').trim();
-    if (resetEnteredPassword.trim() !== requiredPw) {
-      toast.error('Invalid Developer Master Password. Please check /dev/master.');
-      triggerFeedbackSound('error', userEmail);
-      return;
-    }
-
-    if (resetConfirmPhrase.trim().toUpperCase() !== 'CONFIRM RESET') {
-      toast.error('Please type "CONFIRM RESET" exactly to proceed.');
-      return;
-    }
-
-    try {
-      setIsResettingErp(true);
-      setResetStepStatus('Harvesting full database snapshot & downloading local JSON...');
-
-      const res = await executeErpFactoryReset(userEmail || userName || 'Super Admin', resetWipeMaster);
-
-      if (res.success) {
-        setResetStepStatus('Database successfully reset to 0!');
-        triggerFeedbackSound('success', userEmail);
-        toast.success('ERP Factory Reset complete! Clean backup saved to /dev/master/reset-backups.');
-        setShowFactoryResetModal(false);
-        setResetEnteredPassword('');
-        setResetConfirmPhrase('');
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 1500);
-      } else {
-        toast.error('Reset failed: ' + (res.error || 'Unknown error'));
-        setResetStepStatus('');
-      }
-    } catch (err: any) {
-      toast.error('Error executing reset: ' + err.message);
-      setResetStepStatus('');
-    } finally {
-      setIsResettingErp(false);
-    }
-  };
-
-  // Toggle or Update Negative Stock Policy
-  const handleToggleNegativeStock = async () => {
-    if (!systemConfig) return;
-    const currentAllowed = systemConfig.allow_negative_stock !== false;
-    const nextAllowed = !currentAllowed;
-
-    // If user is trying to TURN ON STRICT MODE (i.e. Disallow negative stock, nextAllowed === false)
-    if (!nextAllowed) {
-      setCheckingStockViolations(true);
-      try {
-        const { data: allProds, error } = await fetchAllPages(
-          supabase.from('products').select('id, product_name, item_sr_no, current_stock, category, uom, retail_price')
-        );
-        if (error) throw error;
-
-        const violated = (allProds || []).filter((p: any) => Number(p.current_stock || 0) < 0);
-        if (violated.length > 0) {
-          setNegativeProductsList(violated);
-          setShowStockCorrectionModal(true);
-          triggerFeedbackSound('error', userEmail);
-          setCheckingStockViolations(false);
-          return; // Block enabling strict mode!
-        }
-      } catch (err: any) {
-        toast.error('Failed to verify inventory health: ' + err.message);
-        setCheckingStockViolations(false);
-        return;
-      }
-      setCheckingStockViolations(false);
-    }
-
-    // Save updated configuration
-    try {
-      setSavingStockPolicy(true);
-      const updatedConfig: SystemMasterConfig = {
-        ...systemConfig,
-        allow_negative_stock: nextAllowed,
-      };
-      const res = await saveSystemMasterConfig(updatedConfig);
-      if (res.success) {
-        setSystemConfig(updatedConfig);
-        triggerFeedbackSound('success', userEmail);
-        if (nextAllowed) {
-          toast.success('Negative stock allowed: Sales invoices can proceed even if stock is 0.');
-        } else {
-          toast.success('Strict Stock Protection Active: Billing items with insufficient stock is blocked.');
-        }
-      } else {
-        toast.error('Failed to update stock policy: ' + (res.error || 'Unknown error'));
-      }
-    } catch (err: any) {
-      toast.error('Error saving stock policy: ' + err.message);
-    } finally {
-      setSavingStockPolicy(false);
-    }
-  };
-
 
   // Customer Credit Limits State
   const [customers, setCustomers] = useState<any[]>([]);
@@ -913,26 +882,35 @@ const SettingsPage: React.FC = () => {
 
   const [terminatingOthers, setTerminatingOthers] = useState(false);
   const [terminatingCurrent, setTerminatingCurrent] = useState(false);
-  const [knownTerminals, setKnownTerminals] = useState([
-    {
-      id: 'term-1',
-      name: 'Counter #1 POS Terminal',
-      location: 'Main Showroom / Cashier Desk',
-      device: 'Windows Desktop • Chrome',
-      lastActive: 'Today, 02:40 AM',
-      ip: '192.168.1.105 (Local LAN)',
-      status: 'idle',
-    },
-    {
-      id: 'term-2',
-      name: 'Warehouse Handheld Scanner',
-      location: 'Depot A-39 / Inventory Bay',
-      device: 'Android Terminal • Barcode POS',
-      lastActive: 'Yesterday, 07:15 PM',
-      ip: '192.168.1.142 (WiFi)',
-      status: 'offline',
-    },
-  ]);
+  const [deviceList, setDeviceList] = useState<UserDevice[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const [currentClientIp, setCurrentClientIp] = useState<string>('Detecting IP...');
+
+  const loadRealDevices = async () => {
+    try {
+      setLoadingDevices(true);
+      await recordDeviceHeartbeat(userEmail, tenantId || 'bashir');
+      const ip = await getClientIp();
+      setCurrentClientIp(ip);
+      const devices = await fetchAllDevices(userEmail, tenantId || 'bashir');
+      setDeviceList(devices);
+    } catch (e) {
+      console.warn('Error loading devices:', e);
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRealDevices();
+
+    const interval = setInterval(() => {
+      recordDeviceHeartbeat(userEmail, tenantId || 'bashir');
+      fetchAllDevices(userEmail, tenantId || 'bashir').then(setDeviceList);
+    }, 45000);
+
+    return () => clearInterval(interval);
+  }, [userEmail, tenantId]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -961,8 +939,10 @@ const SettingsPage: React.FC = () => {
   const handleSignOutOtherSessions = async () => {
     setTerminatingOthers(true);
     try {
-      await (supabase.auth as any).signOut({ scope: 'others' });
-      setKnownTerminals((prev) => prev.map((t) => ({ ...t, status: 'offline', lastActive: 'Revoked just now' })));
+      await (supabase.auth as any).signOut({ scope: 'others' }).catch(() => {});
+      await revokeAllOtherDevices();
+      const updated = await fetchAllDevices(userEmail, tenantId || 'bashir');
+      setDeviceList(updated);
       toast.success('All other remote device sessions have been revoked successfully.');
       triggerFeedbackSound('delete', userEmail);
     } catch (err: any) {
@@ -972,10 +952,16 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleDisconnectTerminal = (termId: string, name: string) => {
-    setKnownTerminals((prev) => prev.filter((t) => t.id !== termId));
-    toast.success(`Access revoked for ${name}.`);
-    triggerFeedbackSound('delete', userEmail);
+  const handleDisconnectTerminal = async (termId: string, name: string) => {
+    try {
+      await revokeDevice(termId);
+      const updated = await fetchAllDevices(userEmail, tenantId || 'bashir');
+      setDeviceList(updated);
+      toast.success(`Access revoked for ${name}.`);
+      triggerFeedbackSound('delete', userEmail);
+    } catch {
+      toast.error(`Failed to revoke access for ${name}`);
+    }
   };
 
   const handleClearWorkstationCache = () => {
@@ -1010,7 +996,7 @@ const SettingsPage: React.FC = () => {
       const isDark = isDarkModeActive();
       const currentSidebar = getSavedSidebarColor(isDark);
       const safeCheck = getSafeSidebarColor(
-        localStorage.getItem('zoaib_ali_sidebar_raw_color') || currentSidebar,
+        localStorage.getItem('uzair_jibran_sidebar_raw_color') || currentSidebar,
         isDark
       );
       setAppliedSidebarColor(safeCheck.safeColor);
@@ -1020,13 +1006,13 @@ const SettingsPage: React.FC = () => {
     };
 
     syncColors();
-    window.addEventListener('zoaib_ali_theme_color_changed', syncColors);
-    window.addEventListener('zoaib_ali_sidebar_color_changed', syncColors);
+    window.addEventListener('uzair_jibran_theme_color_changed', syncColors);
+    window.addEventListener('uzair_jibran_sidebar_color_changed', syncColors);
     window.addEventListener('color-mode-changed', syncColors);
 
     return () => {
-      window.removeEventListener('zoaib_ali_theme_color_changed', syncColors);
-      window.removeEventListener('zoaib_ali_sidebar_color_changed', syncColors);
+      window.removeEventListener('uzair_jibran_theme_color_changed', syncColors);
+      window.removeEventListener('uzair_jibran_sidebar_color_changed', syncColors);
       window.removeEventListener('color-mode-changed', syncColors);
     };
   }, [colorMode]);
@@ -1328,6 +1314,7 @@ const SettingsPage: React.FC = () => {
 
   const handleApplyAccentColor = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    markAsCustom();
     let hexToApply = selectedAccentColor;
     if (customAccentHex) {
       const clean = customAccentHex.replace(/[^0-9A-Fa-f]/g, '').trim();
@@ -1354,6 +1341,13 @@ const SettingsPage: React.FC = () => {
   const handleSidebarSelect = (hex: string) => {
     const cleanHex = hex.startsWith('#') ? hex : `#${hex}`;
     const isDark = isDarkModeActive();
+    // Allow white (#FFFFFF) directly whenever sidebar is not white
+    if ((cleanHex.toUpperCase() === '#FFFFFF' || cleanHex.toUpperCase() === '#FFF') && !isSidebarBackgroundLight(isDark)) {
+      setSelectedSidebarColor('#FFFFFF');
+      setCustomSidebarHex('FFFFFF');
+      setWasSidebarAdjusted(false);
+      return;
+    }
     const safeCheck = getSafeSidebarColor(cleanHex, isDark);
     setSelectedSidebarColor(safeCheck.safeColor);
     setCustomSidebarHex(safeCheck.safeColor.replace('#', ''));
@@ -1362,6 +1356,7 @@ const SettingsPage: React.FC = () => {
 
   const handleApplySidebarColor = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    markAsCustom();
     let hexToApply = selectedSidebarColor;
     if (customSidebarHex) {
       const clean = customSidebarHex.replace(/[^0-9A-Fa-f]/g, '').trim();
@@ -1371,10 +1366,11 @@ const SettingsPage: React.FC = () => {
     }
 
     const isDark = isDarkModeActive();
+    // Allow white (#FFFFFF) directly whenever sidebar is not white
     if ((hexToApply.toUpperCase() === '#FFFFFF' || hexToApply.toUpperCase() === '#FFF') && !isSidebarBackgroundLight(isDark)) {
-      localStorage.setItem('alm_sidebar_color', '#FFFFFF');
-      localStorage.setItem('alm_sidebar_raw_color', '#FFFFFF');
-      window.dispatchEvent(new Event('al_muhammad_sidebar_color_changed'));
+      localStorage.setItem('uzair_jibran_sidebar_color', '#FFFFFF');
+      localStorage.setItem('uzair_jibran_sidebar_raw_color', '#FFFFFF');
+      window.dispatchEvent(new Event('uzair_jibran_sidebar_color_changed'));
       setAppliedSidebarColor('#FFFFFF');
       setSelectedSidebarColor('#FFFFFF');
       setCustomSidebarHex('FFFFFF');
@@ -1407,9 +1403,6 @@ const SettingsPage: React.FC = () => {
   const portalName = brand.portalName;
   const portalCode = brand.code;
 
-  const activeTabObj = settingsTabsList.find((t) => t.id === activeTab);
-  const currentTabLabel = activeTabObj ? activeTabObj.label : 'Profile';
-
   const activeAppliedPreset = PRESET_THEME_COLORS.find(
     (c) => c.hex.toLowerCase() === appliedAccentColor.toLowerCase()
   );
@@ -1422,17 +1415,97 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 animate-fadeIn">
-      {/* Top Page Header (Matches Image 1) */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-slate-800 pb-5">
+      {/* Top Page Header */}
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <LuSlidersHorizontal size={14} className="text-primary" />
             <span>Application Preferences</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1 flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1 flex flex-wrap items-center gap-2">
             <span>Settings</span>
-            <span className="text-slate-400 dark:text-slate-600 font-light">/</span>
-            <span className="text-primary">{currentTabLabel}</span>
+            <span className="text-slate-300 dark:text-slate-700 font-light">/</span>
+            <span className="text-primary font-bold text-xl sm:text-2xl">
+              {activeTab === 'profile' && (isRTL ? 'پروفائل' : 'Profile')}
+              {activeTab === 'security_devices' && (isRTL ? 'لاگ ان ڈیوائسز اور سیکیورٹی' : 'Login Devices & Security')}
+                        {/* TAB: AL MUHAMMADI FACTORY RESET ERP */}
+          {activeTab === 'alm_factory_reset' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-red-300 dark:border-red-900/60 p-6 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-red-100 dark:border-red-900/30">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl shrink-0">
+                      <LuShieldAlert />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-black text-red-700 dark:text-red-400">
+                          Factory Reset ERP & Wipe Transactions
+                        </h2>
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-200 dark:border-red-800">
+                          ALM Portal Exclusive
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Wipes all transactional data (sales, purchases, challans, vouchers, opening stock) and sets all physical stock and ledger balances to 0.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEnteredPassword('');
+                      setResetConfirmPhrase('');
+                      setResetWipeMaster(false);
+                      setShowFactoryResetModal(true);
+                    }}
+                    className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-red-600/30 cursor-pointer shrink-0"
+                  >
+                    <LuTrash2 size={16} />
+                    <span>Launch Factory Reset Modal</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                  <div className="p-4 rounded-xl bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/40 space-y-1">
+                    <span className="font-bold text-xs text-red-800 dark:text-red-300 block">
+                      1. Developer Password Required
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Cannot be executed accidentally. Must provide the Master Authorization Password managed in <code>/dev/master</code>.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 space-y-1">
+                    <span className="font-bold text-xs text-emerald-800 dark:text-emerald-300 block">
+                      2. Automatic Dual-Backup
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Instant browser download of JSON file + permanent immutable snapshot uploaded to <code>/dev/master/reset-backups</code>.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">
+                      3. Preserves Item Registry
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Product names, categories, and customers are safely preserved by default so you don't have to re-enter catalog setups.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+          {activeTab === 'theme' && (isRTL ? 'تھیم اور ظاہری شکل' : 'Theme & Appearance')}
+              {activeTab === 'credit_limits' && (isRTL ? 'کسٹمر کریڈٹ لمٹس' : 'Customer Credit Limits')}
+              {activeTab === 'sound_effects' && (isRTL ? 'آواز اور آڈیو اثرات' : 'Audio & Sound Effects')}
+              {activeTab === 'backup' && (isRTL ? 'ڈیٹا بیک اپ اور ایکسپورٹ' : 'Data Backup & Export')}
+              {activeTab === 'workflow_logistics' && (isRTL ? 'گیٹ پاس اور ورک فلو' : 'Gate Pass & Logistics Workflow')}
+            </span>
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Manage your account credentials, primary brand colors, and portal appearance.
@@ -1446,14 +1519,14 @@ const SettingsPage: React.FC = () => {
               style={{ backgroundColor: appliedAccentColor }}
             />
             <span className="text-slate-700 dark:text-slate-200">
-              {activeAppliedPreset ? activeAppliedPreset.name : 'Custom Active'}
+              {masterThemePreset === 'nht-1' ? 'NHT Theme 1 Active' : masterThemePreset === 'nht-2' ? 'NHT Theme 2 Active' : activeAppliedPreset ? activeAppliedPreset.name : 'Custom Active'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Main Full-Width Content Area */}
-      <main className="w-full min-w-0">
+      {/* Main Settings Content Area (Full Screen Width) */}
+      <div className="w-full min-w-0">
           {/* TAB 1: PROFILE */}
           {activeTab === 'profile' && (
             <div className="space-y-6 animate-fadeIn">
@@ -1501,7 +1574,7 @@ const SettingsPage: React.FC = () => {
                         title="View connected login devices and session security"
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>Active Session • Manage Devices →</span>
+                        <span>{isRTL ? "فعال سیشن • ڈیوائسز کا انتظام ←" : "Active Session • Manage Devices →"}</span>
                       </button>
                     </div>
 
@@ -1518,14 +1591,14 @@ const SettingsPage: React.FC = () => {
                 <div className="flex items-center gap-2 pb-4 mb-5 border-b border-slate-100 dark:border-slate-800">
                   <LuBuilding2 className="text-primary text-lg" />
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Organization & Account Information
+                    {isRTL ? "تنظیم اور کھاتہ کی معلومات" : "Organization & Account Information"}
                   </h3>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Company / Organization Name
+                      {isRTL ? "کمپنی / ادارے کا نام" : "Company / Organization Name"}
                     </span>
                     <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-1">
                       {displayCompanyName}
@@ -1534,7 +1607,7 @@ const SettingsPage: React.FC = () => {
 
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Login Email Address
+                      {isRTL ? "لاگ ان ای میل ایڈریس" : "Login Email Address"}
                     </span>
                     <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-1">
                       {displayEmail}
@@ -1543,17 +1616,17 @@ const SettingsPage: React.FC = () => {
 
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Security Level & Access Role
+                      {isRTL ? "سیکیورٹی لیول اور رسائی کا کردار" : "Security Level & Access Role"}
                     </span>
                     <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-1 flex items-center gap-1.5">
                       <LuShieldCheck className="text-primary" />
-                      <span>{displayRole} (Full Permissions)</span>
+                      <span>{displayRole} {isRTL ? "(مکمل اختیارات)" : "(Full Permissions)"}</span>
                     </div>
                   </div>
 
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                      Portal Instance
+                      {isRTL ? "پورٹل انسٹینس" : "Portal Instance"}
                     </span>
                     <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-1 flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-primary border border-slate-300 dark:border-slate-600 shrink-0" />
@@ -1565,7 +1638,7 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-                    {/* TAB 2: THEME & APPEARANCE */}
+          {/* TAB 2: THEME & APPEARANCE */}
           {activeTab === 'theme' && (
             <div className="space-y-6 animate-fadeIn">
               {/* LIVE INTERACTIVE SIDEBAR & NAVBAR WORKSPACE STUDIO */}
@@ -1582,10 +1655,12 @@ const SettingsPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                          {"Workspace Theme & Layout Studio"}
+                          {isRTL ? "تھیم و لے آؤٹ اسٹوڈیو" : "Workspace Theme & Layout Studio"}
                         </h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {"Click any tab in the preview sidebar to customize background, brand accent, layout, drawer behavior, and colors live."}
+                          {isRTL
+                            ? "سائیڈبار کے ذریعے تمام ترتیبات کو کنٹرول کریں اور سائیڈبار و نیوبار دونوں پر فوری لائیو اثر دیکھیں۔"
+                            : "Click any tab in the preview sidebar to customize background, brand accent, layout, drawer behavior, and colors live."}
                         </p>
                       </div>
                     </div>
@@ -1634,7 +1709,7 @@ const SettingsPage: React.FC = () => {
                         }`}
                       >
                         <LuPanelLeftOpen size={13} />
-                        <span>{"Opened View"}</span>
+                        <span>{isRTL ? "کھلی حالت" : "Opened View"}</span>
                       </button>
 
                       <button
@@ -1647,7 +1722,7 @@ const SettingsPage: React.FC = () => {
                         }`}
                       >
                         <LuPanelLeftClose size={13} />
-                        <span>{"Closed View"}</span>
+                        <span>{isRTL ? "بند حالت" : "Closed View"}</span>
                       </button>
                     </div>
                   </div>
@@ -1708,14 +1783,14 @@ const SettingsPage: React.FC = () => {
                                   onClick={() => setSidebarPreviewMode(sidebarPreviewMode === 'opened' ? 'closed' : 'opened')}
                                   title="Toggle expanded/compact view"
                                 >
-                                  JJS
+                                  AM
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs font-black tracking-wide truncate">
                                     AL MUHAMMADI
                                   </div>
                                   <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
-                                    Enterprise ERP
+                                    Cloth ERP
                                   </div>
                                 </div>
                                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-bold border border-blue-500/20">
@@ -1730,7 +1805,7 @@ const SettingsPage: React.FC = () => {
                                   onClick={() => setSidebarPreviewMode('opened')}
                                   title="Click to expand sidebar"
                                 >
-                                  JJS
+                                  AM
                                 </div>
                               </div>
                             )}
@@ -1740,25 +1815,25 @@ const SettingsPage: React.FC = () => {
                               {[
                                 {
                                   id: 'master-themes',
-                                  label: 'Workspace Themes',
+                                  label: isRTL ? 'ورک اسپیس تھیمز' : 'Workspace Themes',
                                   icon: LuLayers,
                                   badge: masterThemePreset === 'nht-1' ? 'Theme 1' : masterThemePreset === 'nht-2' ? 'Theme 2' : 'Custom',
                                 },
                                 {
                                   id: 'theme',
-                                  label: 'Sidebar Background Theme',
+                                  label: isRTL ? 'سائیڈبار پس منظر تھیم' : 'Sidebar Background Theme',
                                   icon: LuPalette,
                                   badge: sidebarThemeMode.toUpperCase(),
                                 },
                                 {
                                   id: 'layout',
-                                  label: 'Workspace & Layout',
+                                  label: isRTL ? 'ورک اسپیس و لے آؤٹ' : 'Workspace & Layout',
                                   icon: LuSlidersHorizontal,
                                   badge: sidebarLayout === 'floating' ? 'Floating' : 'Classic',
                                 },
                                 {
                                   id: 'drawer',
-                                  label: 'Drawer Behavior',
+                                  label: isRTL ? 'کھلنے بند رہنے کا انداز' : 'Drawer Behavior',
                                   icon: LuMonitor,
                                   badge: sidebarBehavior === 'closed' ? 'Auto' : 'Pinned',
                                 },
@@ -1846,7 +1921,7 @@ const SettingsPage: React.FC = () => {
                                           : selectedSidebarColor,
                                         border: isColorActive ? `1px solid ${selectedAccentColor}35` : '1px solid transparent',
                                       }}
-                                      title={"Color (Navbar & Sidebar Colors)"}
+                                      title={isRTL ? "رنگ و ایکسنٹ" : "Color (Navbar & Sidebar Colors)"}
                                     >
                                       <div className="flex items-center gap-2.5 truncate">
                                         <LuSparkles
@@ -1855,7 +1930,7 @@ const SettingsPage: React.FC = () => {
                                           style={{ color: isColorActive ? selectedAccentColor : selectedSidebarColor }}
                                         />
                                         {isEffectiveOpened && (
-                                          <span className="truncate">{"Color"}</span>
+                                          <span className="truncate">{isRTL ? "رنگ و اسٹائل" : "Color"}</span>
                                         )}
                                       </div>
 
@@ -1906,7 +1981,7 @@ const SettingsPage: React.FC = () => {
                                               ? `1px solid ${selectedAccentColor}50`
                                               : '1px solid transparent',
                                           }}
-                                          title={"Navbar & Brand Accent Color"}
+                                          title={isRTL ? "نیوبار و برانڈ ایکسنٹ کلر" : "Navbar & Brand Accent Color"}
                                         >
                                           <div className="flex items-center gap-2 truncate">
                                             <span
@@ -1914,7 +1989,7 @@ const SettingsPage: React.FC = () => {
                                               style={{ backgroundColor: selectedAccentColor }}
                                             />
                                             <span className="truncate">
-                                              {"Navbar & Brand Accent Color"}
+                                              {isRTL ? "نیوبار و برانڈ ایکسنٹ کلر" : "Navbar & Brand Accent Color"}
                                             </span>
                                           </div>
                                           <span
@@ -1947,7 +2022,7 @@ const SettingsPage: React.FC = () => {
                                               ? `1px solid ${selectedAccentColor}50`
                                               : '1px solid transparent',
                                           }}
-                                          title={"Sidebar Font & Icon Color"}
+                                          title={isRTL ? "سائیڈبار فونٹ و آئکن کلر" : "Sidebar Font & Icon Color"}
                                         >
                                           <div className="flex items-center gap-2 truncate">
                                             <span
@@ -1955,7 +2030,7 @@ const SettingsPage: React.FC = () => {
                                               style={{ backgroundColor: selectedSidebarColor }}
                                             />
                                             <span className="truncate">
-                                              {"Sidebar Font & Icon Color"}
+                                              {isRTL ? "سائیڈبار فونٹ و آئکن کلر" : "Sidebar Font & Icon Color"}
                                             </span>
                                           </div>
                                           <span
@@ -2028,7 +2103,7 @@ const SettingsPage: React.FC = () => {
                                   title="Portal Active indicator"
                                 />
                                 <span className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-100 hidden sm:inline">
-                                  ALM • Portal Active
+                                  UJC • Portal Active
                                 </span>
                                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                                   Theme Studio
@@ -2062,7 +2137,7 @@ const SettingsPage: React.FC = () => {
                                     onClick={() => {
                                       if (typeof setColorMode === 'function') setColorMode('light');
                                     }}
-                                    title={"Switch to Light Mode"}
+                                    title={isRTL ? "لائٹ موڈ" : "Switch to Light Mode"}
                                     className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
                                       colorMode === 'light'
                                         ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200'
@@ -2070,14 +2145,14 @@ const SettingsPage: React.FC = () => {
                                     }`}
                                   >
                                     <LuSun size={13} className={colorMode === 'light' ? 'text-amber-500' : ''} />
-                                    <span className="hidden sm:inline">{"Light"}</span>
+                                    <span className="hidden sm:inline">{isRTL ? "لائٹ" : "Light"}</span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => {
                                       if (typeof setColorMode === 'function') setColorMode('dark');
                                     }}
-                                    title={"Switch to Dark Mode"}
+                                    title={isRTL ? "ڈارک موڈ" : "Switch to Dark Mode"}
                                     className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
                                       colorMode === 'dark'
                                         ? 'bg-slate-900 text-white shadow-xs ring-1 ring-slate-700'
@@ -2085,7 +2160,7 @@ const SettingsPage: React.FC = () => {
                                     }`}
                                   >
                                     <LuMoon size={13} className={colorMode === 'dark' ? 'text-indigo-400' : ''} />
-                                    <span className="hidden sm:inline">{"Dark"}</span>
+                                    <span className="hidden sm:inline">{isRTL ? "ڈارک" : "Dark"}</span>
                                   </button>
                                 </div>
 
@@ -2118,16 +2193,18 @@ const SettingsPage: React.FC = () => {
                                   <div>
                                     <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                       <LuLayers size={17} style={{ color: selectedAccentColor }} />
-                                      <span>{"Workspace Themes & Architecture"}</span>
+                                      <span>{isRTL ? "ورک اسپیس تھیمز اور فن تعمیر" : "Workspace Themes & Architecture"}</span>
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                      {"Select a curated workspace architecture preset with live structural skeleton preview."}
+                                      {isRTL
+                                        ? "کیوریٹڈ ورک اسپیس لے آؤٹ میں سے انتخاب کریں یا ہر ایک کا لائیو اسٹرکچر دیکھیں۔"
+                                        : "Select a curated workspace architecture preset with live structural skeleton preview."}
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className={`text-xs font-mono font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
                                       masterThemePreset === 'nht-1'
-                                        ? 'bg-cyan-100 dark:bg-indigo-950/80 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-800'
+                                        ? 'bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-800'
                                         : masterThemePreset === 'nht-2'
                                         ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-800'
                                         : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800'
@@ -2144,7 +2221,7 @@ const SettingsPage: React.FC = () => {
                                     onClick={() => handleApplyMasterPreset('nht-1')}
                                     className={`group relative rounded-2xl border-2 transition-all duration-200 cursor-pointer p-4 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md ${
                                       masterThemePreset === 'nht-1'
-                                        ? 'border-cyan-500 bg-cyan-50/40 dark:bg-indigo-950/20 ring-2 ring-cyan-500/20'
+                                        ? 'border-cyan-500 bg-cyan-50/40 dark:bg-cyan-950/20 ring-2 ring-cyan-500/20'
                                         : 'border-slate-200 dark:border-slate-800 hover:border-cyan-300 dark:hover:border-cyan-800 bg-white dark:bg-slate-900/60'
                                     }`}
                                   >
@@ -2152,12 +2229,12 @@ const SettingsPage: React.FC = () => {
                                       {/* Header row */}
                                       <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center gap-2">
-                                          <span className="w-3 h-3 rounded-full bg-indigo-500 shadow-xs" />
+                                          <span className="w-3 h-3 rounded-full bg-cyan-400 shadow-xs" />
                                           <h5 className="text-sm font-bold text-slate-900 dark:text-white">
                                             NHT Theme 1
                                           </h5>
                                         </div>
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-cyan-800 uppercase tracking-wider">
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 uppercase tracking-wider">
                                           Modern Floating
                                         </span>
                                       </div>
@@ -2178,11 +2255,11 @@ const SettingsPage: React.FC = () => {
                                             <div className="space-y-1.5">
                                               {/* Brand Pill */}
                                               <div className="flex items-center gap-1.5 pb-1 border-b border-slate-700/60">
-                                                <div className="w-3.5 h-3.5 rounded-md bg-indigo-600 shadow-xs shrink-0" />
+                                                <div className="w-3.5 h-3.5 rounded-md bg-cyan-500 shadow-xs shrink-0" />
                                                 <div className="w-8 h-1.5 rounded bg-slate-600" />
                                               </div>
                                               {/* Active item (Cyan Pill) */}
-                                              <div className="w-full h-3 rounded-md bg-indigo-600/90 flex items-center px-1 gap-1">
+                                              <div className="w-full h-3 rounded-md bg-cyan-500/90 flex items-center px-1 gap-1">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-white" />
                                                 <div className="w-6 h-1 rounded bg-white/90" />
                                               </div>
@@ -2208,10 +2285,10 @@ const SettingsPage: React.FC = () => {
                                             {/* Floating Navbar */}
                                             <div className="h-5 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-between px-2">
                                               <div className="flex items-center gap-1.5">
-                                                <div className="w-2 h-2 rounded bg-indigo-500" />
+                                                <div className="w-2 h-2 rounded bg-cyan-400" />
                                                 <div className="w-12 h-1.5 rounded bg-slate-600" />
                                               </div>
-                                              <div className="w-8 h-2 rounded-full bg-indigo-600/80" />
+                                              <div className="w-8 h-2 rounded-full bg-cyan-500/80" />
                                             </div>
 
                                             {/* Content cards */}
@@ -2219,7 +2296,7 @@ const SettingsPage: React.FC = () => {
                                               <div className="grid grid-cols-2 gap-1.5">
                                                 <div className="p-1.5 rounded-md bg-slate-800 border border-slate-700/60 space-y-1">
                                                   <div className="w-6 h-1 rounded bg-slate-500" />
-                                                  <div className="w-10 h-2 rounded bg-indigo-500 font-bold" />
+                                                  <div className="w-10 h-2 rounded bg-cyan-400 font-bold" />
                                                 </div>
                                                 <div className="p-1.5 rounded-md bg-slate-800 border border-slate-700/60 space-y-1">
                                                   <div className="w-6 h-1 rounded bg-slate-500" />
@@ -2227,7 +2304,7 @@ const SettingsPage: React.FC = () => {
                                                 </div>
                                               </div>
                                               <div className="h-6 rounded bg-slate-800/90 border border-slate-700/50 p-1 flex items-center gap-1">
-                                                <div className="w-4 h-1 rounded bg-indigo-500" />
+                                                <div className="w-4 h-1 rounded bg-cyan-400" />
                                                 <div className="w-14 h-1 rounded bg-slate-600" />
                                               </div>
                                             </div>
@@ -2236,7 +2313,7 @@ const SettingsPage: React.FC = () => {
                                       </div>
 
                                       <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
-                                        Modern floating architecture with rounded detached sidebar cards, top floating bar, and dynamic royal indigo theme accent.
+                                        Modern floating architecture with rounded detached sidebar cards, top floating bar, and dynamic cyan theme accent.
                                       </p>
                                     </div>
 
@@ -2253,7 +2330,7 @@ const SettingsPage: React.FC = () => {
                                         }}
                                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                                           masterThemePreset === 'nht-1'
-                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                            ? 'bg-cyan-500 text-white shadow-xs'
                                             : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
                                         }`}
                                       >
@@ -2385,62 +2462,31 @@ const SettingsPage: React.FC = () => {
                                       </div>
 
                                       <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
-                                        Classic edge-to-edge flush rail layout with charcoal sidebar, 2-tier floating category dropdowns, executive hero banner, and clean reporting.
+                                        Classic edge-to-edge flush rail layout with charcoal sidebar, 2-tier floating category dropdowns, burgundy hero banner, and clean reporting.
                                       </p>
                                     </div>
 
-                                    {/* Action button & Color Variant Chips */}
-                                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1">
-                                          Palette:
-                                        </span>
-                                        {[
-                                          { name: 'Option A: Imperial Gold', hex: '#D97706', label: 'Gold (Option A)' },
-                                          { name: 'Option B: Burgundy', hex: '#800020', label: 'Burgundy' },
-                                          { name: 'Option C: Midnight Cobalt', hex: '#1D4ED8', label: 'Cobalt' },
-                                          { name: 'Option D: Royal Violet', hex: '#7C3AED', label: 'Violet' },
-                                          { name: 'Option E: Bronze', hex: '#B45309', label: 'Bronze' },
-                                        ].map((variant) => {
-                                          const isVariantActive = masterThemePreset === 'nht-2' && selectedAccentColor.toUpperCase() === variant.hex.toUpperCase();
-                                          return (
-                                            <button
-                                              key={variant.hex}
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleApplyMasterPreset('nht-2', variant.hex);
-                                              }}
-                                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
-                                                isVariantActive
-                                                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 ring-1 ring-amber-400 shadow-2xs font-black'
-                                                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
-                                              }`}
-                                              title={variant.name}
-                                            >
-                                              <span className="w-2 h-2 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: variant.hex }} />
-                                              <span>{variant.label}</span>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-
+                                    {/* Action button */}
+                                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                        Classic Edge Rail
+                                      </span>
                                       <button
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleApplyMasterPreset('nht-2', '#D97706');
+                                          handleApplyMasterPreset('nht-2');
                                         }}
-                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 self-end sm:self-auto ${
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                                           masterThemePreset === 'nht-2'
-                                            ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                                            ? 'bg-[#800020] text-white shadow-xs'
                                             : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
                                         }`}
                                       >
                                         {masterThemePreset === 'nht-2' ? (
                                           <>
                                             <LuCheck size={13} />
-                                            <span>Active (Theme 2)</span>
+                                            <span>Active</span>
                                           </>
                                         ) : (
                                           <span>Switch to Theme 2</span>
@@ -2460,10 +2506,10 @@ const SettingsPage: React.FC = () => {
                                   <div>
                                     <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                       <LuPalette size={16} style={{ color: selectedAccentColor }} />
-                                      <span>{"Sidebar Background Theme & Gradients"}</span>
+                                      <span>{isRTL ? "سائیڈبار کا پس منظر انداز و گریڈینٹ" : "Sidebar Background Theme & Gradients"}</span>
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                      {"Choose from 12 curated themes, or craft and save your own custom gradients."}
+                                      {isRTL ? "12 کیوریٹڈ تھیمز، یا کسٹم لینیئر گریڈینٹ بنا کر محفوظ کریں۔" : "Choose from 12 curated themes, or craft and save your own custom gradients."}
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -2485,7 +2531,7 @@ const SettingsPage: React.FC = () => {
                                     }`}
                                   >
                                     <LuPalette size={13} />
-                                    <span>{"Curated Themes"} (12)</span>
+                                    <span>{isRTL ? "کیوریٹڈ تھیمز" : "Curated Themes"} (12)</span>
                                   </button>
                                   <button
                                     type="button"
@@ -2500,7 +2546,7 @@ const SettingsPage: React.FC = () => {
                                     }`}
                                   >
                                     <LuSparkles size={13} />
-                                    <span>{"Custom & Gradient Studio"}</span>
+                                    <span>{isRTL ? "کسٹم گریڈینٹ اسٹوڈیو" : "Custom & Gradient Studio"}</span>
                                   </button>
                                   <button
                                     type="button"
@@ -2512,7 +2558,7 @@ const SettingsPage: React.FC = () => {
                                     }`}
                                   >
                                     <LuBookmark size={13} />
-                                    <span>{"Saved Themes"} ({savedCustomThemes.length})</span>
+                                    <span>{isRTL ? "محفوظ شدہ تھیمز" : "Saved Themes"} ({savedCustomThemes.length})</span>
                                   </button>
                                 </div>
 
@@ -2618,7 +2664,7 @@ const SettingsPage: React.FC = () => {
                                     {/* Gradient vs Solid Toggle */}
                                     <div className="flex items-center gap-2">
                                       <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        {"Background Type:"}
+                                        {isRTL ? "بیک گراؤنڈ ٹائپ:" : "Background Type:"}
                                       </span>
                                       <div className="flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                                         <button
@@ -2630,7 +2676,7 @@ const SettingsPage: React.FC = () => {
                                               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                                           }`}
                                         >
-                                          🌈 {"Linear Gradient"}
+                                          🌈 {isRTL ? "لینیئر گریڈینٹ" : "Linear Gradient"}
                                         </button>
                                         <button
                                           type="button"
@@ -2641,7 +2687,7 @@ const SettingsPage: React.FC = () => {
                                               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                                           }`}
                                         >
-                                          ⬛ {"Solid Color"}
+                                          ⬛ {isRTL ? "سولڈ رنگ" : "Solid Color"}
                                         </button>
                                       </div>
                                     </div>
@@ -2790,10 +2836,10 @@ const SettingsPage: React.FC = () => {
                                       <div>
                                         <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                                           <LuSave size={13} className="text-primary" />
-                                          <span>{"Save this Theme & Pick a Suggested Name:"}</span>
+                                          <span>{isRTL ? "تھیم محفوظ کریں اور مجوزہ نام منتخب کریں:" : "Save this Theme & Pick a Suggested Name:"}</span>
                                         </div>
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                          {"Click any suggested name pill below to quickly autofill, or type your own:"}
+                                          {isRTL ? "کسی بھی مجوزہ نام پر کلک کریں تاکہ خودکار طور پر نام داخل ہو جائے:" : "Click any suggested name pill below to quickly autofill, or type your own:"}
                                         </p>
                                       </div>
 
@@ -2830,7 +2876,7 @@ const SettingsPage: React.FC = () => {
                                           className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
                                         >
                                           <LuSave size={13} />
-                                          <span>{"Save & Apply Theme"}</span>
+                                          <span>{isRTL ? "تھیم محفوظ کریں" : "Save & Apply Theme"}</span>
                                         </button>
                                       </div>
                                     </div>
@@ -2844,10 +2890,10 @@ const SettingsPage: React.FC = () => {
                                       <div className="p-8 text-center rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-300 dark:border-slate-700">
                                         <LuBookmark className="mx-auto text-slate-400 mb-2" size={24} />
                                         <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                          {"No saved custom themes yet."}
+                                          {isRTL ? "ابھی تک کوئی کسٹم تھیم محفوظ نہیں کی گئی۔" : "No saved custom themes yet."}
                                         </div>
                                         <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto">
-                                          {"Craft your unique gradient or solid color in the Custom & Gradient Studio and save it here!"}
+                                          {isRTL ? "کسٹم گریڈینٹ اسٹوڈیو میں جا کر اپنی پسند کا نیا گریڈینٹ بنا کر محفوظ کریں۔" : "Craft your unique gradient or solid color in the Custom & Gradient Studio and save it here!"}
                                         </p>
                                         <button
                                           type="button"
@@ -2927,10 +2973,10 @@ const SettingsPage: React.FC = () => {
                                   <div>
                                     <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                       <LuSparkles size={16} style={{ color: selectedAccentColor }} />
-                                      <span>{"Navbar & Brand Accent Color"}</span>
+                                      <span>{isRTL ? "برانڈ کا بنیادی رنگ" : "Navbar & Brand Accent Color"}</span>
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                      {"Controls top navbar buttons, active tab pills, badges, and primary accents across the ERP."}
+                                      {isRTL ? "پیش نظارہ کریں اور ایکسنٹ رنگ محفوظ کرنے کے لیے کلک کریں۔" : "Controls top navbar buttons, active tab pills, badges, and primary accents across the ERP."}
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -3055,7 +3101,7 @@ const SettingsPage: React.FC = () => {
                                       ) : (
                                         <>
                                           <LuSparkles size={13} />
-                                          <span>{"Apply Accent Color"}</span>
+                                          <span>{isRTL ? "رنگ لاگو کریں" : "Apply Accent Color"}</span>
                                         </>
                                       )}
                                     </button>
@@ -3071,7 +3117,7 @@ const SettingsPage: React.FC = () => {
                                   <div>
                                     <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                       <LuLayers size={16} style={{ color: selectedAccentColor }} />
-                                      <span>{"Workspace Navigation & Layout"}</span>
+                                      <span>{isRTL ? "ورک اسپیس نیویگیشن اور لے آؤٹ" : "Workspace Navigation & Layout"}</span>
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                       Choose between a modern floating card layout or the classic edge-to-edge ERP interface.
@@ -3083,7 +3129,7 @@ const SettingsPage: React.FC = () => {
                                     className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
                                   >
                                     <LuRotateCcw size={13} />
-                                    <span>{"Reset to Classic (Undo)"}</span>
+                                    <span>{isRTL ? "کلاسک موڈ پر واپس جائیں" : "Reset to Classic (Undo)"}</span>
                                   </button>
                                 </div>
 
@@ -3239,18 +3285,18 @@ const SettingsPage: React.FC = () => {
                                           {/* Mini Top Filter Bar */}
                                           <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-slate-700/60">
                                             <div className="flex items-center gap-1">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
                                               <span className="w-10 h-1 rounded bg-slate-500" />
                                             </div>
                                             <div className="flex items-center gap-1">
-                                              <span className="w-6 h-1.5 rounded-full bg-indigo-600/30 border border-cyan-400/40" />
+                                              <span className="w-6 h-1.5 rounded-full bg-cyan-500/30 border border-cyan-400/40" />
                                               <span className="w-5 h-1.5 rounded-full bg-slate-700" />
                                             </div>
                                           </div>
                                           {/* Mini Draggable Report Cards Grid (Theme 1 style) */}
                                           <div className="grid grid-cols-3 gap-1.5 flex-1 pt-1.5">
                                             <div className="p-1 rounded bg-slate-800/90 border border-slate-700 flex flex-col justify-between shadow-2xs">
-                                              <div className="w-3 h-3 rounded bg-indigo-600/20 text-cyan-400 flex items-center justify-center text-[7px] font-black">📊</div>
+                                              <div className="w-3 h-3 rounded bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-[7px] font-black">📊</div>
                                               <div className="w-7 h-1 rounded bg-slate-300 mt-1" />
                                               <div className="w-4 h-0.5 rounded bg-slate-500 mt-0.5" />
                                             </div>
@@ -3342,7 +3388,7 @@ const SettingsPage: React.FC = () => {
                                   <div>
                                     <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                       <LuMonitor size={16} style={{ color: selectedAccentColor }} />
-                                      <span>{"Sidebar Default State & Interaction"}</span>
+                                      <span>{isRTL ? "سائیڈبار کھلنے اور بند رہنے کا انداز" : "Sidebar Default State & Interaction"}</span>
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                       Choose whether the sidebar stays permanently pinned open, or stays collapsed and auto-expands on hover/click.
@@ -3369,14 +3415,14 @@ const SettingsPage: React.FC = () => {
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center justify-between mb-1">
                                         <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                          {"Always Opened (Pinned)"}
+                                          {isRTL ? "مستقل کھلی رکھیں (پنڈ)" : "Always Opened (Pinned)"}
                                         </span>
                                         {sidebarBehavior === 'opened' && (
                                           <LuCheck size={14} className="text-blue-600 stroke-[3]" />
                                         )}
                                       </div>
                                       <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                                        {"Sidebar remains fully expanded at all times for quick multi-tasking."}
+                                        {isRTL ? "سائیڈبار ہر وقت پوری چوڑائی کے ساتھ کھلی رہتی ہے۔" : "Sidebar remains fully expanded at all times for quick multi-tasking."}
                                       </p>
                                     </div>
                                   </button>
@@ -3396,14 +3442,14 @@ const SettingsPage: React.FC = () => {
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center justify-between mb-1">
                                         <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                          {"Keep Closed (Smart Drawer)"}
+                                          {isRTL ? "بند رکھیں (آٹو ڈراور)" : "Keep Closed (Smart Drawer)"}
                                         </span>
                                         {sidebarBehavior === 'closed' && (
                                           <LuCheck size={14} className="text-blue-600 stroke-[3]" />
                                         )}
                                       </div>
                                       <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                                        {"Collapses to compact icons. Automatically expands on hover or click."}
+                                        {isRTL ? "عام طور پر بند، ہوور یا کلک کرنے پر خود بخود کھلے۔" : "Collapses to compact icons. Automatically expands on hover or click."}
                                       </p>
                                     </div>
                                   </button>
@@ -3418,7 +3464,7 @@ const SettingsPage: React.FC = () => {
                                   <div>
                                     <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                       <LuPenLine size={16} style={{ color: selectedAccentColor }} />
-                                      <span>{"Sidebar Font & Icon Color"}</span>
+                                      <span>{isRTL ? "سائیڈبار فونٹس اور آئکنز کا رنگ" : "Sidebar Font & Icon Color"}</span>
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                       Colors apply live to all navigation items, text, and icons in the sidebar.
@@ -3567,303 +3613,6 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-
-          {/* TAB: INVENTORY & STOCK GOVERNANCE */}
-          {activeTab === 'stock_control' && (() => {
-            const isNegativeAllowed = isNegativeStockAllowed(systemConfig);
-
-            return (
-              <div className="space-y-6">
-                {/* Hero Header Card */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-2xl shrink-0">
-                        <LuPackage />
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                          Inventory & Stock Governance
-                          <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                            isNegativeAllowed
-                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400'
-                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
-                          }`}>
-                            {isNegativeAllowed ? 'Negative Stock Permitted' : 'Strict Non-Negative Enforced'}
-                          </span>
-                        </h2>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          Configure whether POS and commercial sales invoices can bill items beyond available warehouse stock.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Main Setting Toggle Card */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-100 dark:border-slate-800">
-                    <div className="space-y-1.5 max-w-2xl">
-                      <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
-                        <LuSlidersHorizontal className="text-primary text-base" />
-                        <span>Allow Product Stock to Go Negative</span>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                        When <strong className="text-slate-700 dark:text-slate-200">Enabled</strong> (minus allowed): Salesmen can issue bills even if stock has not yet been inwarded via purchase bills or opening stock.
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                        When <strong className="text-slate-700 dark:text-slate-200">Disabled</strong> (strict mode): Sales Invoices and Delivery Challans are strictly blocked from proceeding if requested quantity exceeds available physical inventory.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <button
-                        type="button"
-                        disabled={savingStockPolicy || checkingStockViolations}
-                        onClick={handleToggleNegativeStock}
-                        className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 ${
-                          isNegativeAllowed ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'
-                        }`}
-                      >
-                        <span className="sr-only">Toggle Negative Stock</span>
-                        <span
-                          className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out flex items-center justify-center text-xs ${
-                            isNegativeAllowed ? 'translate-x-6 text-amber-600' : 'translate-x-0 text-slate-400'
-                          }`}
-                        >
-                          {isNegativeAllowed ? <LuCheck size={14} className="stroke-[3]" /> : <LuXCircle size={14} />}
-                        </span>
-                      </button>
-                      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                        {checkingStockViolations
-                          ? 'Checking health...'
-                          : savingStockPolicy
-                          ? 'Saving...'
-                          : isNegativeAllowed
-                          ? 'Minus Allowed'
-                          : 'Strict (No Minus)'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Operational Policy Guide */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                    <div className={`p-4 rounded-xl border ${
-                      isNegativeAllowed
-                        ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-950/20'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 opacity-60'
-                    }`}>
-                      <div className="flex items-center gap-2 font-bold text-xs text-amber-800 dark:text-amber-300 mb-1">
-                        <LuAlertTriangle size={15} />
-                        <span>Mode A: Allow Negative (Fast Sales)</span>
-                      </div>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
-                        Suitable for high-velocity counter sales where goods arrive in the showroom and are sold immediately before the accounting staff enters the supplier invoice. Physical stock will show negative numbers until purchase bills are posted.
-                      </p>
-                    </div>
-
-                    <div className={`p-4 rounded-xl border ${
-                      !isNegativeAllowed
-                        ? 'border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/20'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 opacity-60'
-                    }`}>
-                      <div className="flex items-center gap-2 font-bold text-xs text-emerald-800 dark:text-emerald-300 mb-1">
-                        <LuShieldCheck size={15} />
-                        <span>Mode B: Disallow Negative (Strict Audit)</span>
-                      </div>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
-                        Guarantees stock assets never drop below zero. Requires all products to be properly inwarded through Opening Stock or Supplier Inward Challans before salesmen can bill them.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-
-                {/* AL MUHAMMADI ONLY: FACTORY RESET DANGER ZONE */}
-                {isAlmPortal && (
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-red-300 dark:border-red-900/60 p-6 shadow-sm space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-red-100 dark:border-red-900/30">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl shrink-0">
-                          <LuShieldAlert />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-base font-black text-red-700 dark:text-red-400">
-                              Factory Reset ERP & Wipe Transactions
-                            </h3>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-200 dark:border-red-800">
-                              ALM Only
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            Wipes all transactions (sales, purchases, challans, vouchers, opening stock) and sets all stock and balances to 0. Requires Developer Password.
-                          </p>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResetEnteredPassword('');
-                          setResetConfirmPhrase('');
-                          setResetWipeMaster(false);
-                          setShowFactoryResetModal(true);
-                        }}
-                        className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer shrink-0"
-                      >
-                        <LuTrash2 size={15} />
-                        <span>Factory Reset ERP</span>
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600 dark:text-slate-400">
-                      <div className="p-3 rounded-xl bg-red-50/40 dark:bg-red-950/20 border border-red-100 dark:border-red-900/40">
-                        <strong className="text-red-700 dark:text-red-300 block mb-0.5">🛡️ Automatic Safe Archive</strong>
-                        <span>Before any data is cleared, an immutable full snapshot is downloaded locally and saved in <strong>/dev/master/reset-backups</strong>.</span>
-                      </div>
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                        <strong className="text-slate-800 dark:text-slate-200 block mb-0.5">📦 Master Directory Safety</strong>
-                        <span>Product names, categories, and customers are safely preserved by default unless you explicitly check blank-slate mode.</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Stock Correction Warning Modal */}
-                {showStockCorrectionModal && (
-                  <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-boxdark rounded-2xl shadow-2xl border border-red-300 dark:border-red-800 w-full max-w-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-200">
-                      <div className="flex items-start gap-4 pb-4 border-b border-stroke dark:border-strokedark">
-                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl shrink-0">
-                          <LuAlertTriangle />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                            Stock Correction Required Before Enabling
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            Strict stock protection cannot be turned ON because <strong>{negativeProductsList.length}</strong> product(s) currently have negative inventory in your system.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="py-4 space-y-2">
-                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                          Please add Opening Stock or Inward Purchases for these products to restore them to zero or above:
-                        </p>
-                        <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-                          {negativeProductsList.map((p, idx) => (
-                            <div key={p.id || idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                              <div>
-                                <span className="font-bold text-slate-900 dark:text-white block">{p.product_name}</span>
-                                <span className="text-[11px] text-slate-400 font-mono">SKU: {p.item_sr_no || 'N/A'} | Category: {p.category || 'Standard'}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="inline-block px-2.5 py-1 rounded-md bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-400 font-mono font-bold text-xs">
-                                  {Number(p.current_stock || 0).toLocaleString()} {p.uom || 'units'}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="pt-4 border-t border-stroke dark:border-strokedark flex items-center justify-between gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setShowStockCorrectionModal(false)}
-                          className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
-                        >
-                          Dismiss & Keep Minus Allowed
-                        </button>
-                        <a
-                          href="/Inventory/OpeningStock/List"
-                          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-md"
-                        >
-                          <LuPackage size={14} />
-                          <span>Go to Opening Stock Correction</span>
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          
-          {/* TAB: AL MUHAMMADI FACTORY RESET ERP */}
-          {activeTab === 'alm_factory_reset' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-red-300 dark:border-red-900/60 p-6 shadow-sm space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-red-100 dark:border-red-900/30">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl shrink-0">
-                      <LuShieldAlert />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-black text-red-700 dark:text-red-400">
-                          Factory Reset ERP & Wipe Transactions
-                        </h2>
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-200 dark:border-red-800">
-                          ALM Portal Exclusive
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Wipes all transactional data (sales, purchases, challans, vouchers, opening stock) and sets all physical stock and ledger balances to 0.
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResetEnteredPassword('');
-                      setResetConfirmPhrase('');
-                      setResetWipeMaster(false);
-                      setShowFactoryResetModal(true);
-                    }}
-                    className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-red-600/30 cursor-pointer shrink-0"
-                  >
-                    <LuTrash2 size={16} />
-                    <span>Launch Factory Reset Modal</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                  <div className="p-4 rounded-xl bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/40 space-y-1">
-                    <span className="font-bold text-xs text-red-800 dark:text-red-300 block">
-                      1. Developer Password Required
-                    </span>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Cannot be executed accidentally. Must provide the Master Authorization Password managed in <code>/dev/master</code>.
-                    </p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 space-y-1">
-                    <span className="font-bold text-xs text-emerald-800 dark:text-emerald-300 block">
-                      2. Automatic Dual-Backup
-                    </span>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Instant browser download of JSON file + permanent immutable snapshot uploaded to <code>/dev/master/reset-backups</code>.
-                    </p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-1">
-                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">
-                      3. Preserves Item Registry
-                    </span>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Product names, categories, and customers are safely preserved by default so you don't have to re-enter catalog setups.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* TAB 3: CUSTOMER CREDIT LIMITS */}
           {activeTab === 'credit_limits' && (() => {
             const canEdit = canUserEditCreditLimit(userEmail, role, systemConfig);
@@ -3915,7 +3664,7 @@ const SettingsPage: React.FC = () => {
                       <div>
                         <div className="flex items-center gap-2">
                           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                            Customer Credit Limits Directory
+                            {isRTL ? "کسٹمر کریڈٹ لمٹس ڈائریکٹری" : "Customer Credit Limits Directory"}
                           </h2>
                           {canEdit ? (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
@@ -3930,7 +3679,7 @@ const SettingsPage: React.FC = () => {
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           {canEdit
                             ? 'You have permission to edit and set customer credit limit ceilings.'
-                            : 'View customer credit boundaries and risk status. Edit rights are managed in /dev/master.'}
+                            : '{isRTL ? "کسٹمر کے ادھار کی حد اور رسک اسٹیٹس دیکھیں۔ ترمیم کے اختیارات /dev/master میں ہیں۔" : "View customer credit boundaries and risk status. Edit rights are managed in /dev/master"}.'}
                         </p>
                       </div>
                     </div>
@@ -3942,7 +3691,7 @@ const SettingsPage: React.FC = () => {
                       className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5 cursor-pointer shrink-0"
                     >
                       <LuRefreshCw className={loadingCustomers ? 'animate-spin' : ''} />
-                      <span>Refresh Limits</span>
+                      <span>{isRTL ? "حدود ریفریش کریں" : "Refresh Limits"}</span>
                     </button>
                   </div>
 
@@ -3978,7 +3727,7 @@ const SettingsPage: React.FC = () => {
                       type="text"
                       value={creditSearch}
                       onChange={e => setCreditSearch(e.target.value)}
-                      placeholder="Search by customer name, phone, or code..."
+                      placeholder={isRTL ? "کسٹمر کا نام، فون یا کوڈ تلاش کریں..." : "Search by customer name, phone, or code..."}
                       className="w-full pl-10 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:border-primary focus:outline-hidden"
                     />
                   </div>
@@ -4157,10 +3906,10 @@ const SettingsPage: React.FC = () => {
                     </div>
                     <div>
                       <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                        POS & System Audio Chimes
+                        {isRTL ? "POS اور سسٹم آڈیو اثرات" : "POS & System Audio Chimes"}
                       </h2>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Interactive sound feedback for cashiers during sales invoice creation, scanning, and alerts.
+                        {isRTL ? "سیلز انوائس بنانے، اسکیننگ اور الرٹس کے دوران کیشیئرز کے لیے آڈیو فیڈ بیک۔" : "Interactive sound feedback for cashiers during sales invoice creation, scanning, and alerts."}
                       </p>
                     </div>
                   </div>
@@ -4168,7 +3917,7 @@ const SettingsPage: React.FC = () => {
                   {/* Per-User Master Sound Switch */}
                   <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {soundEnabled ? 'Audio Active' : 'Audio Muted'}
+                      {isRTL ? (soundEnabled ? 'آڈیو فعال ہے' : 'آڈیو میوٹ ہے') : (soundEnabled ? 'Audio Active' : 'Audio Muted')}
                     </span>
                     <button
                       type="button"
@@ -4290,7 +4039,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                     <div>
                       <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                        ERP Data Backup & Excel Export
+                        {isRTL ? "ERP ڈیٹا بیک اپ اور ایکسل ایکسپورٹ" : "ERP Data Backup & Excel Export"}
                       </h2>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         Download comprehensive, clean Excel (.xlsx) snapshots of your customers, products, and sales history.
@@ -4309,7 +4058,7 @@ const SettingsPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                          Customers & Accounts Directory
+                          {isRTL ? "کسٹمرز اور اکاؤنٹس ڈائریکٹری" : "Customers & Accounts Directory"}
                         </h3>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           Names, codes, phone, ledger balances, and credit limits.
@@ -4339,7 +4088,7 @@ const SettingsPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                          Item Master & Tile Catalog
+                          {isRTL ? "آئٹم ماسٹر اور ٹائلز کیٹلاگ" : "Item Master & Tile Catalog"}
                         </h3>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           Full product registry, tile dimensions, prices, and inventory stock.
@@ -4369,7 +4118,7 @@ const SettingsPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                          Sales Invoices & Revenue Ledger
+                          {isRTL ? "سیلز انوائسز اور ریونیو لیجر" : "Sales Invoices & Revenue Ledger"}
                         </h3>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           Invoice history, customer orders, payment status, and totals.
@@ -4399,7 +4148,7 @@ const SettingsPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                          Complete ERP Snapshot (Multi-Sheet)
+                          {isRTL ? "مکمل ERP اسنیپ شاٹ (ملٹی شیٹ)" : "Complete ERP Snapshot (Multi-Sheet)"}
                         </h3>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           Combines Customers, Products, and Invoices into one Excel workbook.
@@ -4417,7 +4166,7 @@ const SettingsPage: React.FC = () => {
                       ) : (
                         <LuDownload className="text-sm" />
                       )}
-                      <span>Download Complete ERP Snapshot (.xlsx)</span>
+                      <span>{isRTL ? "مکمل ERP اسنیپ شاٹ ڈاؤنلوڈ کریں (.xlsx)" : "Download Complete ERP Snapshot (.xlsx)"}</span>
                     </button>
                   </div>
                 </div>
@@ -4429,7 +4178,7 @@ const SettingsPage: React.FC = () => {
           {activeTab === 'security_devices' && (
             <div className="space-y-6 animate-fadeIn">
               {/* Top Security Banner */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
                 <div className="flex items-start gap-4 z-10">
                   <div className="w-13 h-13 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl shrink-0 shadow-inner">
                     <LuShieldCheck />
@@ -4445,7 +4194,7 @@ const SettingsPage: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
-                      Manage all connected cashier workstations, mobile POS devices, and authorized browsers. You can terminate remote sessions anytime to prevent unauthorized access.
+                      {isRTL ? "تمام منسلک کیشیئر کمپیوٹرز، موبائل ڈیوائسز اور براؤزرز کا انتظام کریں۔ آپ غیر مجاز رسائی روکنے کے لیے کسی بھی وقت ریموٹ سیشن ختم کر سکتے ہیں۔" : "Manage all connected cashier workstations, mobile POS devices, and authorized browsers. You can terminate remote sessions anytime to prevent unauthorized access."}
                     </p>
                   </div>
                 </div>
@@ -4462,7 +4211,7 @@ const SettingsPage: React.FC = () => {
                     ) : (
                       <LuLogOut className="text-sm" />
                     )}
-                    <span>Revoke All Other Devices</span>
+                    <span>{isRTL ? "دیگر تمام ڈیوائسز ختم کریں" : "Revoke All Other Devices"}</span>
                   </button>
                 </div>
 
@@ -4494,7 +4243,7 @@ const SettingsPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 shadow-2xs">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      Connected & Verified
+                      {isRTL ? "منسلک اور تصدیق شدہ" : "Connected & Verified"}
                     </span>
                   </div>
                 </div>
@@ -4530,95 +4279,138 @@ const SettingsPage: React.FC = () => {
 
                   <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      <LuGlobe size={11} className="text-primary" /> Branch Network
+                      <LuGlobe size={11} className="text-primary" /> Workstation IP
                     </span>
-                    <div className="text-xs font-bold text-slate-800 dark:text-slate-100 mt-1">
-                      {portalName} • Local LAN
+                    <div className="text-xs font-mono font-bold text-slate-800 dark:text-slate-100 mt-1 truncate">
+                      {currentClientIp}
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* OTHER AUTHORIZED WORKSTATIONS / REMOTE SESSIONS */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <LuLaptop className="text-primary text-lg" />
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                        Other Authorized Workstations & Remote Terminals
-                      </h3>
-                      <p className="text-[11px] text-slate-400">
-                        Past verified POS terminals and devices assigned to this business portal.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-slate-400 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800">
-                    {knownTerminals.length} Terminals
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {knownTerminals.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-slate-400">
-                      No other remote devices connected. Only this workstation has active access.
-                    </div>
-                  ) : (
-                    knownTerminals.map((terminal) => (
-                      <div
-                        key={terminal.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 transition gap-3"
-                      >
-                        <div className="flex items-start sm:items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center text-base shrink-0">
-                            {terminal.device.toLowerCase().includes('android') ? (
-                              <LuSmartphone />
-                            ) : (
-                              <LuMonitor />
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs text-slate-800 dark:text-slate-100">
-                                {terminal.name}
-                              </span>
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${
-                                  terminal.status === 'idle'
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'
-                                    : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                                }`}
-                              >
-                                {terminal.status === 'idle' ? 'Standby / Idle' : 'Disconnected'}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                              {terminal.location} • {terminal.device} • Last active {terminal.lastActive}
-                            </p>
-                          </div>
+              {(() => {
+                const otherDevices = deviceList.filter((d) => !d.isCurrent);
+                return (
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <LuLaptop className="text-primary text-lg" />
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                            {isRTL ? "دیگر مجاز کمپیوٹرز اور ٹرمینلز" : "Other Authorized Workstations & Remote Terminals"}
+                          </h3>
+                          <p className="text-[11px] text-slate-400">
+                            {isRTL ? "حقیقی وقت میں منسلک کیشیئر کمپیوٹرز، موبائل اسکینرز اور برانچ ڈیوائسز۔" : "Real-time connected cashier workstations, mobile POS scanners, and branch devices."}
+                          </p>
                         </div>
-
+                      </div>
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
                         <button
                           type="button"
-                          onClick={() => handleDisconnectTerminal(terminal.id, terminal.name)}
-                          className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                          title="Revoke access for this terminal"
+                          onClick={loadRealDevices}
+                          disabled={loadingDevices}
+                          className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          title="Refresh active devices"
                         >
-                          <LuXCircle size={13} />
-                          <span>Disconnect</span>
+                          <LuRefreshCw size={12} className={loadingDevices ? 'animate-spin text-primary' : ''} />
+                          <span>{loadingDevices ? 'Refreshing...' : 'Refresh'}</span>
                         </button>
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80">
+                          {otherDevices.length} {otherDevices.length === 1 ? 'Terminal' : 'Terminals'}
+                        </span>
                       </div>
-                    ))
-                  )}
-                </div>
-              </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {otherDevices.length === 0 ? (
+                        <div className="py-10 text-center space-y-2">
+                          <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800/80 text-slate-400 flex items-center justify-center text-xl mx-auto">
+                            <LuShieldCheck />
+                          </div>
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            No Other Remote Devices Active
+                          </p>
+                          <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                            Only this current workstation has active authorized access to this portal. If another cashier or scanner signs in, they will appear here live.
+                          </p>
+                        </div>
+                      ) : (
+                        otherDevices.map((terminal) => (
+                          <div
+                            key={terminal.deviceId}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 transition gap-3"
+                          >
+                            <div className="flex items-start sm:items-center gap-3">
+                              <div className="w-9 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center text-base shrink-0">
+                                {terminal.deviceType.toLowerCase().includes('mobile') ||
+                                terminal.os.toLowerCase().includes('android') ||
+                                terminal.os.toLowerCase().includes('iphone') ? (
+                                  <LuSmartphone />
+                                ) : (
+                                  <LuMonitor />
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                                    {terminal.deviceName}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                      terminal.status === 'online'
+                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
+                                        : terminal.status === 'idle'
+                                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'
+                                        : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                                    }`}
+                                  >
+                                    {terminal.status === 'online'
+                                      ? 'Active Now'
+                                      : terminal.status === 'idle'
+                                      ? `Standby / Idle ${terminal.timeAgo || ''}`
+                                      : `Offline ${terminal.timeAgo || ''}`}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-400 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                    {terminal.ip}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                  {terminal.location} • {terminal.os} • {terminal.browser} •{' '}
+                                  {terminal.status === 'offline' ? (
+                                    <span className="text-slate-600 dark:text-slate-300 font-medium">
+                                      Last online: <b className="text-slate-700 dark:text-slate-200">{terminal.formattedLastActive}</b>
+                                    </span>
+                                  ) : (
+                                    <span>Last active: {terminal.formattedLastActive}</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDisconnectTerminal(terminal.deviceId, terminal.deviceName)}
+                              className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                              title="Revoke access for this terminal"
+                            >
+                              <LuXCircle size={13} />
+                              <span>Disconnect</span>
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* SECURITY & PROTOCOL SPECIFICATIONS */}
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-sm space-y-4">
                 <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
                   <LuLock className="text-primary text-base" />
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Authentication & Workstation Security Specifications
+                    {isRTL ? "تصدیق اور ورک اسٹیشن سیکیورٹی تفصیلات" : "Authentication & Workstation Security Specifications"}
                   </h3>
                 </div>
 
@@ -4667,7 +4459,7 @@ const SettingsPage: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <h3 className="text-sm font-bold text-red-700 dark:text-red-400 flex items-center gap-2">
-                      <LuAlertTriangle /> Workstation Reset & Session Logout
+                      <LuAlertTriangle /> {isRTL ? "ورک اسٹیشن ری سیٹ اور سیشن لاگ آؤٹ" : "Workstation Reset & Session Logout"}
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                       Flush local authorization cache on this machine or terminate your session immediately.
@@ -4681,7 +4473,7 @@ const SettingsPage: React.FC = () => {
                       className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
                     >
                       <LuRefreshCw size={13} />
-                      <span>Flush Workstation Cache</span>
+                      <span>{isRTL ? "کیشے میموری صاف کریں" : "Flush Workstation Cache"}</span>
                     </button>
 
                     <button
@@ -4691,124 +4483,19 @@ const SettingsPage: React.FC = () => {
                       className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
                     >
                       <LuLogOut size={13} />
-                      <span>Sign Out This Device</span>
+                      <span>{isRTL ? "اس ڈیوائس سے سائن آؤٹ کریں" : "Sign Out This Device"}</span>
                     </button>
                   </div>
                 </div>
               </div>
             </div>
           )}
-{/* FACTORY RESET CONFIRMATION MODAL */}
-                {showFactoryResetModal && (
-                  <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-boxdark rounded-2xl shadow-2xl border-2 border-red-400 dark:border-red-800 w-full max-w-xl p-6 overflow-hidden animate-in zoom-in-95 duration-200 space-y-5">
-                      
-                      {/* Modal Header */}
-                      <div className="flex items-start gap-4 pb-4 border-b border-stroke dark:border-strokedark">
-                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl shrink-0">
-                          <LuShieldAlert />
-                        </div>
-                        <div>
-                          <h3 className="font-black text-lg text-red-600 dark:text-red-400">
-                            Authorize ERP Factory Reset
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            This action will completely zero out all inventory, sales, purchases, and ledger balances for AL Muhammadi.
-                          </p>
-                        </div>
-                      </div>
 
-                      {/* Safety Banner */}
-                      <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2.5">
-                        <LuCheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-600" />
-                        <div>
-                          <strong>Automatic Safety Backup Guarantee:</strong> A full Excel & JSON snapshot will automatically be generated, downloaded to your computer, and vaulted in <code>/dev/master/reset-backups</code>.
-                        </div>
-                      </div>
-
-                      {/* Inputs Form */}
-                      <div className="space-y-4 text-xs">
-                        <div>
-                          <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">
-                            1. Enter Developer Master Authorization Password <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="password"
-                            value={resetEnteredPassword}
-                            onChange={(e) => setResetEnteredPassword(e.target.value)}
-                            placeholder="Given by developer in /dev/master"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-red-500 focus:outline-hidden font-mono"
-                          />
-                          <span className="text-[10px] text-slate-400 mt-0.5 block">Managed in /dev/master under Apex Security.</span>
-                        </div>
-
-                        <div>
-                          <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">
-                            2. Type <span className="text-red-600 font-mono font-black">CONFIRM RESET</span> to confirm <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={resetConfirmPhrase}
-                            onChange={(e) => setResetConfirmPhrase(e.target.value)}
-                            placeholder="Type CONFIRM RESET exactly"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-red-500 focus:outline-hidden font-mono"
-                          />
-                        </div>
-
-                        <div className="pt-2 border-t border-stroke dark:border-strokedark">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={resetWipeMaster}
-                              onChange={(e) => setResetWipeMaster(e.target.checked)}
-                              className="rounded border-stroke text-red-600 focus:ring-red-500"
-                            />
-                            <span className="text-xs text-slate-600 dark:text-slate-300">
-                              Also wipe product & customer master catalog (Blank slate mode)
-                            </span>
-                          </label>
-                        </div>
-
-                        {resetStepStatus && (
-                          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                            <LuRefreshCw className="animate-spin" size={14} />
-                            <span>{resetStepStatus}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Modal Actions */}
-                      <div className="pt-4 border-t border-stroke dark:border-strokedark flex items-center justify-between gap-3">
-                        <button
-                          type="button"
-                          disabled={isResettingErp}
-                          onClick={() => setShowFactoryResetModal(false)}
-                          className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={
-                            isResettingErp ||
-                            !resetEnteredPassword ||
-                            resetConfirmPhrase.trim().toUpperCase() !== 'CONFIRM RESET'
-                          }
-                          onClick={handleExecuteFactoryReset}
-                          className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-red-600/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <LuTrash2 size={14} />
-                          <span>{isResettingErp ? 'Backing Up & Resetting...' : 'Execute Factory Reset'}</span>
-                        </button>
-                      </div>
-
-                    </div>
-                  </div>
-                )}
-
-                                
-        </main>
+          {/* TAB 7: WORKFLOW & GATE PASS LOGISTICS */}
+          {activeTab === 'workflow_logistics' && (
+            <WorkflowSettingsTab isRTL={isRTL} />
+          )}
+      </div>
     </div>
   );
 };

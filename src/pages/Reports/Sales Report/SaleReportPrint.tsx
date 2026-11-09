@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdPrint, MdArrowBack, MdFileDownload, MdViewList, MdTableChart } from 'react-icons/md';
@@ -19,7 +19,6 @@ const SaleReportPrint = () => {
   const [reportRows, setReportRows] = useState<any[]>([]);
   const [categoryHierarchyTree, setCategoryHierarchyTree] = useState<any[]>([]);
   const [productUomMap, setProductUomMap] = useState<Record<string, string>>({});
-  const [productList, setProductList] = useState<any[]>([]);
   const [customerLookup, setCustomerLookup] = useState<Record<string, { code: string; pageNo: string }>>({});
 
   const resolveCustomerMeta = (custName?: string) => {
@@ -108,7 +107,7 @@ const SaleReportPrint = () => {
 
         // Fetch products and customers lookup for UOM, codes & ledger page nos
         const [prodRes, custRes] = await Promise.all([
-          fetchAllPages(supabase.from('products').select('*')),
+          supabase.from('products').select('*'),
           supabase.from('customers').select('id, customerName, customername, customer_code, customerCode, page_no, pageNo')
         ]);
         const prodData = prodRes.data;
@@ -121,7 +120,6 @@ const SaleReportPrint = () => {
             }
           });
           setProductUomMap(uomMapObj);
-          setProductList(prodData || []);
         }
 
         const custLookupMap: Record<string, { code: string; pageNo: string }> = {};
@@ -141,8 +139,8 @@ const SaleReportPrint = () => {
         // ── 📂 REPORT TYPE: CATEGORY-WISE SALES & VOLUME REPORT ──
         if (rType === 'category-sales') {
           const [invRes, retRes, catRes, locRes] = await Promise.all([
-            fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
-            fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: true })),
+            supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
+            supabase.from('sales_returns').select('*').order('id', { ascending: true }),
             supabase.from('inventory_categories').select('id, name, parent_id'),
             supabase.from('inventory_locations').select('id, name, location_type').order('id', { ascending: true })
           ]);
@@ -767,8 +765,8 @@ const SaleReportPrint = () => {
         // ── 📦 REPORT TYPE: PRODUCT SALES HISTORY REPORT ──
         else if (rType === 'product-sales-history') {
           const [invRes, retRes] = await Promise.all([
-            fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
-            fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: true }))
+            supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
+            supabase.from('sales_returns').select('*').order('id', { ascending: true })
           ]);
 
           if (invRes.error) throw invRes.error;
@@ -1031,32 +1029,13 @@ const SaleReportPrint = () => {
             else invQuery = invQuery.neq('dc_no', '');
           }
 
-          if (filters.dateFrom) {
-            const startStr = String(filters.dateFrom).split('T')[0];
-            invQuery = invQuery.gte('sale_date', startStr);
-          }
-          if (filters.dateTo) {
-            const endStr = String(filters.dateTo).split('T')[0];
-            invQuery = invQuery.lte('sale_date', endStr);
-          }
-
           let retQuery = supabase.from('sales_returns').select('*');
           if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) retQuery = retQuery.in('customer_name', filters.customer);
+          if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) retQuery = retQuery.in('salesman', filters.salesman);
           if (filters.transport && filters.transport.length > 0 && !filters.transport.includes('All')) retQuery = retQuery.in('transport_name', filters.transport);
           if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) retQuery = retQuery.in('dispatch_warehouse', filters.location);
-          if (filters.dateFrom) {
-            const startStr = String(filters.dateFrom).split('T')[0];
-            retQuery = retQuery.gte('return_date', startStr);
-          }
-          if (filters.dateTo) {
-            const endStr = String(filters.dateTo).split('T')[0];
-            retQuery = retQuery.lte('return_date', endStr);
-          }
 
-          const [invRes, retRes] = await Promise.all([
-            fetchAllPages(invQuery),
-            fetchAllPages(retQuery)
-          ]);
+          const [invRes, retRes] = await Promise.all([invQuery, retQuery]);
           if (invRes.error) throw invRes.error;
           if (retRes.error) throw retRes.error;
 
@@ -1231,25 +1210,8 @@ const SaleReportPrint = () => {
             else query = query.neq('dc_no', '');
           }
 
-          if (filters.dateFrom) {
-            const startStr = String(filters.dateFrom).split('T')[0];
-            query = query.gte('sale_date', startStr);
-          }
-          if (filters.dateTo) {
-            const endStr = String(filters.dateTo).split('T')[0];
-            query = query.lte('sale_date', endStr);
-          }
-
-          let invData: any[] = [];
-          let page = 0;
-          const pageSize = 1000;
-          while (true) {
-            const { data: pageData, error: pageErr } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
-            if (pageErr) throw pageErr;
-            invData = invData.concat(pageData || []);
-            if (!pageData || pageData.length < pageSize) break;
-            page++;
-          }
+          const { data: invData, error: invError } = await query;
+          if (invError) throw invError;
 
           const { data: returnsData, error: retError } = await supabase
             .from('sales_returns')
@@ -1342,32 +1304,13 @@ const SaleReportPrint = () => {
             else invQuery = invQuery.neq('dc_no', '');
           }
 
-          if (filters.dateFrom) {
-            const startStr = String(filters.dateFrom).split('T')[0];
-            invQuery = invQuery.gte('sale_date', startStr);
-          }
-          if (filters.dateTo) {
-            const endStr = String(filters.dateTo).split('T')[0];
-            invQuery = invQuery.lte('sale_date', endStr);
-          }
-
           let retQuery = supabase.from('sales_returns').select('*');
           if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) retQuery = retQuery.in('customer_name', filters.customer);
+          if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) retQuery = retQuery.in('salesman', filters.salesman);
           if (filters.transport && filters.transport.length > 0 && !filters.transport.includes('All')) retQuery = retQuery.in('transport_name', filters.transport);
           if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) retQuery = retQuery.in('dispatch_warehouse', filters.location);
-          if (filters.dateFrom) {
-            const startStr = String(filters.dateFrom).split('T')[0];
-            retQuery = retQuery.gte('return_date', startStr);
-          }
-          if (filters.dateTo) {
-            const endStr = String(filters.dateTo).split('T')[0];
-            retQuery = retQuery.lte('return_date', endStr);
-          }
 
-          const [invRes, retRes] = await Promise.all([
-            fetchAllPages(invQuery),
-            fetchAllPages(retQuery)
-          ]);
+          const [invRes, retRes] = await Promise.all([invQuery, retQuery]);
           if (invRes.error) throw invRes.error;
           if (retRes.error) throw retRes.error;
 
@@ -1670,7 +1613,7 @@ const SaleReportPrint = () => {
           if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) query = query.in('customer_name', filters.customer);
           if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) query = query.in('salesman', filters.salesman);
 
-          const { data: invData, error: invError } = await fetchAllPages(query);
+          const { data: invData, error: invError } = await query;
           if (invError) throw invError;
 
           let filteredInvs = invData || [];
@@ -1851,54 +1794,6 @@ const SaleReportPrint = () => {
       overallBillDiscount,
       grandTotalDiscount
     };
-  };
-
-  // ── 🎯 FILTER-TARGETED ITEM LOGIC (SALES FILTER & PARAMETER REGISTER ONLY) ──
-  const isItemFilterActive = Boolean(
-    rType === 'sales-query' && (
-      (filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
-      (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-      (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))
-    )
-  );
-
-  const isMatchingItem = (it: { name: string }) => {
-    if (!isItemFilterActive) return true;
-    const pName = String(it.name || '').trim().toLowerCase();
-    const matchingProd = (productList || []).find((p: any) => (p.product_name || '').trim().toLowerCase() === pName);
-
-    if (filters.product && filters.product.length > 0 && !filters.product.includes('All')) {
-      const matchP = filters.product.some((fp: string) => fp.trim().toLowerCase() === pName);
-      if (!matchP) return false;
-    }
-    if (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) {
-      const prodCat = String(matchingProd?.category || matchingProd?.parent_category || '').trim().toLowerCase();
-      const matchC = filters.parentCategory.some((fc: string) => fc.trim().toLowerCase() === prodCat);
-      if (!matchC) return false;
-    }
-    if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
-      const prodBrand = String(matchingProd?.brand || '').trim().toLowerCase();
-      const matchB = filters.bin.some((fb: string) => fb.trim().toLowerCase() === prodBrand);
-      if (!matchB) return false;
-    }
-    return true;
-  };
-
-  const getRowItemDetails = (row: any) => {
-    const allItems = extractItemDetails(row);
-    if (!isItemFilterActive) return allItems;
-    const filtered = allItems.filter(isMatchingItem);
-    return filtered.length > 0 ? filtered : allItems;
-  };
-
-  const getRowAmount = (row: any) => {
-    if (!isItemFilterActive) return Number(row.total_amount || 0);
-    const matching = getRowItemDetails(row);
-    return matching.reduce((sum, it) => {
-      const gross = Number(it.qty || 0) * Number(it.price || 0);
-      const discount = Number(it.discountAmt || 0);
-      return sum + (gross - discount);
-    }, 0);
   };
 
   // ── 📥 EXCEL WORKBOOK EXPORT ──
@@ -2161,8 +2056,7 @@ const SaleReportPrint = () => {
         ];
 
         exportData = reportRows.map((row, i) => {
-          const itemDetails = getRowItemDetails(row);
-          const rowAmount = getRowAmount(row);
+          const itemDetails = extractItemDetails(row);
           const productsFormatted = itemDetails.length > 0
             ? itemDetails.map(it => `${it.name} (${it.qty} ${it.uom} @ Rs. ${Number(it.price).toLocaleString()})`).join(' | ')
             : extractItemNames(row).join(' | ');
@@ -2176,7 +2070,7 @@ const SaleReportPrint = () => {
             products: productsFormatted,
             warehouse: row.dispatch_warehouse || 'Main Warehouse',
             paymentTerm: row.payment_term || 'Credit',
-            totalAmount: rowAmount
+            totalAmount: Number(row.total_amount || 0)
           };
         });
       } else if (rType === 'customer-sales') {
@@ -2691,11 +2585,8 @@ const SaleReportPrint = () => {
     if (rType === 'return') {
       return reportRows.reduce((acc, r) => acc + Number(r.total_return_amount || 0), 0);
     }
-    if (rType === 'sales-query') {
-      return reportRows.reduce((acc, row) => acc + getRowAmount(row), 0);
-    }
     return reportRows.reduce((acc, row) => acc + Number(row.total_amount || 0), 0);
-  }, [reportRows, rType, isItemFilterActive, productList]);
+  }, [reportRows, rType]);
 
   const totalSoldUnits = useMemo(() => {
     if (rType === 'category-sales') {
@@ -2776,11 +2667,8 @@ const SaleReportPrint = () => {
     if (rType === 'sale' || rType === 'customer-sales') {
       return reportRows.reduce((acc, s) => acc + Number(s.cash_sales || 0), 0);
     }
-    if (rType === 'sales-query') {
-      return reportRows.filter(r => String(r.payment_term || '').toLowerCase() === 'cash').reduce((acc, r) => acc + getRowAmount(r), 0);
-    }
     return reportRows.filter(r => String(r.payment_term || '').toLowerCase() === 'cash').reduce((acc, r) => acc + Number(r.total_amount || 0), 0);
-  }, [reportRows, rType, isItemFilterActive, productList]);
+  }, [reportRows, rType]);
 
   const creditAmount = useMemo(() => {
     if (rType === 'sale' || rType === 'customer-sales') {
@@ -5307,7 +5195,7 @@ const SaleReportPrint = () => {
                   <th className="p-1.5 border border-black w-24">Warehouse</th>
                   <th className="p-1.5 border border-black text-center w-16">Term</th>
                   <th className="p-1.5 border border-black text-right w-24 pr-2 text-amber-900">Discount</th>
-                  <th className="p-1.5 border border-black text-right pr-3 w-28">{isItemFilterActive ? "Filtered Gross" : "Matrix Gross"}</th>
+                  <th className="p-1.5 border border-black text-right pr-3 w-28">Matrix Gross</th>
                 </tr>
               </thead>
               <tbody>
@@ -5323,8 +5211,7 @@ const SaleReportPrint = () => {
                     const displayDocPrefixId = row.invoice_no || `INV-${String(row.id).padStart(4, '0')}`;
                     const processingDateDisplay = row.sale_date || String(row.created_at || '').split('T')[0];
                     const itemNames = extractItemNames(row);
-                    const itemDetails = getRowItemDetails(row);
-                    const rowAmount = getRowAmount(row);
+                    const itemDetails = extractItemDetails(row);
                     const rowDiscounts = extractRowDiscounts(row);
                     const isCash = String(row.payment_term || '').toLowerCase() === 'cash';
                     const freight = Number(row.transport_charges || row.freight_charges || row.freight || 0) + Number(row.additional_charges || 0);
@@ -5430,16 +5317,12 @@ const SaleReportPrint = () => {
                           )}
                         </td>
                         <td className="p-1.5 border border-black text-right pr-3 font-black text-emerald-700 align-top font-mono text-xs">
-                          <div>Rs. {rowAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                          {isItemFilterActive ? (
-                            <div className="text-[9px] font-sans font-bold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200 mt-0.5 inline-block">
-                              Filtered Gross
-                            </div>
-                          ) : freight > 0 ? (
+                          <div>Rs. {Number(row.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                          {freight > 0 && (
                             <div className="text-[9.5px] font-sans font-medium text-slate-500 mt-0.5 leading-tight">
                               (Inc. Freight Ch. {freight.toLocaleString()})
                             </div>
-                          ) : null}
+                          )}
                         </td>
                       </tr>
                     );
@@ -5454,7 +5337,7 @@ const SaleReportPrint = () => {
                       Page {currentPage} Subtotal ({displayedRows.length} transactions):
                     </td>
                     <td className="p-2 border border-black text-right pr-3 text-emerald-800 font-bold whitespace-nowrap">
-                      <div>Rs. {displayedRows.reduce((sum, r) => sum + getRowAmount(r), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                      <div>Rs. {displayedRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                       {pageAllFreight > 0 && (
                         <div className="text-[9px] font-sans font-medium text-slate-500 mt-0.5 leading-tight">
                           (Inc. Total Freight: {pageAllFreight.toLocaleString()})

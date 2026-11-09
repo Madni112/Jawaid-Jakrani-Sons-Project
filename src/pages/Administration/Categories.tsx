@@ -51,16 +51,13 @@ const Categories = () => {
     const fetchCategories = async () => {
         try {
             setLoading(true);
-            let query = supabase
+            const { data, error } = await supabase
                 .from('inventory_categories')
                 .select('*')
                 .order('name', { ascending: true });
 
-            if (tenantId) {
-                query = query.eq('tenant_id', tenantId);
-            }
-
-            const { data, error } = await query;
+            if (error) throw error;
+            setCategories(data || []);
             if (error) throw error;
             setCategories(data || []);
         } catch (err: any) {
@@ -342,7 +339,7 @@ const Categories = () => {
                     {/* Parent Category */}
                     <div>
                         <label className="block text-gray-500 mb-1.5 text-xs font-bold">
-                            Parent Category (e.g. Tiles)
+                            Parent Category (e.g. Cotton, Silk, Lawn, Wool)
                         </label>
                         <div className="relative">
                             <input

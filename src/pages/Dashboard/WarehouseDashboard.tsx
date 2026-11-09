@@ -121,13 +121,13 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
   const [searchStock, setSearchStock] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Dispatched' | 'Partially Dispatched'>('ALL');
   const [showWarehouseDetails, setShowWarehouseDetails] = useState<boolean>(() => {
-    return localStorage.getItem('zac_warehouse_dashboard_show_details') === 'true';
+    return localStorage.getItem('ujc_warehouse_dashboard_show_details') === 'true';
   });
 
   const toggleWarehouseDetails = () => {
     setShowWarehouseDetails(prev => {
       const next = !prev;
-      localStorage.setItem('zac_warehouse_dashboard_show_details', String(next));
+      localStorage.setItem('ujc_warehouse_dashboard_show_details', String(next));
       return next;
     });
   };
@@ -297,54 +297,48 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
   return (
     <div className="space-y-6 pb-12">
       {/* 1. Header Banner & Location Switcher */}
-      <GlassCard className="p-6 relative overflow-hidden bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className={`absolute right-0 top-0 translate-x-12 -translate-y-12 w-80 h-80 rounded-full blur-3xl pointer-events-none ${
+      <GlassCard
+        className={`p-6 relative overflow-hidden text-white rounded-3xl shadow-xl transition-all duration-300 ${
           isA39
-            ? 'bg-gradient-to-bl from-amber-100/50 via-orange-50/20 to-transparent dark:from-amber-900/20 dark:via-transparent'
-            : 'bg-gradient-to-bl from-teal-100/50 via-emerald-50/20 to-transparent dark:from-teal-900/20 dark:via-transparent'
-        }`} />
+            ? 'bg-gradient-to-r from-amber-600 via-orange-600 to-slate-900'
+            : 'bg-gradient-to-r from-teal-700 via-emerald-700 to-slate-900'
+        }`}
+      >
+        <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 z-10 relative">
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-                {isA39 ? (
-                  <MdWarehouse className="text-sm text-amber-600 dark:text-amber-400" />
-                ) : (
-                  <MdStorefront className="text-sm text-teal-600 dark:text-teal-400" />
-                )}
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 backdrop-blur-md text-white border border-white/20">
+                {isA39 ? <MdWarehouse className="mr-1 text-sm text-yellow-300" /> : <MdStorefront className="mr-1 text-sm text-emerald-300" />}
                 {isA39 ? 'Warehouse Hub (Central Storage Point)' : 'Showroom Hub (Sale & Retail Point)'}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60">
-                <MdLocationOn className="text-xs text-rose-500" />
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-black/25 text-white/90 border border-white/15">
+                <MdLocationOn className="mr-1 text-xs" />
                 {isA39 ? 'Plot A-39, Near Boulevard Mall' : 'Saddar, Bouri Bazar'}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/50">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Inventory
               </span>
             </div>
 
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white drop-shadow-xs">
               {isA39 ? 'A-39 Storage Operations Terminal' : 'SHOP Floor & Dispatch Terminal'}
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1 max-w-xl font-normal leading-relaxed">
+            <p className="text-white/85 text-xs sm:text-sm mt-1 max-w-xl">
               {isA39
                 ? 'Primary bulk holding, supplier inward verification, outbound delivery challans & transfers to Saddar Shop.'
                 : 'Retail counter fulfillment, incoming stock transfers from A-39, customer sales returns & floor stock.'}
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             {/* Quick Location Switcher Buttons - Visible ONLY to Super Admin / Admin */}
             {canSwitchLocation ? (
-              <div className="flex items-center bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+              <div className="flex items-center bg-black/30 p-1 rounded-2xl border border-white/20 backdrop-blur-md">
                 <button
                   onClick={() => setActiveLocation('A-39')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     isA39
-                      ? 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-white text-orange-800 shadow-md scale-102'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}
                 >
                   <MdWarehouse className="text-sm" />
@@ -354,8 +348,8 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
                   onClick={() => setActiveLocation('SHOP')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     !isA39
-                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-white text-emerald-800 shadow-md scale-102'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}
                 >
                   <MdStorefront className="text-sm" />
@@ -364,15 +358,15 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
               </div>
             ) : (
               /* When locked, show a clean, non-clickable assigned location pill */
-              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3.5 py-2 rounded-2xl border border-slate-200/80 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-2xs">
+              <div className="flex items-center gap-2 bg-black/30 px-3.5 py-2 rounded-2xl border border-white/20 backdrop-blur-md text-xs font-bold text-white shadow-inner">
                 {isA39 ? (
                   <>
-                    <MdWarehouse className="text-amber-600 dark:text-amber-400 text-sm" />
+                    <MdWarehouse className="text-yellow-300 text-sm" />
                     <span>Assigned: A-39 Storage</span>
                   </>
                 ) : (
                   <>
-                    <MdStorefront className="text-teal-600 dark:text-teal-400 text-sm" />
+                    <MdStorefront className="text-emerald-300 text-sm" />
                     <span>Assigned: Shop Floor</span>
                   </>
                 )}
@@ -382,7 +376,7 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
             <button
               onClick={loadWarehouseData}
               title="Refresh Warehouse Records"
-              className="p-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/80 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shadow-2xs hover:shadow-sm active:scale-95 cursor-pointer"
+              className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl border border-white/20 transition-all text-white backdrop-blur-md shadow-sm cursor-pointer"
             >
               <MdRefresh className="text-lg" />
             </button>

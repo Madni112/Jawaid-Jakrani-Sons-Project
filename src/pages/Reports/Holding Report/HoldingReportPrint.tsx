@@ -1086,11 +1086,10 @@ const HoldingReportPrint: React.FC = () => {
                 key={p.id}
                 type="button"
                 onClick={() => setActivePerspective(p.id)}
-                className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                  activePerspective === p.id
+                className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${activePerspective === p.id
                     ? 'bg-primary text-white shadow-xs'
                     : 'text-gray-600 hover:text-black hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 {p.label}
               </button>
@@ -1166,7 +1165,7 @@ const HoldingReportPrint: React.FC = () => {
                   printColorAdjust: 'exact'
                 }}
               >
-                {getBrandConfig().code}
+                ZAC
               </span>
             </div>
           </div>
@@ -1255,7 +1254,7 @@ const HoldingReportPrint: React.FC = () => {
                           {renderCustomerBadge(doc.customerName)}
                         </td>
                         <td className="p-1.5 border border-black font-sans text-gray-700 align-middle">{doc.salesman || '-'}</td>
-                        
+
                         {/* 📦 Product Description Sub-Rows */}
                         <td className="p-0 border border-black align-top font-sans">
                           <div className="divide-y divide-black h-full flex flex-col justify-stretch">

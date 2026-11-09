@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../Context/supabaseClient';
+import { supabase } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import Spinner from '../../ui/Spinner';
 import SearchableMultiSelect from '../../components/SearchableMultiSelect';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import { DEFAULT_SUB_AREAS, DEFAULT_AREAS, DEFAULT_SUBAREA_AREAS_MAP } from '../../components/SubAreaAreaInput';
 import {
   MdArrowBack,
   MdReceipt,
@@ -370,7 +371,7 @@ const REPORT_REGISTRY: Record<string, ReportConfig> = {
     targetPrintPath: '/Reports/Account-Report/Print',
     printType: 'account',
     tab: 13,
-    fields: ['customerCategory', 'customer']
+    fields: ['city', 'area', 'customerCategory', 'customer']
   },
   'vendor-balance-detail': {
     id: 'vendor-balance-detail',
@@ -397,7 +398,7 @@ const REPORT_REGISTRY: Record<string, ReportConfig> = {
     targetPrintPath: '/Reports/Account-Report/Print',
     printType: 'account',
     tab: 1,
-    fields: ['customer']
+    fields: ['city', 'area', 'customer']
   },
   'customer-vendor-ledger': {
     id: 'customer-vendor-ledger',
@@ -410,7 +411,7 @@ const REPORT_REGISTRY: Record<string, ReportConfig> = {
     targetPrintPath: '/Reports/Account-Report/Print',
     printType: 'account',
     tab: 1,
-    fields: ['customer']
+    fields: ['city', 'area', 'customer']
   },
   'daybook-activity-report': {
     id: 'daybook-activity-report',
@@ -541,6 +542,8 @@ const DedicatedReportFilter: React.FC = () => {
   const firstOfMonthStr = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
   const [criteria, setCriteria] = useState<any>({
+    city: [],
+    area: [],
     customer: [],
     supplier: [],
     salesman: [],
@@ -634,16 +637,16 @@ const DedicatedReportFilter: React.FC = () => {
           invRes,
           uomRes
         ] = await Promise.allSettled([
-          supabase.from('customers').select('id, customerName, registrationType, customer_code, customerCode'),
+          supabase.from('customers').select('id, customerName, registrationType, customer_code, customerCode, city, address, notes'),
           supabase.from('vendors').select('id, vendor_name, name'),
           supabase.from('salesmen').select('id, name'),
           supabase.from('logistics_transportation').select('id, name'),
           supabase.from('inventory_categories').select('id, name, parent_id'),
           supabase.from('inventory_surface_finishes').select('id, name'),
-          fetchAllPages(supabase.from('products').select('id, product_name')),
+          supabase.from('products').select('id, product_name'),
           supabase.from('inventory_locations').select('id, name'),
           supabase.from('sales_invoices').select('id, total_amount, customer_name, invoice_no').order('id', { ascending: false }),
-          supabase.from('inventory_uom').select('id, short_code, full_name').eq('tenant_id', tenantId || 'bashir').eq('is_active', true)
+          supabase.from('inventory_uom').select('id, short_code, full_name').eq('is_active', true)
         ]);
 
         if (custRes.status === 'fulfilled' && custRes.value.data) setCustomers(custRes.value.data);
@@ -671,10 +674,110 @@ const DedicatedReportFilter: React.FC = () => {
     setCriteria((prev: any) => ({ ...prev, [field]: value }));
   };
 
-  const customerOptions = useMemo(() => customers.map((c) => {
-    const code = c.customer_code || c.customerCode;
-    return code ? `[${code}] ${c.customerName}` : c.customerName;
-  }).filter(Boolean), [customers]);
+  const getCustomerLocation = (c: any) => {
+    let city = c.city || c.sub_area || c.subArea || '';
+    let area = c.area || '';
+
+    if (c.notes && c.notes.includes('Location:')) {
+      const match = c.notes.match(/Location:\s*([^|\n]+)(?:\s*\|\s*([^\n]+))?/);
+      if (match) {
+        const noteCity = match[1]?.trim();
+        const noteArea = match[2]?.trim();
+        if (!city) city = noteCity;
+        if (city && city.toLowerCase() === 'hyderabad' && noteCity && noteCity.toLowerCase() !== 'hyderabad') {
+          city = noteCity;
+        }
+        if (!area && noteArea) area = noteArea;
+      }
+    }
+
+    if (!city && c.address) {
+      const addr = String(c.address).toLowerCase();
+      for (const dCity of DEFAULT_SUB_AREAS) {
+        if (addr.includes(dCity.toLowerCase())) {
+          city = dCity;
+          break;
+        }
+      }
+    }
+
+    return { city: city || 'Hyderabad', area: area || '' };
+  };
+
+  const cityOptions = useMemo(() => {
+    const cities = new Set<string>();
+    customers.forEach(c => {
+      const loc = getCustomerLocation(c);
+      if (loc.city) cities.add(loc.city);
+    });
+    DEFAULT_SUB_AREAS.forEach(c => cities.add(c));
+    return Array.from(cities).filter(Boolean).sort();
+  }, [customers]);
+
+  const isCityMatch = (filterCity: string, targetCity: string) => {
+    if (!filterCity || !targetCity) return false;
+    const f = filterCity.trim().toLowerCase();
+    const t = targetCity.trim().toLowerCase();
+    if (f === t) return true;
+    if ((f === 'matli' || f === 'ماتلی') && (t === 'matli' || t === 'ماتلی')) return true;
+    return false;
+  };
+
+  const areaOptions = useMemo(() => {
+    const areas = new Set<string>();
+    const rawCityFilters = (criteria.city && criteria.city.length > 0 && !criteria.city.includes('All'))
+      ? (Array.isArray(criteria.city) ? criteria.city : [criteria.city])
+      : [];
+
+    if (rawCityFilters.length > 0) {
+      rawCityFilters.forEach(city => {
+        const mapped = DEFAULT_SUBAREA_AREAS_MAP[city] || [];
+        mapped.forEach(a => areas.add(a));
+        if (city.toLowerCase() === 'matli' && DEFAULT_SUBAREA_AREAS_MAP['ماتلی']) {
+          DEFAULT_SUBAREA_AREAS_MAP['ماتلی'].forEach(a => areas.add(a));
+        } else if (city === 'ماتلی' && DEFAULT_SUBAREA_AREAS_MAP['Matli']) {
+          DEFAULT_SUBAREA_AREAS_MAP['Matli'].forEach(a => areas.add(a));
+        }
+      });
+      customers.forEach(c => {
+        const loc = getCustomerLocation(c);
+        const matches = rawCityFilters.some(f => isCityMatch(f, loc.city));
+        if (matches && loc.area) areas.add(loc.area);
+      });
+    } else {
+      DEFAULT_AREAS.forEach(a => areas.add(a));
+      customers.forEach(c => {
+        const loc = getCustomerLocation(c);
+        if (loc.area) areas.add(loc.area);
+      });
+    }
+    return Array.from(areas).filter(Boolean).sort();
+  }, [customers, criteria.city]);
+
+  const customerOptions = useMemo(() => {
+    let pool = customers;
+    if (criteria.city && criteria.city.length > 0 && !criteria.city.includes('All')) {
+      const rawCityFilters = Array.isArray(criteria.city) ? criteria.city : [criteria.city];
+      pool = pool.filter(c => {
+        const loc = getCustomerLocation(c);
+        return rawCityFilters.some(f => isCityMatch(f, loc.city));
+      });
+    }
+    if (criteria.area && criteria.area.length > 0 && !criteria.area.includes('All')) {
+      const rawAreaFilters = Array.isArray(criteria.area) ? criteria.area : [criteria.area];
+      pool = pool.filter(c => {
+        const loc = getCustomerLocation(c);
+        return rawAreaFilters.some(f => f.trim().toLowerCase() === (loc.area || '').trim().toLowerCase());
+      });
+    }
+    if (criteria.customerCategory && criteria.customerCategory.length > 0 && !criteria.customerCategory.includes('All')) {
+      pool = pool.filter(c => criteria.customerCategory.includes(c.registrationType || 'Retail / General'));
+    }
+    return pool.map((c) => {
+      const code = c.customer_code || c.customerCode;
+      return code ? `[${code}] ${c.customerName}` : c.customerName;
+    }).filter(Boolean);
+  }, [customers, criteria.city, criteria.area, criteria.customerCategory]);
   const customerCategoryOptions = useMemo(() => {
     const fromCust = customers.map((c: any) => c.registrationType).filter(Boolean);
     const standard = ['Retail / General', 'Contractor / Builder', 'Wholesaler / Dealer', 'Registered Corporate'];
@@ -1017,6 +1120,39 @@ const DedicatedReportFilter: React.FC = () => {
                 options={customerCategoryOptions}
                 value={criteria.customerCategory}
                 onChange={(val) => handleInputChange('customerCategory', val)}
+              />
+            </div>
+          )}
+
+          {/* City Field */}
+          {f.includes('city') && (
+            <div>
+              <SearchableMultiSelect
+                label="City / Sub Area:"
+                placeholder="All Cities"
+                options={cityOptions}
+                value={criteria.city || []}
+                onChange={(val) => {
+                  handleInputChange('city', val);
+                  handleInputChange('area', []);
+                  handleInputChange('customer', []);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Area Field */}
+          {f.includes('area') && (
+            <div>
+              <SearchableMultiSelect
+                label="Area / Market:"
+                placeholder="All Areas"
+                options={areaOptions}
+                value={criteria.area || []}
+                onChange={(val) => {
+                  handleInputChange('area', val);
+                  handleInputChange('customer', []);
+                }}
               />
             </div>
           )}
@@ -1477,87 +1613,6 @@ const DedicatedReportFilter: React.FC = () => {
                   </span>
                 </label>
               )}
-            </div>
-          )}
-
-          {reportId === 'as-of-date-stock-status' && (
-            <div className="md:col-span-2 flex flex-col gap-3 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800/80">
-              <div className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
-                Stock Snapshot Display & Valuation Selectors:
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Pill: Show Zero Stock Products */}
-                <button
-                  type="button"
-                  onClick={() => handleInputChange('showZeroStock', !Boolean(criteria.showZeroStock))}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border shadow-xs ${
-                    Boolean(criteria.showZeroStock)
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 font-black ring-2 ring-emerald-400/20'
-                      : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 hover:border-slate-400'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${Boolean(criteria.showZeroStock) ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                  <span>Show Zero Stock Products</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${Boolean(criteria.showZeroStock) ? 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
-                    {Boolean(criteria.showZeroStock) ? 'ON' : 'OFF'}
-                  </span>
-                </button>
-
-                {/* Pill: Show Amount and Total Amount */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !Boolean(criteria.showAmount);
-                    handleInputChange('showAmount', next);
-                    if (next && !criteria.showPurchasePrice && !criteria.showSalePrice) {
-                      handleInputChange('showPurchasePrice', true);
-                      handleInputChange('showSalePrice', true);
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border shadow-xs ${
-                    Boolean(criteria.showAmount)
-                      ? 'bg-purple-50 text-purple-800 border-purple-400 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-700 font-black ring-2 ring-purple-400/20'
-                      : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 hover:border-slate-400'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${Boolean(criteria.showAmount) ? 'bg-purple-500 animate-pulse' : 'bg-slate-400'}`} />
-                  <span>Show Amount & Total Amount</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${Boolean(criteria.showAmount) ? 'bg-purple-200 text-purple-900 dark:bg-purple-900 dark:text-purple-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
-                    {Boolean(criteria.showAmount) ? 'ON' : 'OFF'}
-                  </span>
-                </button>
-
-                {/* Sub-Pills when Show Amount is ON */}
-                {Boolean(criteria.showAmount) && (
-                  <div className="flex items-center gap-1.5 bg-purple-50/60 dark:bg-purple-950/20 p-1 rounded-full border border-purple-200 dark:border-purple-800/60 transition-all">
-                    <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider px-2">Valuation:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange('showPurchasePrice', !Boolean(criteria.showPurchasePrice ?? true))}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
-                        Boolean(criteria.showPurchasePrice ?? true)
-                          ? 'bg-blue-600 text-white border-blue-600 font-black shadow-xs'
-                          : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span>Purchase Price</span>
-                      {Boolean(criteria.showPurchasePrice ?? true) && <span>✓</span>}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange('showSalePrice', !Boolean(criteria.showSalePrice ?? true))}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
-                        Boolean(criteria.showSalePrice ?? true)
-                          ? 'bg-emerald-600 text-white border-emerald-600 font-black shadow-xs'
-                          : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span>Sale Price</span>
-                      {Boolean(criteria.showSalePrice ?? true) && <span>✓</span>}
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           )}
 

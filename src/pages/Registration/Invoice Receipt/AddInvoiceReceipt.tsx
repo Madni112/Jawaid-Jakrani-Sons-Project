@@ -20,7 +20,63 @@ import {
   MdClear,
   MdKeyboardArrowDown
 } from 'react-icons/md';
-import { logActivity } from '../../../service/auditLogger';
+
+// Helper to resolve or auto-register Customer Chart of Accounts
+const resolveCustomerCoaAccount = async (customerName: string, customersList: any[] = []) => {
+  const cleanName = (customerName || '').trim();
+  if (!cleanName) return { code: '2020-001', title: 'Walk-in Customer' };
+
+  // 1. Match from customersList
+  const matched = customersList.find(c =>
+    (c.customer_name || c.customerName || '').trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  const existingCode = matched?.customer_code || matched?.customerCode || matched?.coa_code;
+  if (existingCode && String(existingCode).startsWith('2020-')) {
+    return { code: String(existingCode).trim(), title: matched.customer_name || cleanName };
+  }
+
+  // 2. Query chart_of_accounts
+  try {
+    const { data: coaRows } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code, account_title')
+      .ilike('account_title', cleanName)
+      .limit(1);
+
+    if (coaRows && coaRows.length > 0 && coaRows[0].account_code) {
+      return { code: coaRows[0].account_code, title: coaRows[0].account_title || cleanName };
+    }
+
+    const { data: allCustCoa } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code')
+      .ilike('account_code', '2020-%');
+
+    let maxSeq = 0;
+    (allCustCoa || []).forEach(r => {
+      const match = String(r.account_code || '').match(/2020-(\d+)/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    });
+
+    const nextCode = `2020-${String(maxSeq + 1).padStart(3, '0')}`;
+    await supabase.from('chart_of_accounts').insert([{
+      account_code: nextCode,
+      account_title: cleanName,
+      category_code: '1. ASSETS',
+      sub_category_code: 'Current Assets',
+      control_code: 'Customers',
+      notes: `Customer account for ${cleanName} (Auto-registered from Invoice Receipt)`
+    }]);
+
+    return { code: nextCode, title: cleanName };
+  } catch (err) {
+    console.warn('resolveCustomerCoaAccount in receipt error:', err);
+    return { code: '2020-001', title: cleanName };
+  }
+};
 
 function AddInvoiceReceipt() {
   const { tenantId } = useAuth();
@@ -101,6 +157,7 @@ function AddInvoiceReceipt() {
         const normalizedCust = (custData || []).map((c: any) => ({
           ...c,
           customer_name: c.customerName || c.customername || c.customer_name || c.name || 'Unnamed Customer',
+          customer_code: c.customer_code || c.customerCode || '',
           contact_name: c.company || c.contact_person || c.contact_name || '',
           phone: c.primaryPhone || c.phone || c.cell_no || '',
           city: c.city || ''
@@ -108,13 +165,7 @@ function AddInvoiceReceipt() {
         setCustomersList(normalizedCust);
 
         // 2. Fetch Banks & COA
-        const { data: rawBankData } = await supabase.from('banks').select('*');
-        const bankData = (rawBankData || []).map((b: any) => ({
-          ...b,
-          bankName: b.bankName || b.bankname || '',
-          accountTitle: b.accountTitle || b.accounttitle || b.account_title || '',
-          accountNumber: b.accountNumber || b.accountnumber || ''
-        }));
+        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
         const { data: coaData } = await supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code');
 
         if (bankData) setBankAccounts(bankData);
@@ -141,11 +192,7 @@ function AddInvoiceReceipt() {
             setSelectedInvoiceNo(invRef);
             setInvoiceSearchQuery(invRef);
             const cleanId = String(invRef).replace(/\D/g, '');
-            const matchedInv = invData?.find(i => 
-              (i.invoice_no && i.invoice_no.toLowerCase() === invRef.toLowerCase()) ||
-              String(i.id) === cleanId || 
-              `INV-${String(i.id).padStart(4, '0')}`.toLowerCase() === invRef.toLowerCase()
-            );
+            const matchedInv = invData?.find(i => String(i.id) === cleanId || `INV-${String(i.id).padStart(4, '0')}` === invRef);
             if (matchedInv) setSelectedInvoiceObj(matchedInv);
           } else {
             setSelectedInvoiceNo('');
@@ -155,7 +202,21 @@ function AddInvoiceReceipt() {
 
           calculateCustomerBalances(cName, invRef, invData || [], editData.id);
         } else {
-          setGeneratedVoucherNo(`CR-${Math.floor(100000 + Math.random() * 900000)}`);
+          // Fetch highest CRV number
+          const { data: crvRows } = await supabase
+            .from('financial_vouchers')
+            .select('voucher_no')
+            .ilike('voucher_no', 'CRV-%');
+
+          let maxCrvSeq = 0;
+          (crvRows || []).forEach(v => {
+            const match = String(v.voucher_no || '').match(/CRV-(\d+)/i);
+            if (match && match[1]) {
+              const num = parseInt(match[1], 10);
+              if (num > maxCrvSeq) maxCrvSeq = num;
+            }
+          });
+          setGeneratedVoucherNo(`CRV-${String(maxCrvSeq + 1).padStart(3, '0')}`);
         }
       } catch (err: any) {
         console.error(err.message);
@@ -241,20 +302,16 @@ function AddInvoiceReceipt() {
       let totalVouchersPaid = 0;
       let unallocatedGeneralVouchers = 0;
 
-      // Initialize each Invoice allocation by unique invoice ID and actual invoice_no
+      // Initialize each Invoice allocation by unique invoice ID
       sortedCustomerInvoices.forEach(i => {
         const invId = String(i.id);
-        const actualNo = String(i.invoice_no || `INV-${invId.padStart(4, '0')}`).trim();
         const gross = Number(i.total_amount) || 0;
         const upfront = Number(i.cash_amount_paid || 0) + Number(i.bank_amount || 0);
 
         // Find returns for this specific invoice
         const invoiceReturns = customerReturns.filter(r => {
-          const rInv = String(r.original_invoice_no || '').trim().toLowerCase();
-          return rInv === invId.toLowerCase() ||
-                 (actualNo && rInv === actualNo.toLowerCase()) ||
-                 rInv === `inv-${invId.padStart(4, '0')}`.toLowerCase() ||
-                 rInv.replace(/\D/g, '') === invId;
+          const rInv = String(r.original_invoice_no || '').replace(/\D/g, '').trim();
+          return rInv === invId;
         }).reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0);
 
         allocations[invId] = {
@@ -274,18 +331,11 @@ function AddInvoiceReceipt() {
         const vAmt = Number(v.total_amount) || 0;
         totalVouchersPaid += vAmt;
 
-        const vInvRef = String(v.original_invoice_no || v.metadata?.linkedInvoiceNo || '').trim();
+        const vInvRef = v.original_invoice_no || v.metadata?.linkedInvoiceNo || '';
         if (vInvRef) {
-          const cleanInvId = vInvRef.replace(/\D/g, '');
-          const matchedInv = sortedCustomerInvoices.find(i => 
-            (i.invoice_no && i.invoice_no.toLowerCase() === vInvRef.toLowerCase()) ||
-            String(i.id) === vInvRef ||
-            String(i.id) === cleanInvId ||
-            `INV-${String(i.id).padStart(4, '0')}`.toLowerCase() === vInvRef.toLowerCase()
-          );
-
-          if (matchedInv && allocations[String(matchedInv.id)]) {
-            allocations[String(matchedInv.id)].specificVouchers += vAmt;
+          const cleanInvId = String(vInvRef).replace(/\D/g, '');
+          if (cleanInvId && allocations[cleanInvId]) {
+            allocations[cleanInvId].specificVouchers += vAmt;
           } else {
             unallocatedGeneralVouchers += vAmt;
           }
@@ -311,19 +361,13 @@ function AddInvoiceReceipt() {
         }
       });
 
-      // Create multi-key map for easy lookup by either '5', actual 'TESTING-01', or 'INV-0005'
+      // Create dual-key map for easy lookup by either '5' or 'INV-0005'
       const finalMap: Record<string, typeof allocations[string]> = {};
       sortedCustomerInvoices.forEach(i => {
         const invId = String(i.id);
-        const actualNo = String(i.invoice_no || `INV-${invId.padStart(4, '0')}`).trim();
         const formattedKey = `INV-${invId.padStart(4, '0')}`;
         finalMap[invId] = allocations[invId];
         finalMap[formattedKey] = allocations[invId];
-        finalMap[formattedKey.toLowerCase()] = allocations[invId];
-        if (actualNo) {
-          finalMap[actualNo] = allocations[invId];
-          finalMap[actualNo.toLowerCase()] = allocations[invId];
-        }
       });
 
       setInvAllocationsMap(finalMap);
@@ -333,7 +377,7 @@ function AddInvoiceReceipt() {
 
       // If a specific Invoice is selected
       const cleanRefId = String(invoiceRef).replace(/\D/g, '');
-      const selectedAlloc = finalMap[invoiceRef] || (invoiceRef && finalMap[invoiceRef.toLowerCase()]) || finalMap[cleanRefId];
+      const selectedAlloc = finalMap[invoiceRef] || finalMap[cleanRefId];
 
       if (invoiceRef && selectedAlloc) {
         setInvGrossBill(selectedAlloc.gross);
@@ -377,11 +421,7 @@ function AddInvoiceReceipt() {
 
     if (invNo) {
       const cleanId = String(invNo).replace(/\D/g, '');
-      const invObj = salesInvoicesList.find(i => 
-        (i.invoice_no && i.invoice_no.toLowerCase() === invNo.toLowerCase()) ||
-        String(i.id) === cleanId || 
-        `INV-${String(i.id).padStart(4, '0')}`.toLowerCase() === invNo.toLowerCase()
-      );
+      const invObj = salesInvoicesList.find(i => String(i.id) === cleanId || `INV-${String(i.id).padStart(4, '0')}` === invNo);
       setSelectedInvoiceObj(invObj || null);
     } else {
       setSelectedInvoiceObj(null);
@@ -393,6 +433,7 @@ function AddInvoiceReceipt() {
   // Filtered lists for autocomplete
   const filteredCustomers = customersList.filter(c =>
     (c.customer_name || '').toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+    (c.customer_code || '').toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
     (c.contact_name || c.contact_person || '').toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
     (c.cell_no || c.phone_no || c.phone || '').toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
     (c.city || '').toLowerCase().includes(customerSearchQuery.toLowerCase())
@@ -404,14 +445,12 @@ function AddInvoiceReceipt() {
 
   const filteredInvoices = customerInvoicesList.filter(i => {
     if (!invoiceSearchQuery || invoiceSearchQuery.startsWith('-- General')) return true;
-    const actualNo = String(i.invoice_no || `INV-${String(i.id).padStart(4, '0')}`);
-    const q = invoiceSearchQuery.toLowerCase();
+    const invFormatted = `INV-${String(i.id).padStart(4, '0')}`;
     return (
-      actualNo.toLowerCase().includes(q) ||
-      String(i.id).includes(q) ||
-      (i.gate_pass_no || '').toLowerCase().includes(q) ||
-      (i.invoice_date || '').toLowerCase().includes(q) ||
-      (i.dispatch_warehouse || '').toLowerCase().includes(q)
+      invFormatted.toLowerCase().includes(invoiceSearchQuery.toLowerCase()) ||
+      String(i.id).includes(invoiceSearchQuery) ||
+      (i.invoice_date || '').toLowerCase().includes(invoiceSearchQuery.toLowerCase()) ||
+      (i.dispatch_warehouse || '').toLowerCase().includes(invoiceSearchQuery.toLowerCase())
     );
   });
 
@@ -540,62 +579,58 @@ function AddInvoiceReceipt() {
             setLoading(true);
 
             // 1. Resolve Chart of Accounts
-            const cashCoa = coaAccounts.find((c: any) =>
-              String(c.control_code || '').toLowerCase().includes('cash') ||
-              String(c.account_title || '').toLowerCase().includes('cash')
-            );
+            const resolvedCustomer = await resolveCustomerCoaAccount(selectedCustomer, customersList);
+            const customerAccountCode = resolvedCustomer.code;
+            const customerAccountTitle = resolvedCustomer.title;
 
+            // Cash COA
+            const cashAccountCode = '1010-001';
+            const cashAccountTitle = 'Cash in Hand';
+
+            // Bank COA
             const selectedBankObj = bankAccounts.find((b: any) => String(b.id) === String(values.selectedBankId) || String(b.bankName) === String(values.selectedBankId));
-            const bankCoa = coaAccounts.find((c: any) =>
-              (selectedBankObj && (
-                String(c.linked_bank_id) === String(selectedBankObj.id) ||
-                String(c.account_code) === String(selectedBankObj.accountNumber) ||
-                String(c.account_title || '').toLowerCase().includes(String(selectedBankObj.bankName || '').toLowerCase())
-              )) ||
-              String(c.control_code || '').toLowerCase().includes('bank')
-            );
+            let bankAccountCode = '1020-001';
+            let bankAccountTitle = selectedBankObj ? `${selectedBankObj.bankName} - ${selectedBankObj.accountTitle}` : 'Bank Account';
 
-            const recvCoa = coaAccounts.find((c: any) =>
-              String(c.control_code || '').toLowerCase().includes('debtor') ||
-              String(c.control_code || '').toLowerCase().includes('receivable') ||
-              String(c.account_title || '').toLowerCase().includes('receivable') ||
-              String(c.account_title || '').toLowerCase().includes('debtor')
-            );
-
-            const customerAccountCode = recvCoa ? String(recvCoa.account_code) : '1020';
-            const cashAccountCode = cashCoa ? String(cashCoa.account_code) : '1010';
-            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1015');
+            if (selectedBankObj) {
+              const matchedBankCoa = coaAccounts.find((c: any) =>
+                (selectedBankObj.bankName && c.account_title?.toLowerCase().includes(selectedBankObj.bankName.toLowerCase())) ||
+                (selectedBankObj.accountTitle && c.account_title?.toLowerCase().includes(selectedBankObj.accountTitle.toLowerCase())) ||
+                (c.notes && c.notes.includes(String(selectedBankObj.id)))
+              );
+              if (matchedBankCoa) {
+                bankAccountCode = matchedBankCoa.account_code;
+                bankAccountTitle = matchedBankCoa.account_title;
+              }
+            }
 
             let balancedJournalItems: any[] = [];
-            let voucherTypeRecord = 'Cash Receipt Voucher';
+            const voucherTypeRecord = 'Customer Receive Voucher';
 
             if (values.voucherType === 'By Cash') {
-              voucherTypeRecord = 'Cash Receipt Voucher';
               balancedJournalItems = [
-                { accountCode: cashAccountCode, description: `Collection received via ${values.voucherNo}`, debit: finalAmount, credit: 0 },
-                { accountCode: customerAccountCode, description: `Received from Customer ${selectedCustomer}`, debit: 0, credit: finalAmount }
+                { accountCode: cashAccountCode, accountTitle: cashAccountTitle, description: `Cash received via ${values.voucherNo}`, debit: finalAmount, credit: 0 },
+                { accountCode: customerAccountCode, accountTitle: customerAccountTitle, description: `Customer credit from ${selectedCustomer}`, debit: 0, credit: finalAmount }
               ];
             } else if (values.voucherType === 'By Bank') {
-              voucherTypeRecord = 'Bank Receipt Voucher';
               balancedJournalItems = [
-                { accountCode: bankAccountCode, description: `Bank wire received via ${values.voucherNo}`, debit: finalAmount, credit: 0 },
-                { accountCode: customerAccountCode, description: `Received from Customer ${selectedCustomer}`, debit: 0, credit: finalAmount }
+                { accountCode: bankAccountCode, accountTitle: bankAccountTitle, description: `Bank wire received via ${values.voucherNo}`, debit: finalAmount, credit: 0 },
+                { accountCode: customerAccountCode, accountTitle: customerAccountTitle, description: `Customer credit from ${selectedCustomer}`, debit: 0, credit: finalAmount }
               ];
             } else {
-              voucherTypeRecord = 'Cash & Bank Receipt Voucher';
               balancedJournalItems = [
-                ...(cashPortion > 0 ? [{ accountCode: cashAccountCode, description: `Cash collection via ${values.voucherNo}`, debit: cashPortion, credit: 0 }] : []),
-                ...(bankPortion > 0 ? [{ accountCode: bankAccountCode, description: `Bank wire collection via ${values.voucherNo}`, debit: bankPortion, credit: 0 }] : []),
-                { accountCode: customerAccountCode, description: `Received from Customer ${selectedCustomer}`, debit: 0, credit: finalAmount }
+                ...(cashPortion > 0 ? [{ accountCode: cashAccountCode, accountTitle: cashAccountTitle, description: `Cash portion via ${values.voucherNo}`, debit: cashPortion, credit: 0 }] : []),
+                ...(bankPortion > 0 ? [{ accountCode: bankAccountCode, accountTitle: bankAccountTitle, description: `Bank portion via ${values.voucherNo} (${bankAccountTitle})`, debit: bankPortion, credit: 0 }] : []),
+                { accountCode: customerAccountCode, accountTitle: customerAccountTitle, description: `Customer credit from ${selectedCustomer}`, debit: 0, credit: finalAmount }
               ];
             }
 
             const methodStr = values.voucherType === 'Split'
-              ? ` | Split (Cash: Rs. ${formatMoney(cashPortion)} + Bank: Rs. ${formatMoney(bankPortion)} via ${selectedBankObj?.bankName || values.selectedBankId})`
-              : (values.voucherType === 'By Bank' ? ` | Target Bank: ${selectedBankObj?.bankName || values.selectedBankId}` : ' | Mode: Cash Counter');
+              ? ` | Split (Cash: Rs. ${formatMoney(cashPortion)} [1010-001] + Bank: Rs. ${formatMoney(bankPortion)} [${bankAccountCode} - ${bankAccountTitle}])`
+              : (values.voucherType === 'By Bank' ? ` | Target Bank: ${bankAccountCode} - ${bankAccountTitle}` : ' | Mode: Cash Drawer (1010-001)');
 
             const invInfoStr = selectedInvoiceNo ? ` | Linked Invoice: ${selectedInvoiceNo}` : ' | General Customer Ledger Collection';
-            const compositeNarration = `Received from Customer: ${selectedCustomer}${invInfoStr}${methodStr} | Remarks: ${values.notes.trim()}`.trim();
+            const compositeNarration = `Received from Customer: ${selectedCustomer} (${customerAccountCode})${invInfoStr}${methodStr} | Remarks: ${values.notes.trim()}`.trim();
 
             const payload = {
               voucher_no: values.voucherNo,
@@ -603,14 +638,22 @@ function AddInvoiceReceipt() {
               voucher_date: values.paymentDate,
               customerName: selectedCustomer,
               customer_name: selectedCustomer,
+              account_code: customerAccountCode,
+              account_title: customerAccountTitle,
+              debit: 0,
+              credit: finalAmount,
               original_invoice_no: selectedInvoiceNo || null,
               narration: compositeNarration,
               notes: compositeNarration,
               total_amount: finalAmount,
               items: balancedJournalItems,
               metadata: { 
+                preset: 'CRV',
+                auto_generated: Boolean(selectedInvoiceNo),
                 selectedBankId: (values.voucherType === 'By Bank' || values.voucherType === 'Split') ? values.selectedBankId : null,
-                selectedBankTitle: selectedBankObj ? `${selectedBankObj.bankName} - ${selectedBankObj.accountTitle}` : null,
+                selectedBankTitle: bankAccountTitle,
+                bank_coa_code: bankAccountCode,
+                bank_coa_title: bankAccountTitle,
                 linkedInvoiceNo: selectedInvoiceNo || null,
                 cashAmount: values.voucherType === 'Split' ? cashPortion : (values.voucherType === 'By Cash' ? finalAmount : 0),
                 bankAmount: values.voucherType === 'Split' ? bankPortion : (values.voucherType === 'By Bank' ? finalAmount : 0),
@@ -626,53 +669,19 @@ function AddInvoiceReceipt() {
                 .update(payload)
                 .eq('id', editData.id);
               if (updateErr) throw updateErr;
-
-              logActivity({
-                action: 'UPDATE',
-                tableName: 'invoice_receipts',
-                details: {
-                  id: editData.id,
-                  receipt_number: values.voucherNo,
-                  customer_name: selectedCustomer,
-                  amount: finalAmount,
-                  voucher_type: values.voucherType,
-                  linked_invoice: selectedInvoiceNo || 'General Collection',
-                  event: `Updated customer payment receipt ${values.voucherNo} from ${selectedCustomer}`
-                }
-              });
             } else {
-              const { data: insVoucher, error: insertErr } = await supabase
+              const { error: insertErr } = await supabase
                 .from('financial_vouchers')
-                .insert([payload])
-                .select('id')
-                .single();
+                .insert([payload]);
               if (insertErr) throw insertErr;
-
-              logActivity({
-                action: 'INSERT',
-                tableName: 'invoice_receipts',
-                details: {
-                  id: insVoucher?.id,
-                  receipt_number: values.voucherNo,
-                  customer_name: selectedCustomer,
-                  amount: finalAmount,
-                  voucher_type: values.voucherType,
-                  linked_invoice: selectedInvoiceNo || 'General Collection',
-                  event: `Received customer payment ${values.voucherNo} (Rs. ${finalAmount.toLocaleString()}) from ${selectedCustomer}`
-                }
-              });
             }
 
             // Sync with sales_invoices status if specific invoice was selected
             if (selectedInvoiceNo) {
               const cleanId = String(selectedInvoiceNo).replace(/\D/g, '');
-              const targetInv = salesInvoicesList.find(i => 
-                (i.invoice_no && i.invoice_no.toLowerCase() === selectedInvoiceNo.toLowerCase()) ||
-                String(i.id) === cleanId || 
-                `INV-${String(i.id).padStart(4, '0')}`.toLowerCase() === selectedInvoiceNo.toLowerCase()
-              );
+              const targetInv = salesInvoicesList.find(i => String(i.id) === cleanId || `INV-${String(i.id).padStart(4, '0')}` === selectedInvoiceNo);
               if (targetInv) {
-                const targetAlloc = invAllocationsMap[selectedInvoiceNo] || (selectedInvoiceNo && invAllocationsMap[selectedInvoiceNo.toLowerCase()]) || invAllocationsMap[cleanId];
+                const targetAlloc = invAllocationsMap[selectedInvoiceNo] || invAllocationsMap[cleanId];
                 const newRemainingDue = Math.max(0, (targetAlloc ? targetAlloc.due : 0) - finalAmount);
                 if (newRemainingDue <= 0.01) {
                   await supabase.from('sales_invoices').update({ receipt_status: 'SETTLED' }).eq('id', targetInv.id);
@@ -822,7 +831,14 @@ function AddInvoiceReceipt() {
                             }`}
                           >
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-xs font-bold">{cust.customer_name}</span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {cust.customer_code && (
+                                  <span className="font-mono text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-1 py-0.5 rounded">
+                                    {cust.customer_code}
+                                  </span>
+                                )}
+                                <span className="text-xs font-bold">{cust.customer_name}</span>
+                              </div>
                               {(cust.contact_name || cust.contact_person || cust.cell_no || cust.phone) && (
                                 <span className="text-[10px] text-slate-400">
                                   {cust.contact_name || cust.contact_person} {cust.cell_no || cust.phone ? `• ${cust.cell_no || cust.phone}` : ''}
@@ -881,8 +897,7 @@ function AddInvoiceReceipt() {
                               handleSelectInvoice('');
                             } else if (filteredInvoices[highlightedInvoiceIndex - 1]) {
                               const inv = filteredInvoices[highlightedInvoiceIndex - 1];
-                              const actualNo = inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`;
-                              handleSelectInvoice(actualNo);
+                              handleSelectInvoice(`INV-${String(inv.id).padStart(4, '0')}`);
                             }
                           } else if (e.key === 'Escape') {
                             setIsInvoiceDropdownOpen(false);
@@ -893,7 +908,7 @@ function AddInvoiceReceipt() {
                           setIsInvoiceDropdownOpen(true);
                           setHighlightedInvoiceIndex(0);
                         }}
-                        placeholder="Search Invoice # (e.g. TESTING-01), date, or warehouse..."
+                        placeholder="Search Invoice # (e.g. INV-0042), date, or warehouse..."
                         className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 pr-10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-primary"
                       />
 
@@ -938,8 +953,8 @@ function AddInvoiceReceipt() {
 
                         {/* Invoice List */}
                         {filteredInvoices.map((inv, iIdx) => {
-                          const invFormatted = inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`;
-                          const alloc = invAllocationsMap[invFormatted] || (invFormatted && invAllocationsMap[invFormatted.toLowerCase()]) || invAllocationsMap[String(inv.id)];
+                          const invFormatted = `INV-${String(inv.id).padStart(4, '0')}`;
+                          const alloc = invAllocationsMap[invFormatted] || invAllocationsMap[String(inv.id)];
                           const bill = alloc ? alloc.gross : (Number(inv.total_amount) || 0);
                           const due = alloc ? alloc.due : Math.max(0, bill - (Number(inv.cash_amount_paid || 0) + Number(inv.bank_amount || 0)));
 
@@ -997,18 +1012,6 @@ function AddInvoiceReceipt() {
                             setFieldValue('cashAmount', '');
                             setFieldValue('bankAmount', '');
                           }
-                          // Dynamically change voucher prefix
-                          let newPrefix = 'CR';
-                          if (val === 'By Bank') newPrefix = 'BR';
-                          else if (val === 'Split') newPrefix = 'CBR';
-                          
-                          const currentVoucherNo = values.voucherNo || '';
-                          const newVoucherNo = currentVoucherNo.replace(/^(CR|BR|CBR)-/, `${newPrefix}-`);
-                          if (newVoucherNo !== currentVoucherNo) {
-                            setFieldValue('voucherNo', newVoucherNo);
-                          } else if (!currentVoucherNo) {
-                            setFieldValue('voucherNo', `${newPrefix}-${Math.floor(100000 + Math.random() * 900000)}`);
-                          }
                         }}
                         value={values.voucherType}
                         className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-primary"
@@ -1039,9 +1042,23 @@ function AddInvoiceReceipt() {
                             </option>
                           ))}
                         </select>
+                        {values.selectedBankId && (
+                          <div className="mt-1 flex items-center justify-between text-[10px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded border border-blue-200 dark:border-blue-800 font-mono font-semibold">
+                            <span>🏦 Bank Chart of Account:</span>
+                            <span>{values.selectedBankId}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
+
+                  {/* Cash Receiving Account Indicator */}
+                  {(values.voucherType === 'By Cash' || values.voucherType === 'Split') && (
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] font-medium text-emerald-800 dark:text-emerald-300">
+                      <span>💵 Cash Receiving Account:</span>
+                      <span className="font-mono font-bold">1010-001 - Cash in Hand</span>
+                    </div>
+                  )}
 
                   {/* Row 5: Amount Inputs (Single or Split) */}
                   {values.voucherType === 'Split' ? (
@@ -1249,7 +1266,7 @@ function AddInvoiceReceipt() {
                         </strong>
                       </div>
 
-                      <div className="flex justify-between items-center text-red-700 dark:text-red-400">
+                      <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
                         <span className="font-sans">Paid Upfront at Billing:</span>
                         <span>Rs. {formatMoney(invPaidUpfront)}</span>
                       </div>
@@ -1262,7 +1279,7 @@ function AddInvoiceReceipt() {
                       )}
 
                       {invPastReceiptsPaid > 0 && (
-                        <div className="flex justify-between items-center text-rose-700 dark:text-rose-400">
+                        <div className="flex justify-between items-center text-teal-700 dark:text-teal-400">
                           <span className="font-sans">Past Voucher Collections:</span>
                           <span>Rs. {formatMoney(invPastReceiptsPaid)}</span>
                         </div>
@@ -1284,7 +1301,7 @@ function AddInvoiceReceipt() {
 
                         <div className={`p-3 rounded-xl border flex justify-between items-center ${
                           projectedRemaining <= 0
-                            ? 'bg-red-50 dark:bg-red-950/30 border-red-300 text-red-900 dark:text-red-300'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 text-emerald-900 dark:text-emerald-300'
                             : 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 text-amber-900 dark:text-amber-300'
                         }`}>
                           <div className="font-sans">

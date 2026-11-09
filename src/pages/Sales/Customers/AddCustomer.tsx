@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
+import { useLanguage, getUrduText } from '../../../Context/LanguageContext';
 import Breadcrumb from '../../../components/Breadcrumbs/Breadcrumb';
 import {
   MdArrowBack,
@@ -28,34 +29,273 @@ import {
   MdArrowForward
 } from 'react-icons/md';
 import { SearchableDropdown } from '../../../components/SearchableDropdown';
+import SubAreaAreaInput from '../../../components/SubAreaAreaInput';
+import SearchableAddableDropdown from '../../../components/SearchableAddableDropdown';
 
 const TIER_OPTIONS = [
   'Retail / General',
-  'Contractor / Builder',
   'Wholesaler / Dealer',
-  'Registered Corporate'
+  'Semi-Wholesaler',
+  'Distributor',
+  'Boutique / Tailor',
+  'Fabric Manufacturer',
+  'Contractor / Builder',
+  'Registered Corporate',
 ];
+
+const DEFAULT_SUB_AREAS = [
+  'Hyderabad',
+  'Karachi',
+  'Sukkur',
+  'Lahore',
+  'Faisalabad',
+  'Rawalpindi',
+  'Islamabad',
+  'Multan',
+  'Peshawar',
+  'Quetta',
+  'Nawabshah',
+  'Mirpurkhas',
+  'Larkana',
+  'Gujranwala',
+  'Sialkot',
+  'Bahawalpur',
+  'Sargodha',
+  'Rahim Yar Khan',
+  'Jacobabad',
+  'Shikarpur',
+  'Dadu',
+  'Thatta',
+  'Badin',
+  'Tando Adam',
+  'Tando Allahyar',
+  'Kotri',
+];
+
+const DEFAULT_AREAS = [
+  'Cloth Market',
+  'Resham Gali',
+  'Shahi Bazaar',
+  'Saddar',
+  'Latifabad',
+  'Qasimabad',
+  'Auto Bhan',
+  'Boulton Market',
+  'Jama Cloth Market',
+  'Tariq Road',
+  'Hyderi',
+  'PECHS',
+  'North Nazimabad',
+  'Clifton',
+  'Azam Cloth Market',
+  'Anarkali Bazaar',
+  'Liberty Market',
+  'Rail Bazaar',
+];
+
+const DEFAULT_SUBAREA_AREAS_MAP: Record<string, string[]> = {
+  // Cities mapping to their local areas
+  'Hyderabad': ['Cloth Market', 'Resham Gali', 'Shahi Bazaar', 'Saddar', 'Latifabad', 'Qasimabad', 'Auto Bhan', 'Tilak Incline', 'Tower'],
+  'Karachi': ['Boulton Market', 'Jama Cloth Market', 'Tariq Road', 'Saddar', 'Hyderi', 'Liaquat Market', 'Clifton', 'PECHS', 'SITE', 'Gulshan-e-Iqbal', 'Korangi'],
+  'Sukkur': ['Station Road', 'Main Sarafa Bazaar', 'Cloth Market', 'Clock Tower', 'Barrage Colony', 'Military Road'],
+  'Lahore': ['Azam Cloth Market', 'Anarkali Bazaar', 'Ichhra Bazaar', 'Liberty Market', 'Shah Alam Market', 'Gulberg', 'Mall Road'],
+  'Faisalabad': ['Rail Bazaar', 'Clock Tower', 'Karkhana Bazaar', 'Jhang Bazaar', 'Montgomery Bazaar', 'D Ground'],
+  'Rawalpindi': ['Rabi Center', 'Raja Bazaar', 'Moti Bazaar', 'Saddar', 'Commercial Market'],
+  'Multan': ['Hussain Agahi Bazaar', 'Gulgast Colony', 'Cantonment', 'Cloth Market'],
+  'Peshawar': ['Karkhano Market', 'Shaheen Bazaar', 'Qissa Khwani', 'University Road'],
+  'Quetta': ['Liaquat Bazaar', 'Suraj Ganj Bazaar', 'Kandahari Bazaar'],
+  'Nawabshah': ['Cloth Market', 'Chakra Bazaar', 'Masjid Road'],
+  'Mirpurkhas': ['Shahi Bazaar', 'Station Road', 'Cloth Market'],
+  'Larkana': ['Shahi Bazaar', 'Station Road', 'Bank Square'],
+
+  // Specific Bazaars mapping to their parent areas / cities
+  'Resham Gali': ['Cloth Market', 'Hyderabad', 'Sindh'],
+  'Main Sarafa Bazaar': ['Cloth Market', 'Hyderabad', 'Sukkur'],
+  'Cloth Market': ['Hyderabad', 'Karachi', 'Sukkur'],
+  'Shahi Bazaar': ['Hyderabad', 'Mirpurkhas', 'Sindh'],
+  'Station Road': ['Sukkur', 'Mirpurkhas', 'Sindh'],
+  'Boulton Market': ['Saddar', 'Karachi'],
+  'Jama Cloth Market': ['M.A. Jinnah Road', 'Saddar', 'Karachi'],
+  'Tariq Road': ['PECHS', 'Karachi'],
+  'Hyderi Market': ['North Nazimabad', 'Karachi'],
+  'Shershah Market': ['SITE', 'Karachi'],
+  'Liaquat Market': ['Malir', 'Karachi'],
+  'Cliff Shopping Mall': ['Clifton', 'Karachi'],
+  'Ashiana Center': ['Clifton', 'Karachi'],
+  'Anarkali Bazaar': ['Lahore', 'Punjab'],
+  'Azam Cloth Market': ['Lahore', 'Punjab'],
+  'Liberty Market': ['Gulberg', 'Lahore'],
+  'Ichhra Bazaar': ['Lahore', 'Punjab'],
+  'Rail Bazaar': ['Faisalabad', 'Punjab'],
+  'Clock Tower': ['Faisalabad', 'Sukkur'],
+  'Karkhano Market': ['Peshawar', 'KPK'],
+  'Rabi Center': ['Rawalpindi', 'Islamabad'],
+};
 
 const AddCustomer: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<number>(1);
   const [companies, setCompanies] = useState<any[]>([]);
   const [suggestedCode, setSuggestedCode] = useState<string>('');
+
+  const [tierOptions, setTierOptions] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('uj_custom_tiers');
+      const customList: string[] = saved ? JSON.parse(saved) : [];
+      return Array.from(new Set([...TIER_OPTIONS, ...customList]));
+    } catch {
+      return TIER_OPTIONS;
+    }
+  });
+
+  const handleAddCustomTier = (newTier: string) => {
+    const clean = newTier.trim();
+    if (!clean) return;
+    setTierOptions((prev) => {
+      const updated = Array.from(new Set([clean, ...prev]));
+      try {
+        const saved = localStorage.getItem('uj_custom_tiers');
+        const customList: string[] = saved ? JSON.parse(saved) : [];
+        if (!customList.includes(clean)) {
+          localStorage.setItem('uj_custom_tiers', JSON.stringify([...customList, clean]));
+        }
+      } catch (e) {
+        console.error('Failed to save custom tier:', e);
+      }
+      return updated;
+    });
+    toast.success(`Added "${clean}" to Customer Tiers`);
+  };
+  const [subAreaOptions, setSubAreaOptions] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('uj_custom_sub_areas');
+      const customList: string[] = saved ? JSON.parse(saved) : [];
+      return Array.from(new Set([...DEFAULT_SUB_AREAS, ...customList])).sort();
+    } catch {
+      return DEFAULT_SUB_AREAS;
+    }
+  });
+
+  // Mapping of Sub Area -> List of Areas saved under it
+  const [subAreaToAreasMap, setSubAreaToAreasMap] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('uj_subarea_areas_map');
+      const customMap = saved ? JSON.parse(saved) : {};
+      return { ...DEFAULT_SUBAREA_AREAS_MAP, ...customMap };
+    } catch {
+      return DEFAULT_SUBAREA_AREAS_MAP;
+    }
+  });
+
+  const handleAddCustomSubArea = (newVal: string) => {
+    const clean = newVal.trim();
+    if (!clean) return;
+    setSubAreaOptions((prev) => {
+      const updated = Array.from(new Set([clean, ...prev])).sort();
+      try {
+        const saved = localStorage.getItem('uj_custom_sub_areas');
+        const customList: string[] = saved ? JSON.parse(saved) : [];
+        if (!customList.includes(clean)) {
+          localStorage.setItem('uj_custom_sub_areas', JSON.stringify([...customList, clean]));
+        }
+      } catch (e) {
+        console.error('Failed to save custom sub area:', e);
+      }
+      return updated;
+    });
+    toast.success(`Added "${clean}" to Cities`);
+  };
+
+  // Saves new area specifically UNDER the active Sub Area
+  const handleAddCustomArea = (newArea: string, currentSubArea: string) => {
+    const cleanArea = newArea.trim();
+    const cleanSub = currentSubArea.trim();
+    if (!cleanArea) return;
+
+    setSubAreaToAreasMap((prev) => {
+      const existing = prev[cleanSub] || DEFAULT_AREAS;
+      const updatedList = Array.from(new Set([cleanArea, ...existing])).sort();
+      const nextMap = { ...prev, [cleanSub]: updatedList };
+
+      try {
+        localStorage.setItem('uj_subarea_areas_map', JSON.stringify(nextMap));
+      } catch (e) {
+        console.error('Failed to save subarea-areas map:', e);
+      }
+
+      return nextMap;
+    });
+
+    toast.success(`Saved Area "${cleanArea}" under "${cleanSub}"`);
+  };
   const { tenantId } = useAuth();
+  const { isRTL, t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
+  const { id } = useParams<{ id?: string }>();
 
-  // Extract customer data if passed via navigation (Edit Mode)
-  const editData = location.state?.customer;
-  const isEditMode = !!editData;
+  const [fetchedCustomer, setFetchedCustomer] = useState<any>(null);
+  const [customerLoading, setCustomerLoading] = useState<boolean>(false);
 
-  // Safe universal redirect helper that preserves tenant prefix if active
+  // If navigated directly to /Sales/Customers/Edit/:id or refreshed, load customer from DB
+  useEffect(() => {
+    if (id && !location.state?.customer) {
+      setCustomerLoading(true);
+      supabase
+        .from('customers')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Error fetching customer by id:', error);
+            toast.error('Failed to load customer details');
+          } else if (data) {
+            setFetchedCustomer(data);
+          }
+          setCustomerLoading(false);
+        });
+    }
+  }, [id, location.state?.customer]);
+
+  // Extract customer data if passed via navigation (Edit Mode) or fetched from DB
+  const editData = location.state?.customer || fetchedCustomer;
+  const isEditMode = !!(id || editData);
+  const [existingOBDate, setExistingOBDate] = useState<string>('');
+
+  useEffect(() => {
+    if (editData) {
+      const code = editData.customer_code || editData.customerCode || editData.coa_code;
+      const name = editData.customerName || editData.customername || editData.customer_name || editData.name;
+      if (code || name) {
+        let q = supabase
+          .from('financial_vouchers')
+          .select('voucher_date')
+          .like('voucher_no', 'OB-%');
+
+        if (code && name) {
+          q = q.or(`account_code.eq.${code},account_title.eq.${name}`);
+        } else if (code) {
+          q = q.eq('account_code', code);
+        } else {
+          q = q.eq('account_title', name);
+        }
+
+        q.order('id', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.voucher_date) {
+              setExistingOBDate(data.voucher_date);
+            }
+          });
+      }
+    }
+  }, [editData]);
+
+  // Universal redirect helper back to customer list
   const handleNavigateToList = () => {
-    const segments = location.pathname.split('/').filter(Boolean);
-    const tenantPrefix = (segments.length > 0 && ['bashir', 'zohaib', 'daniyal', 'nexis'].includes(segments[0].toLowerCase()))
-      ? `/${segments[0]}`
-      : (tenantId ? `/${tenantId}` : '');
-    navigate(`${tenantPrefix}/Sales/Customers/List`);
+    navigate('/Sales/Customers/List');
   };
 
   useEffect(() => {
@@ -69,31 +309,81 @@ const AddCustomer: React.FC = () => {
 
         if (compRes.data) setCompanies(compRes.data);
 
-        // Derive next suggested customer ledger code (1020-xxx)
+        // Merge any existing customer tiers from DB
+        try {
+          const { data: dbCustTiers } = await supabase.from('customers').select('registrationType, registrationtype').limit(100);
+          if (dbCustTiers && dbCustTiers.length > 0) {
+            const tiersFromDb = dbCustTiers
+              .map((c: any) => c.registrationType || c.registrationtype)
+              .filter((t: any) => typeof t === 'string' && t.trim().length > 1);
+            if (tiersFromDb.length > 0) {
+              setTierOptions((prev) => Array.from(new Set([...prev, ...tiersFromDb])));
+            }
+          }
+        } catch (e) {
+          console.warn('Could not load tiers from customers:', e);
+        }
+
+        // Also merge any existing areas and sub areas from customers table
+        try {
+          const { data: custAreaData } = await supabase.from('customers').select('city, address, sub_area, area').limit(500);
+          if (custAreaData && custAreaData.length > 0) {
+            const dbSubAreas = custAreaData
+              .map((c: any) => (c.city || c.sub_area || '').trim())
+              .filter((v: any) => typeof v === 'string' && v.length > 1);
+            if (dbSubAreas.length > 0) {
+              setSubAreaOptions((prev) => Array.from(new Set([...prev, ...dbSubAreas])).sort());
+            }
+
+            // Sync sub_area -> area database records into mapping
+            setSubAreaToAreasMap((prev) => {
+              const nextMap = { ...prev };
+              custAreaData.forEach((c: any) => {
+                const s = c.sub_area?.trim();
+                const a = (c.area || c.city)?.trim();
+                if (s && a) {
+                  const curr = nextMap[s] || DEFAULT_AREAS;
+                  if (!curr.includes(a)) {
+                    nextMap[s] = [a, ...curr];
+                  }
+                }
+              });
+              return nextMap;
+            });
+          }
+        } catch (e) {
+          console.warn('Could not load areas from customers table:', e);
+        }
+
+        // Derive next suggested customer ledger code starting sequentially from 2020-001
         if (!isEditMode) {
-          let maxNum = 0;
           const coaList = coaRes.data || [];
           const custList = custRes.data || [];
+          const usedCodes = new Set<string>();
 
           coaList.forEach((a: any) => {
-            const match = String(a.account_code || '').match(/1020-(\d+)/);
-            if (match && match[1]) {
-              const num = parseInt(match[1], 10);
-              if (num > maxNum) maxNum = num;
-            }
+            const code = String(a.account_code || '').trim().toUpperCase();
+            if (code) usedCodes.add(code);
           });
 
           custList.forEach((c: any) => {
-            const code = c.customer_code || c.customerCode || c.coa_code || '';
-            const match = String(code).match(/1020-(\d+)/);
-            if (match && match[1]) {
-              const num = parseInt(match[1], 10);
-              if (num > maxNum) maxNum = num;
-            }
+            const code1 = String(c.customer_code || '').trim().toUpperCase();
+            const code2 = String(c.customerCode || '').trim().toUpperCase();
+            const code3 = String(c.coa_code || '').trim().toUpperCase();
+            if (code1) usedCodes.add(code1);
+            if (code2) usedCodes.add(code2);
+            if (code3) usedCodes.add(code3);
           });
 
-          const nextCode = `1020-${String(maxNum + 1).padStart(3, '0')}`;
-          setSuggestedCode(nextCode);
+          let seq = 1;
+          while (true) {
+            const candidate = `2020-${String(seq).padStart(3, '0')}`;
+            if (!usedCodes.has(candidate)) {
+              setSuggestedCode(candidate);
+              break;
+            }
+            seq++;
+          }
         }
       } catch (err: any) {
         console.error('Error loading metadata in AddCustomer:', err);
@@ -103,8 +393,87 @@ const AddCustomer: React.FC = () => {
     fetchInitialMetadata();
   }, [isEditMode]);
 
+  // Safe city & area extractor for edit mode
+  const getInitialLocation = (data?: any) => {
+    if (!data) return { subArea: '', area: '' };
+
+    let subArea = data.sub_area || data.subArea || '';
+    let area = data.area || '';
+
+    // If subArea is not set, check data.city
+    if (!subArea && data.city) {
+      subArea = data.city;
+    }
+
+    // Check if Location was recorded in notes e.g. "Location: Hyderabad | Cloth Market"
+    if (data.notes && data.notes.includes('Location:')) {
+      const match = data.notes.match(/Location:\s*([^|\n]+)(?:\s*\|\s*([^\n]+))?/);
+      if (match) {
+        const noteCity = match[1]?.trim();
+        const noteArea = match[2]?.trim();
+        if (!subArea) subArea = noteCity;
+        // If subArea was defaulted to Hyderabad but note specifically says another city (e.g. ماتلی), restore it
+        if (subArea && subArea.toLowerCase() === 'hyderabad' && noteCity && noteCity.toLowerCase() !== 'hyderabad') {
+          subArea = noteCity;
+        }
+        if (!area && noteArea) area = noteArea;
+      }
+    }
+
+    // Fallback: If city still empty, scan address for known cities
+    if (!subArea && data.address) {
+      const addr = String(data.address).toLowerCase();
+      for (const dCity of DEFAULT_SUB_AREAS) {
+        if (addr.includes(dCity.toLowerCase())) {
+          subArea = dCity;
+          break;
+        }
+      }
+    }
+
+    // Fallback: If area still empty, scan address for known areas
+    if (!area && data.address) {
+      const addr = String(data.address).toLowerCase();
+      for (const dArea of DEFAULT_AREAS) {
+        if (addr.includes(dArea.toLowerCase())) {
+          area = dArea;
+          break;
+        }
+      }
+    }
+
+    // In case area was erroneously set equal to city, clear it
+    if (area && subArea && area.toLowerCase() === subArea.toLowerCase()) {
+      area = '';
+    }
+
+    return { subArea, area };
+  };
+
+  const initialLoc = getInitialLocation(editData);
+
+  // Sync edit location into options and mapping so dropdown immediately shows them
+  useEffect(() => {
+    if (editData) {
+      const loc = getInitialLocation(editData);
+      if (loc.subArea) {
+        setSubAreaOptions((prev) => Array.from(new Set([...prev, loc.subArea])).sort());
+      }
+      if (loc.subArea && loc.area) {
+        setSubAreaToAreasMap((prev) => {
+          const existing = prev[loc.subArea] || DEFAULT_AREAS;
+          if (!existing.includes(loc.area)) {
+            return { ...prev, [loc.subArea]: [loc.area, ...existing] };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [editData]);
+
   const validationSchema = Yup.object().shape({
     customerName: Yup.string().trim().required('Customer / Business Name is required'),
+    subArea: Yup.string().trim().required('City is required'),
     primaryPhone: Yup.string().trim().required('Primary Contact Phone is required'),
   });
 
@@ -121,8 +490,9 @@ const AddCustomer: React.FC = () => {
         .eq('customerName', trimmedName)
         .eq('company', companyVal);
 
-      if (isEditMode) {
-        query = query.neq('id', editData.id);
+      const customerId = editData?.id || id;
+      if (isEditMode && customerId) {
+        query = query.neq('id', customerId);
       }
 
       const { data: existingRecords, error: checkError } = await query;
@@ -134,86 +504,150 @@ const AddCustomer: React.FC = () => {
         return;
       }
 
-      const cleanCode = values.customer_code ? values.customer_code.trim() : '';
+      const cleanCode = (values.customer_code || suggestedCode || '').trim();
       const parsedOpeningBal = Number(values.openingBalance || 0);
       const computedBalance = values.balanceNature === 'Credit' ? -Math.abs(parsedOpeningBal) : Math.abs(parsedOpeningBal);
 
-      const regTypeVal = values.registrationType || 'Retail / General';
+      const regTypeVal = values.registrationType ? values.registrationType.trim() : '';
       const secPhoneVal = values.secondaryPhone ? values.secondaryPhone.trim() : '';
 
-      const payload: any = {
-        customerName: trimmedName,
-        customer_code: cleanCode,
-        customerCode: cleanCode,
-        coa_code: cleanCode,
-        page_no: values.page_no ? String(values.page_no).trim() : '',
-        pageNo: values.page_no ? String(values.page_no).trim() : '',
-        registrationType: regTypeVal,
-        primaryPhone: values.primaryPhone ? values.primaryPhone.trim() : '',
-        phone: values.primaryPhone ? values.primaryPhone.trim() : '',
-        secondaryPhone: secPhoneVal,
-        email: values.email ? values.email.trim() : '',
-        website: values.website ? values.website.trim() : '',
-        province: values.province || 'Sindh',
-        company: companyVal,
-        address: values.address ? values.address.trim() : '',
-        ntnNo: values.ntnNo ? values.ntnNo.trim() : '',
-        cnicNo: values.cnicNo ? values.cnicNo.trim() : '',
-        stRegNo: values.stRegNo ? values.stRegNo.trim() : '',
-        notes: values.notes ? values.notes.trim() : '',
-        followUpDate: values.followUpDate || null,
-      };
-
-      if (!isEditMode && parsedOpeningBal !== 0) {
-        payload.balance = computedBalance;
-      }
-
-      let customerRecordId = editData?.id;
+      const cityVal = (() => {
+        const s = (values.subArea || '').trim();
+        const a = (values.area || '').trim();
+        const PAK_CITIES = ['hyderabad', 'karachi', 'sukkur', 'lahore', 'faisalabad', 'rawalpindi', 'multan', 'peshawar', 'quetta', 'nawabshah', 'mirpurkhas', 'larkana', 'islamabad'];
+        if (PAK_CITIES.includes(s.toLowerCase())) return s;
+        if (PAK_CITIES.includes(a.toLowerCase())) return a;
+        return s || a || values.city || 'Hyderabad';
+      })();
 
       // --- SMART SCHEMA-ADAPTIVE COLUMN MAPPER ---
-      // Dynamically probe existing database columns to prevent 'column not found in schema cache' (e.g. registrationType vs registrationtype)
-      const colMap = new Map<string, string>();
+      // Known columns in customers table
+      const KNOWN_CUSTOMER_COLUMNS = new Set([
+        'customerName', 'customer_code', 'customerCode', 'account_code', 'coa_code',
+        'page_no', 'pageNo', 'registrationType', 'primaryPhone', 'phone', 'secondaryPhone',
+        'secondaryphone', 'email', 'website', 'address', 'city', 'province', 'company',
+        'cnicNo', 'ntnNo', 'ntn_strn', 'stRegNo', 'notes', 'followUpDate', 'currentBalance',
+        'balance', 'opening_balance', 'customer_name', 'sub_area', 'area'
+      ]);
+
+      const dbColumns: string[] = [];
       try {
         const { data: probeData } = await supabase.from('customers').select('*').limit(1);
         if (probeData && probeData.length > 0) {
-          Object.keys(probeData[0]).forEach((c) => colMap.set(c.toLowerCase(), c));
+          dbColumns.push(...Object.keys(probeData[0]));
         }
       } catch (probeErr) {
         console.warn('Schema probe notice:', probeErr);
       }
 
-      // Build sanitized payload using exact database column names
+      const hasCol = (colName: string) => {
+        if (dbColumns.length > 0) return dbColumns.some(c => c.toLowerCase() === colName.toLowerCase());
+        return KNOWN_CUSTOMER_COLUMNS.has(colName);
+      };
+
+      const getExactCols = (colName: string) => {
+        if (dbColumns.length > 0) return dbColumns.filter(c => c.toLowerCase() === colName.toLowerCase());
+        return KNOWN_CUSTOMER_COLUMNS.has(colName) ? [colName] : [];
+      };
+
       const sanitizedPayload: any = {};
-      for (const [key, val] of Object.entries(payload)) {
-        if (colMap.size > 0) {
-          const exactCol = colMap.get(key.toLowerCase());
-          if (exactCol) {
-            sanitizedPayload[exactCol] = val;
+      const setCol = (fieldKey: string, val: any) => {
+        const matchingCols = getExactCols(fieldKey);
+        if (matchingCols.length > 0) {
+          matchingCols.forEach(col => { sanitizedPayload[col] = val; });
+        }
+      };
+
+      // Set customer name across all existing database name columns (customerName, customername, customer_name, name)
+      setCol('customerName', trimmedName);
+      setCol('customername', trimmedName);
+      setCol('customer_name', trimmedName);
+      setCol('name', trimmedName);
+
+      // Customer Code / Ledger Code
+      setCol('customer_code', cleanCode);
+      setCol('customerCode', cleanCode);
+      setCol('coa_code', cleanCode);
+      setCol('account_code', cleanCode);
+
+      // Page Number
+      setCol('page_no', values.page_no ? String(values.page_no).trim() : '');
+      setCol('pageNo', values.page_no ? String(values.page_no).trim() : '');
+
+      // Registration Type / Customer Tier
+      setCol('registrationType', regTypeVal);
+      setCol('registrationtype', regTypeVal);
+
+      // Phone
+      setCol('primaryPhone', values.primaryPhone ? values.primaryPhone.trim() : '');
+      setCol('primaryphone', values.primaryPhone ? values.primaryPhone.trim() : '');
+      setCol('phone', values.primaryPhone ? values.primaryPhone.trim() : '');
+
+      // Secondary Phone
+      setCol('secondaryPhone', secPhoneVal);
+      setCol('secondaryphone', secPhoneVal);
+
+      // Location / City / Area / Address / Province / Business info
+      setCol('sub_area', values.subArea ? values.subArea.trim() : '');
+      setCol('subArea', values.subArea ? values.subArea.trim() : '');
+      setCol('area', values.area ? values.area.trim() : '');
+      setCol('city', cityVal);
+      setCol('address', values.address ? values.address.trim() : '');
+      setCol('province', values.province || 'Sindh');
+      setCol('company', companyVal);
+      setCol('email', values.email ? values.email.trim() : '');
+      setCol('website', values.website ? values.website.trim() : '');
+      setCol('ntnNo', values.ntnNo ? values.ntnNo.trim() : '');
+      setCol('ntn_strn', values.ntnNo ? values.ntnNo.trim() : '');
+      setCol('cnicNo', values.cnicNo ? values.cnicNo.trim() : '');
+      setCol('stRegNo', values.stRegNo ? values.stRegNo.trim() : '');
+      setCol('notes', values.notes ? values.notes.trim() : '');
+      setCol('followUpDate', values.followUpDate || null);
+
+      const obDate = values.openingBalanceDate || new Date().toISOString().split('T')[0];
+      setCol('opening_balance', Math.abs(parsedOpeningBal));
+      setCol('balance', computedBalance);
+      setCol('currentBalance', computedBalance);
+      setCol('balance_nature', values.balanceNature || 'Debit');
+      setCol('balanceNature', values.balanceNature || 'Debit');
+      setCol('opening_balance_date', obDate);
+      setCol('openingBalanceDate', obDate);
+
+      // If Sub Area or Area was entered but DB has no dedicated columns, preserve in notes
+      const sVal = values.subArea ? values.subArea.trim() : '';
+      const aVal = values.area ? values.area.trim() : '';
+      if ((sVal || aVal) && !hasCol('sub_area') && !hasCol('subarea')) {
+        const exactNotes = getExactCols('notes')[0] || 'notes';
+        const areaNote = `Location: ${[sVal, aVal].filter(Boolean).join(' | ')}`;
+        if (sanitizedPayload[exactNotes]) {
+          if (!sanitizedPayload[exactNotes].includes(areaNote)) {
+            sanitizedPayload[exactNotes] += ` | ${areaNote}`;
           }
         } else {
-          sanitizedPayload[key] = val;
+          sanitizedPayload[exactNotes] = areaNote;
         }
       }
 
       // If secondary phone was entered but DB has no secondary phone column, preserve in notes
-      if (secPhoneVal && !colMap.has('secondaryphone')) {
-        const notesKey = colMap.get('notes') || 'notes';
-        if (sanitizedPayload[notesKey]) {
-          if (!sanitizedPayload[notesKey].includes(secPhoneVal)) {
-            sanitizedPayload[notesKey] += ` | Alt Phone: ${secPhoneVal}`;
+      if (secPhoneVal && !hasCol('secondaryphone') && !hasCol('secondaryPhone')) {
+        const exactNotes = getExactCols('notes')[0] || 'notes';
+        if (sanitizedPayload[exactNotes]) {
+          if (!sanitizedPayload[exactNotes].includes(secPhoneVal)) {
+            sanitizedPayload[exactNotes] += ` | Alt Phone: ${secPhoneVal}`;
           }
-        } else if (colMap.has('notes')) {
-          sanitizedPayload[notesKey] = `Alt Phone: ${secPhoneVal}`;
+        } else {
+          sanitizedPayload[exactNotes] = `Alt Phone: ${secPhoneVal}`;
         }
       }
 
       // Self-healing database executor: handles schema cache column casing mismatches automatically
       const executeSave = async (dataPayload: any) => {
-        if (isEditMode) {
+        const customerId = editData?.id || id;
+        if (isEditMode && customerId) {
           return await supabase
             .from('customers')
             .update(dataPayload)
-            .eq('id', editData.id);
+            .eq('id', customerId);
         } else {
           return await supabase
             .from('customers')
@@ -269,6 +703,7 @@ const AddCustomer: React.FC = () => {
             balance_nature: values.balanceNature || 'Debit',
             notes: `Customer ledger account for ${trimmedName} (Synced from Customers module)`
           };
+          if (tenantId) coaPayload.tenant_id = tenantId;
 
           const { data: existingCOA } = await supabase
             .from('chart_of_accounts')
@@ -282,9 +717,91 @@ const AddCustomer: React.FC = () => {
               .update(coaPayload)
               .eq('id', existingCOA.id);
           } else {
-            await supabase
+            const { error: insErr } = await supabase
               .from('chart_of_accounts')
               .insert([coaPayload]);
+            if (insErr) {
+              console.error('COA auto-sync insert error:', insErr);
+            }
+          }
+
+          // --- TWO-WAY SYNC: UPDATE OR INSERT OPENING BALANCE FINANCIAL VOUCHER ---
+          try {
+            let voucherQuery = supabase
+              .from('financial_vouchers')
+              .select('id')
+              .like('voucher_no', 'OB-%');
+
+            if (cleanCode && trimmedName) {
+              voucherQuery = voucherQuery.or(`account_code.eq.${cleanCode},account_title.eq.${trimmedName}`);
+            } else if (cleanCode) {
+              voucherQuery = voucherQuery.eq('account_code', cleanCode);
+            } else {
+              voucherQuery = voucherQuery.eq('account_title', trimmedName);
+            }
+
+            let { data: existingVoucher } = await voucherQuery.maybeSingle();
+
+            if (!existingVoucher) {
+              const { data: fallbackVoucher } = await supabase
+                .from('financial_vouchers')
+                .select('id')
+                .ilike('narration', '%Opening Balance%')
+                .or(`account_code.eq.${cleanCode},account_title.eq.${trimmedName}`)
+                .maybeSingle();
+              if (fallbackVoucher) {
+                existingVoucher = fallbackVoucher;
+              }
+            }
+
+            const isDebit = values.balanceNature !== 'Credit';
+            const bal = Math.abs(parsedOpeningBal);
+            const voucherPayload: any = {
+              account_code: cleanCode,
+              account_title: trimmedName,
+              customerName: trimmedName,
+              customer_name: trimmedName,
+              voucher_date: obDate,
+              total_amount: bal,
+              debit: isDebit ? bal : 0,
+              credit: !isDebit ? bal : 0,
+              narration: `Opening Balance for Customer ${trimmedName}`,
+              items: [
+                {
+                  accountCode: cleanCode,
+                  accountTitle: trimmedName,
+                  description: `Opening Balance for Customer ${trimmedName}`,
+                  debit: isDebit ? bal : 0,
+                  credit: !isDebit ? bal : 0
+                }
+              ],
+              metadata: {
+                preset: 'SAV',
+                auto_generated: true,
+                isOpeningBalance: true,
+                balanceNature: values.balanceNature || 'Debit'
+              }
+            };
+
+            if (existingVoucher) {
+              if (bal > 0) {
+                await supabase
+                  .from('financial_vouchers')
+                  .update(voucherPayload)
+                  .eq('id', existingVoucher.id);
+              } else {
+                await supabase.from('financial_vouchers').delete().eq('id', existingVoucher.id);
+              }
+            } else if (bal > 0) {
+              const vNum = cleanCode.replace('2020-', '');
+              await supabase.from('financial_vouchers').insert([{
+                voucher_no: `OB-${vNum}`,
+                voucher_type: 'Journal Voucher',
+                ...voucherPayload
+              }]);
+            }
+          } catch (vErr) {
+            console.warn('Voucher auto-sync note:', vErr);
           }
         } catch (coaErr) {
           console.warn('COA auto-sync note:', coaErr);
@@ -305,6 +822,11 @@ const AddCustomer: React.FC = () => {
       setActiveTab(1);
       return false;
     }
+    if (!values.subArea || !values.subArea.trim()) {
+      toast.error('City is required (Step 2: Contact & Address)');
+      setActiveTab(2);
+      return false;
+    }
     if (!values.primaryPhone || !values.primaryPhone.trim()) {
       toast.error('Primary Contact Phone is required (Step 2: Contact & Address)');
       setActiveTab(2);
@@ -312,6 +834,15 @@ const AddCustomer: React.FC = () => {
     }
     return true;
   };
+
+  if (customerLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[350px] gap-3">
+        <Spinner size="w-8 h-8" />
+        <span className="text-sm font-semibold text-gray-500">Loading Customer Profile...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -332,7 +863,7 @@ const AddCustomer: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-lg text-slate-900 dark:text-white">
-                {isEditMode ? `Edit Profile: ${editData.customerName}` : 'Add New Customer'}
+                {isEditMode ? `Edit Profile: ${editData?.customerName || editData?.customername || editData?.customer_name || editData?.name || 'Customer'}` : 'Add New Customer'}
               </h3>
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                 isEditMode 
@@ -364,9 +895,13 @@ const AddCustomer: React.FC = () => {
       <Formik
         initialValues={editData ? {
           ...editData,
+          customerName: editData.customerName || editData.customername || editData.customer_name || editData.name || '',
           customer_code: editData.customer_code || editData.customerCode || editData.coa_code || '',
           page_no: editData.page_no || editData.pageNo || editData.page_number || '',
-          registrationType: editData.registrationType || 'Retail / General',
+          registrationType: editData.registrationType || editData.registrationtype || '',
+          subArea: initialLoc.subArea,
+          city: initialLoc.subArea,
+          area: initialLoc.area,
           primaryPhone: editData.primaryPhone || editData.phone || '',
           secondaryPhone: editData.secondaryPhone || '',
           email: editData.email || '',
@@ -376,13 +911,20 @@ const AddCustomer: React.FC = () => {
           website: editData.website || '',
           notes: editData.notes || '',
           followUpDate: editData.followUpDate || '',
-          openingBalance: editData.opening_balance || editData.openingBalance || editData.currentBalance || '',
-          balanceNature: (editData.currentBalance && editData.currentBalance < 0) ? 'Credit' : 'Debit'
+          openingBalance: editData.opening_balance !== undefined && editData.opening_balance !== null && editData.opening_balance !== ''
+            ? Math.abs(Number(editData.opening_balance))
+            : (editData.currentBalance !== undefined && editData.currentBalance !== null && editData.currentBalance !== ''
+                ? Math.abs(Number(editData.currentBalance))
+                : (editData.balance !== undefined && editData.balance !== null && editData.balance !== '' ? Math.abs(Number(editData.balance)) : '')),
+          balanceNature: editData.balance_nature || editData.balanceNature || ((editData.currentBalance && Number(editData.currentBalance) < 0) || (editData.balance && Number(editData.balance) < 0) ? 'Credit' : 'Debit'),
+          openingBalanceDate: existingOBDate || editData.opening_balance_date || editData.openingBalanceDate || (editData.created_at ? editData.created_at.split('T')[0] : new Date().toISOString().split('T')[0])
         } : {
           customerName: '',
-          customer_code: '',
+          subArea: '',
+          area: '',
+          customer_code: suggestedCode || '',
           page_no: '',
-          registrationType: 'Retail / General',
+          registrationType: '',
           primaryPhone: '',
           secondaryPhone: '',
           email: '',
@@ -396,7 +938,8 @@ const AddCustomer: React.FC = () => {
           notes: '',
           followUpDate: '',
           openingBalance: '',
-          balanceNature: 'Debit'
+          balanceNature: 'Debit',
+          openingBalanceDate: new Date().toISOString().split('T')[0]
         }}
         enableReinitialize={true}
         validationSchema={validationSchema}
@@ -414,7 +957,7 @@ const AddCustomer: React.FC = () => {
           >
 
             {/* Step Wizard Tabs Bar */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded-2xl border border-stroke dark:border-strokedark">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded-2xl border border-stroke dark:border-strokedark">
               <button
                 type="button"
                 onClick={() => setActiveTab(1)}
@@ -427,7 +970,7 @@ const AddCustomer: React.FC = () => {
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
                   activeTab === 1 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                 }`}>1</span>
-                <span className="truncate">Identity</span>
+                <span className="truncate">{isRTL ? 'شناخت' : 'Identity'}</span>
               </button>
 
               <button
@@ -442,7 +985,7 @@ const AddCustomer: React.FC = () => {
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
                   activeTab === 2 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                 }`}>2</span>
-                <span className="truncate">Contact & Address</span>
+                <span className="truncate">{isRTL ? 'پتہ اور رابطہ' : 'Contact & Address'}</span>
               </button>
 
               <button
@@ -457,7 +1000,7 @@ const AddCustomer: React.FC = () => {
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
                   activeTab === 3 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                 }`}>3</span>
-                <span className="truncate">Tax & Ledger</span>
+                <span className="truncate">{isRTL ? 'کھاتہ اور لیجر' : 'Account & Ledger'}</span>
               </button>
 
               <button
@@ -472,7 +1015,22 @@ const AddCustomer: React.FC = () => {
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
                   activeTab === 4 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                 }`}>4</span>
-                <span className="truncate">Follow-up Notes</span>
+                <span className="truncate">{isRTL ? 'ٹیکس اور قانونی' : 'Tax & Legal'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab(5)}
+                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  activeTab === 5
+                    ? 'bg-white dark:bg-boxdark text-primary shadow-xs border border-stroke dark:border-strokedark'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  activeTab === 5 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}>5</span>
+                <span className="truncate">{isRTL ? 'فالو اپ نوٹس' : 'Follow-up Notes'}</span>
               </button>
             </div>
             
@@ -494,9 +1052,9 @@ const AddCustomer: React.FC = () => {
                   <span className="text-[11px] font-semibold text-slate-400">* Required Fields</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-5">
                   {/* Customer Name */}
-                  <div className="md:col-span-2">
+                  <div>
                     <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
                       Customer / Business Name <span className="text-red-500">*</span>
                     </label>
@@ -505,7 +1063,7 @@ const AddCustomer: React.FC = () => {
                       name="customerName"
                       onChange={handleChange}
                       value={values.customerName}
-                      placeholder="e.g. Haji Muhammad / Al-Madina Trading & Tiles"
+                      placeholder="e.g. Haji Muhammad / Al-Madina Cloth House"
                       className={`w-full rounded-xl border bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-3 text-xs font-semibold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:ring-2 focus:ring-primary/20 ${
                         touched.customerName && errors.customerName 
                           ? 'border-red-500 focus:border-red-500' 
@@ -523,87 +1081,20 @@ const AddCustomer: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Customer Code / Account Code */}
+                  {/* Customer Category / Tier (Searchable + Addable) */}
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                        <MdTag size={14} className="text-primary" />
-                        <span>Customer / Account Code</span>
-                      </label>
-                      {!values.customer_code && suggestedCode && (
-                        <button
-                          type="button"
-                          onClick={() => setFieldValue('customer_code', suggestedCode)}
-                          className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
-                        >
-                          Use Suggested ({suggestedCode})
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      name="customer_code"
-                      onChange={handleChange}
-                      value={values.customer_code || ''}
-                      placeholder={suggestedCode || 'e.g. 1020-001 or CUST-100'}
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono font-bold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Auto-links with Chart of Accounts ledger code under Customers (1020-xxx)
-                    </p>
-                  </div>
-
-                  {/* Page Number */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Ledger Page # (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      name="page_no"
-                      onChange={handleChange}
-                      value={values.page_no || ''}
-                      placeholder="e.g. 142 or Pg-25"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Physical ledger book reference number for traditional paper accounting cross-checks
-                    </p>
-                  </div>
-
-                  {/* Customer Category / Type */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Customer Tier / Category
-                    </label>
-                    <SearchableDropdown
-                      value={values.registrationType || 'Retail / General'}
-                      onChange={(val) => setFieldValue('registrationType', val || 'Retail / General')}
-                      options={TIER_OPTIONS}
+                    <SearchableAddableDropdown
+                      label="Customer Tier / Category"
                       placeholder="Customer Tier / Category"
-                      allowAll={false}
-                      allowClear={false}
-                    />
-                  </div>
-
-                  {/* Client Business Entity / Branch */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Associated Branch / Business Entity
-                    </label>
-                    <SearchableDropdown
-                      value={values.company || '-- General / NHT ENTERPRISE --'}
-                      onChange={(val) => {
-                        if (!val || val === '-- General / NHT ENTERPRISE --') {
-                          setFieldValue('company', '');
-                        } else {
-                          setFieldValue('company', val);
-                        }
+                      icon={<MdTag className="text-primary text-sm" />}
+                      value={values.registrationType || ''}
+                      onChange={(val) => setFieldValue('registrationType', val || '')}
+                      onAddNew={(newTier) => {
+                        handleAddCustomTier(newTier);
+                        setFieldValue('registrationType', newTier);
                       }}
-                      options={['-- General / NHT ENTERPRISE --', ...companies.map((c: any) => c.name)]}
-                      placeholder="Associated Branch / Business Entity"
-                      allowAll={false}
-                      allowClear={true}
+                      options={tierOptions}
+                      helperText="Select or type a new Customer Tier / Category (navigate with ↑ ↓ and Enter ↵)"
                     />
                   </div>
                 </div>
@@ -666,7 +1157,7 @@ const AddCustomer: React.FC = () => {
                   </div>
 
                   {/* Email Address */}
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
                       Email Address (Optional)
                     </label>
@@ -680,25 +1171,27 @@ const AddCustomer: React.FC = () => {
                     />
                   </div>
 
-                  {/* Province / Region */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Province / Region
-                    </label>
-                    <select
-                      name="province"
-                      onChange={handleChange}
-                      value={values.province || 'Sindh'}
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-medium outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    >
-                      <option value="Sindh">Sindh</option>
-                      <option value="Punjab">Punjab</option>
-                      <option value="Khyber Pakhtunkhwa">Khyber Pakhtunkhwa</option>
-                      <option value="Balochistan">Balochistan</option>
-                      <option value="Islamabad">Islamabad (ICT)</option>
-                      <option value="Azad Jammu and Kashmir">Azad Jammu and Kashmir (AJK)</option>
-                      <option value="Gilgit-Baltistan">Gilgit-Baltistan (GB)</option>
-                    </select>
+                  {/* City | Area Dual Dropdown in Single Unified Input */}
+                  <div className="md:col-span-2">
+                    <SubAreaAreaInput
+                      label="City | Area"
+                      subAreaValue={values.subArea || values.city || ''}
+                      areaValue={values.area || ''}
+                      onSubAreaChange={(val) => {
+                        setFieldValue('subArea', val);
+                        setFieldValue('city', val);
+                      }}
+                      onAreaChange={(val) => setFieldValue('area', val)}
+                      onSubAreaAdd={handleAddCustomSubArea}
+                      onAreaAdd={handleAddCustomArea}
+                      subAreaOptions={subAreaOptions}
+                      areaOptions={
+                        (values.subArea || values.city) && subAreaToAreasMap[values.subArea || values.city]
+                          ? subAreaToAreasMap[values.subArea || values.city]
+                          : DEFAULT_AREAS
+                      }
+                      helperText="City is required. Area is optional."
+                    />
                   </div>
 
                   {/* Delivery / Site Address */}
@@ -719,7 +1212,7 @@ const AddCustomer: React.FC = () => {
               </div>
             )}
 
-            {/* Card 3: Taxation, Identity & Opening Ledger Balance */}
+            {/* Card 3: Account & Ledger Configuration */}
             {activeTab === 3 && (
               <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-6 space-y-5 animate-in fade-in duration-150">
                 <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark pb-3">
@@ -728,9 +1221,158 @@ const AddCustomer: React.FC = () => {
                   </span>
                   <div>
                     <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                      3. Taxation Details & Opening Ledger Balance
+                      3. Account & Ledger Configuration
                     </h4>
-                    <p className="text-[11px] text-slate-500">Corporate tax filings, CNIC identity, and initial financial balance</p>
+                    <p className="text-[11px] text-slate-500">Auto-linked Chart of Accounts code, physical page number, and opening balance</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Customer / Account Code */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                        <MdTag size={14} className="text-primary" />
+                        <span>Customer / Account Code</span>
+                      </label>
+                      {suggestedCode && (values.customer_code || suggestedCode) !== suggestedCode && (
+                        <button
+                          type="button"
+                          onClick={() => setFieldValue('customer_code', suggestedCode)}
+                          className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                        >
+                          Use Auto ({suggestedCode})
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      name="customer_code"
+                      onChange={handleChange}
+                      value={values.customer_code !== undefined && values.customer_code !== '' ? values.customer_code : (suggestedCode || '')}
+                      placeholder={suggestedCode || 'e.g. 2020-001'}
+                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono font-bold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Auto-assigned sequentially starting from 2020-001 under Chart of Accounts Customers
+                    </p>
+                  </div>
+
+                  {/* Ledger Page # (Optional) */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
+                      Ledger Page # (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      name="page_no"
+                      onChange={handleChange}
+                      value={values.page_no || ''}
+                      placeholder="e.g. 142 or Pg-25"
+                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Physical ledger book reference number for traditional paper accounting cross-checks
+                    </p>
+                  </div>
+
+                  {/* Opening Balance (PKR) */}
+                  <div>
+                    <label className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                      <span className="flex items-center gap-1.5">
+                        <MdAccountBalance className="text-primary text-sm" />
+                        <span>Opening Balance (PKR)</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                    </label>
+                    <input
+                      type="number"
+                      name="openingBalance"
+                      onChange={handleChange}
+                      value={values.openingBalance || ''}
+                      placeholder="0.00"
+                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono font-bold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Initial balance owed by customer or advance held
+                    </p>
+                  </div>
+
+                  {/* Opening Balance Date */}
+                  <div>
+                    <label className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                      <span className="flex items-center gap-1.5">
+                        <MdCalendarToday className="text-primary text-sm" />
+                        <span>Opening Balance Date</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-normal">Effective Date</span>
+                    </label>
+                    <input
+                      type="date"
+                      name="openingBalanceDate"
+                      onChange={handleChange}
+                      value={values.openingBalanceDate || ''}
+                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Date assigned to Opening Balance journal voucher in ledger statements
+                    </p>
+                  </div>
+
+                  {/* Balance Nature */}
+                  <div className="md:col-span-2">
+                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
+                      Balance Nature:
+                    </label>
+                    <div className="flex items-center gap-3 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setFieldValue('balanceNature', 'Debit')}
+                        className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                          (values.balanceNature || 'Debit') === 'Debit'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-stroke dark:border-strokedark hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {(values.balanceNature || 'Debit') === 'Debit' && <MdCheckCircle size={14} />}
+                        <span>Debit (Dr - Receivable)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFieldValue('balanceNature', 'Credit')}
+                        className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                          values.balanceNature === 'Credit'
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                            : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-stroke dark:border-strokedark hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {values.balanceNature === 'Credit' && <MdCheckCircle size={14} />}
+                        <span>Credit (Cr - Advance)</span>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5">
+                      {(values.balanceNature || 'Debit') === 'Debit'
+                        ? 'Customer owes this amount (Receivable)'
+                        : 'Customer paid advance / excess credit (Payable)'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Card 4: Taxation & Legal Identifiers */}
+            {activeTab === 4 && (
+              <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-6 space-y-5 animate-in fade-in duration-150">
+                <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark pb-3">
+                  <span className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-lg">
+                    <MdReceipt size={18} />
+                  </span>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      4. Taxation & Legal Identifiers
+                    </h4>
+                    <p className="text-[11px] text-slate-500">Corporate tax filings, NTN, CNIC, and STRN credentials</p>
                   </div>
                 </div>
 
@@ -779,46 +1421,12 @@ const AddCustomer: React.FC = () => {
                       className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
-
-                  {/* Opening Balance */}
-                  <div className="sm:col-span-2">
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Opening Balance (PKR)
-                    </label>
-                    <input
-                      type="number"
-                      name="openingBalance"
-                      onChange={handleChange}
-                      value={values.openingBalance || ''}
-                      placeholder="0.00"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono font-bold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Debit = Customer owes you money (Receivable). Credit = You owe customer (Advance / Payable).
-                    </p>
-                  </div>
-
-                  {/* Balance Nature */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Balance Nature
-                    </label>
-                    <select
-                      name="balanceNature"
-                      onChange={handleChange}
-                      value={values.balanceNature || 'Debit'}
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-semibold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    >
-                      <option value="Debit">Debit (Receivable from Customer)</option>
-                      <option value="Credit">Credit (Advance / Liability to Customer)</option>
-                    </select>
-                  </div>
                 </div>
               </div>
             )}
 
-            {/* Card 4: CRM Follow-Up & Remarks */}
-            {activeTab === 4 && (
+            {/* Card 5: CRM Follow-Up & Remarks */}
+            {activeTab === 5 && (
               <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-6 space-y-5 animate-in fade-in duration-150">
                 <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark pb-3">
                   <span className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 rounded-lg">
@@ -826,7 +1434,7 @@ const AddCustomer: React.FC = () => {
                   </span>
                   <div>
                     <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                      4. Follow-up & Relationship Notes
+                      5. Follow-up & Relationship Notes
                     </h4>
                     <p className="text-[11px] text-slate-500">Scheduled reminders and customer-specific preferences</p>
                   </div>
@@ -882,30 +1490,30 @@ const AddCustomer: React.FC = () => {
                     onClick={handleNavigateToList}
                     className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition shadow-xs cursor-pointer"
                   >
-                    Cancel
+                    {isRTL ? 'منسوخ' : 'Cancel'}
                   </button>
                 )}
               </div>
 
               <div className="flex items-center gap-3">
-                {activeTab < 4 ? (
+                {activeTab < 5 ? (
                   <button
                     type="button"
                     onClick={() => {
                       if (activeTab === 1 && !values.customerName?.trim()) {
-                        toast.error('Customer / Business Name is required (Step 1)');
+                        toast.error(isRTL ? 'کسٹمر کا نام درج کرنا ضروری ہے (مرحلہ 1)' : 'Customer / Business Name is required (Step 1)');
                         return;
                       }
                       if (activeTab === 2 && !values.primaryPhone?.trim()) {
-                        toast.error('Primary Contact Phone is required (Step 2)');
+                        toast.error(isRTL ? 'فون نمبر درج کرنا ضروری ہے (مرحلہ 2)' : 'Primary Contact Phone is required (Step 2)');
                         return;
                       }
-                      setActiveTab(prev => Math.min(4, prev + 1));
+                      setActiveTab(prev => Math.min(5, prev + 1));
                     }}
                     className="px-6 py-2.5 rounded-xl bg-primary hover:opacity-90 text-white font-bold text-xs transition shadow-md cursor-pointer flex items-center gap-1.5"
                   >
-                    <span>Next Step</span>
-                    <MdArrowForward size={16} />
+                    <span>{isRTL ? 'اگلا مرحلہ' : 'Next Step'}</span>
+                    <MdArrowForward size={16} className={isRTL ? 'rotate-180' : ''} />
                   </button>
                 ) : (
                   <button
@@ -921,12 +1529,12 @@ const AddCustomer: React.FC = () => {
                     {loading ? (
                       <>
                         <Spinner color="border-white" size="w-4 h-4" />
-                        <span>Saving Profile...</span>
+                        <span>{isRTL ? 'محفوظ ہو رہا ہے...' : 'Saving Profile...'}</span>
                       </>
                     ) : (
                       <>
                         <MdSave size={16} />
-                        <span>{isEditMode ? 'Update Customer Profile' : 'Save Customer Profile'}</span>
+                        <span>{isRTL ? (isEditMode ? 'کسٹمر میں ترمیم محفوظ کریں' : 'کسٹمر محفوظ کریں') : (isEditMode ? 'Update Customer Profile' : 'Save Customer Profile')}</span>
                       </>
                     )}
                   </button>

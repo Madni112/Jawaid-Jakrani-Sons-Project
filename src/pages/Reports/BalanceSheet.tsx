@@ -385,7 +385,7 @@ const BalanceSheet: React.FC = () => {
       </div>
 
       <div className="balance-sheet-print-container flex flex-col gap-6">
-        
+
         {/* Printable Header for physical paper prints */}
         <div className="hidden print:block relative text-center mb-4 border-b-2 border-black pb-3">
           <div className="absolute left-2 top-0">
@@ -434,7 +434,7 @@ const BalanceSheet: React.FC = () => {
                   printColorAdjust: 'exact'
                 }}
               >
-                {getBrandConfig().code}
+                ZAC
               </span>
             </div>
           </div>
@@ -459,7 +459,7 @@ const BalanceSheet: React.FC = () => {
 
             {/* 📊 6 Executive KPI Briefing Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              
+
               {/* Card 1: Liquid Funds */}
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-4 shadow-xs relative overflow-hidden">
                 <div className="flex justify-between items-start">
@@ -819,7 +819,7 @@ const BalanceSheet: React.FC = () => {
                 </div>
 
                 <div className="space-y-3 font-sans">
-                  
+
                   {/* 1. CASH IN HAND ACCORDION */}
                   <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                     <div
@@ -1002,7 +1002,7 @@ const BalanceSheet: React.FC = () => {
                 </div>
 
                 <div className="space-y-3 font-sans">
-                  
+
                   {/* SECTION HEADER: CURRENT LIABILITIES */}
                   <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 pt-1">
                     Current Liabilities (Supplier Credit &amp; Debts)

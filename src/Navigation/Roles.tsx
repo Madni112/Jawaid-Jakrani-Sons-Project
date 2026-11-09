@@ -6,9 +6,12 @@ import {
   MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview,
   MdSpaceDashboard, MdOutlineLaptop, MdTexture, MdPayment, MdAssignmentReturn,
   MdAssessment, MdDashboardCustomize, MdTrendingUp, MdBarChart, MdAccountBalanceWallet,
-  MdBalance, MdPauseCircleFilled, MdInbox, MdPointOfSale, MdWarehouse
+  MdBalance, MdPauseCircleFilled, MdInbox, MdPointOfSale, MdWarehouse, MdSecurity,
+  MdPrecisionManufacturing
 } from 'react-icons/md';
 import { Navigate } from 'react-router-dom';
+import BOMList from '../pages/Manufacturing/BOM/BOMList';
+import AddBOM from '../pages/Manufacturing/BOM/AddBOM';
 import HoldingReport from '../pages/Reports/Holding Report/HoldingReport';
 import HoldingReportPrint from '../pages/Reports/Holding Report/HoldingReportPrint';
 import Brands from '../pages/Administration/Brands';
@@ -102,10 +105,15 @@ import QuotationList from '../pages/CRM/Quotations/QuotationList';
 import AddQuotation from '../pages/CRM/Quotations/AddQuotation';
 import PrintQuotation from '../pages/CRM/Quotations/PrintQuotation';
 import FollowUps from '../pages/CRM/FollowUps';
+import POSTerminal from '../pages/POS/POSTerminal';
+import POSTerminalsManager from '../pages/POS/POSTerminalsManager';
+import POSOrders from '../pages/POS/POSOrders';
+import POSRegister from '../pages/POS/POSRegister';
+import POSCatalog from '../pages/POS/POSCatalog';
 
 export const adminRoutes = [
   {
-    path: '/',
+    path: '/dashboard',
     component: <Dashboard />,
     label: 'Dashboard',
     icon: MdDashboard,
@@ -125,8 +133,38 @@ export const adminRoutes = [
     hideFromSidebar: true,
   },
   {
-    label: 'Administation',
-    icon: MdAdminPanelSettings,
+    label: 'Point of Sale (POS)',
+    icon: MdPointOfSale,
+    children: [
+      {
+        path: '/pos/terminals',
+        component: <POSTerminalsManager />,
+        label: 'Register Terminals & Counters',
+        icon: MdPointOfSale,
+      },
+      {
+        path: '/pos/orders',
+        component: <POSOrders />,
+        label: 'POS Orders & Receipts',
+        icon: MdReceiptLong,
+      },
+      {
+        path: '/pos/shifts',
+        component: <POSRegister />,
+        label: 'Cash Drawer / Shifts',
+        icon: MdAccountBalanceWallet,
+      },
+      {
+        path: '/pos/catalog',
+        component: <POSCatalog />,
+        label: 'POS Store Catalog',
+        icon: MdInventory2,
+      },
+    ],
+  },
+  {
+    label: 'Inventory',
+    icon: MdInventory2,
     children: [
       {
         path: '/Administration/Categories/List',
@@ -165,6 +203,24 @@ export const adminRoutes = [
         icon: MdDashboard,
         path: '/Administration/Products/Bulk-Upload',
         component: <BulkProductUpload />,
+      },
+      {
+        label: 'Manufacturing (BOM)',
+        icon: MdPrecisionManufacturing,
+        path: '/Manufacturing/list',
+        component: <BOMList />,
+      },
+      {
+        path: '/Manufacturing/add',
+        component: <AddBOM />,
+        label: 'Create BOM',
+        hideFromSidebar: true,
+      },
+      {
+        path: '/Manufacturing/edit/:id',
+        component: <AddBOM />,
+        label: 'Edit BOM',
+        hideFromSidebar: true,
       }
       /* 
       {
@@ -177,8 +233,8 @@ export const adminRoutes = [
     ]
   },
   {
-    label: 'REGISTRATION',
-    icon: MdFormatListBulleted,
+    label: 'Accounts',
+    icon: MdAccountBalance,
     children: [
       {
         path: '/Registration/Chart-of-Account/List',
@@ -251,7 +307,7 @@ export const adminRoutes = [
         path: '/Sales/Salesman/List',
         component: <SalesmanHistory />,
         icon: MdPeople,
-      },
+      }
     ],
   },
   {
@@ -264,13 +320,13 @@ export const adminRoutes = [
         component: <PurchaseList />,
         icon: MdLaptopChromebook
       },
-        {
-          label: 'Goods Receipt (GRN)',
-          path: '/Purchase/GRN/List',
-          component: <GRNList />,
-          icon: MdInventory
-        },,
-
+      {
+        label: 'Goods Receipt (GRN)',
+        path: '/Purchase/GRN/List',
+        component: <GRNList />,
+        icon: MdInventory,
+        hideFromSidebar: true
+      },
       {
         label: 'Purchase Receipt',
         path: '/Purchase/Purchase-Receipt/List',
@@ -295,7 +351,6 @@ export const adminRoutes = [
         component: <VendorList />,
         icon: MdPeople
       }
-
     ]
   },
   {
@@ -327,25 +382,13 @@ export const adminRoutes = [
         icon: MdEmojiTransportation,
       },
       {
-        label: 'Shop Dispatch Queue (SDQ)',
-        path: '/Sales/Shop-Dispatch/List',
-        component: <ShopDispatchQueue />,
-        icon: MdEmojiTransportation,
-      },
-      {
         label: 'Inward Challan',
         path: '/Purchase/Inward-Challan/List',
-        component: <InwardChallanList locationFilter="WAREHOUSE" />,
-        icon: MdInbox
-      },
-      {
-        label: 'Shop Receiving Queue',
-        path: '/Purchase/Shop-Receiving',
-        component: <InwardChallanList locationFilter="SHOP" />,
+        component: <InwardChallanList locationFilter="ALL" />,
         icon: MdInbox
       }
     ]
-  },,
+  },
   {
     label: 'Human Resource',
     icon: MdBadge,
@@ -389,9 +432,9 @@ export const adminRoutes = [
     icon: MdAssessment
   },
   {
-    path: '/Reports/Main-Reports',
-    component: <MainReports />,
-    label: 'Main Reports',
+    path: '/Reports/Reports Dashboard',
+    component: <ReportDashboard />,
+    label: 'Reports Dashboard',
     hideFromSidebar: true
   },
   {
@@ -428,6 +471,12 @@ export const adminRoutes = [
     path: '/Reports/Balance-Sheet',
     component: <BalanceSheet />,
     label: 'Balance Sheet',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Main-Reports',
+    component: <MainReports />,
+    label: 'Main Reports',
     hideFromSidebar: true
   },
   {
@@ -664,6 +713,16 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/Sales/Customers/Edit',
+    component: <AddCustomer />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales/Customers/Edit/:id',
+    component: <AddCustomer />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Customers/list',
     component: <CustomerHistory />,
     hideFromSidebar: true
@@ -777,6 +836,16 @@ export const adminRoutes = [
   },
   {
     path: '/Purchase/Vendor/Add',
+    component: <AddVendor />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase/Vendor/Edit',
+    component: <AddVendor />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase/Vendor/Edit/:id',
     component: <AddVendor />,
     hideFromSidebar: true
   },

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -21,7 +21,63 @@ import {
   MdOutlinePayment
 } from 'react-icons/md';
 import { FiPrinter } from 'react-icons/fi';
-import { logActivity } from '../../../service/auditLogger';
+
+// Helper to resolve or auto-register Customer Chart of Accounts
+const resolveCustomerCoaAccount = async (customerName: string, customersList: any[] = []) => {
+  const cleanName = (customerName || '').trim();
+  if (!cleanName) return { code: '2020-001', title: 'Walk-in Customer' };
+
+  // 1. Match from customersList
+  const matched = customersList.find(c =>
+    (c.customer_name || c.customerName || c.name || '').trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  const existingCode = matched?.customer_code || matched?.customerCode || matched?.coa_code;
+  if (existingCode && String(existingCode).startsWith('2020-')) {
+    return { code: String(existingCode).trim(), title: matched.customer_name || matched.customerName || cleanName };
+  }
+
+  // 2. Query chart_of_accounts
+  try {
+    const { data: coaRows } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code, account_title')
+      .ilike('account_title', cleanName)
+      .limit(1);
+
+    if (coaRows && coaRows.length > 0 && coaRows[0].account_code) {
+      return { code: coaRows[0].account_code, title: coaRows[0].account_title || cleanName };
+    }
+
+    const { data: allCustCoa } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code')
+      .ilike('account_code', '2020-%');
+
+    let maxSeq = 0;
+    (allCustCoa || []).forEach(r => {
+      const match = String(r.account_code || '').match(/2020-(\d+)/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    });
+
+    const nextCode = `2020-${String(maxSeq + 1).padStart(3, '0')}`;
+    await supabase.from('chart_of_accounts').insert([{
+      account_code: nextCode,
+      account_title: cleanName,
+      category_code: '1. ASSETS',
+      sub_category_code: 'Current Assets',
+      control_code: 'Customers',
+      notes: `Customer account for ${cleanName} (Auto-registered from Sales Return)`
+    }]);
+
+    return { code: nextCode, title: cleanName };
+  } catch (err) {
+    console.warn('resolveCustomerCoaAccount in sales return error:', err);
+    return { code: '2020-001', title: cleanName };
+  }
+};
 
 const AddSalesReturn = () => {
   const { tenantId } = useAuth();
@@ -231,7 +287,7 @@ const AddSalesReturn = () => {
         setLocations(normalizedLocs.length > 0 ? normalizedLocs : [{ id: 1, name: 'Main Warehouse', code: 'MW' }]);
 
         // 3. Fetch Products
-        const { data: prodData } = await fetchAllPages(supabase.from('products').select('*').order('product_name', { ascending: true }));
+        const { data: prodData } = await supabase.from('products').select('*').order('product_name', { ascending: true });
         setProductList(prodData || []);
 
         // 4. Fetch Banks
@@ -365,6 +421,27 @@ const AddSalesReturn = () => {
   };
 
   const validationSchema = Yup.object().shape({
+    returnNo: Yup.string()
+      .trim()
+      .required('Return Memo # is required')
+      .test('check-unique-return-no', 'This Return Memo # already exists!', async function (value) {
+        if (!value) return true;
+        const currentReturnId = editData?.id;
+        try {
+          let query = supabase
+            .from('sales_returns')
+            .select('id')
+            .ilike('return_no', value.trim());
+          if (currentReturnId) {
+            query = query.neq('id', currentReturnId);
+          }
+          const { data, error } = await query.maybeSingle();
+          if (error) return true;
+          return !data;
+        } catch {
+          return true;
+        }
+      }),
     customerName: Yup.string().required('Customer selection is required'),
     sourceWarehouse: Yup.string().required('Receiving warehouse selection is required'),
     gatePassNo: Yup.string().required('Gate Pass No is required'),
@@ -650,7 +727,7 @@ const AddSalesReturn = () => {
 
               // 2. Prepare payload
               const returnPayload = {
-                return_no: values.returnNo || defaultReturnNo,
+                return_no: (values.returnNo || defaultReturnNo || '').trim(),
                 customer_name: values.customerName,
                 return_date: values.returnDate,
                 gate_pass_no: values.gatePassNo,
@@ -695,19 +772,6 @@ const AddSalesReturn = () => {
                   .update(returnPayload)
                   .eq('id', editData.id);
                 if (updateErr) throw updateErr;
-
-                logActivity({
-                  action: 'UPDATE',
-                  tableName: 'sales_returns',
-                  details: {
-                    id: editData.id,
-                    return_number: values.returnNo,
-                    customer_name: values.customerName,
-                    total_amount: calculatedNetTotal,
-                    item_count: (values.items || []).length,
-                    event: `Updated sales return note ${values.returnNo} for ${values.customerName}`
-                  }
-                });
               } else {
                 const { data: insertedRtn, error: insertErr } = await supabase
                   .from('sales_returns')
@@ -716,24 +780,222 @@ const AddSalesReturn = () => {
                   .single();
                 if (insertErr) throw insertErr;
                 savedReturnId = insertedRtn?.id;
-
-                logActivity({
-                  action: 'INSERT',
-                  tableName: 'sales_returns',
-                  details: {
-                    id: insertedRtn?.id,
-                    return_number: values.returnNo,
-                    customer_name: values.customerName,
-                    total_amount: calculatedNetTotal,
-                    item_count: (values.items || []).length,
-                    event: `Created sales return note ${values.returnNo} (Rs. ${calculatedNetTotal.toLocaleString()}) for ${values.customerName}`
-                  }
-                });
               }
 
               // Physical stock increment is now handled by the Warehouse team via Return Challans (VerifyReturnChallan.tsx)
+
+              // ── AUTO-SYNC FINANCIAL VOUCHERS (SRV & CPV) ──
+              try {
+                const resolvedCustomer = await resolveCustomerCoaAccount(values.customerName, customers);
+                const returnIdentifier = values.returnNo || (savedReturnId ? `RTN-${String(savedReturnId).padStart(4, '0')}` : 'RTN-RETURN');
+                const vDate = values.returnDate || new Date().toISOString().split('T')[0];
+
+                // 1. ─── HANDLE SRV (Sale Return Voucher) ───
+                // Credit customer khata for goods returned
+                const { data: existingSrv } = await supabase
+                  .from('financial_vouchers')
+                  .select('id, voucher_no, metadata')
+                  .or(`original_invoice_no.eq.${returnIdentifier},metadata->>linkedReturnNo.eq.${returnIdentifier}`)
+                  .ilike('voucher_no', 'SRV-%')
+                  .maybeSingle();
+
+                const srvNarration = `Sales return credit from ${resolvedCustomer.title} (Return #${returnIdentifier}, ${values.items.length} items)`;
+                const srvItems = [
+                  {
+                    accountCode: resolvedCustomer.code,
+                    accountTitle: resolvedCustomer.title,
+                    particulars: `Goods returned on Return #${returnIdentifier}`,
+                    debit: 0,
+                    credit: grossReturnSum
+                  }
+                ];
+
+                if (existingSrv) {
+                  await supabase
+                    .from('financial_vouchers')
+                    .update({
+                      total_amount: grossReturnSum,
+                      debit: 0,
+                      credit: grossReturnSum,
+                      account_code: resolvedCustomer.code,
+                      account_title: resolvedCustomer.title,
+                      voucher_date: vDate,
+                      narration: srvNarration,
+                      original_invoice_no: returnIdentifier,
+                      items: srvItems,
+                      metadata: {
+                        ...(existingSrv.metadata || {}),
+                        preset: 'SRV',
+                        auto_generated: true,
+                        linkedReturnNo: returnIdentifier,
+                        moduleSource: 'sales_return'
+                      }
+                    })
+                    .eq('id', existingSrv.id);
+                } else {
+                  const { data: srvRows } = await supabase
+                    .from('financial_vouchers')
+                    .select('voucher_no')
+                    .ilike('voucher_no', 'SRV-%');
+
+                  let maxSrvSeq = 0;
+                  (srvRows || []).forEach(v => {
+                    const match = String(v.voucher_no || '').match(/SRV-(\d+)/i);
+                    if (match && match[1]) {
+                      const num = parseInt(match[1], 10);
+                      if (num > maxSrvSeq) maxSrvSeq = num;
+                    }
+                  });
+                  const nextSrvNo = `SRV-${String(maxSrvSeq + 1).padStart(3, '0')}`;
+
+                  await supabase.from('financial_vouchers').insert([{
+                    voucher_no: nextSrvNo,
+                    voucher_type: 'Sale Amount Return',
+                    voucher_date: vDate,
+                    total_amount: grossReturnSum,
+                    debit: 0,
+                    credit: grossReturnSum,
+                    account_code: resolvedCustomer.code,
+                    account_title: resolvedCustomer.title,
+                    narration: srvNarration,
+                    original_invoice_no: returnIdentifier,
+                    items: srvItems,
+                    metadata: {
+                      preset: 'SRV',
+                      auto_generated: true,
+                      linkedReturnNo: returnIdentifier,
+                      moduleSource: 'sales_return'
+                    }
+                  }]);
+                }
+
+                // 2. ─── HANDLE CPV (Customer Payment / Refund Voucher) IF IMMEDIATE CASH/BANK DISBURSED ───
+                const { data: existingCpv } = await supabase
+                  .from('financial_vouchers')
+                  .select('id, voucher_no, metadata')
+                  .or(`original_invoice_no.eq.${returnIdentifier},metadata->>linkedReturnNo.eq.${returnIdentifier}`)
+                  .ilike('voucher_no', 'CPV-%')
+                  .maybeSingle();
+
+                if (totalRefundDisbursed > 0) {
+                  // Resolve Bank COA if bank amount > 0
+                  const selectedBankObj = bankAccountsList.find((b: any) => String(b.id) === String(values.selectedBankId) || String(b.bankName) === String(values.selectedBankId));
+                  let bankCoaCode = '1020-001';
+                  let bankCoaTitle = selectedBankObj ? `${selectedBankObj.bankName} - ${selectedBankObj.accountTitle}` : 'Bank Account';
+
+                  if (selectedBankObj) {
+                    try {
+                      const { data: bankCoaRows } = await supabase
+                        .from('chart_of_accounts')
+                        .select('account_code, account_title')
+                        .ilike('account_title', `%${selectedBankObj.bankName || ''}%`)
+                        .limit(1);
+                      if (bankCoaRows && bankCoaRows[0]) {
+                        bankCoaCode = bankCoaRows[0].account_code;
+                        bankCoaTitle = bankCoaRows[0].account_title;
+                      }
+                    } catch (bErr) {
+                      console.warn('Bank COA lookup warning:', bErr);
+                    }
+                  }
+
+                  const cpvItems: any[] = [
+                    {
+                      accountCode: resolvedCustomer.code,
+                      accountTitle: resolvedCustomer.title,
+                      particulars: `Refund payout against Return #${returnIdentifier}`,
+                      debit: totalRefundDisbursed,
+                      credit: 0
+                    }
+                  ];
+                  if (cashRefund > 0) {
+                    cpvItems.push({
+                      accountCode: '1010-001',
+                      accountTitle: 'Cash in Hand',
+                      particulars: `Cash refund payout from drawer`,
+                      debit: 0,
+                      credit: cashRefund
+                    });
+                  }
+                  if (bankRefund > 0) {
+                    cpvItems.push({
+                      accountCode: bankCoaCode,
+                      accountTitle: bankCoaTitle,
+                      particulars: `Bank refund wire transfer`,
+                      debit: 0,
+                      credit: bankRefund
+                    });
+                  }
+
+                  const cpvNarration = `Sales return cash/bank refund disbursed to ${resolvedCustomer.title} (Return #${returnIdentifier})`;
+
+                  if (existingCpv) {
+                    await supabase
+                      .from('financial_vouchers')
+                      .update({
+                        total_amount: totalRefundDisbursed,
+                        debit: totalRefundDisbursed,
+                        credit: 0,
+                        account_code: resolvedCustomer.code,
+                        account_title: resolvedCustomer.title,
+                        voucher_date: vDate,
+                        narration: cpvNarration,
+                        original_invoice_no: returnIdentifier,
+                        items: cpvItems,
+                        metadata: {
+                          ...(existingCpv.metadata || {}),
+                          preset: 'CPV',
+                          auto_generated: true,
+                          linkedReturnNo: returnIdentifier,
+                          moduleSource: 'sales_return'
+                        }
+                      })
+                      .eq('id', existingCpv.id);
+                  } else {
+                    const { data: cpvRows } = await supabase
+                      .from('financial_vouchers')
+                      .select('voucher_no')
+                      .ilike('voucher_no', 'CPV-%');
+
+                    let maxCpvSeq = 0;
+                    (cpvRows || []).forEach(v => {
+                      const match = String(v.voucher_no || '').match(/CPV-(\d+)/i);
+                      if (match && match[1]) {
+                        const num = parseInt(match[1], 10);
+                        if (num > maxCpvSeq) maxCpvSeq = num;
+                      }
+                    });
+                    const nextCpvNo = `CPV-${String(maxCpvSeq + 1).padStart(3, '0')}`;
+
+                    await supabase.from('financial_vouchers').insert([{
+                      voucher_no: nextCpvNo,
+                      voucher_type: 'Customer Payment Voucher',
+                      voucher_date: vDate,
+                      total_amount: totalRefundDisbursed,
+                      debit: totalRefundDisbursed,
+                      credit: 0,
+                      account_code: resolvedCustomer.code,
+                      account_title: resolvedCustomer.title,
+                      narration: cpvNarration,
+                      original_invoice_no: returnIdentifier,
+                      items: cpvItems,
+                      metadata: {
+                        preset: 'CPV',
+                        auto_generated: true,
+                        linkedReturnNo: returnIdentifier,
+                        moduleSource: 'sales_return'
+                      }
+                    }]);
+                  }
+                } else if (existingCpv) {
+                  // If refund was removed or set to credit in edit mode
+                  await supabase.from('financial_vouchers').delete().eq('id', existingCpv.id);
+                }
+              } catch (vchSyncErr: any) {
+                console.error('Financial voucher auto-sync in sales return error:', vchSyncErr);
+              }
               
-              toast.success(isEditMode ? 'Sales Return updated successfully!' : 'Sales Return Note generated & pending warehouse verification!');
+              toast.success(isEditMode ? 'Sales Return updated successfully!' : 'Sales Return Note generated & vouchers posted!');
 
               if (shouldPrintAfterSave && savedReturnId) {
                 navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/Sales-Return/Print/${savedReturnId}`);
@@ -784,13 +1046,43 @@ const AddSalesReturn = () => {
                   
                   {/* Return Memo ID Code */}
                   <div>
-                    <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                      Return Memo ID Code #:
-                    </label>
-                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
-                      <span>{values.returnNo || defaultReturnNo || 'RTN-...'}</span>
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-sans uppercase font-bold">Auto</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px]">
+                        Return Memo ID Code #: *
+                      </label>
+                      {defaultReturnNo && values.returnNo !== defaultReturnNo && (
+                        <button
+                          type="button"
+                          onClick={() => setFieldValue('returnNo', defaultReturnNo)}
+                          className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-bold hover:underline cursor-pointer"
+                          title="Reset to auto-suggested number"
+                        >
+                          Auto: {defaultReturnNo}
+                        </button>
+                      )}
                     </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="returnNo"
+                        placeholder="e.g. RTN-0001 or custom #"
+                        value={values.returnNo}
+                        onChange={handleChange}
+                        className={`w-full border rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-800 font-mono font-black text-emerald-800 dark:text-emerald-300 outline-none text-xs ${
+                          touched.returnNo && errors.returnNo
+                            ? 'border-red-500 bg-red-50/10'
+                            : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600'
+                        }`}
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-1.5 py-0.5 rounded font-sans uppercase font-bold pointer-events-none">
+                        {values.returnNo === defaultReturnNo ? 'Auto' : 'Manual'}
+                      </span>
+                    </div>
+                    {touched.returnNo && errors.returnNo && (
+                      <div className="text-[10px] text-red-500 font-semibold mt-1">
+                        {errors.returnNo as string}
+                      </div>
+                    )}
                   </div>
 
                   {/* Return Date */}
@@ -1274,8 +1566,11 @@ const AddSalesReturn = () => {
                                     String(matchedProduct.scenario_name || '').toLowerCase().includes('tile')
                                   ) && (rawPcs > 1 || String(matchedProduct.scenario_name || '').toLowerCase().includes('tile'))
                                 );
-
-                                const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
+                                const allowLoose = Boolean(matchedProduct?.allow_loose_sales || isTile);
+                                const looseRatio = Number(matchedProduct?.loose_conversion_ratio || rawPcs || (isTile ? 4 : 1)) || 1;
+                                const pcsPerBox = looseRatio > 1 ? looseRatio : (isTile ? 4 : 1);
+                                const bulkUnitLabel = matchedProduct?.uom || (isTile ? 'Box' : 'Unit');
+                                const looseUnitLabel = matchedProduct?.loose_uom || (isTile ? 'Pcs' : 'Units');
 
                                 let tileWidthCm = 60;
                                 let tileHeightCm = 60;
@@ -1588,6 +1883,11 @@ const AddSalesReturn = () => {
                                         placeholder="0"
                                         className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-mono font-bold text-right bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600"
                                       />
+                                      {((isTile || allowLoose) && pcsPerBox > 1) && (
+                                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-mono text-right mt-1">
+                                          ≈ Rs. {(Number(matchedProduct?.loose_sale_price) > 0 ? Number(matchedProduct.loose_sale_price) : (Number(item.rate || 0) / pcsPerBox)).toFixed(2)} / {looseUnitLabel}
+                                        </div>
+                                      )}
                                     </td>
 
                                     {/* Return Qty with Dedicated Boxes & Loose Pieces & Sq.Mtr for Tiles */}
@@ -1668,6 +1968,72 @@ const AddSalesReturn = () => {
                                             <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
                                           </div>
                                         </div>
+                                      ) : allowLoose && pcsPerBox > 1 ? (
+                                        /* DUAL UNIT INPUT FOR GENERAL LOOSE SELLABLE PRODUCTS (KG+GM, LTR+ML, BOX+PCS) */
+                                        (() => {
+                                          const currentQty = Number(item.qty || 0);
+                                          const bulkCount = Math.floor(currentQty);
+                                          const looseCount = Math.round((currentQty - bulkCount) * pcsPerBox);
+
+                                          return (
+                                            <div className="flex flex-col gap-1">
+                                              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-inner">
+                                                {/* BULK UNIT INPUT */}
+                                                <div className="flex-1 flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 focus-within:border-emerald-600 shadow-xs">
+                                                  <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    onKeyDown={blockInvalidChar}
+                                                    value={bulkCount === 0 ? '' : bulkCount}
+                                                    placeholder="0"
+                                                    onChange={(e) => {
+                                                      const val = e.target.value.trim();
+                                                      const newBulk = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                      const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                      const combinedQty = Number((newBulk + currentLoose / pcsPerBox).toFixed(3));
+                                                      setFieldValue(`items.${idx}.qty`, combinedQty);
+                                                    }}
+                                                    className="w-full bg-transparent text-center font-black text-xs text-emerald-700 dark:text-emerald-400 outline-none min-w-[32px]"
+                                                  />
+                                                  <span className="text-[10px] font-bold text-slate-400 pl-1 select-none">{bulkUnitLabel}</span>
+                                                </div>
+
+                                                <span className="text-slate-400 font-black text-xs select-none">+</span>
+
+                                                {/* LOOSE SUB-UNIT INPUT */}
+                                                <div className="flex-1 flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 focus-within:border-emerald-600 shadow-xs">
+                                                  <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    onKeyDown={blockInvalidChar}
+                                                    value={looseCount === 0 ? '' : looseCount}
+                                                    placeholder={`${pcsPerBox}`}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value.trim();
+                                                      const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                      const currentBulk = Math.floor(Number(item.qty || 0));
+
+                                                      const extraBulk = Math.floor(enteredLoose / pcsPerBox);
+                                                      const remLoose = enteredLoose % pcsPerBox;
+                                                      const finalBulk = currentBulk + extraBulk;
+                                                      const combinedQty = remLoose > 0 
+                                                        ? Number((finalBulk + remLoose / pcsPerBox).toFixed(3)) 
+                                                        : finalBulk;
+
+                                                      setFieldValue(`items.${idx}.qty`, combinedQty);
+                                                    }}
+                                                    className="w-full bg-transparent text-center font-black text-xs text-emerald-600 dark:text-emerald-400 outline-none min-w-[32px]"
+                                                  />
+                                                  <span className="text-[10px] font-bold text-slate-400 pl-1 select-none">{looseUnitLabel}</span>
+                                                </div>
+                                              </div>
+
+                                              <div className="text-center font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                                                Total: <strong>{currentQty}</strong> {bulkUnitLabel} ({bulkCount} {bulkUnitLabel} + {looseCount} {looseUnitLabel})
+                                              </div>
+                                            </div>
+                                          );
+                                        })()
                                       ) : (
                                         (() => {
                                           const u = String(item.uom || matchedProduct?.uom || '').trim().toUpperCase();
@@ -1809,9 +2175,23 @@ const AddSalesReturn = () => {
                               </option>
                             ))}
                           </select>
+                          {values.selectedBankId && (
+                            <div className="mt-1 flex items-center justify-between text-[10px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded border border-blue-200 dark:border-blue-800 font-mono font-semibold">
+                              <span>🏦 Disbursing Bank:</span>
+                              <span>{values.selectedBankId}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
+
+                    {/* Cash Drawer Indicator */}
+                    {(values.paymentTerm === 'By Cash' || values.paymentTerm === 'Split' || values.paymentTerm === 'Exchange & Cash Refund') && (
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] font-medium text-emerald-800 dark:text-emerald-300">
+                        <span>💵 Cash Disbursing Account:</span>
+                        <span className="font-mono font-bold">1010-001 - Cash in Hand</span>
+                      </div>
+                    )}
 
                     {/* Immediate Refund Payout Input */}
                     {values.paymentTerm === 'Exchange & Cash Refund' ? (

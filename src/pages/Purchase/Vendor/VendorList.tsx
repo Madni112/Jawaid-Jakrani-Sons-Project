@@ -5,7 +5,9 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
-import { MdEdit, MdDelete, MdMoreVert, MdEmail, MdPhone, MdPerson, MdBusiness, MdAccountBalanceWallet, MdAdd, MdClose, MdCheckCircle, MdArrowUpward, MdArrowDownward } from 'react-icons/md';
+import { DEFAULT_SUB_AREAS } from '../../../components/SubAreaAreaInput';
+import VendorImportModal from './VendorImportModal';
+import { MdEdit, MdDelete, MdMoreVert, MdEmail, MdPhone, MdPerson, MdBusiness, MdAccountBalanceWallet, MdAdd, MdClose, MdCheckCircle, MdArrowUpward, MdArrowDownward, MdReceiptLong, MdCloudUpload } from 'react-icons/md';
 
 const VendorList = () => {
     const navigate = useNavigate();
@@ -15,6 +17,7 @@ const VendorList = () => {
 
     // Modal State
     const [showAccountModal, setShowAccountModal] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
     const [selectedVendor, setSelectedVendor] = useState<any>(null);
     const [accountCodeInput, setAccountCodeInput] = useState('');
     const [openingBalanceInput, setOpeningBalanceInput] = useState('');
@@ -30,8 +33,8 @@ const VendorList = () => {
         try {
             setLoading(true);
             const [vendRes, coaRes] = await Promise.all([
-                supabase.from('vendors').select('*').order('id', { ascending: false }),
-                supabase.from('chart_of_accounts').select('*')
+                supabase.from('vendors').select('*').order('vendor_code', { ascending: true }),
+                supabase.from('chart_of_accounts').select('*').order('account_code', { ascending: true })
             ]);
 
             if (vendRes.error) throw vendRes.error;
@@ -50,8 +53,9 @@ const VendorList = () => {
 
     const getVendorCOA = (vend: any) => {
         const vName = (vend.vendor_name || vend.name || '').trim().toLowerCase();
+        const vCode = String(vend.account_code || vend.vendor_code || vend.vendorCode || '').trim();
         return coaAccounts.find(a => 
-            (vend.account_code && String(a.account_code).trim() === String(vend.account_code).trim()) ||
+            (vCode && String(a.account_code).trim().toLowerCase() === vCode.toLowerCase()) ||
             ((a.control_code === 'Vendor' || a.control_code === 'Vendors') && (a.account_title || '').trim().toLowerCase() === vName) ||
             ((a.account_title || '').trim().toLowerCase() === vName)
         );
@@ -110,13 +114,16 @@ const VendorList = () => {
             }
 
             const vendorName = (selectedVendor.vendor_name || selectedVendor.name || '').trim();
+            const bal = Math.abs(Number(openingBalanceInput) || 0);
             const coaPayload: any = {
                 category_code: '2. LIABILITIES',
                 sub_category_code: 'Current Liabilities',
                 control_code: 'Vendor',
                 account_code: cleanCode,
                 account_title: vendorName,
-                notes: `Vendor ledger account for ${vendorName}${openingBalanceInput ? ` (Opening Balance: ${openingBalanceInput} ${balanceNatureInput})` : ''}`
+                opening_balance: bal,
+                balance_nature: balanceNatureInput,
+                notes: `Vendor ledger account for ${vendorName}${bal > 0 ? ` (Opening Balance: ${bal} ${balanceNatureInput})` : ''}`
             };
 
             if (existingCOA?.id) {
@@ -132,44 +139,79 @@ const VendorList = () => {
                 if (error) throw error;
             }
 
-            // Record Opening Balance in financial_vouchers if opening balance > 0
-            if (openingBalanceInput && Number(openingBalanceInput) > 0) {
-                const bal = Number(openingBalanceInput);
-                try {
-                    await supabase.from('financial_vouchers').insert([{
-                        voucher_no: `OB-${cleanCode}`,
-                        voucher_type: 'JV',
+            // Two-Way Live Sync with financial_vouchers
+            try {
+                const isDebit = balanceNatureInput === 'Debit';
+                const vSubCode = cleanCode.replace(/^2010-/, '').replace(/^0+/, '') || String(selectedVendor?.id || 1);
+                const vchNo = `OBV-${vSubCode.padStart(3, '0')}`;
+
+                const { data: existV } = await supabase
+                    .from('financial_vouchers')
+                    .select('id')
+                    .or(`voucher_no.eq.${vchNo},voucher_no.eq.OB-${cleanCode},voucher_no.eq.OBV-${cleanCode},account_code.eq.${cleanCode}`)
+                    .maybeSingle();
+
+                if (bal > 0) {
+                    const vPayload: any = {
+                        voucher_no: vchNo,
+                        voucher_type: 'Journal Voucher',
                         voucher_date: new Date().toISOString().split('T')[0],
                         account_code: cleanCode,
                         account_title: vendorName,
-                        debit: balanceNatureInput === 'Debit' ? bal : 0,
-                        credit: balanceNatureInput === 'Credit' ? bal : 0,
-                        narration: `Opening Balance for Vendor ${vendorName}`
-                    }]);
-                } catch (_) {
-                    // Non-blocking
+                        customerName: vendorName,
+                        customer_name: vendorName,
+                        total_amount: bal,
+                        debit: isDebit ? bal : 0,
+                        credit: !isDebit ? bal : 0,
+                        narration: `Opening Balance for Vendor ${vendorName}`,
+                        items: [
+                            {
+                                accountCode: cleanCode,
+                                accountTitle: vendorName,
+                                description: `Opening Balance for Vendor ${vendorName}`,
+                                debit: isDebit ? bal : 0,
+                                credit: !isDebit ? bal : 0
+                            }
+                        ],
+                        metadata: {
+                            preset: 'PAV',
+                            auto_generated: true,
+                            isOpeningBalance: true,
+                            balanceNature: balanceNatureInput
+                        }
+                    };
+
+                    if (existV) {
+                        await supabase.from('financial_vouchers').update(vPayload).eq('id', existV.id);
+                    } else {
+                        await supabase.from('financial_vouchers').insert([vPayload]);
+                    }
+                } else if (existV) {
+                    await supabase.from('financial_vouchers').delete().eq('id', existV.id);
                 }
+            } catch (vErr) {
+                console.warn('Vendor voucher sync note:', vErr);
             }
 
-            // Try updating vendor record with account_code and currentBalance
+            // Update vendor record with vendor_code, balance, currentBalance, opening_balance
             try {
-                const vendUpdates: any = { account_code: cleanCode };
-                if (openingBalanceInput) {
-                    const bal = Number(openingBalanceInput);
+                const vendUpdates: any = { 
+                    vendor_code: cleanCode,
+                    vendorCode: cleanCode,
+                    account_code: cleanCode
+                };
+                if (openingBalanceInput !== undefined && openingBalanceInput !== '') {
                     vendUpdates.balance = balanceNatureInput === 'Credit' ? bal : -bal;
+                    vendUpdates.currentBalance = balanceNatureInput === 'Credit' ? bal : -bal;
                     vendUpdates.opening_balance = bal;
+                    vendUpdates.balance_nature = balanceNatureInput;
                 }
                 await supabase
                     .from('vendors')
                     .update(vendUpdates)
                     .eq('id', selectedVendor.id);
-            } catch (_) {
-                try {
-                    await supabase
-                        .from('vendors')
-                        .update({ account_code: cleanCode })
-                        .eq('id', selectedVendor.id);
-                } catch (_) {}
+            } catch (vUpErr) {
+                console.warn('Vendor update note:', vUpErr);
             }
 
             toast.success(`Chart of Account for "${vendorName}" assigned successfully!`);
@@ -186,10 +228,29 @@ const VendorList = () => {
         if (!window.confirm('Are you absolutely certain you want to delete this vendor account entry?')) return;
 
         try {
+            // Find vendor code before deleting to clean up linked vouchers and COA
+            const targetVend = vendors.find(v => String(v.id) === String(id));
+            const vCode = targetVend?.vendor_code || targetVend?.vendorCode || targetVend?.account_code;
+            const cleanCode = vCode ? String(vCode).trim() : '';
+            const vSub = cleanCode ? cleanCode.replace(/^2010-/, '').replace(/^0+/, '') : String(id);
+            const obvNo = `OBV-${vSub.padStart(3, '0')}`;
+
             const { error } = await supabase.from('vendors').delete().eq('id', id);
             if (error) throw error;
 
-            toast.success('Vendor profile dropped from enterprise directory successfully.');
+            // Cascade delete vendor's opening balance voucher and linked COA entry
+            if (cleanCode) {
+                await Promise.allSettled([
+                    supabase.from('chart_of_accounts').delete().eq('account_code', cleanCode),
+                    supabase.from('financial_vouchers').delete().eq('account_code', cleanCode),
+                    supabase.from('financial_vouchers').delete().eq('voucher_no', obvNo),
+                    supabase.from('financial_vouchers').delete().eq('voucher_no', `OB-${cleanCode}`)
+                ]);
+            } else {
+                await supabase.from('financial_vouchers').delete().eq('voucher_no', obvNo);
+            }
+
+            toast.success('Vendor profile and linked opening balance records dropped successfully.');
             fetchRegisteredVendorsAndCOA();
         } catch (err: any) {
             toast.error(err.message);
@@ -202,19 +263,64 @@ const VendorList = () => {
         return match ? parseInt(match[0], 10) : null;
     };
 
+    const getVendorLocation = (v: any) => {
+        let city = v.sub_area || v.subArea || v.city || '';
+        let area = v.area || '';
+
+        // Fallback: If city is missing, scan address for known cities
+        if (!city && v.address) {
+            const addr = String(v.address).toLowerCase();
+            for (const c of DEFAULT_SUB_AREAS) {
+                if (addr.includes(c.toLowerCase())) {
+                    city = c;
+                    break;
+                }
+            }
+        }
+
+        return { city, area };
+    };
+
     const filteredVendors = vendors
-        .filter(v =>
-            (v.vendor_name || v.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.vendor_code || v.vendorCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.page_no || v.pageNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.contact_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.cell_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.phone_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.address || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (v.account_code || '').includes(searchTerm)
-        )
+        .filter(v => {
+            const term = searchTerm.trim().toLowerCase();
+            if (!term) return true;
+
+            const cleanTerm = term.replace(/[\s-]/g, '');
+            const loc = getVendorLocation(v);
+            const coa = getVendorCOA(v);
+
+            const name = (v.vendor_name || v.name || '').toLowerCase();
+            const code = (v.vendor_code || v.vendorCode || '').toLowerCase();
+            const pageNo = String(v.page_no || v.pageNo || '').toLowerCase();
+            const contact = (v.contact_name || '').toLowerCase();
+            const city = (loc.city || v.sub_area || v.subArea || v.city || '').toLowerCase();
+            const area = (loc.area || v.area || '').toLowerCase();
+            const address = (v.address || '').toLowerCase();
+            const coaCode = String(coa?.account_code || v.account_code || '').toLowerCase();
+            const email = (v.email || '').toLowerCase();
+
+            // Phone numbers
+            const rawCell = String(v.cell_no || '').toLowerCase();
+            const rawPhone = String(v.phone_no || v.phone || '').toLowerCase();
+            const cleanCell = rawCell.replace(/[\s-]/g, '');
+            const cleanPhone = rawPhone.replace(/[\s-]/g, '');
+
+            return (
+                name.includes(term) ||
+                code.includes(term) ||
+                pageNo.includes(term) ||
+                contact.includes(term) ||
+                city.includes(term) ||
+                area.includes(term) ||
+                address.includes(term) ||
+                coaCode.includes(term) ||
+                email.includes(term) ||
+                rawCell.includes(term) ||
+                rawPhone.includes(term) ||
+                (cleanTerm.length > 0 && (cleanCell.includes(cleanTerm) || cleanPhone.includes(cleanTerm)))
+            );
+        })
         .sort((a, b) => {
             if (!pageSortOrder) {
                 return (a.vendor_name || a.name || '').localeCompare(b.vendor_name || b.name || '');
@@ -268,13 +374,23 @@ const VendorList = () => {
                     <h2 className="text-xl font-bold text-black dark:text-white">Wholesale Vendor Master Directory</h2>
                     <p className="text-xs text-gray-400">Browse supply business profiles, manage tax coordinates, and map Chart of Account codes</p>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => navigate('/Purchase/Vendor/Add')}
-                    className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
-                >
-                    + Add New Vendor
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowImportModal(true)}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-600 dark:hover:text-white py-2 px-3 text-xs font-bold transition shadow-xs cursor-pointer"
+                        title="Bulk upload suppliers and opening balances from Excel"
+                    >
+                        <MdCloudUpload size={16} /> Upload Excel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/Purchase/Vendor/Add')}
+                        className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
+                    >
+                        + Add New Vendor
+                    </button>
+                </div>
             </div>
 
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
@@ -300,7 +416,7 @@ const VendorList = () => {
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Search vendor name, code, page #, phone..."
+                            placeholder="Search name, phone, city, area, account, page #..."
                             className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-black dark:text-white text-xs font-semibold"
                         />
                     </div>
@@ -310,64 +426,35 @@ const VendorList = () => {
                     <table className="w-full table-auto border-collapse">
                         <thead>
                             <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                                <th 
-                                    onClick={() => setPageSortOrder(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc')}
-                                    className="py-4 px-4 font-semibold min-w-[95px] cursor-pointer select-none hover:text-primary transition"
-                                    title="Click to toggle Page # sorting"
-                                >
-                                    <div className="flex items-center gap-1">
-                                        <span>Page #</span>
-                                        {pageSortOrder === 'asc' && <MdArrowUpward size={14} className="text-primary font-bold" />}
-                                        {pageSortOrder === 'desc' && <MdArrowDownward size={14} className="text-primary font-bold" />}
-                                        {!pageSortOrder && <span className="text-[10px] text-gray-400 font-normal">⇅</span>}
-                                    </div>
-                                </th>
-                                <th className="py-4 px-4 font-semibold min-w-[100px]">Code</th>
-                                <th className="py-4 px-4 font-semibold min-w-[180px]">Vendor / Business Name</th>
-                                <th className="py-4 px-4 font-semibold min-w-[140px]">Contact Person</th>
+                                <th className="py-4 px-4 font-semibold w-12 text-center">S#</th>
+                                <th className="py-4 px-4 font-semibold min-w-[170px]">Name</th>
+                                <th className="py-4 px-4 font-semibold min-w-[130px]">Contact Person</th>
                                 <th className="py-4 px-4 font-semibold min-w-[120px]">Mobile / Phone</th>
-                                <th className="py-4 px-4 font-semibold min-w-[120px]">Email</th>
-                                <th className="py-4 px-4 font-semibold min-w-[140px]">Address</th>
-                                <th className="py-4 px-4 font-semibold min-w-[160px]">Accounts</th>
+                                <th className="py-4 px-4 font-semibold min-w-[130px]">City / Area</th>
+                                <th className="py-4 px-4 font-semibold min-w-[130px]">Address</th>
+                                <th className="py-4 px-4 font-semibold min-w-[150px]">Accounts</th>
                                 <th className="py-4 px-4 font-semibold w-24 text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={9} className="text-center py-12 text-sm"><Spinner /></td></tr>
+                                <tr><td colSpan={8} className="text-center py-12 text-sm"><Spinner /></td></tr>
                             ) : paginatedVendors.length === 0 ? (
-                                <tr><td colSpan={9} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No business merchant vendors registered yet.</td></tr>
+                                <tr><td colSpan={8} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No business merchant vendors registered yet.</td></tr>
                             ) : (
-                                paginatedVendors.map((vendor) => {
+                                paginatedVendors.map((vendor, index) => {
                                     const coa = getVendorCOA(vendor);
-                                    const vendCode = vendor.vendor_code || vendor.vendorCode;
-                                    const pageNo = vendor.page_no || vendor.pageNo;
+                                    const loc = getVendorLocation(vendor);
+                                    const serialNumber = (currentPage - 1) * pageSize + index + 1;
 
                                     return (
                                         <tr key={vendor.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
-                                            {/* 1. Page # */}
-                                            <td className="py-3.5 px-4">
-                                                {pageNo ? (
-                                                    <span className="font-mono font-bold text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded">
-                                                        {pageNo}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-400 font-mono text-xs">-</span>
-                                                )}
+                                            {/* S# */}
+                                            <td className="py-3.5 px-4 text-center font-bold text-gray-500 font-mono">
+                                                {serialNumber}
                                             </td>
 
-                                            {/* 2. Code */}
-                                            <td className="py-3.5 px-4">
-                                                {vendCode ? (
-                                                    <span className="font-mono font-bold text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded">
-                                                        {vendCode}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-400 font-mono text-xs">-</span>
-                                                )}
-                                            </td>
-
-                                            {/* 3. Vendor Name */}
+                                            {/* Vendor Name */}
                                             <td className="py-3.5 px-4 font-bold text-primary dark:text-white">
                                                 <div className="flex items-center gap-1.5">
                                                     <MdBusiness className="text-gray-400 shrink-0" size={16} />
@@ -386,10 +473,22 @@ const VendorList = () => {
                                                     {vendor.cell_no || vendor.phone_no || vendor.phone || '-'}
                                                 </span>
                                             </td>
-                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400">
-                                                <span className="inline-flex items-center gap-1 font-mono text-[11px]">
-                                                    {vendor.email ? <><MdEmail size={14} className="text-gray-400" />{vendor.email}</> : '-'}
-                                                </span>
+                                            {/* City / Area */}
+                                            <td className="py-3.5 px-4">
+                                                <div className="flex flex-col items-start gap-0.5">
+                                                    {loc.city ? (
+                                                        <span className="font-semibold text-[11px] text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-meta-4/40 px-2 py-0.5 rounded border border-slate-200 dark:border-strokedark">
+                                                            {loc.city}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400 font-mono text-xs">-</span>
+                                                    )}
+                                                    {loc.area ? (
+                                                        <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium pl-0.5">
+                                                            {loc.area}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
                                             </td>
                                             <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 max-w-xs truncate">
                                                 {vendor.address || '-'}
@@ -420,12 +519,34 @@ const VendorList = () => {
                                                 )}
                                             </td>
                                             <td className="py-3.5 px-4 text-center">
-                                                <TableActions
-                                                    onEdit={() => navigate('/Purchase/Vendor/Add', { state: { vendor } })}
-                                                    onDelete={() => handleDeleteVendorRecord(vendor.id)}
-                                                    editTitle="Edit Supplier"
-                                                    deleteTitle="Delete Supplier"
-                                                />
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const vName = vendor.vendor_name || vendor.name;
+                                                            const vCode = vendor.vendor_code || vendor.vendorCode || vendor.account_code;
+                                                            navigate('/Reports/Reports-Dashboard', {
+                                                                state: {
+                                                                    tab: 'vendor-ledger',
+                                                                    accountCode: vCode,
+                                                                    partyName: vName,
+                                                                    partyId: vendor.id,
+                                                                    autoGenerate: true
+                                                                }
+                                                            });
+                                                        }}
+                                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-600 text-purple-700 hover:text-white dark:bg-purple-950/50 dark:hover:bg-purple-600 dark:text-purple-300 dark:hover:text-white rounded text-xs font-bold border border-purple-200 dark:border-purple-800 transition duration-150 cursor-pointer shadow-2xs"
+                                                        title="View Vendor Account Ledger"
+                                                    >
+                                                        <MdReceiptLong size={14} /> Ledger
+                                                    </button>
+                                                    <TableActions
+                                                        onEdit={() => navigate(`/Purchase/Vendor/Edit/${vendor.id}`, { state: { vendor } })}
+                                                        onDelete={() => handleDeleteVendorRecord(vendor.id)}
+                                                        editTitle="Edit Supplier"
+                                                        deleteTitle="Delete Supplier"
+                                                    />
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -527,14 +648,32 @@ const VendorList = () => {
                                 </div>
                                 <div>
                                     <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Balance Nature:</label>
-                                    <select
-                                        value={balanceNatureInput}
-                                        onChange={(e) => setBalanceNatureInput(e.target.value as 'Debit' | 'Credit')}
-                                        className="w-full rounded border border-stroke dark:border-strokedark px-3 h-9 bg-transparent font-bold text-xs text-black dark:text-white outline-none focus:border-primary dark:bg-boxdark"
-                                    >
-                                        <option value="Credit">Credit (Cr - Normal Payable)</option>
-                                        <option value="Debit">Debit (Dr - Advance Paid)</option>
-                                    </select>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setBalanceNatureInput('Credit')}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-bold transition border cursor-pointer ${
+                                                balanceNatureInput === 'Credit'
+                                                    ? 'bg-amber-500 border-amber-600 text-white shadow-xs'
+                                                    : 'border-stroke dark:border-strokedark bg-gray-50 dark:bg-boxdark text-gray-600 dark:text-gray-400 hover:border-amber-400'
+                                            }`}
+                                        >
+                                            {balanceNatureInput === 'Credit' && <MdCheckCircle size={14} />}
+                                            <span>Credit (Cr - Payable)</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setBalanceNatureInput('Debit')}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg text-xs font-bold transition border cursor-pointer ${
+                                                balanceNatureInput === 'Debit'
+                                                    ? 'bg-blue-600 border-blue-700 text-white shadow-xs'
+                                                    : 'border-stroke dark:border-strokedark bg-gray-50 dark:bg-boxdark text-gray-600 dark:text-gray-400 hover:border-blue-400'
+                                            }`}
+                                        >
+                                            {balanceNatureInput === 'Debit' && <MdCheckCircle size={14} />}
+                                            <span>Debit (Dr - Advance)</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -560,6 +699,12 @@ const VendorList = () => {
                 </div>
             )}
 
+            {/* Vendor Excel Import Modal */}
+            <VendorImportModal
+                isOpen={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onSuccess={() => fetchRegisteredVendorsAndCOA()}
+            />
         </div>
     );
 };

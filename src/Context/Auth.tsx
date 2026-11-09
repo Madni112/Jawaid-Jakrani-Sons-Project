@@ -6,7 +6,6 @@ import { UserRole } from '../constant/auth';
 import { getModulesForRole, ROLE_PRESETS } from '../constant/roles';
 import { toast } from 'react-hot-toast';
 import { getModulePermissions, ModulePermissionState, cleanBaseModuleId } from '../utils/permissionUtils';
-import { getBrandConfig } from '../utils/brand';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -23,7 +22,9 @@ interface AuthContextType {
   logout: () => void;
   getRoleBasedRoutes: () => any[];
   allowedModules: string[] | null;
+  allowedSettings: string[] | null;
   can: (path: string, action?: 'view' | 'add' | 'edit' | 'delete') => boolean;
+  canAccessSetting: (tabId: string) => boolean;
   getPermissions: (path: string) => ModulePermissionState;
 }
 
@@ -46,13 +47,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
   const [role, setRole] = useState<string | null>(() => {
     try {
-      return localStorage.getItem('zac_user_role') || 'Super Admin';
+      const saved = localStorage.getItem('zac_user_role');
+      if (saved && saved.toLowerCase().includes('tiles')) {
+        return 'Cloth Retail & Wholesale';
+      }
+      return saved || 'Cloth Retail & Wholesale';
     } catch (_) {
-      return 'Super Admin';
+      return 'Cloth Retail & Wholesale';
     }
   });
-  const [tenantId, setTenantId] = useState<string | null>(null);
-  const [businessName, setBusinessName] = useState<string | null>(() => getBrandConfig().name);
+  const [tenantId, setTenantId] = useState<string | null>('uzair');
+  const [businessName, setBusinessName] = useState<string | null>('AL MUHAMMADI');
   const [userEmail, setUserEmail] = useState<string | null>(() => {
     try {
       return localStorage.getItem('zac_user_email') || null;
@@ -101,6 +106,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return ROLE_PRESETS['Super Admin'].modules;
   });
 
+  const [allowedSettings, setAllowedSettings] = useState<string[] | null>(() => {
+    try {
+      const cached = localStorage.getItem('zac_user_settings');
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    return null;
+  });
+
   const handleSessionExpired = (showToast = true) => {
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -137,6 +150,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, 1200);
 
     supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (import.meta.env.DEV && localStorage.getItem('dev_bypass_auth') === 'true') {
+        setIsAuthenticated(true);
+        setRole('Super Admin');
+        setUserName('Admin');
+        setLoading(false);
+        return;
+      }
       if (error || !session) {
         if (localStorage.getItem('zac_is_authenticated') === 'true') {
           handleSessionExpired(true);
@@ -217,21 +237,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (email) {
           const { data: tenantRecord } = await supabase
             .from('tenants')
-            .select('business_activity, allowed_modules, name, location_id')
+            .select('slug, business_activity, allowed_modules, allowed_settings, name, location_id')
             .ilike('email', email)
             .maybeSingle();
 
           if (tenantRecord) {
-            if (tenantRecord.business_activity) userRole = tenantRecord.business_activity;
+            if (tenantRecord.business_activity) {
+              userRole = tenantRecord.business_activity;
+            }
+            if (userRole && userRole.toLowerCase().includes('tiles')) {
+              userRole = 'Cloth Retail & Wholesale';
+            }
             if (tenantRecord.name) empName = tenantRecord.name;
             if (Array.isArray(tenantRecord.allowed_modules) && tenantRecord.allowed_modules.length > 0) {
               userPermissions = tenantRecord.allowed_modules;
+            }
+            if (Array.isArray(tenantRecord.allowed_settings)) {
+              setAllowedSettings(tenantRecord.allowed_settings);
+              try {
+                localStorage.setItem('zac_user_settings', JSON.stringify(tenantRecord.allowed_settings));
+              } catch (_) {}
             }
             if (tenantRecord.location_id) {
               locId = tenantRecord.location_id;
               // Fetch location name
               const { data: locData } = await supabase.from('inventory_locations').select('name').eq('id', locId).maybeSingle();
               if (locData) locName = locData.name;
+            }
+            if (tenantRecord.slug) {
+              setTenantId(tenantRecord.slug);
             }
           }
         }
@@ -244,12 +278,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userPermissions = metadata.allowed_modules || appMetadata.allowed_modules || getModulesForRole(userRole);
       }
 
+      if (userRole && userRole.toLowerCase().includes('tiles')) {
+        userRole = 'Cloth Retail & Wholesale';
+      }
+
       setIsAuthenticated(true);
       setCurrentUser(session.user);
       setUserEmail(email || null);
       setRole(userRole);
-      setTenantId(null);
-      setBusinessName(getBrandConfig().name);
+      setTenantId('uzair');
+      setBusinessName('AL MUHAMMADI');
       setAllowedModules(userPermissions);
       setUserLocationId(locId);
       setUserLocationName(locName);
@@ -270,7 +308,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUserEmail(null);
       setRole('Super Admin');
       setTenantId(null);
-      setBusinessName(getBrandConfig().name);
+      setBusinessName('AL MUHAMMADI');
       setUserLocationId(null);
       setUserLocationName(null);
       setUserName(null);
@@ -303,7 +341,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (_) {}
     }
 
-    navigate('/');
+    navigate('/dashboard');
   };
 
   const logout = async () => {
@@ -360,21 +398,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    // Master developer bypass if no explicit module restrictions are defined
+    // Master developer and Super Admin full access bypass - allows ALL pages
     const isMasterDeveloper = Boolean(
       userEmail && (
         userEmail.toLowerCase() === 'developer@noorhorizontechnologies.com' ||
-        userEmail.toLowerCase() === 'admin@zoaibalicompany.com' ||
-        userEmail.toLowerCase() === 'admin@almuhammadi.com'
+        userEmail.toLowerCase() === 'admin@jawaidjakwani.com' || userEmail.toLowerCase() === 'admin@uzairjibrancloth.com' ||
+        userEmail.toLowerCase() === 'admin@almuhammadi.com' ||
+        userEmail.toLowerCase() === 'admin@almuhammadi.com' || userEmail.toLowerCase() === 'jjs@nht.com' || userEmail.toLowerCase() === 'uzairjibran@nht.com' ||
+        userEmail.toLowerCase() === 'admin@nht.com'
       )
     );
 
-    if (isMasterDeveloper && (!currentAllowed || currentAllowed.length === 0)) {
-      return routes;
-    }
-
-    // If an admin has NO custom module restriction assigned, default to full access
-    if ((!currentAllowed || currentAllowed.length === 0) && role && role.toLowerCase().includes('admin')) {
+    if (
+      isMasterDeveloper ||
+      role === 'Super Admin' ||
+      (role && role.toLowerCase().includes('admin')) ||
+      (currentAllowed && currentAllowed.map(m => String(m).toLowerCase()).includes('all'))
+    ) {
       return routes;
     }
 
@@ -390,7 +430,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         // Route aliases mapping
         const aliases: Record<string, string[]> = {
-          '/': ['dashboard', 'dashboards', '/dashboard/executive', '/', '/dashboard/salesman', '/dashboard/warehouse', 'salesman-dashboard', 'warehouse-dashboard'],
+          '/dashboard': ['dashboard', 'dashboards', '/dashboard/executive', '/', '/dashboard', '/dashboard/salesman', '/dashboard/warehouse', 'salesman-dashboard', 'warehouse-dashboard'],
+          '/': ['dashboard', 'dashboards', '/dashboard/executive', '/', '/dashboard', '/dashboard/salesman', '/dashboard/warehouse', 'salesman-dashboard', 'warehouse-dashboard'],
           'dashboard': ['/', 'dashboard', 'dashboards', '/dashboard/executive', '/dashboard/salesman', '/dashboard/warehouse'],
           '/dashboard/executive': ['dashboard', 'dashboards', '/', '/dashboard/executive'],
           '/dashboard/salesman': ['salesman-dashboard', '/dashboard/salesman', 'dashboards', 'dashboard', '/'],
@@ -428,7 +469,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const routePath = String(route.path || '').toLowerCase().trim();
 
           // 2. Standalone pages (like Dashboard)
-          if (routePath === '/' || label === 'dashboard' || label === 'dashboards') {
+          if (routePath === '/' || routePath === '/dashboard' || label === 'dashboard' || label === 'dashboards') {
             const isAllowed =
               lowerAllowed.includes('dashboard') ||
               lowerAllowed.includes('dashboards') ||
@@ -483,15 +524,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const can = (path: string, action: 'view' | 'add' | 'edit' | 'delete' = 'view'): boolean => {
+    if (role === 'Super Admin' || (role && role.toLowerCase().includes('admin'))) {
+      return true;
+    }
     const isMasterDeveloper = Boolean(
       userEmail && (
         userEmail.toLowerCase() === 'developer@noorhorizontechnologies.com' ||
-        userEmail.toLowerCase() === 'admin@zoaibalicompany.com' ||
-        userEmail.toLowerCase() === 'admin@almuhammadi.com'
+        userEmail.toLowerCase() === 'admin@jawaidjakwani.com' || userEmail.toLowerCase() === 'admin@uzairjibrancloth.com' ||
+        userEmail.toLowerCase() === 'admin@almuhammadi.com' ||
+        userEmail.toLowerCase() === 'admin@almuhammadi.com' || userEmail.toLowerCase() === 'jjs@nht.com' || userEmail.toLowerCase() === 'uzairjibran@nht.com' ||
+        userEmail.toLowerCase() === 'admin@nht.com'
       )
     );
-    if (isMasterDeveloper && (!allowedModules || allowedModules.length === 0)) return true;
-    if ((!allowedModules || allowedModules.length === 0) && role && role.toLowerCase().includes('admin')) return true;
+    if (isMasterDeveloper) return true;
 
     const perms = getModulePermissions(allowedModules, path, role);
     if (action === 'view') return perms.canView;
@@ -499,6 +544,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (action === 'edit') return perms.canEdit;
     if (action === 'delete') return perms.canDelete;
     return perms.hasAccess;
+  };
+
+  const canAccessSetting = (tabId: string): boolean => {
+    const isMasterDeveloper = Boolean(
+      userEmail &&
+      (
+        userEmail.toLowerCase() === 'developer@noorhorizontechnologies.com' ||
+        userEmail.toLowerCase() === 'admin@jawaidjakwani.com' || userEmail.toLowerCase() === 'admin@uzairjibrancloth.com' ||
+        userEmail.toLowerCase() === 'admin@almuhammadi.com' ||
+        userEmail.toLowerCase() === 'admin@almuhammadi.com' || userEmail.toLowerCase() === 'jjs@nht.com' || userEmail.toLowerCase() === 'uzairjibran@nht.com' ||
+        userEmail.toLowerCase() === 'admin@nht.com'
+      )
+    );
+    if (isMasterDeveloper || role === 'Super Admin') return true;
+    if (!allowedSettings || allowedSettings.length === 0) return true; // default all if unconfigured
+    return allowedSettings.includes(tabId);
   };
 
   const getPermissions = (path: string): ModulePermissionState => {
@@ -521,7 +582,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       logout,
       getRoleBasedRoutes,
       allowedModules,
+      allowedSettings,
       can,
+      canAccessSetting,
       getPermissions,
     }}>
       {children}

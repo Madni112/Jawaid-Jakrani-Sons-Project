@@ -3182,7 +3182,7 @@ export const ReportDashboard: React.FC = () => {
                     AL MUHAMMADI
                   </h1>
                   <div className="text-[10px] text-slate-600 font-medium">
-                    Enterprise Accounts & Business Management
+                    Cloth Retail & Wholesale Accounts Management
                   </div>
                 </div>
                 <div className="text-right">

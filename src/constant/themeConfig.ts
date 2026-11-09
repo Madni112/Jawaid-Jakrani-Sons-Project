@@ -39,7 +39,7 @@ export const PRESET_THEME_COLORS: ThemeColor[] = [
   { name: 'Pitch Black', hex: '#000000' },
 ];
 
-export const DEFAULT_THEME_COLOR = '#4F46E5'; // Cobalt / Electric Blue for Modern SaaS look
+export const DEFAULT_THEME_COLOR = '#2563EB'; // Cobalt / Electric Blue for Modern SaaS look
 
 export type SidebarThemeMode = 'light' | 'dark' | 'navy' | 'emerald' | 'charcoal';
 
@@ -153,12 +153,12 @@ export const CURATED_THEME_SUITES: CuratedThemeSuite[] = [
 
 export function getSidebarThemeMode(): SidebarThemeMode {
   if (typeof window === 'undefined') return 'dark';
-  const customBg = localStorage.getItem('alm_sidebar_custom_bg');
+  const customBg = localStorage.getItem('jakwani_sidebar_custom_bg');
   if (customBg) {
     const lower = customBg.toLowerCase().trim();
     return (lower === '#ffffff' || lower === '#fff' || lower === 'white') ? 'light' : 'dark';
   }
-  const stored = localStorage.getItem('alm_sidebar_theme_mode') || localStorage.getItem('alm_sidebar_theme_mode');
+  const stored = localStorage.getItem('jakwani_sidebar_theme_mode') || localStorage.getItem('uzair_jibran_sidebar_theme_mode');
   if (stored && ['light', 'dark', 'navy', 'emerald', 'charcoal'].includes(stored)) {
     return stored as SidebarThemeMode;
   }
@@ -167,15 +167,15 @@ export function getSidebarThemeMode(): SidebarThemeMode {
 
 export function setSidebarThemeMode(mode: SidebarThemeMode) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('alm_sidebar_theme_mode', mode);
-    localStorage.setItem('alm_sidebar_theme_mode', mode);
-    window.dispatchEvent(new Event('al_muhammad_sidebar_theme_changed'));
+    localStorage.setItem('jakwani_sidebar_theme_mode', mode);
+    localStorage.setItem('uzair_jibran_sidebar_theme_mode', mode);
+    window.dispatchEvent(new Event('jakwani_sidebar_theme_changed'));
   }
 }
 
 export function isSidebarBackgroundLight(isDarkMode?: boolean): boolean {
   if (typeof window !== 'undefined') {
-    const customBg = localStorage.getItem('alm_sidebar_custom_bg');
+    const customBg = localStorage.getItem('jakwani_sidebar_custom_bg');
     if (customBg) {
       const lower = customBg.toLowerCase().trim();
       if (lower === '#ffffff' || lower === '#fff' || lower === 'white' || lower.includes('rgb(255, 255, 255)')) {
@@ -198,18 +198,18 @@ export function applyThemeSuite(suiteId: string): boolean {
   applyAccentColor(suite.accentColor);
 
   if (typeof window !== 'undefined') {
-    localStorage.setItem('alm_active_theme_suite', suiteId);
-    window.dispatchEvent(new Event('al_muhammad_theme_suite_changed'));
-    window.dispatchEvent(new Event('al_muhammad_sidebar_theme_changed'));
-    window.dispatchEvent(new Event('alm_sidebar_color_changed'));
-    window.dispatchEvent(new Event('al_muhammad_theme_color_changed'));
+    localStorage.setItem('jakwani_active_theme_suite', suiteId);
+    window.dispatchEvent(new Event('jakwani_theme_suite_changed'));
+    window.dispatchEvent(new Event('jakwani_sidebar_theme_changed'));
+    window.dispatchEvent(new Event('uzair_jibran_sidebar_color_changed'));
+    window.dispatchEvent(new Event('uzair_jibran_theme_color_changed'));
   }
   return true;
 }
 
 export function getActiveThemeSuiteId(): string {
   if (typeof window === 'undefined') return 'unified-light';
-  const saved = localStorage.getItem('alm_active_theme_suite');
+  const saved = localStorage.getItem('jakwani_active_theme_suite');
   if (saved && CURATED_THEME_SUITES.some((s) => s.id === saved)) {
     return saved;
   }
@@ -225,14 +225,14 @@ export type SidebarBehaviorMode = 'opened' | 'closed'; // 'opened' = Always Keep
 
 export function getSidebarBehaviorMode(): SidebarBehaviorMode {
   if (typeof window === 'undefined') return 'opened';
-  const stored = localStorage.getItem('alm_sidebar_behavior_mode');
+  const stored = localStorage.getItem('jakwani_sidebar_behavior_mode');
   return stored === 'closed' ? 'closed' : 'opened';
 }
 
 export function setSidebarBehaviorMode(mode: SidebarBehaviorMode) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('alm_sidebar_behavior_mode', mode);
-    window.dispatchEvent(new Event('al_muhammad_sidebar_behavior_changed'));
+    localStorage.setItem('jakwani_sidebar_behavior_mode', mode);
+    window.dispatchEvent(new Event('jakwani_sidebar_behavior_changed'));
   }
 }
 
@@ -240,13 +240,13 @@ export type SidebarLayoutMode = 'floating' | 'classic';
 
 export function getSidebarLayoutMode(): SidebarLayoutMode {
   if (typeof window === 'undefined') return 'floating';
-  return (localStorage.getItem('alm_sidebar_layout_mode') as SidebarLayoutMode) || 'floating';
+  return (localStorage.getItem('uzair_jibran_sidebar_layout_mode') as SidebarLayoutMode) || 'floating';
 }
 
 export function setSidebarLayoutMode(mode: SidebarLayoutMode) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('alm_sidebar_layout_mode', mode);
-    window.dispatchEvent(new Event('al_muhammad_sidebar_layout_changed'));
+    localStorage.setItem('uzair_jibran_sidebar_layout_mode', mode);
+    window.dispatchEvent(new Event('uzair_jibran_sidebar_layout_changed'));
   }
 }
 
@@ -256,12 +256,12 @@ export type MasterThemePreset = 'nht-1' | 'nht-2' | 'custom';
 
 export function getMasterThemePreset(): MasterThemePreset {
   if (typeof window === 'undefined') return 'nht-1';
-  const saved = localStorage.getItem('alm_master_theme_preset') as MasterThemePreset;
+  const saved = localStorage.getItem('jakwani_master_theme_preset') as MasterThemePreset;
   if (saved === 'nht-1' || saved === 'nht-2' || saved === 'custom') return saved;
   const sLayout = getSidebarLayoutMode();
   const nLayout = getNavbarLayoutMode();
-  const accent = (localStorage.getItem('alm_accent_color') || '').toUpperCase();
-  const customBg = localStorage.getItem('alm_sidebar_custom_bg') || '';
+  const accent = (localStorage.getItem('uzair_jibran_accent_color') || '').toUpperCase();
+  const customBg = localStorage.getItem('jakwani_sidebar_custom_bg') || '';
   const sTheme = getSidebarThemeMode();
 
   if (sLayout === 'classic' && (accent === '#800020' || sTheme === 'charcoal' || customBg === '#1A1A1A')) {
@@ -275,11 +275,11 @@ export function getMasterThemePreset(): MasterThemePreset {
 
 export function setMasterThemePreset(preset: MasterThemePreset) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('alm_master_theme_preset', preset);
+    localStorage.setItem('jakwani_master_theme_preset', preset);
     if (preset === 'nht-1' || preset === 'nht-2') {
-      localStorage.setItem('alm_base_master_theme', preset);
+      localStorage.setItem('jakwani_base_master_theme', preset);
     }
-    window.dispatchEvent(new Event('alm_master_theme_preset_changed'));
+    window.dispatchEvent(new Event('jakwani_master_theme_preset_changed'));
   }
 }
 
@@ -287,7 +287,7 @@ export type ReportLayoutMode = 'modern' | 'classic';
 
 export function getReportLayoutMode(): ReportLayoutMode {
   if (typeof window === 'undefined') return 'classic';
-  const stored = localStorage.getItem('alm_report_layout_mode');
+  const stored = localStorage.getItem('jakwani_report_layout_mode');
   if (stored === 'modern' || stored === 'classic') return stored;
   // Default according to master theme preset if not explicitly overridden
   return isNHTTheme2Active() ? 'classic' : 'modern';
@@ -295,8 +295,8 @@ export function getReportLayoutMode(): ReportLayoutMode {
 
 export function setReportLayoutMode(mode: ReportLayoutMode) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('alm_report_layout_mode', mode);
-    window.dispatchEvent(new Event('alm_report_layout_mode_changed'));
+    localStorage.setItem('jakwani_report_layout_mode', mode);
+    window.dispatchEvent(new Event('jakwani_report_layout_mode_changed'));
   }
 }
 
@@ -305,11 +305,11 @@ export function isNHTTheme2Active(): boolean {
   const preset = getMasterThemePreset();
   if (preset === 'nht-2') return true;
   if (preset === 'custom') {
-    const base = localStorage.getItem('alm_base_master_theme');
+    const base = localStorage.getItem('jakwani_base_master_theme');
     if (base === 'nht-2') return true;
     const sLayout = getSidebarLayoutMode();
-    const accent = (localStorage.getItem('alm_accent_color') || '').toUpperCase();
-    const customBg = localStorage.getItem('alm_sidebar_custom_bg') || '';
+    const accent = (localStorage.getItem('uzair_jibran_accent_color') || '').toUpperCase();
+    const customBg = localStorage.getItem('jakwani_sidebar_custom_bg') || '';
     if (sLayout === 'classic' && (accent === '#800020' || customBg === '#1A1A1A')) {
       return true;
     }
@@ -319,13 +319,13 @@ export function isNHTTheme2Active(): boolean {
 
 export function getNavbarLayoutMode(): NavbarLayoutMode {
   if (typeof window === 'undefined') return 'sticky';
-  return (localStorage.getItem('alm_navbar_layout_mode') as NavbarLayoutMode) || 'sticky';
+  return (localStorage.getItem('uzair_jibran_navbar_layout_mode') as NavbarLayoutMode) || 'sticky';
 }
 
 export function setNavbarLayoutMode(mode: NavbarLayoutMode) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('alm_navbar_layout_mode', mode);
-    window.dispatchEvent(new Event('al_muhammad_navbar_layout_changed'));
+    localStorage.setItem('uzair_jibran_navbar_layout_mode', mode);
+    window.dispatchEvent(new Event('uzair_jibran_navbar_layout_changed'));
   }
 }
 
@@ -380,9 +380,9 @@ export function getSafeAccentTextColor(hexColor?: string, isDarkMode?: boolean):
 export function applyAccentColor(hexColor: string) {
   if (!hexColor) return;
   try {
-    localStorage.setItem('alm_accent_color', hexColor);
+    localStorage.setItem('uzair_jibran_accent_color', hexColor);
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('al_muhammad_theme_color_changed'));
+      window.dispatchEvent(new Event('uzair_jibran_theme_color_changed'));
     }
   } catch (_) {}
 
@@ -427,10 +427,10 @@ export function applyAccentColor(hexColor: string) {
     const darkerHex = `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
 
     // Dynamic style tag that globally overrides brand primary classes to the active accent color
-    let styleTag = document.getElementById('alm-dynamic-theme');
+    let styleTag = document.getElementById('uj-cloth-dynamic-theme');
     if (!styleTag) {
       styleTag = document.createElement('style');
-      styleTag.id = 'alm-dynamic-theme';
+      styleTag.id = 'uj-cloth-dynamic-theme';
       document.head.appendChild(styleTag);
     }
 
@@ -617,7 +617,7 @@ export function applyAccentColor(hexColor: string) {
 
 export function getSavedAccentColor(): string {
   if (typeof window === 'undefined') return DEFAULT_THEME_COLOR;
-  const stored = localStorage.getItem('alm_accent_color');
+  const stored = localStorage.getItem('uzair_jibran_accent_color');
   if (!stored || stored === '#059669' || stored === '#10B981' || stored === '#6366F1') {
     return DEFAULT_THEME_COLOR;
   }
@@ -710,8 +710,8 @@ export function getSavedSidebarColor(isDarkMode?: boolean): string {
   const defaultFallback = isLightBg ? '#0F172A' : '#FFFFFF';
   if (typeof window === 'undefined') return defaultFallback;
 
-  const raw = localStorage.getItem('alm_sidebar_raw_color') 
-    || localStorage.getItem('alm_sidebar_color');
+  const raw = localStorage.getItem('uzair_jibran_sidebar_raw_color') 
+    || localStorage.getItem('uzair_jibran_sidebar_color');
 
   // If cached value was an invisible color for current background mode, reset to proper default
   if (isLightBg && (raw === '#FFFFFF' || raw === '#F8FAFC' || raw === '#F1F5F9' || !raw)) {
@@ -726,17 +726,17 @@ export function getSavedSidebarColor(isDarkMode?: boolean): string {
 
 export function applySidebarColor(hexColor: string, isDarkMode?: boolean): { safeColor: string; wasAdjusted: boolean } {
   if (!hexColor) return { safeColor: DEFAULT_SIDEBAR_COLOR, wasAdjusted: false };
-  const prevColor = typeof window !== 'undefined' ? localStorage.getItem('alm_sidebar_color') : null;
+  const prevColor = typeof window !== 'undefined' ? localStorage.getItem('uzair_jibran_sidebar_color') : null;
 
   try {
-    localStorage.setItem('alm_sidebar_raw_color', hexColor);
+    localStorage.setItem('uzair_jibran_sidebar_raw_color', hexColor);
   } catch (_) {}
 
   const { safeColor, wasAdjusted } = getSafeSidebarColor(hexColor, isDarkMode);
   try {
-    localStorage.setItem('alm_sidebar_color', safeColor);
+    localStorage.setItem('uzair_jibran_sidebar_color', safeColor);
     if (typeof window !== 'undefined' && prevColor !== safeColor) {
-      window.dispatchEvent(new Event('alm_sidebar_color_changed'));
+      window.dispatchEvent(new Event('uzair_jibran_sidebar_color_changed'));
     }
   } catch (_) {}
 

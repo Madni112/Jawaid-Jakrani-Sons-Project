@@ -20,6 +20,61 @@ import {
 } from 'react-icons/md';
 import { FiPrinter } from 'react-icons/fi';
 
+// Helper to resolve or auto-register Vendor Chart of Accounts (2010-XXXX)
+const resolveVendorCoaAccount = async (vendorName: string, vendorsList: any[] = []) => {
+  const cleanName = (vendorName || '').trim();
+  if (!cleanName) return { code: '2010-001', title: 'Demo Vendor' };
+
+  const matched = vendorsList.find(v =>
+    (v.vendor_name || v.supplier_name || v.name || '').trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  const existingCode = matched?.vendor_code || matched?.supplier_code || matched?.coa_code;
+  if (existingCode && String(existingCode).startsWith('2010-')) {
+    return { code: String(existingCode).trim(), title: matched.vendor_name || cleanName };
+  }
+
+  try {
+    const { data: coaRows } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code, account_title')
+      .ilike('account_title', cleanName)
+      .limit(1);
+
+    if (coaRows && coaRows.length > 0 && coaRows[0].account_code) {
+      return { code: coaRows[0].account_code, title: coaRows[0].account_title || cleanName };
+    }
+
+    const { data: allVendCoa } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code')
+      .ilike('account_code', '2010-%');
+
+    let maxSeq = 0;
+    (allVendCoa || []).forEach(r => {
+      const match = String(r.account_code || '').match(/2010-(\d+)/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    });
+
+    const nextCode = `2010-${String(maxSeq + 1).padStart(3, '0')}`;
+    await supabase.from('chart_of_accounts').insert([{
+      account_code: nextCode,
+      account_title: cleanName,
+      category_code: '2. LIABILITIES',
+      sub_category_code: 'Current Liabilities',
+      control_code: 'Vendor',
+      notes: `Vendor account for ${cleanName} (Auto-registered from Purchase Return Refund)`
+    }]);
+
+    return { code: nextCode, title: cleanName };
+  } catch (err) {
+    console.warn('resolveVendorCoaAccount in return receipt error:', err);
+    return { code: '2010-001', title: cleanName };
+  }
+};
+
 const AddPurchaseReturnReceipt: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -105,13 +160,7 @@ const AddPurchaseReturnReceipt: React.FC = () => {
         setVendorOptions(normalizedVendors);
 
         // 2. Fetch Banks & COA
-        const { data: rawBankData } = await supabase.from('banks').select('*');
-        const bankData = (rawBankData || []).map((b: any) => ({
-          ...b,
-          bankName: b.bankName || b.bankname || '',
-          accountTitle: b.accountTitle || b.accounttitle || b.account_title || '',
-          accountNumber: b.accountNumber || b.accountnumber || ''
-        }));
+        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
         const { data: coaData } = await supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code');
 
         if (bankData) setBankAccounts(bankData);
@@ -147,7 +196,25 @@ const AddPurchaseReturnReceipt: React.FC = () => {
 
           calculateVendorBalances(vName, rRef, rData || [], editData.id);
         } else {
-          setGeneratedReceiptNo(`PRR-${Math.floor(100000 + Math.random() * 900000)}`);
+          // Fetch next VRV sequence
+          try {
+            const { data: vrvRows } = await supabase
+              .from('financial_vouchers')
+              .select('voucher_no')
+              .ilike('voucher_no', 'VRV-%');
+            
+            let maxSeq = 0;
+            (vrvRows || []).forEach((r: any) => {
+              const match = String(r.voucher_no || '').match(/VRV-(\d+)/i);
+              if (match && match[1]) {
+                const n = parseInt(match[1], 10);
+                if (n > maxSeq) maxSeq = n;
+              }
+            });
+            setGeneratedReceiptNo(`VRV-${String(maxSeq + 1).padStart(3, '0')}`);
+          } catch {
+            setGeneratedReceiptNo(`VRV-${Math.floor(100 + Math.random() * 900)}`);
+          }
         }
       } catch (err: any) {
         console.error(err.message);
@@ -531,10 +598,9 @@ const AddPurchaseReturnReceipt: React.FC = () => {
             setLoading(true);
 
             // 1. Resolve Chart of Accounts
-            const cashCoa = coaAccounts.find((c: any) =>
-              String(c.control_code || '').toLowerCase().includes('cash') ||
-              String(c.account_title || '').toLowerCase().includes('cash')
-            );
+            const vendorAcc = await resolveVendorCoaAccount(selectedVendor, vendorOptions);
+            const vendorAccountCode = vendorAcc.code;
+            const cashAccountCode = '1010-001';
 
             const selectedBankObj = bankAccounts.find((b: any) => String(b.id) === String(values.selectedBankId) || String(b.bankName) === String(values.selectedBankId));
             const bankCoa = coaAccounts.find((c: any) =>
@@ -545,17 +611,7 @@ const AddPurchaseReturnReceipt: React.FC = () => {
               )) ||
               String(c.control_code || '').toLowerCase().includes('bank')
             );
-
-            const payCoa = coaAccounts.find((c: any) =>
-              String(c.control_code || '').toLowerCase().includes('creditor') ||
-              String(c.control_code || '').toLowerCase().includes('payable') ||
-              String(c.account_title || '').toLowerCase().includes('payable') ||
-              String(c.account_title || '').toLowerCase().includes('creditor')
-            );
-
-            const vendorAccountCode = payCoa ? String(payCoa.account_code) : (cashCoa ? String(cashCoa.account_code) : '2010');
-            const cashAccountCode = cashCoa ? String(cashCoa.account_code) : '1010';
-            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1015');
+            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1020-001');
 
             // 2. Prepare purchase_return_receipts record
             const receiptPayload = {
@@ -601,24 +657,21 @@ const AddPurchaseReturnReceipt: React.FC = () => {
               savedReceiptId = insertedRec?.id;
             }
 
-            // 3. Balanced Journal Entries in financial_vouchers
+            // 3. Balanced Journal Entries in financial_vouchers (VRV - Vendor Receive Voucher)
             let balancedJournalItems: any[] = [];
-            let voucherTypeRecord = 'Cash Receipt Voucher';
+            const voucherTypeRecord = 'Vendor Receive Voucher';
 
             if (values.paymentMethod === 'By Cash') {
-              voucherTypeRecord = 'Cash Receipt Voucher';
               balancedJournalItems = [
-                { accountCode: cashAccountCode, description: `Cash refund recovered from ${selectedVendor} via ${values.receiptNo}`, debit: finalAmount, credit: 0 },
+                { accountCode: cashAccountCode, description: `Cash refund recovered from ${selectedVendor} (${vendorAcc.title}) via ${values.receiptNo}`, debit: finalAmount, credit: 0 },
                 { accountCode: vendorAccountCode, description: `Debit note settlement for ${selectedReturnNo || 'General Returns'}`, debit: 0, credit: finalAmount }
               ];
             } else if (values.paymentMethod === 'By Bank') {
-              voucherTypeRecord = 'Bank Receipt Voucher';
               balancedJournalItems = [
-                { accountCode: bankAccountCode, description: `Bank wire refund received from ${selectedVendor} via ${values.receiptNo}`, debit: finalAmount, credit: 0 },
+                { accountCode: bankAccountCode, description: `Bank wire refund received from ${selectedVendor} (${vendorAcc.title}) via ${values.receiptNo}`, debit: finalAmount, credit: 0 },
                 { accountCode: vendorAccountCode, description: `Debit note settlement for ${selectedReturnNo || 'General Returns'}`, debit: 0, credit: finalAmount }
               ];
             } else {
-              voucherTypeRecord = 'Cash & Bank Receipt Voucher';
               balancedJournalItems = [
                 ...(cashPortion > 0 ? [{ accountCode: cashAccountCode, description: `Cash refund recovered via ${values.receiptNo}`, debit: cashPortion, credit: 0 }] : []),
                 ...(bankPortion > 0 ? [{ accountCode: bankAccountCode, description: `Bank wire refund received via ${values.receiptNo}`, debit: bankPortion, credit: 0 }] : []),
@@ -645,6 +698,8 @@ const AddPurchaseReturnReceipt: React.FC = () => {
               total_amount: finalAmount,
               items: balancedJournalItems,
               metadata: {
+                preset: 'VRV',
+                auto_generated: Boolean(selectedReturnNo),
                 selectedBankId: (values.paymentMethod === 'By Bank' || values.paymentMethod === 'Split') ? values.selectedBankId : null,
                 selectedBankTitle: selectedBankObj ? `${selectedBankObj.bankName} - ${selectedBankObj.accountTitle}` : null,
                 linkedReturnNo: selectedReturnNo || null,

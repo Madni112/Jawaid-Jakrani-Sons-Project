@@ -1,49 +1,48 @@
 import { supabase } from '../Context/supabaseClient';
 
-export interface AuditLogPayload {
-  action: 'INSERT' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT';
-  tableName: string;
-  details: Record<string, any>;
+export interface LogActivityParams {
+  action?: string;
+  action_type?: string;
+  tableName?: string;
+  table_name?: string;
+  details?: Record<string, any> | any;
   performedBy?: string;
+  performed_by?: string;
+  branchId?: number;
+  tenantId?: string | number;
 }
 
 /**
- * Centrally records any business activity into the `audit_logs` table.
- * Designed to be non-blocking and fail-safe (errors are caught and logged).
+ * Universal Activity & Audit Logger
+ * Safely persists ERP audit trail entries to Supabase audit_logs
  */
-export async function logActivity({
-  action,
-  tableName,
-  details,
-  performedBy
-}: AuditLogPayload): Promise<void> {
+export const logActivity = async (params: LogActivityParams) => {
   try {
-    let userEmail = performedBy;
+    const action_type = params.action || params.action_type || 'ACTIVITY';
+    const table_name = params.tableName || params.table_name || 'general';
+    const performed_by =
+      params.performedBy ||
+      params.performed_by ||
+      localStorage.getItem('zac_user_email') ||
+      localStorage.getItem('zac_user_name') ||
+      'User';
+    const details = params.details || {};
 
-    if (!userEmail && typeof window !== 'undefined') {
-      try {
-        userEmail =
-          localStorage.getItem('zac_user_email') ||
-          localStorage.getItem('zac_user_name') ||
-          'System User';
-      } catch (_) {
-        userEmail = 'System User';
+    await supabase.from('audit_logs').insert([
+      {
+        action_type,
+        table_name,
+        performed_by,
+        details: {
+          ...details,
+          logged_at: new Date().toISOString()
+        }
       }
-    }
-
-    const logEntry = {
-      action_type: action,
-      table_name: tableName,
-      performed_by: userEmail || 'System User',
-      details: {
-        ...details,
-        timestamp: new Date().toISOString(),
-      },
-    };
-
-    await supabase.from('audit_logs').insert([logEntry]);
+    ]);
   } catch (err) {
-    // Non-blocking catch to ensure UI operations are never interrupted
-    console.warn('Audit log capture note:', err);
+    // Fail gracefully so logging issues never disrupt application operations
+    console.debug('Audit log skipped:', err);
   }
-}
+};
+
+export default logActivity;

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactApexChart from 'react-apexcharts';
 import { useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../Context/supabaseClient';
+import { supabase } from '../../Context/supabaseClient';
 import { fetchFinancialMetrics, FinancialSummary } from '../../service/financialCalculations';
 import Spinner from '../../ui/Spinner';
 import {
@@ -33,25 +33,44 @@ import {
   MdKeyboardArrowDown,
   MdKeyboardArrowUp,
   MdShowChart,
-  MdBarChart
+  MdBarChart,
+  MdCorporateFare
 } from 'react-icons/md';
-import GlassCard from '../../ui/GlassCard';
 import StatCard from '../../ui/StatCard';
 import ActionCard from '../../ui/ActionCard';
 import { QtyBadge } from '../../utils/QtyBadge';
 import { useAuth } from '../../Context/Auth';
+import { useLanguage } from '../../Context/LanguageContext';
 import SalesmanDashboard from './SalesmanDashboard';
 import WarehouseDashboard from './WarehouseDashboard';
+import {
+  LuPlus,
+  LuShoppingCart,
+  LuFileText,
+  LuArrowDownToLine,
+  LuSearch,
+  LuMoon,
+  LuBell,
+  LuCreditCard,
+  LuArrowDownLeft,
+  LuArrowUpRight,
+} from 'react-icons/lu';
+import {
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+} from '../../constant/themeConfig';
 
 const AdminRoleSwitcher: React.FC<{
   activeView: 'executive' | 'salesman' | 'warehouse';
   onChangeView: (v: 'executive' | 'salesman' | 'warehouse') => void;
 }> = ({ activeView, onChangeView }) => {
+  const { isRTL, t } = useLanguage();
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
       <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 px-2">
         <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-        Role Dashboard Preview:
+        {t('role_dashboard_preview', 'Role Dashboard Preview:')}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <button
@@ -61,7 +80,7 @@ const AdminRoleSwitcher: React.FC<{
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
             }`}
         >
-          👑 Executive Overview
+          👑 {isRTL ? 'مرکزی جائزہ' : 'Executive Overview'}
         </button>
         <button
           onClick={() => onChangeView('salesman')}
@@ -70,7 +89,7 @@ const AdminRoleSwitcher: React.FC<{
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
             }`}
         >
-          🛒 Salesman View
+          🛒 {isRTL ? 'سیلزمین ویو' : 'Salesman View'}
         </button>
         <button
           onClick={() => onChangeView('warehouse')}
@@ -79,7 +98,7 @@ const AdminRoleSwitcher: React.FC<{
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
             }`}
         >
-          📦 Warehouse
+          📦 {isRTL ? 'گودام' : 'Warehouse'}
         </button>
       </div>
     </div>
@@ -97,6 +116,15 @@ interface ReceivableInvoice {
   paidAmount: number;
   outstandingBalance: number;
   daysPending: number;
+}
+
+interface PayableVendor {
+  id: string | number;
+  vendorCode: string;
+  vendorName: string;
+  city: string;
+  phone: string;
+  outstandingBalance: number;
 }
 
 interface TrendingProduct {
@@ -154,13 +182,55 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { role, tenantId, userEmail, userName } = useAuth();
+  const { isRTL, t } = useLanguage();
   const [adminView, setAdminView] = useState<'executive' | 'salesman' | 'warehouse'>(initialView);
+
+  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+
+  useEffect(() => {
+    const updateMasterPreset = () => {
+      setMasterPreset(getMasterThemePreset());
+    };
+    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('storage', updateMasterPreset);
+    return () => {
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('storage', updateMasterPreset);
+    };
+  }, []);
+
+  const isTheme2 = isNHTTheme2Active() || masterPreset === 'nht-2';
+
+  const [currentTime, setCurrentTime] = useState<string>(() => {
+    return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  });
+  const [currentDate, setCurrentDate] = useState<string>(() => {
+    return new Date().toLocaleDateString('en-US', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
+      setCurrentDate(now.toLocaleDateString('en-US', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const greeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  })();
+
+  const displayName = userName || (userEmail ? userEmail.split('@')[0].toUpperCase() : 'MUHAMMAD SAAD');
 
   const userRoleLower = (role || '').toLowerCase();
   let allowedModules: string[] = [];
   try {
-    const cached = localStorage.getItem('zac_user_modules');
+    const cached = localStorage.getItem('ujc_user_modules');
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
@@ -178,6 +248,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
 
   // Operational Data States
   const [receivablesList, setReceivablesList] = useState<ReceivableInvoice[]>([]);
+  const [payablesList, setPayablesList] = useState<PayableVendor[]>([]);
   const [trendingProducts, setTrendingProducts] = useState<TrendingProduct[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<LowStockAlert[]>([]);
   const [holdingItems, setHoldingItems] = useState<HoldingItemData[]>([]);
@@ -190,15 +261,15 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
   const [selectedHoldingInvoice, setSelectedHoldingInvoice] = useState<string>('All');
   const [liquidityTab, setLiquidityTab] = useState<'bank' | 'cash'>('bank');
   const [stockModalView, setStockModalView] = useState<'allTime' | 'thisMonth'>('allTime');
-  const [activeBreakdownModal, setActiveBreakdownModal] = useState<'cash' | 'bank' | 'receivables' | 'stock' | null>(null);
+  const [activeBreakdownModal, setActiveBreakdownModal] = useState<'cash' | 'bank' | 'receivables' | 'payables' | 'stock' | null>(null);
   const [showOperationalDetails, setShowOperationalDetails] = useState<boolean>(() => {
-    return localStorage.getItem('zac_dashboard_show_details') === 'true';
+    return localStorage.getItem('ujc_dashboard_show_details') === 'true';
   });
 
   const toggleOperationalDetails = () => {
     setShowOperationalDetails(prev => {
       const next = !prev;
-      localStorage.setItem('zac_dashboard_show_details', String(next));
+      localStorage.setItem('ujc_dashboard_show_details', String(next));
       return next;
     });
   };
@@ -228,18 +299,22 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
         purchaseReturnsRes,
         vouchersRes,
         dcsRes,
-        custRecoveriesRes
+        custRecoveriesRes,
+        customersRes,
+        vendorsRes
       ] = await Promise.all([
         fetchFinancialMetrics(),
-        fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })),
-        fetchAllPages(supabase.from('products').select('*')),
-        fetchAllPages(supabase.from('opening_stocks').select('*')),
-        fetchAllPages(supabase.from('supplier_purchases').select('*')),
-        fetchAllPages(supabase.from('sales_returns').select('*')),
-        fetchAllPages(supabase.from('purchase_returns').select('*')),
-        fetchAllPages(supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false })),
-        fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
-        fetchAllPages(supabase.from('customer_recoveries').select('*'))
+        supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }),
+        supabase.from('products').select('*'),
+        supabase.from('opening_stocks').select('*'),
+        supabase.from('supplier_purchases').select('*'),
+        supabase.from('sales_returns').select('*'),
+        supabase.from('purchase_returns').select('*'),
+        supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false }),
+        supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
+        supabase.from('customer_recoveries').select('*'),
+        supabase.from('customers').select('*').order('customerName', { ascending: true }),
+        supabase.from('vendors').select('*').order('vendor_name', { ascending: true })
       ]);
 
       setMetrics(metricsData);
@@ -253,10 +328,42 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
       const vouchers = vouchersRes.data || [];
       const dcs = dcsRes.data || [];
       const recoveries = custRecoveriesRes.data || [];
+      const vendorsData = vendorsRes?.data || [];
 
       // ==========================================
       // 1. CUSTOMER RECEIVABLES WITH AGING PENDING
       // ==========================================
+      // 1a. Include customer opening debit balances / accounts receivable
+      const customersData = customersRes?.data || [];
+      const extractedReceivables: ReceivableInvoice[] = [];
+
+      customersData.forEach((c: any) => {
+        const rawBal = Number(c.currentBalance !== undefined && c.currentBalance !== null && c.currentBalance !== ''
+          ? c.currentBalance
+          : (c.balance !== undefined && c.balance !== null && c.balance !== '' ? c.balance : c.opening_balance || 0));
+        const nature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
+        let effectiveBal = rawBal;
+        if (nature.includes('cr') || nature.includes('credit')) {
+          effectiveBal = -Math.abs(rawBal);
+        } else if (rawBal > 0) {
+          effectiveBal = Math.abs(rawBal);
+        }
+
+        if (effectiveBal > 0.5) {
+          extractedReceivables.push({
+            id: `cust-${c.id}`,
+            invoiceNo: c.customer_code || `CUST-${String(c.id).padStart(3, '0')}`,
+            customerName: c.customerName || 'Customer',
+            salesman: c.city ? `City: ${c.city}` : (c.primaryPhone || 'Direct Ledger'),
+            invoiceDate: c.created_at ? c.created_at.split('T')[0] : 'Opening Bal',
+            totalAmount: effectiveBal,
+            paidAmount: 0,
+            outstandingBalance: effectiveBal,
+            daysPending: 30
+          });
+        }
+      });
+
       // Map recoveries per invoice
       const invoiceRecoveriesMap: Record<string, number> = {};
       recoveries.forEach((rec: any) => {
@@ -278,7 +385,6 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
       });
 
       const today = new Date();
-      const extractedReceivables: ReceivableInvoice[] = [];
 
       invoices.forEach((inv: any) => {
         const total = Number(inv.total_amount || 0);
@@ -311,8 +417,57 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
         }
       });
 
-      // Keep last 10 sale transactions with pending receivables
-      setReceivablesList(extractedReceivables.slice(0, 10));
+      // Sort with highest pending receivables on top
+      extractedReceivables.sort((a, b) => b.outstandingBalance - a.outstandingBalance);
+      setReceivablesList(extractedReceivables.slice(0, 15));
+
+      // ==========================================
+      // 1b. VENDOR PAYABLES LEDGER
+      // ==========================================
+      const extractedPayables: PayableVendor[] = [];
+      vendorsData.forEach((v: any) => {
+        const rawBal = Number(v.current_balance !== undefined && v.current_balance !== null
+          ? v.current_balance
+          : (v.balance !== undefined && v.balance !== null ? v.balance : v.opening_balance || 0));
+        const nature = String(v.balance_nature || v.balanceNature || '').toLowerCase();
+        let effectiveBal = rawBal;
+        if (nature.includes('dr') || nature.includes('debit')) {
+          effectiveBal = -Math.abs(rawBal);
+        } else if (rawBal > 0) {
+          effectiveBal = Math.abs(rawBal);
+        }
+
+        if (effectiveBal > 0.5) {
+          extractedPayables.push({
+            id: v.id,
+            vendorCode: v.vendor_code || v.vendorCode || `V-${String(v.id).padStart(3, '0')}`,
+            vendorName: v.vendor_name || v.name || 'Vendor / Mill',
+            city: v.city || v.address || 'Cloth Market',
+            phone: v.phone || v.phone_no || v.cell_no || '-',
+            outstandingBalance: effectiveBal
+          });
+        }
+      });
+
+      // Add unpaid purchases
+      purchases.forEach((pur: any) => {
+        const tot = Number(pur.total_amount || 0);
+        const initialPaid = Number(pur.amount_paid_now || pur.paid_amount || 0);
+        const outstanding = Math.max(0, tot - initialPaid);
+        if (outstanding > 0.5) {
+          extractedPayables.push({
+            id: `pur-${pur.id}`,
+            vendorCode: pur.purchase_no || `PUR-${pur.id}`,
+            vendorName: pur.supplier_name || pur.supplierName || 'Wholesale Supplier',
+            city: pur.destination_warehouse || pur.warehouse || 'Warehouse',
+            phone: '-',
+            outstandingBalance: outstanding
+          });
+        }
+      });
+
+      extractedPayables.sort((a, b) => b.outstandingBalance - a.outstandingBalance);
+      setPayablesList(extractedPayables.slice(0, 15));
 
       // ==========================================
       // 2. TRENDING PRODUCTS (REVENUE & VELOCITY)
@@ -745,92 +900,458 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs pb-12">
-      {/* Role Dashboard Switcher for Admins */}
-      <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />
+      {/* Role Dashboard Switcher for Admins (Theme 1 or when testing views) */}
+      {!isTheme2 && <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />}
 
-      {/* Top Header Banner */}
-      <GlassCard className="p-6 relative overflow-hidden bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800/80 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
-        <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-80 h-80 bg-gradient-to-bl from-emerald-100/40 via-teal-50/20 to-transparent dark:from-emerald-950/20 dark:via-transparent rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 z-10 relative">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-                <MdAssessment className="text-sm text-emerald-600 dark:text-emerald-400" />
-                Executive Suite
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/50">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Fiscal Intelligence Live
-              </span>
+      {isTheme2 ? (
+        /* =========================================================================
+         * NHT THEME 2 (AMAL ERP STYLE): Burgundy Hero Banner + 4 Primary Cards + 4 Analytical Panels
+         * ========================================================================= */
+        <>
+          {/* Burgundy Hero Banner */}
+          <div className="rounded-2xl bg-[#800020] text-white p-5 md:p-6 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-3xl md:text-4xl font-extrabold tracking-tight font-mono">
+                  {currentTime}
+                </span>
+                <span className="text-sm font-medium text-white/80">
+                  {currentDate}
+                </span>
+              </div>
+              <p className="text-base md:text-lg font-bold text-white/95 mt-1 tracking-tight">
+                {greeting}, {displayName}!
+              </p>
             </div>
-            <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-              Executive Management Dashboard
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1 max-w-xl font-normal leading-relaxed">
-              Real-time fiscal monitoring, procurement velocity, cash-flow ledger & operational intelligence.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 font-mono text-xs">
-            <div className="bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-slate-700 dark:text-slate-300 shadow-2xs flex items-center gap-1.5">
-              <MdCalendarToday className="text-emerald-600 dark:text-emerald-400" />
-              <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => navigate('/sales/invoice/new')}
+                className="bg-white text-gray-900 hover:bg-slate-100 font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all"
+              >
+                <LuPlus size={14} />
+                <span>New Sale</span>
+              </button>
+              <button
+                onClick={() => navigate('/Purchase/Purchases/list')}
+                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              >
+                <LuShoppingCart size={14} />
+                <span>Purchase</span>
+              </button>
+              <button
+                onClick={() => navigate('/Reports/Reports-Dashboard')}
+                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              >
+                <LuFileText size={14} />
+                <span>Reports</span>
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              >
+                <LuArrowDownToLine size={14} />
+                <span>Export</span>
+              </button>
+              <button
+                onClick={() => navigate('/sales/invoice/list')}
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
+                title="Search"
+              >
+                <LuSearch size={14} />
+              </button>
+              <button
+                onClick={() => window.dispatchEvent(new Event('toggle-dark-mode'))}
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
+                title="Toggle Dark Mode"
+              >
+                <LuMoon size={14} />
+              </button>
+              <button
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
+                title="Notifications"
+              >
+                <LuBell size={14} />
+              </button>
             </div>
           </div>
-        </div>
-      </GlassCard>
 
-      {/* --- TOP ACTION TILES GRID --- */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
-        <ActionCard title="Sales" subtitle="Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/list')} />
-        <ActionCard title="Purchases" subtitle="Buy New Product" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-teal-700 to-emerald-900" onClick={() => navigate('/Purchase/Purchases/list')} />
-        <ActionCard title="Products" subtitle="Items List" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/list')} />
-        <ActionCard title="Sale Return" subtitle="Customer Return" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/Sales/Sales-Return/List')} />
-        <ActionCard title="Stock Report" subtitle="Inventory Audit" Icon={MdAssessment} bgGradient="bg-gradient-to-br from-emerald-700 to-teal-900" onClick={() => navigate('/Reports/Stock-Report')} />
-        <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-teal-500 to-emerald-700" onClick={() => { }} />
-        <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-emerald-800 to-slate-900" onClick={() => { }} />
-        <ActionCard title="This Month Purchases" subtitle={`Rs. ${metrics.thisMonthPurchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowDownward} bgGradient="bg-gradient-to-br from-teal-800 to-slate-900" onClick={() => { }} />
-      </div>
+          {/* 4 Financial Metric Cards (Amal Style) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* CASH */}
+            <div
+              onClick={() => setActiveBreakdownModal('cash')}
+              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-cyan-400 cursor-pointer hover:shadow-sm transition-all"
+            >
+              <div className="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 flex items-center justify-center font-bold text-sm mb-3">
+                $
+              </div>
+              <div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Rs.{metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  CASH
+                </div>
+              </div>
+            </div>
 
-      {/* --- FINANCIAL KPI STAT CARDS --- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        <StatCard
-          title="Cash"
-          value={metrics.cashBalance}
-          Icon={MdAccountBalanceWallet}
-          bgColor="bg-gradient-to-br from-emerald-500 to-teal-600"
-          thisMonthValue={metrics.thisMonthCashInflow}
-          thisMonthLabel="This Month"
-          onClick={() => setActiveBreakdownModal('cash')}
-        />
-        <StatCard
-          title="Bank Balance"
-          value={metrics.totalBankBalance}
-          Icon={MdAccountBalance}
-          bgColor="bg-gradient-to-br from-teal-600 to-cyan-700"
-          thisMonthValue={metrics.thisMonthBankInflow}
-          thisMonthLabel="This Month"
-          onClick={() => setActiveBreakdownModal('bank')}
-        />
-        <StatCard
-          title="Receivables"
-          value={metrics.totalReceivables}
-          Icon={MdReceiptLong}
-          bgColor="bg-gradient-to-br from-emerald-600 to-teal-700"
-          thisMonthValue={metrics.thisMonthReceivables}
-          thisMonthLabel="This Month"
-          onClick={() => setActiveBreakdownModal('receivables')}
-        />
-        <StatCard
-          title="Stock Assets"
-          value={metrics.inventoryAssetValue}
-          Icon={MdAssessment}
-          bgColor="bg-gradient-to-br from-emerald-700 to-slate-900"
-          thisMonthValue={metrics.inventoryAssetValue}
-          thisMonthLabel="This Month"
-          onClick={() => setActiveBreakdownModal('stock')}
-        />
-      </div>
+            {/* BANK */}
+            <div
+              onClick={() => setActiveBreakdownModal('bank')}
+              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-emerald-400 cursor-pointer hover:shadow-sm transition-all"
+            >
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-bold text-sm mb-3">
+                <LuCreditCard size={16} />
+              </div>
+              <div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Rs.{metrics.totalBankBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  BANK
+                </div>
+              </div>
+            </div>
+
+            {/* RECEIVABLE */}
+            <div
+              onClick={() => setActiveBreakdownModal('receivables')}
+              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-amber-400 cursor-pointer hover:shadow-sm transition-all"
+            >
+              <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center font-bold text-sm mb-3">
+                <LuArrowDownLeft size={16} />
+              </div>
+              <div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Rs.{metrics.totalReceivables.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  RECEIVABLE
+                </div>
+              </div>
+            </div>
+
+            {/* PAYABLE */}
+            <div
+              onClick={() => setActiveBreakdownModal('payables')}
+              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-rose-400 cursor-pointer hover:shadow-sm transition-all"
+            >
+              <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center font-bold text-sm mb-3">
+                <LuArrowUpRight size={16} />
+              </div>
+              <div>
+                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  Rs.{metrics.totalPayables.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                  PAYABLE
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Analytical Panels (Amal Style) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Money Position */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-rose-50 text-rose-500 flex items-center justify-center text-xs">
+                    📈
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Money Position</h3>
+                    <p className="text-[11px] text-slate-400">Cash and bank, month by month</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  Total: Rs. {(metrics.cashBalance + metrics.totalBankBalance).toLocaleString()}
+                </span>
+              </div>
+              {hasMonthlyTrend ? (
+                <div className="mt-2 -mb-2">
+                  <ReactApexChart
+                    options={{
+                      chart: { type: 'area', height: 140, sparkline: { enabled: false }, toolbar: { show: false } },
+                      colors: ['#059669', '#0284C7'],
+                      stroke: { curve: 'smooth', width: 2 },
+                      dataLabels: { enabled: false },
+                      xaxis: { categories: monthlyCategories, labels: { style: { colors: '#94A3B8', fontSize: '9px' } } },
+                      yaxis: { labels: { formatter: (val: number) => `Rs.${(val / 1000).toFixed(0)}k`, style: { colors: '#94A3B8', fontSize: '9px' } } },
+                      tooltip: { y: { formatter: (val: number) => `Rs. ${Number(val || 0).toLocaleString()}` } },
+                      legend: { position: 'top', horizontalAlign: 'right', fontSize: '10px' }
+                    }}
+                    series={[
+                      { name: 'Cash Flow Inflow', data: metrics.cashFlowTrend ? metrics.cashFlowTrend.map(c => c.inflow) : [metrics.cashBalance] },
+                      { name: 'Net Bank Liquidity', data: monthlyCategories.map(() => metrics.totalBankBalance) }
+                    ]}
+                    type="area"
+                    height={140}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-4">
+                  <div className="flex items-center gap-4 text-center">
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Cash in Hand</span>
+                      <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">Rs. {metrics.cashBalance.toLocaleString()}</span>
+                    </div>
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-100 dark:border-blue-900/50">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Bank Accounts</span>
+                      <span className="text-sm font-black font-mono text-blue-600 dark:text-blue-400">Rs. {metrics.totalBankBalance.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Owed to you vs owed by you */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-amber-50 text-amber-500 flex items-center justify-center text-xs">
+                    ⏱️
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Owed to you vs owed by you</h3>
+                    <p className="text-[11px] text-slate-400">Receivable against payable</p>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full ${
+                  (metrics.totalReceivables - metrics.totalPayables) >= 0
+                    ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                }`}>
+                  Net: Rs. {(metrics.totalReceivables - metrics.totalPayables).toLocaleString()}
+                </span>
+              </div>
+              {metrics.totalReceivables > 0 || metrics.totalPayables > 0 ? (
+                <div className="flex-1 flex flex-col justify-center py-2 space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs font-bold mb-1">
+                      <span className="text-amber-600 dark:text-amber-400">Receivable from Customers</span>
+                      <span className="font-mono text-slate-800 dark:text-slate-100">Rs. {metrics.totalReceivables.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-amber-400 h-2 rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, Math.round((metrics.totalReceivables / Math.max(1, metrics.totalReceivables + metrics.totalPayables)) * 100))}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs font-bold mb-1">
+                      <span className="text-rose-600 dark:text-rose-400">Payable to Vendors & Mills</span>
+                      <span className="font-mono text-slate-800 dark:text-slate-100">Rs. {metrics.totalPayables.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-rose-500 h-2 rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, Math.round((metrics.totalPayables / Math.max(1, metrics.totalReceivables + metrics.totalPayables)) * 100))}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-slate-400 text-xs text-center py-6">
+                  Nothing outstanding either way.
+                </div>
+              )}
+            </div>
+
+            {/* Sales vs Recovery */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-teal-50 text-teal-500 flex items-center justify-center text-xs">
+                    🔄
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Sales vs Recovery</h3>
+                    <p className="text-[11px] text-slate-400">Monthly recovery against billing</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300">
+                  This Month: Rs. {metrics.thisMonthSales.toLocaleString()}
+                </span>
+              </div>
+              {hasMonthlyTrend ? (
+                <div className="mt-2 -mb-2">
+                  <ReactApexChart
+                    options={{
+                      chart: { type: 'bar', height: 140, toolbar: { show: false } },
+                      colors: ['#0D9488', '#F59E0B'],
+                      plotOptions: { bar: { columnWidth: '40%', borderRadius: 3 } },
+                      dataLabels: { enabled: false },
+                      xaxis: { categories: monthlyCategories, labels: { style: { colors: '#94A3B8', fontSize: '9px' } } },
+                      yaxis: { labels: { formatter: (val: number) => `Rs.${(val / 1000).toFixed(0)}k`, style: { colors: '#94A3B8', fontSize: '9px' } } },
+                      tooltip: { y: { formatter: (val: number) => `Rs. ${Number(val || 0).toLocaleString()}` } },
+                      legend: { position: 'top', horizontalAlign: 'right', fontSize: '10px' }
+                    }}
+                    series={[
+                      { name: 'Monthly Gross Sales', data: grossSalesData },
+                      { name: 'Monthly Collections / Inflow', data: metrics.cashFlowTrend ? metrics.cashFlowTrend.map(c => c.inflow) : [metrics.thisMonthCashInflow] }
+                    ]}
+                    type="bar"
+                    height={140}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-4">
+                  <div className="flex items-center gap-4 text-center">
+                    <div className="p-3 bg-teal-50 dark:bg-teal-950/40 rounded-xl border border-teal-100 dark:border-teal-900/50">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Invoiced</span>
+                      <span className="text-sm font-black font-mono text-teal-600 dark:text-teal-400">Rs. {metrics.thisMonthSales.toLocaleString()}</span>
+                    </div>
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-100 dark:border-amber-900/50">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Recovered</span>
+                      <span className="text-sm font-black font-mono text-amber-600 dark:text-amber-400">Rs. {metrics.thisMonthCashInflow.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sales vs Expense */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-500 flex items-center justify-center text-xs">
+                    📊
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Sales vs Expense</h3>
+                    <p className="text-[11px] text-slate-400">Revenue against procurement velocity</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
+                  Purchases: Rs. {metrics.thisMonthPurchases.toLocaleString()}
+                </span>
+              </div>
+              {hasMonthlyTrend ? (
+                <div className="mt-2 -mb-2">
+                  <ReactApexChart
+                    options={{
+                      chart: { type: 'line', height: 140, toolbar: { show: false } },
+                      colors: ['#4F46E5', '#E11D48'],
+                      stroke: { width: [3, 2], curve: 'smooth' },
+                      dataLabels: { enabled: false },
+                      xaxis: { categories: monthlyCategories, labels: { style: { colors: '#94A3B8', fontSize: '9px' } } },
+                      yaxis: { labels: { formatter: (val: number) => `Rs.${(val / 1000).toFixed(0)}k`, style: { colors: '#94A3B8', fontSize: '9px' } } },
+                      tooltip: { y: { formatter: (val: number) => `Rs. ${Number(val || 0).toLocaleString()}` } },
+                      legend: { position: 'top', horizontalAlign: 'right', fontSize: '10px' }
+                    }}
+                    series={[
+                      { name: 'Revenue (Sales)', data: grossSalesData },
+                      { name: 'Procurement (Expense)', data: procurementData }
+                    ]}
+                    type="line"
+                    height={140}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-4">
+                  <div className="flex items-center gap-4 text-center">
+                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Sales (Revenue)</span>
+                      <span className="text-sm font-black font-mono text-indigo-600 dark:text-indigo-400">Rs. {metrics.thisMonthSales.toLocaleString()}</span>
+                    </div>
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-100 dark:border-rose-900/50">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Procurement</span>
+                      <span className="text-sm font-black font-mono text-rose-600 dark:text-rose-400">Rs. {metrics.thisMonthPurchases.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        /* =========================================================================
+         * NHT THEME 1 (ORIGINAL CLASSIC): 8 Action Tiles + 4 Stat Cards
+         * ========================================================================= */
+        <>
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+            <div>
+              <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                {t('executive_dashboard_title', 'Executive Management Dashboard')}
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {t('executive_dashboard_subtitle', 'Real-time fiscal monitoring, procurement velocity & operational intelligence')}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 font-mono text-xs">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 shadow-sm flex items-center gap-1.5">
+                <MdCalendarToday className="text-emerald-600" />
+                <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
+            <ActionCard title="Sales" subtitle="Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/list')} />
+            <ActionCard title="Purchases" subtitle="Buy New Product" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-teal-700 to-emerald-900" onClick={() => navigate('/Purchase/Purchases/list')} />
+            <ActionCard title="Products" subtitle="Items List" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/list')} />
+            <ActionCard title="Sale Return" subtitle="Customer Return" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/Sales/Sales-Return/List')} />
+            <ActionCard
+              title="Stock Report"
+              subtitle="Inventory Audit"
+              Icon={MdAssessment}
+              bgGradient="bg-gradient-to-br from-emerald-700 to-teal-900"
+              onClick={() => {
+                navigate('/Reports/Reports-Dashboard?category=inventory', { state: { category: 'inventory' } });
+              }}
+            />
+            <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-teal-500 to-emerald-700" onClick={() => { }} />
+            <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-emerald-800 to-slate-900" onClick={() => { }} />
+            <ActionCard title="This Month Purchases" subtitle={`Rs. ${metrics.thisMonthPurchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowDownward} bgGradient="bg-gradient-to-br from-teal-800 to-slate-900" onClick={() => { }} />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            <StatCard
+              title="Cash"
+              value={metrics.cashBalance}
+              Icon={MdAccountBalanceWallet}
+              bgColor="bg-gradient-to-br from-emerald-500 to-teal-600"
+              thisMonthValue={metrics.thisMonthCashInflow}
+              thisMonthLabel="This Month"
+              onClick={() => setActiveBreakdownModal('cash')}
+            />
+            <StatCard
+              title="Bank Balance"
+              value={metrics.totalBankBalance}
+              Icon={MdAccountBalance}
+              bgColor="bg-gradient-to-br from-teal-600 to-cyan-700"
+              thisMonthValue={metrics.thisMonthBankInflow}
+              thisMonthLabel="This Month"
+              onClick={() => setActiveBreakdownModal('bank')}
+            />
+            <StatCard
+              title="Receivables"
+              value={metrics.totalReceivables}
+              Icon={MdReceiptLong}
+              bgColor="bg-gradient-to-br from-emerald-600 to-teal-700"
+              thisMonthValue={metrics.thisMonthReceivables}
+              thisMonthLabel="This Month"
+              onClick={() => setActiveBreakdownModal('receivables')}
+            />
+            <StatCard
+              title="Stock Assets"
+              value={metrics.inventoryAssetValue}
+              Icon={MdAssessment}
+              bgColor="bg-gradient-to-br from-emerald-700 to-slate-900"
+              thisMonthValue={metrics.inventoryAssetValue}
+              thisMonthLabel="This Month"
+              onClick={() => setActiveBreakdownModal('stock')}
+            />
+          </div>
+        </>
+      )}
       {/* ========================================================================= */}
       {/* EXPANDABLE OPERATIONAL DETAILS TOGGLE BAR                                */}
       {/* ========================================================================= */}
@@ -842,10 +1363,12 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
           <div className="flex items-center gap-2.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
-              {showOperationalDetails ? 'Hide Operational Ledgers & Analytics' : 'Show Operational Ledgers & Analytics'}
+              {showOperationalDetails
+                ? (isRTL ? 'آپریشنل لیجرز اور تجزیات چھپائیں' : 'Hide Operational Ledgers & Analytics')
+                : (isRTL ? 'آپریشنل لیجرز اور تجزیات دکھائیں' : 'Show Operational Ledgers & Analytics')}
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono font-bold border border-slate-200/70 dark:border-slate-700/60">
-              8 Live Modules
+              {isRTL ? '8 فعال ماڈیولز' : '8 Live Modules'}
             </span>
           </div>
           <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition-transform duration-200 group-hover:bg-slate-200/70 dark:group-hover:bg-slate-700">
@@ -953,7 +1476,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex justify-between items-center text-[11px] text-slate-400 pl-2.5 mt-2">
             <span>Scroll table to see full last 10 entries</span>
             <button
-              onClick={() => navigate('/Reports/Account-Report', { state: { activeTab: 12 } })}
+              onClick={() => navigate('/Reports/Reports-Dashboard?tab=customer-ledger')}
               className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
             >
               <span>Open Receivables Ledger</span>
@@ -1038,7 +1561,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
 
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 text-right mt-2">
             <button
-              onClick={() => navigate('/Reports/Stock-Report')}
+              onClick={() => {
+                navigate('/Reports/Reports-Dashboard?category=inventory', { state: { category: 'inventory' } });
+              }}
               className="text-rose-600 dark:text-rose-400 font-bold hover:underline text-[11px] inline-flex items-center gap-1 cursor-pointer"
             >
               <span>Open Inventory Audit Matrix</span>
@@ -1471,7 +1996,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
               {liquidityTab === 'bank' ? 'Real-time verified bank reconciliation' : `Current Cash In Hand: Rs. ${metrics.cashBalance.toLocaleString()}`}
             </span>
             <button
-              onClick={() => navigate('/Reports/Account-Report')}
+              onClick={() => navigate('/Reports/Reports-Dashboard?tab=combined-ledger')}
               className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline text-xs flex items-center gap-1 cursor-pointer"
             >
               <span>View Full General Ledger</span>
@@ -1567,12 +2092,15 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                     ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 border-blue-200/70 dark:border-blue-800/60'
                     : activeBreakdownModal === 'receivables'
                     ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200/70 dark:border-indigo-800/60'
+                    : activeBreakdownModal === 'payables'
+                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200/70 dark:border-rose-800/60'
                     : 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200/70 dark:border-amber-800/60'
                 }`}>
                   {activeBreakdownModal === 'stock' && <MdAssessment size={22} />}
                   {activeBreakdownModal === 'cash' && <MdAccountBalanceWallet size={22} />}
                   {activeBreakdownModal === 'bank' && <MdAccountBalance size={22} />}
                   {activeBreakdownModal === 'receivables' && <MdReceiptLong size={22} />}
+                  {activeBreakdownModal === 'payables' && <MdCorporateFare size={22} />}
                 </div>
                 <div>
                   <h3 className="font-extrabold text-base text-slate-900 dark:text-white tracking-tight">
@@ -1580,12 +2108,14 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                     {activeBreakdownModal === 'cash' && 'Cash Liquidity & Inflow Ledger'}
                     {activeBreakdownModal === 'bank' && 'Corporate Bank Accounts'}
                     {activeBreakdownModal === 'receivables' && 'Customer Receivables & Aging'}
+                    {activeBreakdownModal === 'payables' && 'Vendor Payables & Supplier Balances'}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     {activeBreakdownModal === 'stock' && 'Real-time warehouse physical stock audit'}
                     {activeBreakdownModal === 'cash' && 'Cash drawer inflows, outflows & balances'}
                     {activeBreakdownModal === 'bank' && 'Verified multi-bank treasury accounts'}
                     {activeBreakdownModal === 'receivables' && 'Outstanding customer debt & collection status'}
+                    {activeBreakdownModal === 'payables' && 'Liabilities owed to fabric suppliers and mills'}
                   </p>
                 </div>
               </div>
@@ -1757,7 +2287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                           type="button"
                           onClick={() => {
                             setActiveBreakdownModal(null);
-                            navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock Report`);
+                            navigate('/Reports/Reports-Dashboard?category=inventory', { state: { category: 'inventory' } });
                           }}
                           className="text-[11px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
                         >

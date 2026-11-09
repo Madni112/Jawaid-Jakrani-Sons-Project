@@ -5,7 +5,6 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdCheckCircle, MdArrowBack } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
-import { isShopLocation } from '../../../utils/locationUtils';
 
 const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly }: { inwardId?: string, locationFilter?: string, onSuccess?: () => void, onCancel?: () => void, readonly?: boolean }) => {
   const params = useParams();
@@ -86,7 +85,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
       let displayItems = initializedItems;
       if (locationFilter && locationFilter !== 'ALL') {
         displayItems = initializedItems.filter(item => {
-          const isShop = isShopLocation(item.warehouse_name);
+          const isShop = String(item.warehouse_name).toUpperCase() === 'SHOP';
           return locationFilter === 'SHOP' ? isShop : !isShop;
         });
       }

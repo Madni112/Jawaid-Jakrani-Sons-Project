@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../Context/supabaseClient';
 import { MdVisibility } from 'react-icons/md';
 import Spinner from '../../../ui/Spinner';
-import { isShopLocation } from '../../../utils/locationUtils';
 
 interface InwardChallanHistoryProps {
   onView: (id: string) => void;
@@ -21,32 +20,19 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, loc
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const [ receiptsRes, itemsRes, { data: purchases } ] = await Promise.all([
-        supabase.from('grn_receipts').select('*').neq('status', 'Pending Inward').order('created_at', { ascending: false }),
-        supabase.from('grn_items').select('*'),
+      const [ { data: grns, error }, { data: purchases } ] = await Promise.all([
+        supabase.from('grn_receipts').select('*, grn_items(*)').neq('status', 'Pending Inward').order('created_at', { ascending: false }),
         supabase.from('supplier_purchases').select('purchase_no, metadata')
       ]);
       
-      if (receiptsRes.error) throw receiptsRes.error;
+      if (error) throw error;
 
-      const itemsByGrn: Record<string, any[]> = {};
-      (itemsRes.data || []).forEach((it: any) => {
-        const gId = String(it.grn_id || '');
-        if (!itemsByGrn[gId]) itemsByGrn[gId] = [];
-        itemsByGrn[gId].push(it);
-      });
-
-      const combinedGrns = (receiptsRes.data || []).map((g: any) => ({
-        ...g,
-        grn_items: itemsByGrn[String(g.id)] || []
-      }));
-
-      let filteredGrns = combinedGrns || [];
+      let filteredGrns = grns || [];
       if (locationFilter && locationFilter !== 'ALL') {
         filteredGrns = filteredGrns.filter(g => {
           const items = g.grn_items || [];
           return items.some((item: any) => {
-            const isShop = isShopLocation(item.warehouse_name);
+            const isShop = String(item.warehouse_name).toUpperCase() === 'SHOP';
             return locationFilter === 'SHOP' ? isShop : !isShop;
           });
         });

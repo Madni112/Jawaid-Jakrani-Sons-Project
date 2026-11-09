@@ -77,9 +77,9 @@ const NotFound: React.FC<NotFoundProps> = ({
           </span>
         </div>
 
-        <ul className="flex items-center gap-2">
+        <div>
           <DarkModeSwitcher />
-        </ul>
+        </div>
       </header>
 
       {/* ERROR CARD CONTAINER */}
@@ -115,7 +115,7 @@ const NotFound: React.FC<NotFoundProps> = ({
 
       {/* FOOTER */}
       <footer className="border-t border-stroke dark:border-strokedark py-6 text-center text-xs text-gray-400 dark:text-gray-500">
-        © {new Date().getFullYear()} NHT ENTERPRISES • Developed by Abdul Sattar • All Rights Reserved.
+        © {new Date().getFullYear()} NHT ENTERPRISES by Abdul Sattar. All rights reserved.
       </footer>
     </div>
   );

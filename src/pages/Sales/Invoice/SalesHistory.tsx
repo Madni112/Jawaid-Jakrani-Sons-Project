@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate } from 'react-router-dom';
@@ -196,19 +196,20 @@ const SalesHistory = () => {
     try {
       setLoading(true);
 
-      const { data: invoicesData, error: invError } = await fetchAllPages(
-        supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })
-      );
+      const { data: invoicesData, error: invError } = await supabase
+        .from('sales_invoices')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (invError) throw invError;
 
-      const { data: vouchersData } = await fetchAllPages(
-        supabase.from('financial_vouchers').select('*')
-      );
+      const { data: vouchersData } = await supabase
+        .from('financial_vouchers')
+        .select('*');
 
-      const { data: returnsData, error: retError } = await fetchAllPages(
-        supabase.from('sales_returns').select('*')
-      );
+      const { data: returnsData, error: retError } = await supabase
+        .from('sales_returns')
+        .select('*');
 
       if (!retError && returnsData) {
         const cleanList = returnsData
@@ -452,6 +453,15 @@ const SalesHistory = () => {
       const invoiceIdentifier = targetInvoice?.invoice_no ? String(targetInvoice.invoice_no).trim() : `INV-${String(id).padStart(4, '0')}`;
       if (invoiceIdentifier) {
         await supabase.from('delivery_challans').delete().eq('invoice_no', invoiceIdentifier);
+        // Also delete any linked auto-generated financial vouchers (SAV and CRV)
+        try {
+          await supabase
+            .from('financial_vouchers')
+            .delete()
+            .eq('original_invoice_no', invoiceIdentifier);
+        } catch (vchDelErr) {
+          console.warn('Vouchers deletion warning for invoice:', invoiceIdentifier, vchDelErr);
+        }
       }
 
       const { error: deleteError } = await supabase.from('sales_invoices').delete().eq('id', id);
@@ -960,8 +970,8 @@ const SalesHistory = () => {
               {/* Quick Meta Pills */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                 <div className="bg-slate-50 dark:bg-meta-4/20 p-2.5 rounded-xl border border-stroke dark:border-strokedark">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Gate Pass #</span>
-                  <span className="font-mono font-bold text-black dark:text-white truncate block">{previewInvoice.gate_pass_no || '-'}</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Dispatch Mode</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 truncate block">Direct Delivery</span>
                 </div>
                 <div className="bg-slate-50 dark:bg-meta-4/20 p-2.5 rounded-xl border border-stroke dark:border-strokedark">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Sale Scenario</span>
@@ -1187,7 +1197,6 @@ const SalesHistory = () => {
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
                 <th className="py-3.5 px-4 text-center w-16 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('invoice_no')}>Invoice No <span className={sortConfig?.key === 'invoice_no' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'invoice_no' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
-                <th className="py-3.5 px-4 text-center">Gate Pass #</th>
                 <th className="py-3.5 px-4 text-center">DC No</th>
                 <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('sale_date')}>Sale Date <span className={sortConfig?.key === 'sale_date' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'sale_date' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 text-center cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('payment_term')}>Sale Type <span className={sortConfig?.key === 'payment_term' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'payment_term' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
@@ -1203,7 +1212,7 @@ const SalesHistory = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="text-center py-14">
+                  <td colSpan={10} className="text-center py-14">
                     <div className="flex flex-col items-center justify-center gap-2.5">
                       <Spinner size="w-8 h-8" color="border-primary" />
                       <span className="text-xs font-bold text-slate-500 dark:text-slate-400 animate-pulse">
@@ -1213,7 +1222,7 @@ const SalesHistory = () => {
                   </td>
                 </tr>
               ) : paginatedInvoices.length === 0 ? (
-                <tr><td colSpan={11} className="text-center py-10 text-xs text-slate-400 italic">No invoice records found.</td></tr>
+                <tr><td colSpan={10} className="text-center py-10 text-xs text-slate-400 italic">No invoice records found.</td></tr>
               ) : (
                 paginatedInvoices.map((inv) => {
                   const rawInvoiceIdString = String(inv.id).trim().toLowerCase();
@@ -1254,9 +1263,6 @@ const SalesHistory = () => {
                         >
                           {inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`}
                         </button>
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400 font-bold text-center font-mono whitespace-nowrap">
-                        {inv.gate_pass_no || '-'}
                       </td>
                       <td className="py-3 px-4 text-center font-mono">
                         {linkedDCs.length > 1 ? (

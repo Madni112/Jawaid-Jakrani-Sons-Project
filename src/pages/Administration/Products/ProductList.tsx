@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdSearch, MdAdd, MdWarning, MdClose, MdInfoOutline } from 'react-icons/md';
@@ -92,15 +92,15 @@ const ProductList = () => {
       if (error) throw error;
 
       if (baseProducts && baseProducts.length > 0) {
-        const { data: openStocks } = await fetchAllPages(supabase.from('opening_stocks').select('*'));
-        const { data: purchases } = await fetchAllPages(supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse'));
-        const { data: sales } = await fetchAllPages(supabase.from('sales_invoices').select('items, sale_status, receipt_status, dispatch_warehouse'));
-        const { data: sReturns } = await fetchAllPages(supabase.from('sales_returns').select('*'));
-        const { data: pReturns } = await fetchAllPages(supabase.from('purchase_returns').select('*'));
-        const { data: deliveryChallans } = await fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }));
+        const { data: openStocks } = await supabase.from('opening_stocks').select('*');
+        const { data: purchases } = await supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse');
+        const { data: sales } = await supabase.from('sales_invoices').select('items, sale_status, receipt_status, dispatch_warehouse');
+        const { data: sReturns } = await supabase.from('sales_returns').select('*');
+        const { data: pReturns } = await supabase.from('purchase_returns').select('*');
+        const { data: deliveryChallans } = await supabase.from('delivery_challans').select('*').order('created_at', { ascending: false });
         const [ { data: rData }, { data: iData } ] = await Promise.all([
-          fetchAllPages(supabase.from('grn_receipts').select('*')),
-          fetchAllPages(supabase.from('grn_items').select('*'))
+          supabase.from('grn_receipts').select('*'),
+          supabase.from('grn_items').select('*')
         ]);
         const itemsByGrn: Record<string, any[]> = {};
         (iData || []).forEach((it: any) => {
@@ -112,7 +112,7 @@ const ProductList = () => {
           ...g,
           grn_items: itemsByGrn[String(g.id)] || []
         }));
-        const { data: stockTransfers } = await fetchAllPages(supabase.from('stock_transfers').select('items, from_location, to_location, status'));
+        const { data: stockTransfers } = await supabase.from('stock_transfers').select('items, from_location, to_location, status');
         const { data: locationsMaster } = await supabase.from('inventory_locations').select('name');
 
         if (locationsMaster) {
@@ -152,8 +152,9 @@ const ProductList = () => {
             const hasGrn = metadata?.grn_id ||
               (Array.isArray(metadata?.grn_ids) && metadata.grn_ids.length > 0) ||
               (grnReceipts || []).some((g: any) =>
-                (p.purchase_no && g.grn_no?.includes(p.purchase_no)) ||
-                (p.id && g.metadata?.linkedPurchaseId === p.id)
+                (p.purchase_no && (g.grn_no?.includes(p.purchase_no) || g.grn_number?.includes(p.purchase_no))) ||
+                (p.id && (g.purchase_id === p.id || g.metadata?.linkedPurchaseId === p.id)) ||
+                (metadata?.grn_id && g.id === metadata.grn_id)
               );
 
             if (termClean !== 'cancel' && termClean !== 'deleted' && termClean !== 'draft' && !hasGrn) {
@@ -367,7 +368,7 @@ const ProductList = () => {
   };
 
   // ---- Server-side pagination (only the current page is loaded) ----
-  const PRODUCT_PAGE_COLS = 'id, product_name, item_sr_no, category, sub_category, sub_sub_category, bin, uom, retail_price, purchase_price, mrp, min_stock_alert, product_description, item_type, pieces_per_box, pcs_per_box, pieces_per_packing, scenario_name, service_charges';
+  const PRODUCT_PAGE_COLS = 'id, product_name, item_sr_no, category, sub_category, sub_sub_category, bin, uom, retail_price, purchase_price, mrp, min_stock_alert, product_description, item_type, pieces_per_box, pcs_per_box, pieces_per_packing, scenario_name, service_charges, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_purchase_price, loose_sale_price';
 
   const stockForProduct = (productName: string) => {
     const n = String(productName || '').trim().toLowerCase();
@@ -489,7 +490,7 @@ const ProductList = () => {
     }
     setSelectedStockBreakdown({ ...product, _loading: true });
     try {
-      const detail = await getDetailedBreakdown(product.product_name);
+      const detail = await getDetailedBreakdown(product.product_name, product.item_sr_no);
       setSelectedStockBreakdown({
         ...product,
         breakdown: detail.breakdown,
@@ -596,16 +597,20 @@ const ProductList = () => {
 
     const isTile = Boolean(
       (String(product.category || '').toLowerCase().includes('tile') ||
-        String(product.scenario_name || '').toLowerCase().includes('tile')) ||
-      Number(product.pieces_per_box || product.pcs_per_box || product.pieces_per_packing || 0) > 1
+        String(product.scenario_name || '').toLowerCase().includes('tile'))
     );
-    const rawPcs = Number(product.pieces_per_box || product.pcs_per_box || product.pieces_per_packing || 0);
+    const allowLoose = Boolean(product.allow_loose_sales || isTile);
+    const rawPcs = Number(product.loose_conversion_ratio || product.pieces_per_box || product.pcs_per_box || product.pieces_per_packing || 0);
     const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
-    const isTileWithPieces = isTile && pcsPerBox > 1;
+    const hasLooseUnits = allowLoose && pcsPerBox > 1;
+
+    const bulkLabel = product.uom || (isTile ? 'Box' : 'Unit');
+    const bulkPlural = bulkLabel.endsWith('S') ? bulkLabel : `${bulkLabel}s`;
+    const looseLabel = product.loose_uom || (isTile ? 'pcs' : 'Units');
 
     let tileBoxes = 0;
     let tileLoosePcs = 0;
-    if (isTileWithPieces) {
+    if (hasLooseUnits) {
       const totalPieces = Math.round(currentStock * pcsPerBox);
       tileBoxes = Math.floor(totalPieces / pcsPerBox);
       tileLoosePcs = totalPieces % pcsPerBox;
@@ -645,13 +650,13 @@ const ProductList = () => {
         </td>
         <td className="py-3.5 px-4 text-center">
           <div className="inline-flex flex-col items-center">
-            <span className={`font-black text-xs px-2.5 py-1 ${isTileWithPieces && tileLoosePcs > 0 ? 'rounded-xl' : 'rounded-full'} inline-flex items-center gap-1 ${badgeClass}`}>
-              {isTileWithPieces ? (
-                <span className="flex flex-col items-center leading-tight">
-                  <span>{tileBoxes.toLocaleString()} {tileBoxes === 1 ? 'Box' : 'Boxes'}</span>
+            <span className={`font-black text-xs px-2.5 py-1 ${hasLooseUnits && tileLoosePcs > 0 ? 'rounded-xl' : 'rounded-full'} inline-flex items-center gap-1 ${badgeClass}`}>
+              {hasLooseUnits ? (
+                <span className="flex flex-col items-center leading-tight py-0.5">
+                  <span className="text-xs font-black">{tileBoxes.toLocaleString()} {tileBoxes === 1 ? bulkLabel : bulkPlural}</span>
                   {tileLoosePcs > 0 && (
-                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                      + {tileLoosePcs} pcs
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-300 mt-0.5">
+                      {tileLoosePcs} {looseLabel}
                     </span>
                   )}
                 </span>
@@ -863,21 +868,26 @@ const ProductList = () => {
               }
               const isTile = Boolean(
                 (String(selectedStockBreakdown.category || '').toLowerCase().includes('tile') ||
-                  String(selectedStockBreakdown.scenario_name || '').toLowerCase().includes('tile')) &&
-                (Number(selectedStockBreakdown.pieces_per_box || selectedStockBreakdown.pcs_per_box || 0) > 1 || String(selectedStockBreakdown.scenario_name || '').toLowerCase().includes('tile'))
+                  String(selectedStockBreakdown.scenario_name || '').toLowerCase().includes('tile'))
               );
-              const rawPcs = Number(selectedStockBreakdown.pieces_per_box || selectedStockBreakdown.pcs_per_box || 0);
+              const allowLoose = Boolean(selectedStockBreakdown.allow_loose_sales || isTile);
+              const rawPcs = Number(selectedStockBreakdown.loose_conversion_ratio || selectedStockBreakdown.pieces_per_box || selectedStockBreakdown.pcs_per_box || 0);
               const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
+              const hasLooseUnits = allowLoose && pcsPerBox > 1;
+
+              const bulkLabel = selectedStockBreakdown.uom || (isTile ? 'Box' : 'Unit');
+              const bulkPlural = bulkLabel.endsWith('S') ? bulkLabel : `${bulkLabel}s`;
+              const looseLabel = selectedStockBreakdown.loose_uom || (isTile ? 'Pcs' : 'Units');
 
               const formatVal = (val: number) => {
-                if (isTile && pcsPerBox > 1) {
+                if (hasLooseUnits) {
                   const totalPieces = Math.round(val * pcsPerBox);
                   const b = Math.floor(totalPieces / pcsPerBox);
                   const p = totalPieces % pcsPerBox;
                   return (
                     <div className="text-right flex flex-col items-end">
-                      <span className="font-bold text-slate-700 dark:text-slate-200">{b} Boxes</span>
-                      {p > 0 && <span className="text-[9px] font-bold text-slate-400">+{p} Pcs</span>}
+                      <span className="font-bold text-slate-700 dark:text-slate-200">{b} {b === 1 ? bulkLabel : bulkPlural}</span>
+                      {p > 0 && <span className="text-[9px] font-bold text-slate-400">+{p} {looseLabel}</span>}
                     </div>
                   );
                 }
@@ -912,6 +922,16 @@ const ProductList = () => {
                         </span>
                       </div>
                       {formatVal(bData.purchased || 0)}
+                    </div>
+                    {/* Manufactured Stock Output */}
+                    <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Manufactured</span>
+                        <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 tracking-wide">
+                          (BOM Production)
+                        </span>
+                      </div>
+                      {formatVal(bData.manufactured || 0)}
                     </div>
                     {/* Purchase / QC hold (from GRN) */}
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-yellow-50/50 dark:bg-yellow-900/10 px-3 -mx-3 rounded-lg mb-1">
@@ -1012,16 +1032,7 @@ const ProductList = () => {
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800/50">
                   <span className="text-xs font-semibold text-slate-500">Dimensions</span>
-                  <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    {(() => {
-                      const sizeMatch = String(selectedQuickViewProduct.product_description || '').match(/Size:\s*([^|]+)/i);
-                      if (sizeMatch) return sizeMatch[1].trim();
-                      const text = `${selectedQuickViewProduct.category || ''} ${selectedQuickViewProduct.product_name || ''} ${selectedQuickViewProduct.sub_category || ''}`;
-                      const match = text.match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
-                      if (match) return `${match[1]} × ${match[2]} cm`;
-                      return selectedQuickViewProduct.dimensions || 'N/A';
-                    })()}
-                  </span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedQuickViewProduct.dimensions || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800/50">
                   <span className="text-xs font-semibold text-slate-500">Weight</span>

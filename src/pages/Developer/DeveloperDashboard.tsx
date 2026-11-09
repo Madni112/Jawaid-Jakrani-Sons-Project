@@ -107,8 +107,7 @@ export const PERMISSION_TREE: PermissionNode[] = [
       { id: '/Sales/Invoice/List', label: 'Sales Invoices' },
       { id: '/sales/orders', label: 'Sales Orders' },
       { id: '/sales/price-lists', label: 'Customer Price Lists' },
-      { id: '/Sales/Delivery-Challan/List', label: 'Delivery Challan (A-39 WDQ)' },
-      { id: '/Sales/Shop-Dispatch/List', label: 'Shop Dispatch Queue (SDQ)' },
+      { id: '/Sales/Delivery-Challan/List', label: 'Delivery Challan' },
       { id: '/Sales/Sales-Return/List', label: 'Sales Returns' },
       { id: '/Sales-Return/Debit-Notes/List', label: 'Debit Notes' },
       { id: '/Sales/Sales-Return-Receipt/List', label: 'Sales Return Receipts' },
@@ -123,8 +122,7 @@ export const PERMISSION_TREE: PermissionNode[] = [
       { id: '/purchase/orders', label: 'Purchase Orders' },
       { id: '/purchase/quotations', label: 'Supplier Quotations' },
       { id: '/Purchase/GRN/List', label: 'Goods Receiving Note (GRN)' },
-      { id: '/Purchase/Inward-Challan/List', label: 'A-39 Inward Challans (Receiving)' },
-      { id: '/Purchase/Shop-Receiving', label: 'Shop Incoming Stock Receiving' },
+      { id: '/Purchase/Inward-Challan/List', label: 'Inward Challan' },
       { id: '/Purchase/Purchase-Return/List', label: 'Purchase Returns' },
       { id: '/Purchase/Purchase-Return-Receipt/List', label: 'Purchase Return Receipts' },
       { id: '/Purchase/Purchase-Receipt/List', label: 'Vendor Payment Receipts' },
@@ -156,7 +154,6 @@ export const PERMISSION_TREE: PermissionNode[] = [
       { id: '/inventory/stock-ledger', label: 'Stock Movement Ledger' },
       { id: '/inventory/scheduled-valuations', label: 'Scheduled Valuations' },
       { id: '/Warehouse/Return-Challan', label: 'A-39 Customer Return Challans' },
-      { id: '/Warehouse/Shop-Return', label: 'Shop Return Receiving Queue' },
       { id: '/Inventory/OpeningStock/List', label: 'Opening Stock Balance' },
     ],
   },
@@ -174,6 +171,17 @@ export const PERMISSION_TREE: PermissionNode[] = [
     ],
   },
   {
+    id: 'locations_group',
+    label: 'Locations & Logistics',
+    children: [
+      { id: '/Administration/Locations/List', label: 'Assigned Locations / Warehouses' },
+      { id: '/Administration/StockTransfer/List', label: 'Inter-Warehouse Stock Transfers' },
+      { id: '/Administration/Transportation/List', label: 'Transportation & Fleet' },
+      { id: '/Sales/Delivery-Challan/List', label: 'Delivery Challan' },
+      { id: '/Purchase/Inward-Challan/List', label: 'Inward Challan' },
+    ],
+  },
+  {
     id: 'administration',
     label: 'Classification & Settings',
     children: [
@@ -182,8 +190,6 @@ export const PERMISSION_TREE: PermissionNode[] = [
       { id: '/Administration/Surface-Finish', label: 'Brand' },
       { id: '/administration/tile-dimensions', label: 'Tile Dimensions Matrix' },
       { id: '/Administration/UOM/List', label: 'Units of Measure (UOM)' },
-      { id: '/Administration/Locations/List', label: 'Locations / Warehouses' },
-      { id: '/Administration/Transportation/List', label: 'Transportation & Couriers' },
       { id: '/administration/drivers', label: 'Drivers & Fleet Directory' },
       { id: '/company', label: 'Company Profile' },
     ],
@@ -234,8 +240,23 @@ export interface EmployeeAccount {
   email?: string;
   role: string;
   allowed_modules: string[];
+  location_id?: string | number | null;
+  allowed_locations?: string[];
+  allowed_settings?: string[];
   created_at: string;
 }
+
+export const SETTINGS_TAB_CONFIG: { id: string; label: string; desc: string; icon: string }[] = [
+  { id: 'profile', label: 'Profile', desc: 'Account credentials, name and security info', icon: '👤' },
+  { id: 'security_devices', label: 'Login Devices & Security', desc: 'Active sessions, passkeys, and trusted devices', icon: '🛡️' },
+  { id: 'theme', label: 'Theme & Appearance', desc: 'Workspace background, theme colors and studio controls', icon: '🎨' },
+  { id: 'credit_limits', label: 'Customer Credit Limits', desc: 'Credit limits, customer balances, and limit thresholds', icon: '💳' },
+  { id: 'sound_effects', label: 'Audio & Sound Effects', desc: 'Interactive UI sound chimes, alert tones and volume', icon: '🔊' },
+  { id: 'backup', label: 'Data Backup & Export', desc: 'Download system database backups and CSV snapshots', icon: '💾' },
+  { id: 'workflow_logistics', label: 'Gate Pass & Workflow', desc: 'Inward & Delivery challan 2-step warehouse approval workflow', icon: '📑' },
+];
+
+export const ALL_SETTING_TAB_IDS = SETTINGS_TAB_CONFIG.map(t => t.id);
 
 // Master Super Admin / Developer Credentials
 const DEV_EMAIL = getBrandConfig().adminEmail;
@@ -251,7 +272,11 @@ const BACKUP_DEV_PASSWORD = 'NoorHorizon@5923';
 const PermissionTreeEditor: React.FC<{
   selectedIds: string[];
   onChange: (ids: string[]) => void;
-}> = ({ selectedIds, onChange }) => {
+  allowedLocations?: string[];
+  onLocationsChange?: (locations: string[]) => void;
+  availableLocations?: any[];
+}> = ({ selectedIds, onChange, allowedLocations = [], onLocationsChange, availableLocations = [] }) => {
+  const [openLocationPill, setOpenLocationPill] = useState<Record<string, boolean>>({});
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     dashboards: true,
     crm: true,
@@ -474,6 +499,9 @@ const PermissionTreeEditor: React.FC<{
                     );
                   }
 
+                  const isChallanModule = child.id === '/Sales/Delivery-Challan/List' || child.id === '/Purchase/Inward-Challan/List';
+                  const isLocationDropdownOpen = Boolean(openLocationPill[child.id]);
+
                   // CRUD Module with 4-way granular selector: Unticked | View Only | Full Access | Custom
                   return (
                     <div
@@ -490,7 +518,7 @@ const PermissionTreeEditor: React.FC<{
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         {/* Title & Status */}
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
                           <span
                             className={`w-2 h-2 rounded-full shrink-0 ${
                               perm.level === 'full'
@@ -522,28 +550,97 @@ const PermissionTreeEditor: React.FC<{
                               ? 'Only View'
                               : perm.level === 'custom'
                               ? 'Custom'
-                              : 'Unticked'}
+                              : 'No Access'}
                           </span>
+
+                          {/* Location Dropdown Arrow for Challans */}
+                          {isChallanModule && onLocationsChange && (
+                            <div className="relative inline-block">
+                              <button
+                                type="button"
+                                onClick={() => setOpenLocationPill(prev => ({ ...prev, [child.id]: !prev[child.id] }))}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                                  allowedLocations.length > 0
+                                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-2xs'
+                                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                                }`}
+                                title="Assign authorized branch locations for this challan"
+                              >
+                                <span>📍 {
+                                  allowedLocations.length === 0
+                                    ? 'All Locations'
+                                    : allowedLocations.length === 1
+                                    ? allowedLocations[0]
+                                    : `Custom (${allowedLocations.length} Locations)`
+                                }</span>
+                                <MdKeyboardArrowDown className={`text-xs transition-transform ${isLocationDropdownOpen ? 'rotate-180' : ''}`} />
+                              </button>
+
+                              {isLocationDropdownOpen && (
+                                <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-white dark:bg-boxdark rounded-xl shadow-xl border border-stroke dark:border-strokedark p-2 text-xs space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                                  <div className="px-2 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-stroke dark:border-strokedark flex items-center justify-between">
+                                    <span>Assigned Locations</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => onLocationsChange([])}
+                                      className="text-emerald-600 hover:underline capitalize"
+                                    >
+                                      Reset (All)
+                                    </button>
+                                  </div>
+                                  <div className="max-h-40 overflow-y-auto space-y-1 pt-1">
+                                    {(availableLocations || []).map((loc: any) => {
+                                      const lName = String(loc.name || '').trim();
+                                      const isChecked = allowedLocations.includes(lName);
+                                      return (
+                                        <label
+                                          key={loc.id || lName}
+                                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-meta-4 cursor-pointer text-slate-700 dark:text-slate-200"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                onLocationsChange([...allowedLocations, lName]);
+                                              } else {
+                                                onLocationsChange(allowedLocations.filter(x => x !== lName));
+                                              }
+                                            }}
+                                            className="rounded text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
+                                          />
+                                          <span className="font-semibold">{lName}</span>
+                                          {loc.location_type && (
+                                            <span className="text-[9px] text-gray-400 font-normal ml-auto">({loc.location_type})</span>
+                                          )}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
 
-                        {/* 4-Way Segmented Control */}
+                        {/* 3-Way Segmented Control: No Access | Only View | Full */}
                         <div className="inline-flex items-center p-0.5 bg-gray-100 dark:bg-meta-4 rounded-lg border border-stroke dark:border-strokedark shrink-0 self-start sm:self-auto">
                           <button
                             type="button"
                             onClick={() => handleLevelChange(child.id, node, 'none')}
-                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition cursor-pointer ${
+                            className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition cursor-pointer ${
                               perm.level === 'none'
                                 ? 'bg-white dark:bg-boxdark text-gray-800 dark:text-gray-200 shadow-xs'
                                 : 'text-gray-500 hover:text-black dark:hover:text-white'
                             }`}
                             title="No access to this module"
                           >
-                            Unticked
+                            No Access
                           </button>
                           <button
                             type="button"
                             onClick={() => handleLevelChange(child.id, node, 'view')}
-                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
+                            className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
                               perm.level === 'view'
                                 ? 'bg-sky-600 text-white shadow-xs'
                                 : 'text-gray-500 hover:text-sky-600 dark:hover:text-sky-400'
@@ -555,7 +652,7 @@ const PermissionTreeEditor: React.FC<{
                           <button
                             type="button"
                             onClick={() => handleLevelChange(child.id, node, 'full')}
-                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
+                            className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
                               perm.level === 'full'
                                 ? 'bg-emerald-600 text-white shadow-xs'
                                 : 'text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400'
@@ -563,18 +660,6 @@ const PermissionTreeEditor: React.FC<{
                             title="Full access (View, Add, Edit, Delete)"
                           >
                             <MdCheckCircle className="text-xs" /> Full
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleLevelChange(child.id, node, 'custom')}
-                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
-                              perm.level === 'custom'
-                                ? 'bg-amber-600 text-white shadow-xs'
-                                : 'text-gray-500 hover:text-amber-600 dark:hover:text-amber-400'
-                            }`}
-                            title="Pick exact actions (Only add, only edit, etc.)"
-                          >
-                            <MdTune className="text-xs" /> Custom
                           </button>
                         </div>
                       </div>
@@ -673,8 +758,6 @@ const DeveloperDashboard: React.FC = () => {
 
   // Master System Permissions State
   const [systemConfig, setSystemConfig] = useState<SystemMasterConfig>(DEFAULT_SYSTEM_CONFIG);
-  const [showAlmResetPw, setShowAlmResetPw] = useState(false);
-  const [almResetPwInput, setAlmResetPwInput] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [userWhitelistSearch, setUserWhitelistSearch] = useState('');
 
@@ -722,8 +805,8 @@ const DeveloperDashboard: React.FC = () => {
       const roleModules = ROLE_PRESETS[assignLoginRole]?.modules || ROLE_PRESETS['Salesman'].modules;
 
       const secondaryAuthClient = createClient(
-        import.meta.env.VITE_SUPABASE_URL || 'https://zzjxukhrhvmuxxznjbos.supabase.co',
-        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_1rECaTLSxzwonvR12iOOKQ_XEI8wqCb',
+        import.meta.env.VITE_SUPABASE_URL || 'https://niwzgfouutangmdskqql.supabase.co',
+        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_2xSHcWIOC9vRjSxv-QtjOA_AbHygGKl',
         { auth: { persistSession: false, autoRefreshToken: false } }
       );
 
@@ -736,7 +819,7 @@ const DeveloperDashboard: React.FC = () => {
             full_name: salesmanToAssignLogin.name.trim(),
             role: assignLoginRole,
             tenant_id: cleanSlug,
-            business_name: 'NHT ENTERPRISE',
+            business_name: 'AL MUHAMMADI',
             allowed_modules: roleModules,
           },
         },
@@ -751,7 +834,7 @@ const DeveloperDashboard: React.FC = () => {
           slug: cleanSlug,
           email: assignLoginEmail.trim(),
           business_activity: assignLoginRole,
-          seller_address: 'NHT ENTERPRISE Headquarters',
+          seller_address: 'AL MUHAMMADI',
           allowed_modules: roleModules,
         },
       ], { onConflict: 'slug' });
@@ -912,9 +995,12 @@ const DeveloperDashboard: React.FC = () => {
 
   // Edit Permissions Modal State
   const [editingEmployee, setEditingEmployee] = useState<EmployeeAccount | null>(null);
+  const [editModalTab, setEditModalTab] = useState<'details' | 'roles' | 'settings'>('roles');
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('Warehouse Manager');
   const [editModules, setEditModules] = useState<string[]>([]);
+  const [editAllowedLocations, setEditAllowedLocations] = useState<string[]>([]);
+  const [editAllowedSettings, setEditAllowedSettings] = useState<string[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Create Employee Form State
@@ -924,6 +1010,7 @@ const DeveloperDashboard: React.FC = () => {
     password: '',
     role: 'Warehouse Manager',
     location_id: '' as string | number,
+    allowed_locations: [] as string[],
     modules: ROLE_PRESETS['Warehouse Manager'].modules,
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -935,7 +1022,6 @@ const DeveloperDashboard: React.FC = () => {
       fetchSalesmenData();
       fetchSystemMasterConfig().then(cfg => {
         setSystemConfig(cfg);
-        setAlmResetPwInput(cfg.alm_reset_password || 'ALM-RESET-MASTER-2026');
       });
     }
   }, [isDevAuthorized]);
@@ -1024,8 +1110,8 @@ const DeveloperDashboard: React.FC = () => {
     try {
       setPwUpdating(true);
       const secondaryAuthClient = createClient(
-        import.meta.env.VITE_SUPABASE_URL || 'https://wpzwntbgpeiiclytuuht.supabase.co',
-        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_IpW1ssWRf1_q6-J0hvXTzA_kVDyZcjy',
+        import.meta.env.VITE_SUPABASE_URL || 'https://niwzgfouutangmdskqql.supabase.co',
+        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_2xSHcWIOC9vRjSxv-QtjOA_AbHygGKl',
         { auth: { persistSession: false, autoRefreshToken: false } }
       );
 
@@ -1098,15 +1184,38 @@ const DeveloperDashboard: React.FC = () => {
       
       let formattedEmployees: EmployeeAccount[] = [];
       if (tenantData && tenantData.length > 0) {
-        formattedEmployees = tenantData.map((t: any) => ({
-          id: t.id,
-          name: t.name,
-          slug: t.slug,
-          email: t.email,
-          role: t.role || t.business_activity || (t.name?.toLowerCase().includes('admin') ? 'Super Admin' : 'Staff'),
-          allowed_modules: Array.isArray(t.allowed_modules) && t.allowed_modules.length > 0 ? t.allowed_modules : getAllPermissionIds(),
-          created_at: t.created_at || new Date().toISOString(),
-        }));
+        formattedEmployees = tenantData.map((t: any) => {
+          let modules = Array.isArray(t.allowed_modules) && t.allowed_modules.length > 0 ? t.allowed_modules : getAllPermissionIds();
+          // If stored array is just category names or ["all"], expand to full permission IDs
+          if (modules.includes('all') || modules.some((m: string) => !m.startsWith('/'))) {
+            const expanded = new Set<string>();
+            modules.forEach((m: string) => {
+              if (m === 'all') {
+                getAllPermissionIds().forEach(id => expanded.add(id));
+              } else {
+                expanded.add(m);
+                // If it's a category id (e.g. "sales", "purchase"), add all its children
+                const cat = PERMISSION_TREE.find(p => p.id === m);
+                if (cat?.children) {
+                  cat.children.forEach(c => expanded.add(c.id));
+                }
+              }
+            });
+            modules = Array.from(expanded);
+          }
+          return {
+            id: t.id,
+            name: t.name,
+            slug: t.slug,
+            email: t.email,
+            role: t.role || t.business_activity || (t.name?.toLowerCase().includes('admin') ? 'Super Admin' : 'Staff'),
+            allowed_modules: modules,
+            location_id: t.location_id,
+            allowed_locations: Array.isArray(t.allowed_locations) ? t.allowed_locations : [],
+            allowed_settings: Array.isArray(t.allowed_settings) ? t.allowed_settings : ALL_SETTING_TAB_IDS,
+            created_at: t.created_at || new Date().toISOString(),
+          };
+        });
       } else {
         formattedEmployees = [];
       }
@@ -1156,8 +1265,8 @@ const DeveloperDashboard: React.FC = () => {
       // 1. Create User in Supabase Auth with allowed modules and role
       // Create a secondary client so we don't log out the active session
       const secondaryAuthClient = createClient(
-        import.meta.env.VITE_SUPABASE_URL || 'https://zzjxukhrhvmuxxznjbos.supabase.co',
-        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_1rECaTLSxzwonvR12iOOKQ_XEI8wqCb',
+        import.meta.env.VITE_SUPABASE_URL || 'https://niwzgfouutangmdskqql.supabase.co',
+        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_2xSHcWIOC9vRjSxv-QtjOA_AbHygGKl',
         { auth: { persistSession: false, autoRefreshToken: false } }
       );
       
@@ -1170,7 +1279,7 @@ const DeveloperDashboard: React.FC = () => {
             full_name: newEmployee.name.trim(),
             role: newEmployee.role,
             tenant_id: cleanSlug,
-            business_name: 'NHT ENTERPRISE',
+            business_name: 'AL MUHAMMADI',
             allowed_modules: newEmployee.modules,
           },
         },
@@ -1186,8 +1295,9 @@ const DeveloperDashboard: React.FC = () => {
             slug: cleanSlug,
             email: newEmployee.email.trim(),
             business_activity: newEmployee.role,
-            seller_address: 'NHT ENTERPRISE Headquarters',
+            seller_address: 'AL MUHAMMADI',
             allowed_modules: newEmployee.modules,
+            allowed_locations: newEmployee.allowed_locations,
             location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
           },
         ], { onConflict: 'slug' });
@@ -1200,8 +1310,9 @@ const DeveloperDashboard: React.FC = () => {
               slug: cleanSlug,
               email: newEmployee.email.trim(),
               business_activity: newEmployee.role,
-              seller_address: 'NHT ENTERPRISE Headquarters',
+              seller_address: 'AL MUHAMMADI',
               allowed_modules: newEmployee.modules,
+              allowed_locations: newEmployee.allowed_locations,
               location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
             },
           ]);
@@ -1255,9 +1366,12 @@ const DeveloperDashboard: React.FC = () => {
 
   const handleOpenEditModal = (emp: EmployeeAccount) => {
     setEditingEmployee(emp);
+    setEditModalTab('details');
     setEditName(emp.name || '');
     setEditRole(emp.role || 'Warehouse Manager');
     setEditModules(emp.allowed_modules || getAllPermissionIds());
+    setEditAllowedLocations(Array.isArray(emp.allowed_locations) ? emp.allowed_locations : []);
+    setEditAllowedSettings(Array.isArray(emp.allowed_settings) && emp.allowed_settings.length > 0 ? emp.allowed_settings : ALL_SETTING_TAB_IDS);
   };
 
   const handleSaveEmployeePermissions = async () => {
@@ -1274,6 +1388,8 @@ const DeveloperDashboard: React.FC = () => {
         name: editName.trim(),
         business_activity: editRole,
         allowed_modules: editModules,
+        allowed_locations: editAllowedLocations,
+        allowed_settings: editAllowedSettings,
       };
 
       const { error } = await supabase
@@ -1730,7 +1846,7 @@ const DeveloperDashboard: React.FC = () => {
               <MdSecurity />
             </div>
             <h2 className="text-2xl font-black tracking-tight text-black dark:text-white">Master Role & Dev Console</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for NHT ENTERPRISE</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for AL MUHAMMADI</p>
           </div>
 
           {authError && (
@@ -1793,7 +1909,7 @@ const DeveloperDashboard: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">NHT ENTERPRISE</h1>
+              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">AL MUHAMMADI</h1>
               <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                 Employee Role & Access Control
               </span>
@@ -2198,7 +2314,7 @@ const DeveloperDashboard: React.FC = () => {
                   </p>
                 </div>
                 <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-semibold flex items-center gap-1.5">
-                  <MdSecurity /> NHT ENTERPRISE RBAC
+                  <MdSecurity /> AL MUHAMMADI RBAC
                 </span>
               </div>
 
@@ -2264,7 +2380,7 @@ const DeveloperDashboard: React.FC = () => {
                       <input
                         type="email"
                         required
-                        placeholder={`e.g. warehouse@${getBrandConfig().isAlm ? 'almuhammadi.com' : 'zoaibalicompany.com'}`}
+                        placeholder="e.g. employee@jawaidjakwani.com"
                         value={newEmployee.email}
                         onChange={e => setNewEmployee({ ...newEmployee, email: e.target.value })}
                         className="w-full bg-white dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-lg p-2.5 text-black dark:text-white text-xs outline-none focus:border-emerald-500"
@@ -2323,6 +2439,9 @@ const DeveloperDashboard: React.FC = () => {
                   <PermissionTreeEditor
                     selectedIds={newEmployee.modules}
                     onChange={ids => setNewEmployee({ ...newEmployee, modules: ids })}
+                    allowedLocations={newEmployee.allowed_locations}
+                    onLocationsChange={locs => setNewEmployee({ ...newEmployee, allowed_locations: locs })}
+                    availableLocations={locations}
                   />
                 </div>
 
@@ -2949,77 +3068,6 @@ const DeveloperDashboard: React.FC = () => {
                 </form>
               </div>
 
-              {/* CARD 4: AL MUHAMMADI ERP FACTORY RESET SECURITY & ARCHIVES */}
-              <div className="bg-white dark:bg-boxdark rounded-2xl border border-red-200 dark:border-red-900/50 p-6 shadow-default space-y-5 lg:col-span-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stroke dark:border-strokedark">
-                  <div className="flex items-center gap-3">
-                    <span className="p-2.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 text-xl">
-                      <MdSecurity />
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-sm text-black dark:text-white">AL Muhammadi ERP Factory Reset Governance</h3>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
-                          High Security
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-gray-400">
-                        Manages the authorization master password required to wipe transactions and view saved snapshots.
-                      </p>
-                    </div>
-                  </div>
-
-                  <a
-                    href="/dev/master/reset-backups"
-                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer shrink-0"
-                  >
-                    <MdCloudDone size={16} />
-                    <span>View Reset Backups Vault</span>
-                  </a>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-black dark:text-white">
-                      Authorization Master Password for ERP Reset
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type={showAlmResetPw ? 'text' : 'password'}
-                        value={almResetPwInput}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setAlmResetPwInput(val);
-                          setSystemConfig((prev) => ({ ...prev, alm_reset_password: val }));
-                        }}
-                        placeholder="Enter Master Reset Password"
-                        className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-red-500 focus:outline-hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowAlmResetPw((p) => !p)}
-                        className="px-3 rounded-xl border border-stroke dark:border-strokedark text-gray-500 hover:text-black dark:hover:text-white transition cursor-pointer"
-                        title={showAlmResetPw ? 'Hide password' : 'Show password'}
-                      >
-                        <MdVisibility />
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-gray-400">
-                      Settings in AL Muhammadi will strictly verify against this password before allowing any database wipe.
-                    </p>
-                  </div>
-
-                  <div className="p-4 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50/30 dark:bg-red-950/20 space-y-1.5 text-xs text-red-900 dark:text-red-300">
-                    <span className="font-bold flex items-center gap-1.5">
-                      <MdInfoOutline size={15} /> Safety Guarantee & Automation
-                    </span>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Whenever an authorized user executes a Factory Reset from Settings, the system automatically captures a full Excel & JSON snapshot, triggers an instant browser download, and uploads a permanent copy to <strong>/dev/master/reset-backups</strong>.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
             </div>
           </div>
         )}
@@ -3028,7 +3076,7 @@ const DeveloperDashboard: React.FC = () => {
       {/* EDIT EMPLOYEE PERMISSIONS MODAL */}
       {editingEmployee && (
         <div className="fixed inset-0 bg-black/60 z-99999 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-boxdark w-full max-w-2xl rounded-3xl border border-stroke dark:border-strokedark p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
+          <div className="bg-white dark:bg-boxdark w-[92vw] max-w-6xl rounded-3xl border border-stroke dark:border-strokedark p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
             
             <div className="flex items-center justify-between border-b border-stroke dark:border-strokedark pb-4">
               <div>
@@ -3042,46 +3090,215 @@ const DeveloperDashboard: React.FC = () => {
               </span>
             </div>
 
-            {/* QUICK PRESET TEMPLATES */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-black dark:text-white mb-1">Employee Name:</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-transparent dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-xl p-2 text-xs text-black dark:text-white outline-none focus:border-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-black dark:text-white mb-2">Role Template Presets:</label>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(ROLE_PRESETS).map(([key, preset]) => (
-                    <button
-                      type="button"
-                      key={key}
-                      onClick={() => applyRolePresetToEdit(key)}
-                      className={`text-xs px-2.5 py-1 rounded-lg border font-bold flex items-center gap-1 transition cursor-pointer ${
-                        editRole === key
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                          : 'bg-gray-100 dark:bg-meta-4/40 text-gray-700 dark:text-gray-300 border-stroke dark:border-strokedark hover:border-emerald-500'
-                      }`}
-                    >
-                      <span>{preset.icon}</span>
-                      <span>{key}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+            {/* TAB NAVIGATION */}
+            <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark pb-2">
+              <button
+                type="button"
+                onClick={() => setEditModalTab('details')}
+                className={`text-xs px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  editModalTab === 'details'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-gray-100 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <MdBadge className="text-sm" /> Employee Details
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditModalTab('roles')}
+                className={`text-xs px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  editModalTab === 'roles'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-gray-100 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <MdSecurity className="text-sm" /> Roles & Permissions ({editModules.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditModalTab('settings')}
+                className={`text-xs px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  editModalTab === 'settings'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-gray-100 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <MdTune className="text-sm" /> Allowed Settings ({editAllowedSettings.length}/{SETTINGS_TAB_CONFIG.length})
+              </button>
             </div>
 
-            {/* PERMISSION TREE */}
-            <div className="flex-1 overflow-y-auto pr-1">
-              <PermissionTreeEditor
-                selectedIds={editModules}
-                onChange={ids => setEditModules(ids)}
-              />
-            </div>
+            {/* TAB CONTENT: 1. DETAILS */}
+            {editModalTab === 'details' && (
+              <div className="space-y-4 flex-1 overflow-y-auto pr-1">
+                <div>
+                  <label className="block text-xs font-bold text-black dark:text-white mb-1">Employee Full Name:</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-transparent dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-xl p-2.5 text-xs text-black dark:text-white outline-none focus:border-emerald-500"
+                    placeholder="e.g. Muhammad Tariq"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-black dark:text-white mb-1">Login Email / Username:</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={editingEmployee.email || '—'}
+                      className="w-full bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark rounded-xl p-2.5 text-xs text-gray-500 dark:text-gray-400 font-mono cursor-not-allowed"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">System authentication identifier</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-black dark:text-white mb-1">Current Active Role:</label>
+                    <div className="p-2.5 bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                      <span>{ROLE_PRESETS[editRole]?.icon || '🛡️'}</span>
+                      <span>{editRole}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">Configured in Roles tab</p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Account Status Summary</span>
+                  <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                    <span>Registered Profile:</span>
+                    <strong className="text-black dark:text-white font-mono">{editingEmployee.slug || editingEmployee.name}</strong>
+                  </div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                    <span>Access Footprint:</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400">{editModules.length} pages enabled</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: 2. ROLES & PERMISSIONS */}
+            {editModalTab === 'roles' && (
+              <div className="flex-1 flex flex-col min-h-0 space-y-4">
+                {/* QUICK PRESET TEMPLATES */}
+                <div className="p-3 rounded-2xl bg-gray-50 dark:bg-meta-4/20 border border-stroke dark:border-strokedark space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-black dark:text-white">Role Template Presets:</label>
+                    <span className="text-[11px] text-gray-500 font-medium">Click a preset to apply standard access</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(ROLE_PRESETS).map(([key, preset]) => (
+                      <button
+                        type="button"
+                        key={key}
+                        onClick={() => applyRolePresetToEdit(key)}
+                        className={`text-xs px-3 py-1.5 rounded-xl border font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                          editRole === key
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            : 'bg-white dark:bg-boxdark text-gray-700 dark:text-gray-300 border-stroke dark:border-strokedark hover:border-emerald-500'
+                        }`}
+                      >
+                        <span>{preset.icon}</span>
+                        <span>{key}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* PERMISSION TREE */}
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <PermissionTreeEditor
+                    selectedIds={editModules}
+                    onChange={ids => setEditModules(ids)}
+                    allowedLocations={editAllowedLocations}
+                    onLocationsChange={locs => setEditAllowedLocations(locs)}
+                    availableLocations={locations}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: 3. ALLOWED SETTINGS */}
+            {editModalTab === 'settings' && (
+              <div className="flex-1 flex flex-col min-h-0 space-y-4 overflow-y-auto pr-1">
+                <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h5 className="text-xs font-bold text-black dark:text-white flex items-center gap-1.5">
+                      <MdTune className="text-amber-600 text-sm" /> Visible Settings Tabs for this Account
+                    </h5>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      Toggle which application preference & configuration tabs appear in the top settings bar for this user.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setEditAllowedSettings([...ALL_SETTING_TAB_IDS])}
+                      className="px-3 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer"
+                    >
+                      Allow All ({ALL_SETTING_TAB_IDS.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditAllowedSettings([])}
+                      className="px-3 py-1 text-[11px] font-bold rounded-lg bg-gray-200 dark:bg-meta-4 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition cursor-pointer"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-2">
+                  {SETTINGS_TAB_CONFIG.map((setting) => {
+                    const isChecked = editAllowedSettings.includes(setting.id);
+                    return (
+                      <div
+                        key={setting.id}
+                        onClick={() => {
+                          if (isChecked) {
+                            setEditAllowedSettings(prev => prev.filter(id => id !== setting.id));
+                          } else {
+                            setEditAllowedSettings(prev => [...prev, setting.id]);
+                          }
+                        }}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
+                          isChecked
+                            ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/70 shadow-xs'
+                            : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="mt-1 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0 accent-emerald-600"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-black dark:text-white flex items-center gap-1.5 truncate">
+                              <span>{setting.icon}</span>
+                              <span>{setting.label}</span>
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                                isChecked
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                                  : 'bg-gray-100 text-gray-500 dark:bg-meta-4 dark:text-gray-400'
+                              }`}
+                            >
+                              {isChecked ? 'Allowed' : 'Hidden'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-snug">
+                            {setting.desc}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* MODAL ACTIONS */}
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-stroke dark:border-strokedark">

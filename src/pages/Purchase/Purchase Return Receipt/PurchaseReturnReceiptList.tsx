@@ -53,9 +53,19 @@ const PurchaseReturnReceiptList: React.FC = () => {
   const handleDeleteReceipt = async (id: string | number) => {
     if (!window.confirm('Are you certain you want to permanently erase this refund collection record?')) return;
     try {
+      const { data: targetRecord } = await supabase.from('purchase_return_receipts').select('receipt_no').eq('id', id).single();
+      
+      // Cascade delete linked VRV voucher in financial_vouchers
+      if (targetRecord?.receipt_no) {
+        await supabase
+          .from('financial_vouchers')
+          .delete()
+          .eq('voucher_no', targetRecord.receipt_no);
+      }
+
       const { error } = await supabase.from('purchase_return_receipts').delete().eq('id', id);
       if (error) throw error;
-      toast.success('Collection receipt deleted successfully!');
+      toast.success('Collection receipt and linked VRV voucher deleted successfully!');
       fetchReceiptLogs();
     } catch (err: any) {
       toast.error(err.message);

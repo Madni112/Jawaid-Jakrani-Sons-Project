@@ -1,13 +1,5 @@
-import MainReports from './MainReports';
-import {
-  MasterThemePreset,
-  getMasterThemePreset,
-  isNHTTheme2Active,
-  getReportLayoutMode,
-  ReportLayoutMode,
-} from '../../constant/themeConfig';
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../Context/Auth';
 import { getBrandConfig } from '../../utils/brand';
 import {
@@ -43,21 +35,19 @@ import {
   MdHistory,
   MdCompareArrows,
   MdPriceCheck,
-  MdFormatListBulleted,
-  MdStar,
-  MdStarBorder,
-  MdGridView,
-  MdViewHeadline
+  MdFormatListBulleted
 } from 'react-icons/md';
 import { exportMultiSheetExcel, ExcelColumn } from '../../utils/excelExport';
 import { toast } from 'react-hot-toast';
+import MainReports from './MainReports';
 import {
-  getSavedAccentColor,
-  getSavedSidebarColor,
-  getContrastTextColor,
-  getSafeAccentTextColor,
-  isDarkModeActive,
+  MasterThemePreset,
+  getMasterThemePreset,
+  isNHTTheme2Active,
+  getReportLayoutMode,
+  ReportLayoutMode,
 } from '../../constant/themeConfig';
+import { LuBarChart2, LuDownload, LuPrinter, LuSearch } from 'react-icons/lu';
 
 interface ReportItem {
   id: string;
@@ -465,50 +455,6 @@ const ALL_REPORTS: ReportItem[] = [
   }
 ];
 
-
-const CATEGORY_PALETTES: Record<string, { bg: string; text: string; border: string; darkBg: string; darkText: string; darkBorder: string }> = {
-  sales: {
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-700',
-    border: 'border-emerald-200/80',
-    darkBg: 'dark:bg-emerald-950/60',
-    darkText: 'dark:text-emerald-300',
-    darkBorder: 'dark:border-emerald-800/60',
-  },
-  purchases: {
-    bg: 'bg-blue-50',
-    text: 'text-blue-700',
-    border: 'border-blue-200/80',
-    darkBg: 'dark:bg-blue-950/60',
-    darkText: 'dark:text-blue-300',
-    darkBorder: 'dark:border-blue-800/60',
-  },
-  inventory: {
-    bg: 'bg-amber-50',
-    text: 'text-amber-700',
-    border: 'border-amber-200/80',
-    darkBg: 'dark:bg-amber-950/60',
-    darkText: 'dark:text-amber-300',
-    darkBorder: 'dark:border-amber-800/60',
-  },
-  accounts: {
-    bg: 'bg-purple-50',
-    text: 'text-purple-700',
-    border: 'border-purple-200/80',
-    darkBg: 'dark:bg-purple-950/60',
-    darkText: 'dark:text-purple-300',
-    darkBorder: 'dark:border-purple-800/60',
-  },
-  business: {
-    bg: 'bg-teal-50',
-    text: 'text-teal-700',
-    border: 'border-teal-200/80',
-    darkBg: 'dark:bg-teal-950/60',
-    darkText: 'dark:text-teal-300',
-    darkBorder: 'dark:border-teal-800/60',
-  },
-};
-
 const CATEGORY_META = [
   {
     key: 'sales',
@@ -549,38 +495,6 @@ const CATEGORY_META = [
 
 const STORAGE_KEY = 'erp_reports_custom_order';
 const STORAGE_CAT_KEY = 'erp_reports_category_order';
-const STORAGE_PINNED_KEY = 'erp_reports_pinned_ids';
-const STORAGE_RECENT_KEY = 'erp_reports_recent_ids';
-const STORAGE_LAYOUT_KEY = 'erp_reports_view_mode';
-
-const DEFAULT_PINNED_IDS = [
-  'as-of-date-stock-status',
-  'commercial-sale-ledger',
-  'daily-cash-daybook',
-  'category-wise-stock'
-];
-
-const getInitialPinnedIds = (): string[] => {
-  try {
-    const saved = localStorage.getItem(STORAGE_PINNED_KEY);
-    if (!saved) return DEFAULT_PINNED_IDS;
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : DEFAULT_PINNED_IDS;
-  } catch {
-    return DEFAULT_PINNED_IDS;
-  }
-};
-
-const getInitialRecentIds = (): string[] => {
-  try {
-    const saved = localStorage.getItem(STORAGE_RECENT_KEY);
-    if (!saved) return [];
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
 
 const getInitialReports = (): ReportItem[] => {
   try {
@@ -629,6 +543,9 @@ const getInitialCategories = () => {
 };
 
 const ReportDashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const { tenantId, businessName } = useAuth();
+
   const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
   const [reportLayout, setReportLayout] = useState<ReportLayoutMode>(() => getReportLayoutMode());
 
@@ -637,97 +554,56 @@ const ReportDashboard: React.FC = () => {
       setMasterPreset(getMasterThemePreset());
       setReportLayout(getReportLayoutMode());
     };
-    window.addEventListener('al_muhammad_theme_preset_changed', updateMasterPreset);
-    window.addEventListener('al_muhammad_report_layout_mode_changed', updateMasterPreset);
+    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('jakwani_report_layout_mode_changed', updateMasterPreset);
     window.addEventListener('storage', updateMasterPreset);
     return () => {
-      window.removeEventListener('al_muhammad_theme_preset_changed', updateMasterPreset);
-      window.removeEventListener('al_muhammad_report_layout_mode_changed', updateMasterPreset);
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('jakwani_report_layout_mode_changed', updateMasterPreset);
       window.removeEventListener('storage', updateMasterPreset);
     };
   }, []);
 
+  // Show classic AccountReport only if user explicitly selected classic report mode,
+  // or if using Theme 2 and report layout mode has not been set to modern.
+  const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
   const isClassicReport = reportLayout === 'classic';
 
   if (isClassicReport) {
     return <MainReports />;
   }
-  const navigate = useNavigate();
-  const { tenantId, businessName } = useAuth();
 
   const [reportsList, setReportsList] = useState<ReportItem[]>(getInitialReports);
   const [categoriesList, setCategoriesList] = useState(getInitialCategories);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const getInitialCategory = () => {
+    const fromState = (location.state as any)?.category;
+    const fromParam = searchParams.get('category');
+    return fromState || fromParam || 'all';
+  };
+
+  const [selectedCategory, setSelectedCategory] = useState<string>(getInitialCategory);
+
+  // Synchronize category if query params or location state change dynamically
+  useEffect(() => {
+    const target = (location.state as any)?.category || searchParams.get('category');
+    if (target && target !== selectedCategory) {
+      setSelectedCategory(target);
+      setCollapsedCats((prev) => ({
+        ...prev,
+        [target]: false,
+      }));
+    }
+  }, [location.state, searchParams]);
   const [exporting, setExporting] = useState(false);
   const [draggedReportId, setDraggedReportId] = useState<string | null>(null);
   const [draggedCatKey, setDraggedCatKey] = useState<string | null>(null);
   const [justDroppedReportId, setJustDroppedReportId] = useState<string | null>(null);
   const [justDroppedCatKey, setJustDroppedCatKey] = useState<string | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
-  const [pinnedIds, setPinnedIds] = useState<string[]>(getInitialPinnedIds);
-  const [recentIds, setRecentIds] = useState<string[]>(getInitialRecentIds);
-  
-  const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
-  const [sidebarColor, setSidebarColor] = useState<string>(getSavedSidebarColor());
-
-  useEffect(() => {
-    const onThemeChange = () => setAccentColor(getSavedAccentColor());
-    const onSidebarChange = () => setSidebarColor(getSavedSidebarColor());
-    window.addEventListener('zoaib_ali_theme_color_changed', onThemeChange);
-    window.addEventListener('zoaib_ali_sidebar_color_changed', onSidebarChange);
-    return () => {
-      window.removeEventListener('zoaib_ali_theme_color_changed', onThemeChange);
-      window.removeEventListener('zoaib_ali_sidebar_color_changed', onSidebarChange);
-    };
-  }, []);
-
-  const isDark = isDarkModeActive();
-  const safeAccentText = getSafeAccentTextColor(accentColor, isDark);
-  const isLightAccent = getContrastTextColor(accentColor) === '#0F172A';
-
-  const [viewLayout, setViewLayout] = useState<'grid' | 'compact'>(() => {
-    try {
-      return (localStorage.getItem(STORAGE_LAYOUT_KEY) as 'grid' | 'compact') || 'grid';
-    } catch {
-      return 'grid';
-    }
-  });
-
-  const togglePin = (reportId: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setPinnedIds((prev) => {
-      const isPinned = prev.includes(reportId);
-      const updated = isPinned ? prev.filter((id) => id !== reportId) : [reportId, ...prev];
-      try {
-        localStorage.setItem(STORAGE_PINNED_KEY, JSON.stringify(updated));
-        toast.success(isPinned ? 'Removed from Quick Access' : 'Pinned to Quick Access ⭐', {
-          id: 'pin-toggle',
-          duration: 1200
-        });
-      } catch {}
-      return updated;
-    });
-  };
-
-  const handleLayoutChange = (mode: 'grid' | 'compact') => {
-    setViewLayout(mode);
-    try {
-      localStorage.setItem(STORAGE_LAYOUT_KEY, mode);
-    } catch {}
-  };
-
-  const pinnedReports = useMemo(() => {
-    return pinnedIds
-      .map((id) => ALL_REPORTS.find((r) => r.id === id))
-      .filter((r): r is ReportItem => Boolean(r));
-  }, [pinnedIds]);
-
-  const recentReports = useMemo(() => {
-    return recentIds
-      .map((id) => ALL_REPORTS.find((r) => r.id === id))
-      .filter((r): r is ReportItem => Boolean(r));
-  }, [recentIds]);
 
   // Auto-scroll window when dragging near top or bottom screen edges
   useEffect(() => {
@@ -778,11 +654,13 @@ const ReportDashboard: React.FC = () => {
     if (categoryKey === selectedCategory || categoryKey === 'all') {
       setSelectedCategory('all');
       setCollapsedCats({});
+      setSearchParams({}, { replace: true });
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     setSelectedCategory(categoryKey);
+    setSearchParams({ category: categoryKey }, { replace: true });
     setCollapsedCats((prev) => ({
       ...prev,
       [categoryKey]: false,
@@ -913,6 +791,7 @@ const ReportDashboard: React.FC = () => {
       setReportsList(ALL_REPORTS);
       setCategoriesList(CATEGORY_META);
       setCollapsedCats({});
+      setSearchParams({}, { replace: true });
       setSearchQuery('');
       setSelectedCategory('all');
       toast.success('Reports layout reset to default order.');
@@ -922,13 +801,6 @@ const ReportDashboard: React.FC = () => {
   };
 
   const handleNavigate = (report: ReportItem) => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_RECENT_KEY) || '[]');
-      const updated = [report.id, ...saved.filter((id: string) => id !== report.id)].slice(0, 5);
-      localStorage.setItem(STORAGE_RECENT_KEY, JSON.stringify(updated));
-      setRecentIds(updated);
-    } catch {}
-
     const dest = `${tenantId ? `/${tenantId}` : ''}/Reports/view/${report.id}`;
     navigate(dest, { state: report.state || {} });
   };
@@ -978,175 +850,180 @@ const ReportDashboard: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs antialiased font-sans pb-16 pt-2">
       {/* ── BREADCRUMB & METADATA BAR ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] font-mono text-slate-500 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2 uppercase tracking-wider">
-          <span>Financial Accounting</span>
-          <span>&gt;</span>
-          <span>Operational Ledger</span>
-          <span>&gt;</span>
-          <span style={{ color: safeAccentText }} className="font-bold">Standard Reports Hub</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div style={{ backgroundColor: `${accentColor}14`, borderColor: `${accentColor}30`, color: safeAccentText }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-semibold text-[10px]">
-            <span style={{ backgroundColor: accentColor }} className="h-1.5 w-1.5 rounded-full animate-pulse" />
-            <span>Ledger Synced Active</span>
+      {isTheme2 ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 pb-1">
+          <div className="flex items-center gap-1.5 font-medium">
+            <span>Reports</span>
+            <span className="text-slate-400">/</span>
+            <span>Overview</span>
+            <span className="text-slate-400">/</span>
+            <span className="text-slate-900 dark:text-white font-bold">Reports Directory</span>
           </div>
-          <div className="flex items-center gap-1 text-slate-400">
-            <MdAccessTime size={14} />
-            <span>Real-time DB</span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live DB Synced
+            </span>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] font-mono text-slate-500 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2 uppercase tracking-wider">
+            <span>Financial Accounting</span>
+            <span>&gt;</span>
+            <span>Operational Ledger</span>
+            <span>&gt;</span>
+            <span className="text-emerald-700 dark:text-emerald-400 font-bold">Standard Reports Hub</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800/60 font-semibold text-[10px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Ledger Synced Active</span>
+            </div>
+            <div className="flex items-center gap-1 text-slate-400">
+              <MdAccessTime size={14} />
+              <span>Real-time DB</span>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* ── HEADER BANNER ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div style={{ backgroundColor: `${accentColor}12`, borderColor: `${accentColor}28`, color: safeAccentText }} className="p-3 rounded-xl border shadow-inner shrink-0">
-            <MdAssessment size={28} />
+      {/* ── HEADER BANNER / CRITERIA SPECIFICATION CARD ── */}
+      {isTheme2 ? (
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white font-sans">
+                  Reports Directory
+                </h1>
+                <span className="bg-[#800020]/10 text-[#800020] dark:bg-[#800020]/30 dark:text-rose-200 font-bold px-2.5 py-0.5 rounded-full text-[11px] border border-[#800020]/20">
+                  {reportsList.length} Active Modules
+                </span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+                Select category criteria or search report modules to analyze fiscal metrics, transactions and inventory.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleBatchExport}
+                disabled={exporting}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold transition cursor-pointer"
+              >
+                <LuDownload size={14} />
+                <span>{exporting ? 'Exporting...' : 'CSV'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold transition cursor-pointer"
+              >
+                <LuPrinter size={14} />
+                <span>Print</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const firstReport = filteredReports[0];
+                  if (firstReport) handleNavigate(firstReport);
+                }}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[#800020] hover:bg-[#6e001c] text-white text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <LuBarChart2 size={14} />
+                <span>Generate</span>
+              </button>
+            </div>
           </div>
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white font-sans">
-                Reports Directory
-              </h1>
-              <span style={{ backgroundColor: `${accentColor}15`, borderColor: `${accentColor}35`, color: safeAccentText }} className="font-bold px-2 py-0.5 rounded-md text-[11px] border">
-                {reportsList.length} Available
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="w-full sm:w-auto">
+              <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Financial Year 2026-27 (Active)
               </span>
             </div>
-            <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-              Drag report cards or whole category boxes to rearrange. Saved automatically in your browser.
-            </p>
-          </div>
-        </div>
-
-        {/* Global Search, View Switcher & Reset Order Controls */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
-          {/* View Mode Switcher: Grid vs Compact Table */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+            <div className="w-full sm:flex-1 relative">
+              <LuSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search reports by name or keyword..."
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-[#800020]/20 focus:border-[#800020] outline-none transition text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                >
+                  <MdClear size={14} />
+                </button>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => handleLayoutChange('grid')}
-              title="Card Grid View"
-              style={viewLayout === 'grid' ? { color: safeAccentText } : undefined}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                viewLayout === 'grid'
-                  ? 'bg-white dark:bg-slate-900 shadow-xs font-black'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
+              onClick={handleResetOrder}
+              title="Reset layout and category positions to default"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium text-xs transition cursor-pointer shrink-0 border border-slate-200 dark:border-slate-700"
             >
-              <MdGridView size={16} />
-              <span className="hidden sm:inline">Grid</span>
+              <MdRestartAlt size={15} />
+              <span>Reset Layout</span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleLayoutChange('compact')}
-              title="Compact Directory Table View"
-              style={viewLayout === 'compact' ? { color: safeAccentText } : undefined}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                viewLayout === 'compact'
-                  ? 'bg-white dark:bg-slate-900 shadow-xs font-black'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <MdViewHeadline size={16} />
-              <span className="hidden sm:inline">Compact</span>
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleResetOrder}
-            title="Reset layout and category positions to default"
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 border border-slate-200 dark:border-slate-700"
-          >
-            <MdRestartAlt size={16} />
-            <span className="hidden sm:inline">Reset Layout</span>
-          </button>
-
-          <div className="w-full md:w-80 relative">
-            <MdSearch size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search reports by name or keyword..."
-              className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
-              >
-                <MdClear size={14} />
-              </button>
-            )}
           </div>
         </div>
-      </div>
-
-      {/* ── QUICK ACCESS & PINNED REPORTS RIBBON ── */}
-      {(pinnedReports.length > 0 || recentReports.length > 0) && !searchQuery.trim() && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
-          {pinnedReports.length > 0 && (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
-              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black text-xs uppercase tracking-wider shrink-0 min-w-[130px]">
-                <MdStar size={16} className="text-amber-500" />
-                <span>Quick Access:</span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {pinnedReports.map((report) => {
-                  const Icon = report.icon || MdAssessment;
-                  return (
-                    <button
-                      key={report.id}
-                      type="button"
-                      onClick={() => handleNavigate(report)}
-                      className="group flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-emerald-50 dark:bg-slate-800/80 dark:hover:bg-emerald-950/40 border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700/60 rounded-xl transition cursor-pointer shadow-xs"
-                    >
-                      <div className="p-1 rounded bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 group-hover:text-emerald-600 transition">
-                        <Icon size={14} />
-                      </div>
-                      <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
-                        {report.title}
-                      </span>
-                      <span
-                        onClick={(e) => togglePin(report.id, e)}
-                        title="Unpin"
-                        className="text-amber-400 hover:text-rose-500 p-0.5 rounded opacity-60 group-hover:opacity-100 transition"
-                      >
-                        <MdStar size={13} />
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+      ) : (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner">
+              <MdAssessment size={28} />
             </div>
-          )}
-
-          {recentReports.length > 0 && (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-1.5 text-slate-400 font-bold text-xs uppercase tracking-wider shrink-0 min-w-[130px]">
-                <MdHistory size={16} />
-                <span>Recently Run:</span>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white font-sans">
+                  Reports Directory
+                </h1>
+                <span className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-md text-[11px] border border-emerald-200 dark:border-emerald-800/40">
+                  {reportsList.length} Available
+                </span>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {recentReports.map((report) => {
-                  const Icon = report.icon || MdAssessment;
-                  return (
-                    <button
-                      key={report.id}
-                      type="button"
-                      onClick={() => handleNavigate(report)}
-                      className="group flex items-center gap-2 px-2.5 py-1 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 transition cursor-pointer"
-                    >
-                      <Icon size={13} className="text-slate-400 group-hover:text-emerald-600" />
-                      <span className="truncate max-w-[200px]">{report.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+                Drag report cards or whole category boxes to rearrange. Saved automatically in your browser.
+              </p>
             </div>
-          )}
+          </div>
+
+          <div className="flex items-center gap-2.5 w-full md:w-auto">
+            <button
+              type="button"
+              onClick={handleResetOrder}
+              title="Reset layout and category positions to default"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 border border-slate-200 dark:border-slate-700"
+            >
+              <MdRestartAlt size={16} />
+              <span className="hidden sm:inline">Reset Layout</span>
+            </button>
+
+            <div className="w-full md:w-80 relative">
+              <MdSearch size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search reports by name or keyword..."
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                >
+                  <MdClear size={14} />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1155,18 +1032,25 @@ const ReportDashboard: React.FC = () => {
         <button
           type="button"
           onClick={() => handleTabClick('all')}
-          style={selectedCategory === 'all' ? { backgroundColor: accentColor, color: getContrastTextColor(accentColor) } : undefined}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap cursor-pointer transition ${
+          className={`flex items-center gap-2 ${
+            isTheme2 ? 'px-4 py-2 rounded-full font-semibold' : 'px-3.5 py-2 rounded-xl font-bold'
+          } text-xs whitespace-nowrap cursor-pointer transition ${
             selectedCategory === 'all'
-              ? 'shadow-sm'
+              ? isTheme2
+                ? 'bg-[#800020] text-white shadow-xs'
+                : 'bg-emerald-700 text-white shadow-sm'
               : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
         >
-          <MdCategory size={15} />
+          {!isTheme2 && <MdCategory size={15} />}
           <span>All Reports</span>
           <span
             className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-              selectedCategory === 'all' ? 'bg-black/15 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              selectedCategory === 'all'
+                ? isTheme2
+                  ? 'bg-[#5c0017] text-white'
+                  : 'bg-emerald-800/80 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
             }`}
           >
             {categoryCounts.all}
@@ -1180,18 +1064,25 @@ const ReportDashboard: React.FC = () => {
               key={cat.key}
               type="button"
               onClick={() => handleTabClick(cat.key)}
-              style={selectedCategory === cat.key ? { backgroundColor: accentColor, color: getContrastTextColor(accentColor), boxShadow: `0 0 0 2px ${accentColor}40` } : undefined}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap cursor-pointer transition ${
+              className={`flex items-center gap-2 ${
+                isTheme2 ? 'px-4 py-2 rounded-full font-semibold' : 'px-3.5 py-2 rounded-xl font-bold'
+              } text-xs whitespace-nowrap cursor-pointer transition ${
                 selectedCategory === cat.key
-                  ? 'shadow-sm'
+                  ? isTheme2
+                    ? 'bg-[#800020] text-white shadow-xs'
+                    : 'bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/50'
                   : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <CatIcon size={15} />
+              {!isTheme2 && <CatIcon size={15} />}
               <span>{cat.title}</span>
               <span
                 className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-                  selectedCategory === cat.key ? 'bg-black/15 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                  selectedCategory === cat.key
+                    ? isTheme2
+                      ? 'bg-[#5c0017] text-white'
+                      : 'bg-emerald-800/80 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                 }`}
               >
                 {categoryCounts[cat.key] || 0}
@@ -1275,12 +1166,12 @@ const ReportDashboard: React.FC = () => {
           return (
             <div
               key={category.key}
-              style={{ borderColor: `${accentColor}70`, boxShadow: `0 20px 25px -5px ${accentColor}18` }} className="w-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl border overflow-hidden animate-expand-container"
+              className="w-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-emerald-500/80 dark:border-emerald-500/60 shadow-xl shadow-emerald-500/10 dark:shadow-emerald-950/40 overflow-hidden animate-expand-container"
             >
               {/* Category Full-Width Banner Header */}
-              <div style={{ backgroundColor: `${accentColor}10`, borderBottomColor: `${accentColor}25` }} className="p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-5 border-b border-emerald-100 dark:border-emerald-950 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div style={{ backgroundColor: accentColor, color: getContrastTextColor(accentColor) }} className="p-3 rounded-xl shadow-sm">
+                  <div className="p-3 rounded-xl bg-emerald-600 text-white shadow-sm">
                     <CatBannerIcon size={24} />
                   </div>
                   <div>
@@ -1288,7 +1179,7 @@ const ReportDashboard: React.FC = () => {
                       <h2 className="font-black text-lg text-slate-900 dark:text-white">
                         {category.title}
                       </h2>
-                      <span style={{ backgroundColor: `${accentColor}18`, borderColor: `${accentColor}35`, color: safeAccentText }} className="font-mono text-xs font-black px-2.5 py-0.5 rounded-full border">
+                      <span className="font-mono text-xs font-black text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                         {categoryReports.length} {categoryReports.length === 1 ? 'Report' : 'Reports'}
                       </span>
                     </div>
@@ -1300,7 +1191,10 @@ const ReportDashboard: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => setSelectedCategory('all')}
+                  onClick={() => {
+                    setSelectedCategory('all');
+                    setSearchParams({}, { replace: true });
+                  }}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs border border-slate-200 dark:border-slate-700 transition cursor-pointer self-start sm:self-auto shadow-sm"
                 >
                   <span>← Back to All Reports</span>
@@ -1345,18 +1239,6 @@ const ReportDashboard: React.FC = () => {
                             >
                               <MdDragIndicator size={18} />
                             </div>
-                            <button
-                              type="button"
-                              onClick={(e) => togglePin(report.id, e)}
-                              title={pinnedIds.includes(report.id) ? "Unpin report" : "Pin to Quick Access"}
-                              className={`p-1 rounded-lg transition-colors cursor-pointer ${
-                                pinnedIds.includes(report.id)
-                                  ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/40'
-                                  : 'text-slate-300 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                              }`}
-                            >
-                              {pinnedIds.includes(report.id) ? <MdStar size={16} /> : <MdStarBorder size={16} />}
-                            </button>
                           </div>
 
                           {shouldShowBadge(report) && (
@@ -1398,97 +1280,6 @@ const ReportDashboard: React.FC = () => {
           );
         })()
       ) : (
-        /* Compact Directory View OR Card Grid Overview */
-        viewLayout === 'compact' ? (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-expand-container">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-slate-400 font-mono">
-                    <th className="p-3 text-center w-10">⭐</th>
-                    <th className="p-3 text-center w-12">S#</th>
-                    <th className="p-3">Report Title & Description</th>
-                    <th className="p-3 w-48">Category Module</th>
-                    <th className="p-3 text-center w-28">Status / Badge</th>
-                    <th className="p-3 text-right pr-4 w-32">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredReports.map((report, idx) => {
-                    const Icon = report.icon || MdAssessment;
-                    const catMeta = CATEGORY_META.find((c) => c.key === report.category);
-                    const isPinned = pinnedIds.includes(report.id);
-
-                    return (
-                      <tr
-                        key={report.id}
-                        onClick={() => handleNavigate(report)}
-                        className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition group"
-                      >
-                        <td className="p-3 text-center align-middle" onClick={(e) => togglePin(report.id, e)}>
-                          <button
-                            type="button"
-                            className={`p-1 rounded cursor-pointer ${
-                              isPinned
-                                ? 'text-amber-500'
-                                : 'text-slate-300 hover:text-amber-500 opacity-60 group-hover:opacity-100 transition'
-                            }`}
-                          >
-                            {isPinned ? <MdStar size={16} /> : <MdStarBorder size={16} />}
-                          </button>
-                        </td>
-                        <td className="p-3 text-center text-slate-400 font-mono font-bold align-middle">
-                          {idx + 1}
-                        </td>
-                        <td className="p-3 align-middle">
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:text-emerald-600 transition shrink-0">
-                              <Icon size={16} />
-                            </div>
-                            <div>
-                              <div className="font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-                                {report.title}
-                              </div>
-                              <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
-                                {report.description}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-3 align-middle">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                            {catMeta?.title || report.category}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center align-middle">
-                          {shouldShowBadge(report) && (
-                            <span
-                              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wide border ${
-                                report.badgeType === 'new'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                                  : report.badgeType === 'audited'
-                                  ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                                  : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800'
-                              }`}
-                            >
-                              {report.badge}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 text-right pr-4 align-middle">
-                          <span style={{ color: safeAccentText }} className="inline-flex items-center gap-1 text-xs font-bold group-hover:translate-x-1 transition-transform">
-                            <span>Open</span>
-                            <MdArrowForward size={14} />
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
         /* All Categories Overview Grid with Responsive CSS Columns (Zero vertical gaps) */
         <div className="columns-1 md:columns-2 lg:columns-3 gap-6 animate-expand-container">
           {categoriesList.map((category, catIdx) => {
@@ -1529,14 +1320,9 @@ const ReportDashboard: React.FC = () => {
                     >
                       <MdDragIndicator size={18} />
                     </div>
-                    {(() => {
-                      const pal = CATEGORY_PALETTES[category.key] || CATEGORY_PALETTES.sales;
-                      return (
-                        <div className={`p-2 rounded-lg ${pal.bg} ${pal.text} ${pal.border} ${pal.darkBg} ${pal.darkText} ${pal.darkBorder} border shrink-0`}>
-                          {category.icon ? <category.icon size={18} /> : <MdAssessment size={18} />}
-                        </div>
-                      );
-                    })()}
+                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shrink-0">
+                      {category.icon ? <category.icon size={18} /> : <MdAssessment size={18} />}
+                    </div>
                     <div>
                       <h2 className="font-extrabold text-sm text-slate-900 dark:text-white">
                         {category.title}
@@ -1640,8 +1426,7 @@ const ReportDashboard: React.FC = () => {
             );
           })}
         </div>
-      )
-    )}
+      )}
 
       {/* Empty State */}
       {filteredReports.length === 0 && (
@@ -1656,7 +1441,7 @@ const ReportDashboard: React.FC = () => {
               setSearchQuery('');
               setSelectedCategory('all');
             }}
-            style={{ backgroundColor: accentColor, color: getContrastTextColor(accentColor) }} className="mt-4 px-4 py-1.5 rounded-lg font-bold text-xs cursor-pointer transition hover:opacity-90"
+            className="mt-4 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs cursor-pointer transition"
           >
             Clear Search
           </button>
@@ -1683,7 +1468,7 @@ const ReportDashboard: React.FC = () => {
           type="button"
           disabled={exporting}
           onClick={handleBatchExport}
-          style={{ backgroundColor: accentColor, color: getContrastTextColor(accentColor) }} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold cursor-pointer transition shadow-sm hover:opacity-90 disabled:opacity-50 whitespace-nowrap text-xs"
+          className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl font-bold cursor-pointer transition shadow-sm disabled:opacity-50 whitespace-nowrap text-xs"
         >
           <MdFileDownload size={16} />
           <span>{exporting ? 'Exporting...' : 'Export Directory (.xlsx)'}</span>

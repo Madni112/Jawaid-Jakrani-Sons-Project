@@ -12,14 +12,7 @@ import { useAuth } from '../../../Context/Auth';
 import { logActivity } from '../../../service/auditLogger';
 import { triggerFeedbackSound } from '../../../utils/audioFeedback';
 import { fetchCustomerCreditLimits } from '../../../utils/creditLimitUtils';
-import { fetchSystemMasterConfig, isNegativeStockAllowed } from '../../../utils/systemPermissions';
-
-// Helper to identify Tile products strictly based on parent category
-const isTileProduct = (p: any) => {
-  if (!p) return false;
-  const parent = String(p.sub_sub_category || '').toLowerCase().trim();
-  return parent.includes('tile');
-};
+import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
 
 // Universal comprehensive search helper matching across Name, Code, Category, Sub Cat, Parent Cat, Brand, and Description
 const matchesProductSearch = (p: any, query: string): boolean => {
@@ -32,7 +25,7 @@ const matchesProductSearch = (p: any, query: string): boolean => {
   const parentCat = String(p?.sub_sub_category || '').toLowerCase();
   const brand = String(p?.brand || p?.bin || '').toLowerCase();
   const desc = String(p?.product_description || '').toLowerCase();
-  const sku = `sku-${p?.id || ''}`.toLowerCase();
+  const sku = ('sku-' + (p?.id || '')).toLowerCase();
 
   return (
     name.includes(q) ||
@@ -46,15 +39,329 @@ const matchesProductSearch = (p: any, query: string): boolean => {
   );
 };
 
+// Helper to identify Tile products based on parent category
+const isTileProduct = (p: any) => {
+  const parent = String(p?.sub_sub_category || '').toLowerCase().trim();
+  return parent.includes('tile');
+};
+
+// Helper: Resolve or create customer COA code (2020-XXX) silently
+const resolveCustomerCoaAccount = async (customerName: string, customersList: any[] = []): Promise<{ code: string; title: string }> => {
+  const cleanName = (customerName || '').trim();
+  if (!cleanName) return { code: '2020-001', title: 'Walk-in Customer' };
+
+  // 1. Try matching from loaded customers list
+  const matchedFromList = customersList.find(c =>
+    (c.customerName || c.customer_name || '').trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  const existingCode = matchedFromList?.customer_code || matchedFromList?.customerCode || matchedFromList?.coa_code;
+  if (existingCode && String(existingCode).startsWith('2020-')) {
+    return { code: String(existingCode).trim(), title: matchedFromList.customerName || cleanName };
+  }
+
+  // 2. Query chart_of_accounts directly
+  try {
+    const { data: coaRows } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code, account_title')
+      .ilike('account_title', cleanName)
+      .limit(1);
+
+    if (coaRows && coaRows.length > 0 && coaRows[0].account_code) {
+      return { code: coaRows[0].account_code, title: coaRows[0].account_title || cleanName };
+    }
+
+    // 3. Find highest existing 2020- code to assign sequentially
+    const { data: allCustCoa } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code')
+      .ilike('account_code', '2020-%');
+
+    let maxSeq = 0;
+    (allCustCoa || []).forEach(r => {
+      const match = String(r.account_code || '').match(/2020-(\d+)/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    });
+
+    const nextCode = `2020-${String(maxSeq + 1).padStart(3, '0')}`;
+    // Register in chart_of_accounts silently
+    await supabase.from('chart_of_accounts').insert([{
+      account_code: nextCode,
+      account_title: cleanName,
+      account_type: 'Current Assets',
+      category: 'Accounts Receivable',
+      notes: `Customer account for ${cleanName} (Auto-registered from Sales Invoice)`
+    }]);
+
+    return { code: nextCode, title: cleanName };
+  } catch (err) {
+    console.warn('resolveCustomerCoaAccount error:', err);
+    return { code: '2020-001', title: cleanName };
+  }
+};
+
+// Helper: Synchronize SAV and CRV financial vouchers for an invoice
+const syncInvoiceFinancialVouchers = async ({
+  invoiceNo,
+  customerName,
+  customerCode,
+  saleDate,
+  grandTotal,
+  paidCash,
+  paidBank,
+  settlementMode,
+  selectedBankTitle,
+  itemsCount,
+  isEdit = false
+}: {
+  invoiceNo: string;
+  customerName: string;
+  customerCode: string;
+  saleDate: string;
+  grandTotal: number;
+  paidCash: number;
+  paidBank: number;
+  settlementMode: string;
+  selectedBankTitle?: string;
+  itemsCount: number;
+  isEdit?: boolean;
+}) => {
+  try {
+    const cleanInvNo = String(invoiceNo || '').trim();
+    const totalPaid = (Number(paidCash) || 0) + (Number(paidBank) || 0);
+    const vDate = saleDate || new Date().toISOString().split('T')[0];
+
+    // Find any existing vouchers linked to this invoice
+    const { data: existingVouchers } = await supabase
+      .from('financial_vouchers')
+      .select('id, voucher_no, voucher_type, original_invoice_no, metadata')
+      .or(`original_invoice_no.eq.${cleanInvNo},voucher_no.eq.SAV-${cleanInvNo.replace(/^INV-?/i, '')}`);
+
+    const existingSav = existingVouchers?.find(v =>
+      String(v.voucher_type || '').toLowerCase().includes('sale amount') ||
+      String(v.voucher_no || '').startsWith('SAV-')
+    );
+
+    const existingCrv = existingVouchers?.find(v =>
+      String(v.voucher_type || '').toLowerCase().includes('customer receive') ||
+      String(v.voucher_no || '').startsWith('CRV-')
+    );
+
+    // 1. ─── HANDLE SAV (Sale Amount Voucher) ───
+    if (grandTotal > 0) {
+      if (existingSav) {
+        // Update existing SAV
+        await supabase
+          .from('financial_vouchers')
+          .update({
+            total_amount: grandTotal,
+            debit: grandTotal,
+            credit: 0,
+            account_code: customerCode,
+            account_title: customerName,
+            voucher_date: vDate,
+            narration: `Sale Amount for Invoice #${cleanInvNo} (${itemsCount} items)`,
+            original_invoice_no: cleanInvNo,
+            metadata: {
+              ...(existingSav.metadata || {}),
+              preset: 'SAV',
+              source: 'sales_invoice',
+              invoice_no: cleanInvNo,
+              auto_generated: true
+            }
+          })
+          .eq('id', existingSav.id);
+      } else {
+        // Generate next SAV number
+        const { data: savRows } = await supabase
+          .from('financial_vouchers')
+          .select('voucher_no')
+          .ilike('voucher_no', 'SAV-%');
+
+        let maxSavSeq = 0;
+        (savRows || []).forEach(v => {
+          const match = String(v.voucher_no || '').match(/SAV-(\d+)/i);
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (num > maxSavSeq) maxSavSeq = num;
+          }
+        });
+        const nextSavNo = `SAV-${String(maxSavSeq + 1).padStart(3, '0')}`;
+
+        await supabase.from('financial_vouchers').insert([{
+          voucher_no: nextSavNo,
+          voucher_type: 'Sale Amount Voucher',
+          voucher_date: vDate,
+          total_amount: grandTotal,
+          debit: grandTotal,
+          credit: 0,
+          account_code: customerCode,
+          account_title: customerName,
+          narration: `Sale Amount for Invoice #${cleanInvNo} (${itemsCount} items)`,
+          original_invoice_no: cleanInvNo,
+          items: [
+            {
+              accountCode: customerCode,
+              particulars: `Bill #${cleanInvNo}`,
+              debit: grandTotal,
+              credit: 0
+            }
+          ],
+          metadata: {
+            preset: 'SAV',
+            source: 'sales_invoice',
+            invoice_no: cleanInvNo,
+            auto_generated: true
+          }
+        }]);
+      }
+    } else if (existingSav && isEdit) {
+      await supabase.from('financial_vouchers').delete().eq('id', existingSav.id);
+    }
+
+    // 2. ─── HANDLE CRV (Customer Receive Voucher) ───
+    if (totalPaid > 0) {
+      // Resolve Bank Chart of Account if bank amount exists
+      let bankCoaCode = '1020-001';
+      let bankCoaTitle = 'Bank Account';
+      if (Number(paidBank) > 0 && selectedBankTitle) {
+        try {
+          const cleanBankSearch = selectedBankTitle.trim();
+          const { data: bankCoaRows } = await supabase
+            .from('chart_of_accounts')
+            .select('account_code, account_title')
+            .ilike('account_title', `%${cleanBankSearch}%`)
+            .limit(1);
+
+          if (bankCoaRows && bankCoaRows[0]) {
+            bankCoaCode = bankCoaRows[0].account_code;
+            bankCoaTitle = bankCoaRows[0].account_title;
+          }
+        } catch (bErr) {
+          console.warn('Bank COA lookup warning:', bErr);
+        }
+      }
+
+      const crvItems: any[] = [];
+      if (Number(paidCash) > 0) {
+        crvItems.push({
+          accountCode: '1010-001',
+          accountTitle: 'Cash in Hand',
+          particulars: `Cash received on Invoice #${cleanInvNo}`,
+          debit: Number(paidCash),
+          credit: 0
+        });
+      }
+      if (Number(paidBank) > 0) {
+        crvItems.push({
+          accountCode: bankCoaCode,
+          accountTitle: bankCoaTitle,
+          particulars: `Bank transfer received on Invoice #${cleanInvNo}`,
+          debit: Number(paidBank),
+          credit: 0
+        });
+      }
+      // Customer Credit row
+      crvItems.push({
+        accountCode: customerCode,
+        accountTitle: customerName,
+        particulars: `Customer credit on Invoice #${cleanInvNo}`,
+        debit: 0,
+        credit: totalPaid
+      });
+
+      const modeDesc = Number(paidCash) > 0 && Number(paidBank) > 0
+        ? `Cash: Rs. ${paidCash} (1010-001) + Bank: Rs. ${paidBank} (${bankCoaCode} - ${bankCoaTitle})`
+        : Number(paidBank) > 0
+        ? `Bank Transfer: Rs. ${paidBank} (${bankCoaCode} - ${bankCoaTitle})`
+        : `Cash Payment: Rs. ${paidCash} (1010-001 - Cash in Hand)`;
+
+      if (existingCrv) {
+        // Update existing CRV
+        await supabase
+          .from('financial_vouchers')
+          .update({
+            total_amount: totalPaid,
+            debit: 0,
+            credit: totalPaid,
+            account_code: customerCode,
+            account_title: customerName,
+            voucher_date: vDate,
+            narration: `Payment received for Invoice #${cleanInvNo} (${modeDesc})`,
+            original_invoice_no: cleanInvNo,
+            items: crvItems,
+            metadata: {
+              ...(existingCrv.metadata || {}),
+              preset: 'CRV',
+              source: 'sales_invoice',
+              invoice_no: cleanInvNo,
+              auto_generated: true,
+              settlement_mode: settlementMode,
+              bank_coa_code: bankCoaCode,
+              bank_coa_title: bankCoaTitle,
+              paid_cash: Number(paidCash),
+              paid_bank: Number(paidBank)
+            }
+          })
+          .eq('id', existingCrv.id);
+      } else {
+        // Generate next CRV number
+        const { data: crvRows } = await supabase
+          .from('financial_vouchers')
+          .select('voucher_no')
+          .ilike('voucher_no', 'CRV-%');
+
+        let maxCrvSeq = 0;
+        (crvRows || []).forEach(v => {
+          const match = String(v.voucher_no || '').match(/CRV-(\d+)/i);
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (num > maxCrvSeq) maxCrvSeq = num;
+          }
+        });
+        const nextCrvNo = `CRV-${String(maxCrvSeq + 1).padStart(3, '0')}`;
+
+        await supabase.from('financial_vouchers').insert([{
+          voucher_no: nextCrvNo,
+          voucher_type: 'Customer Receive Voucher',
+          voucher_date: vDate,
+          total_amount: totalPaid,
+          debit: 0,
+          credit: totalPaid,
+          account_code: customerCode,
+          account_title: customerName,
+          narration: `Payment received for Invoice #${cleanInvNo} (${modeDesc})`,
+          original_invoice_no: cleanInvNo,
+          items: crvItems,
+          metadata: {
+            preset: 'CRV',
+            source: 'sales_invoice',
+            invoice_no: cleanInvNo,
+            auto_generated: true,
+            settlement_mode: settlementMode,
+            bank_coa_code: bankCoaCode,
+            bank_coa_title: bankCoaTitle,
+            paid_cash: Number(paidCash),
+            paid_bank: Number(paidBank)
+          }
+        }]);
+      }
+    } else if (existingCrv && isEdit) {
+      // Payment was reduced to 0 in edit
+      await supabase.from('financial_vouchers').delete().eq('id', existingCrv.id);
+    }
+  } catch (syncErr: any) {
+    console.error('syncInvoiceFinancialVouchers error:', syncErr);
+  }
+};
+
 const NewInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { tenantId, role, userName, userEmail } = useAuth();
-  const currentRole = (role || localStorage.getItem('zac_user_role') || '').toLowerCase();
-  const currentSalesmanName = (userName || localStorage.getItem('zac_user_name') || '').trim();
-  const isSalesman = currentRole.includes('salesman');
-  const editData = location.state?.invoice || location.state?.record || null;
-
   const [customerCreditLimitsMap, setCustomerCreditLimitsMap] = useState<Record<string, number>>({});
 
   const checkAndAlertCreditLimit = (cust: any) => {
@@ -63,12 +370,16 @@ const NewInvoice = () => {
     const bal = Number(cust.currentBalance !== undefined ? cust.currentBalance : (cust.balance || 0));
     if (limit > 0 && bal >= limit) {
       triggerFeedbackSound('warning', userEmail);
-      toast.error(`⚠️ Credit Limit Warning: "${cust.customerName}" has an outstanding balance of Rs. ${bal.toLocaleString()} which exceeds their agreed credit limit of Rs. ${limit.toLocaleString()}!`, { duration: 6000 });
+      toast.error(`Credit Limit Warning: "${cust.customerName}" has an outstanding balance of Rs. ${bal.toLocaleString()} which exceeds their agreed credit limit of Rs. ${limit.toLocaleString()}!`, { duration: 6000 });
     } else if (limit > 0 && bal >= 0.75 * limit) {
       triggerFeedbackSound('warning', userEmail);
-      toast(`⚠️ Credit Limit Alert: "${cust.customerName}" has reached ${Math.round((bal / limit) * 100)}% of their credit limit (Rs. ${limit.toLocaleString()}).`, { icon: '⚠️', duration: 5000 });
+      toast(`Credit Limit Alert: "${cust.customerName}" has reached ${Math.round((bal / limit) * 100)}% of their credit limit (Rs. ${limit.toLocaleString()}).`, { icon: '⚠️', duration: 5000 });
     }
   };
+  const currentRole = (role || localStorage.getItem('zac_user_role') || '').toLowerCase();
+  const currentSalesmanName = (userName || localStorage.getItem('zac_user_name') || '').trim();
+  const isSalesman = currentRole.includes('salesman');
+  const editData = location.state?.invoice || location.state?.record || null;
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
@@ -123,13 +434,13 @@ const NewInvoice = () => {
     let maxNum = 0;
     customersList.forEach((c: any) => {
       const code = c.customer_code || c.customerCode || c.coa_code || '';
-      const match = String(code).match(/1020-(\d+)/);
+      const match = String(code).match(/2020-(\d+)/);
       if (match && match[1]) {
         const num = parseInt(match[1], 10);
         if (num > maxNum) maxNum = num;
       }
     });
-    return `1020-${String(maxNum + 1).padStart(3, '0')}`;
+    return `2020-${String(maxNum + 1).padStart(3, '0')}`;
   };
 
   const handleOpenQuickCustomerModal = (initialName: string = '', setFieldValueFn?: any) => {
@@ -160,7 +471,6 @@ const NewInvoice = () => {
       const computedBalance = quickCustomerBalNature === 'Credit' ? -Math.abs(parsedOpeningBal) : Math.abs(parsedOpeningBal);
 
       const payload: any = {
-        customername: trimmedName,
         customerName: trimmedName,
         customer_code: cleanCode,
         customerCode: cleanCode,
@@ -170,7 +480,8 @@ const NewInvoice = () => {
         phone: quickCustomerPhone.trim(),
         address: quickCustomerAddress.trim(),
         province: 'Sindh',
-        balance: computedBalance,
+        opening_balance: computedBalance,
+        currentBalance: computedBalance,
       };
 
       const { data: insertData, error: insertError } = await supabase
@@ -183,9 +494,7 @@ const NewInvoice = () => {
       const newCustomerId = insertData?.[0]?.id || Date.now();
       const createdCustObj = {
         id: newCustomerId,
-        ...payload,
-        currentBalance: computedBalance,
-        opening_balance: computedBalance,
+        ...payload
       };
 
       if (cleanCode) {
@@ -196,6 +505,8 @@ const NewInvoice = () => {
             control_code: 'Customers',
             account_code: cleanCode,
             account_title: trimmedName,
+            opening_balance: Math.abs(parsedOpeningBal),
+            balance_nature: quickCustomerBalNature || 'Debit',
             notes: `Customer ledger account for ${trimmedName} (Synced from Quick Add)`
           };
           await supabase.from('chart_of_accounts').insert([coaPayload]);
@@ -347,7 +658,6 @@ const NewInvoice = () => {
   const [pendingFormValues, setPendingFormValues] = useState<any>(null);
   const [isOpeningCustomerModal, setIsOpeningCustomerModal] = useState<boolean>(false);
   const [serverToday, setServerToday] = useState<Date | null>(null);
-  const [systemNegativeStockAllowed, setSystemNegativeStockAllowed] = useState<boolean>(true);
 
   useEffect(() => {
     // Fetch server date so validation is not based on user's local clock
@@ -361,27 +671,7 @@ const NewInvoice = () => {
       try {
         setInitialLoading(true);
         const { data: rawCust } = await supabase.from('customers').select('*');
-        // Fetch all products across all chunks (overcoming PostgREST 1000-row default limit)
-        const CHUNK_SIZE = 1000;
-        let prod: any[] = [];
-        let pFrom = 0;
-        let hasMoreProds = true;
-        while (hasMoreProds) {
-          const { data: chunk, error: pErr } = await supabase
-            .from('products')
-            .select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges')
-            .range(pFrom, pFrom + CHUNK_SIZE - 1);
-          if (pErr || !chunk || chunk.length === 0) {
-            hasMoreProds = false;
-          } else {
-            prod = prod.concat(chunk);
-            if (chunk.length < CHUNK_SIZE) {
-              hasMoreProds = false;
-            } else {
-              pFrom += CHUNK_SIZE;
-            }
-          }
-        }
+        const { data: prod } = await supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price');
         const { data: sm } = await supabase.from('salesmen').select('id, name, invoice_name, invoice_names');
         const { data: trans } = await supabase.from('logistics_transportation').select('id, name, base_charges');
         const { data: locMaster } = await supabase.from('inventory_locations').select('name');
@@ -416,8 +706,6 @@ const NewInvoice = () => {
         setWarehousesList(uniqueLocations);
 
         if (bnk) setBanksList(bnk);
-        fetchCustomerCreditLimits().then(setCustomerCreditLimitsMap).catch(() => {});
-        fetchSystemMasterConfig().then(cfg => setSystemNegativeStockAllowed(isNegativeStockAllowed(cfg))).catch(() => {});
       } catch (err: any) {
         toast.error('Failed to aggregate core infrastructure registries: ' + err.message);
       } finally {
@@ -716,21 +1004,7 @@ const NewInvoice = () => {
           }
         }
       ),
-    gatePasses: Yup.object().test('all-gate-passes', 'Gate pass required for all locations', function (value, ctx) {
-      const { items, tileItems, showTileSection } = ctx.parent;
-      const validItems = [
-        ...(Array.isArray(items) ? items : []).filter((i: any) => i.itemName && i.itemName.trim() !== ''),
-        ...(showTileSection && Array.isArray(tileItems) ? tileItems : []).filter((t: any) => t.itemName && t.itemName.trim() !== '')
-      ];
-      if (validItems.length === 0) return true;
-      const uniqueLocations = Array.from(new Set(validItems.map((i: any) => i.warehouse || ctx.parent.dispatchWarehouse).filter(Boolean)));
-      for (const loc of uniqueLocations) {
-        if (!value || !value[loc as string]) {
-          return this.createError({ message: `Gate Pass required for ${loc}` });
-        }
-      }
-      return true;
-    }),
+    gatePasses: Yup.object().nullable().notRequired(),
     shippingAddress: Yup.string().nullable(),
     saleDate: Yup.string().required('Required Field').test('valid-date', 'Date must be within last 3 days', function(value) {
       if (!value) return false;
@@ -763,11 +1037,7 @@ const NewInvoice = () => {
     items: Yup.array().of(
       Yup.object().shape({
         itemName: Yup.string().nullable(),
-        warehouse: Yup.string().when('itemName', {
-          is: (val: string) => Boolean(val && val.trim()),
-          then: (s) => s.required('Warehouse is required'),
-          otherwise: (s) => s.nullable()
-        }),
+        warehouse: Yup.string().nullable().notRequired(),
         qty: Yup.number().when('itemName', {
           is: (val: string) => Boolean(val && val.trim()),
           then: (s) => s.min(0.001, 'Qty must be > 0').required('Qty is required'),
@@ -783,42 +1053,13 @@ const NewInvoice = () => {
         gstRate: Yup.number().min(0).nullable(),
         fTaxPer: Yup.number().min(0).nullable()
       })
-    ).test('at-least-one-item', 'Please add at least one product (Standard or Tile) to the invoice', function (items, ctx) {
-      const { tileItems, showTileSection } = ctx.parent;
-      const hasStandard = Array.isArray(items) && items.some((i: any) => i && i.itemName && String(i.itemName).trim() !== '');
-      const hasTile = showTileSection && Array.isArray(tileItems) && tileItems.some((t: any) => t && t.itemName && String(t.itemName).trim() !== '');
-      return hasStandard || hasTile;
+    ).test('at-least-one-item', 'Please add at least one product to the invoice', function (items) {
+      return Array.isArray(items) && items.some((i: any) => i && i.itemName && String(i.itemName).trim() !== '');
     }),
-    tileItems: Yup.array().of(
-      Yup.object().shape({
-        itemName: Yup.string().nullable(),
-        warehouse: Yup.string().when('itemName', {
-          is: (val: string) => Boolean(val && val.trim()),
-          then: (s) => s.required('Warehouse is required'),
-          otherwise: (s) => s.nullable()
-        }),
-        boxQty: Yup.number().min(0).nullable(),
-        loosePcs: Yup.number().min(0).nullable(),
-        totalSqm: Yup.number().min(0).nullable()
-      })
-    ).nullable(),
-    tileReturnItems: Yup.array().of(
-      Yup.object().shape({
-        itemName: Yup.string().nullable(),
-        warehouse: Yup.string().when('itemName', {
-          is: (val: string) => Boolean(val && val.trim()),
-          then: (s) => s.required('Warehouse is required'),
-          otherwise: (s) => s.nullable()
-        }),
-        boxQty: Yup.number().min(0).nullable(),
-        loosePcs: Yup.number().min(0).nullable(),
-        totalSqm: Yup.number().min(0).nullable()
-      })
-    ).nullable(),
     returnItems: Yup.array().of(
       Yup.object().shape({
         itemName: Yup.string().required('Item Name is required'),
-        warehouse: Yup.string().required('Warehouse is required'),
+        warehouse: Yup.string().nullable().notRequired(),
         qty: Yup.number().min(0.001, 'Return Qty must be > 0').required('Qty is required'),
         rp: Yup.number().min(0, 'Return rate cannot be negative').required('Rate is required')
       })
@@ -869,9 +1110,9 @@ const NewInvoice = () => {
     setFieldValue(`items.${index}.itemName`, selectedProduct.product_name);
     setFieldValue(`items.${index}.skuCode`, selectedProduct.item_sr_no || '');
     setFieldValue(`items.${index}.rp`, newRp);
+    setFieldValue(`items.${index}.uom`, selectedProduct.uom || 'MTR');
     setFieldValue(`items.${index}.itemServiceCharges`, isService ? serviceCharges : 0);
     setFieldValue(`items.${index}.hsCode`, selectedProduct.hs_code || '');
-    triggerFeedbackSound('scan', userEmail);
 
     if (currentItem && currentItem.discountPer) {
       const gross = newRp * (Number(currentItem.qty) || 1);
@@ -879,11 +1120,7 @@ const NewInvoice = () => {
       setFieldValue(`items.${index}.discountAmt`, Number(calculatedAmt.toFixed(2)));
     }
 
-    const effectiveWarehouse = (currentItem && currentItem.warehouse) ? currentItem.warehouse : chosenWarehouse;
-    if (!effectiveWarehouse) {
-      setFieldValue(`items.${index}.availableQty`, 0);
-      return;
-    }
+    const effectiveWarehouse = (currentItem && currentItem.warehouse) ? currentItem.warehouse : (chosenWarehouse || '');
     const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse);
     setFieldValue(`items.${index}.availableQty`, availStock);
   };
@@ -906,7 +1143,6 @@ const NewInvoice = () => {
       setFieldValue(`tileItems.${tIdx}.totalSqm`, 0);
       return;
     }
-    triggerFeedbackSound('scan', userEmail);
 
     let pcsPerBox = Number(selectedProduct.pieces_per_box || selectedProduct.pcs_per_box || selectedProduct.pieces_per_packing || 0);
     if (pcsPerBox <= 1) {
@@ -920,7 +1156,7 @@ const NewInvoice = () => {
     if (matchSqm && Number(matchSqm[1]) > 0) {
       sqmPerBox = Number(matchSqm[1]);
     } else {
-      const dimMatch = String(`${selectedProduct.category || ''} ${selectedProduct.product_name || ''} ${selectedProduct.sub_category || ''} ${selectedProduct.product_description || ''} ${selectedProduct.item_sr_no || ''}`).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
+      const dimMatch = String(`${selectedProduct.sub_category || ''} ${selectedProduct.product_description || ''} ${selectedProduct.item_sr_no || ''}`).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
       if (dimMatch) {
         const h = Number(dimMatch[1]) || 60;
         const w = Number(dimMatch[2]) || 60;
@@ -929,7 +1165,8 @@ const NewInvoice = () => {
     }
 
     const pBox = Number(selectedProduct.retail_price || 0);
-    const pPiece = Number((pBox / pcsPerBox).toFixed(2));
+    const configuredLoosePrice = Number(selectedProduct.loose_sale_price || 0);
+    const pPiece = configuredLoosePrice > 0 ? configuredLoosePrice : Number((pBox / pcsPerBox).toFixed(2));
     const pSqm = Number((pBox / (sqmPerBox || 1)).toFixed(2));
 
     const boxQty = currentTileItem?.boxQty !== undefined ? Number(currentTileItem.boxQty) : 1;
@@ -1061,7 +1298,7 @@ const NewInvoice = () => {
     if (matchSqm && Number(matchSqm[1]) > 0) {
       sqmPerBox = Number(matchSqm[1]);
     } else {
-      const dimMatch = String(`${selectedProduct.category || ''} ${selectedProduct.product_name || ''} ${selectedProduct.sub_category || ''} ${selectedProduct.product_description || ''} ${selectedProduct.item_sr_no || ''}`).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
+      const dimMatch = String(`${selectedProduct.sub_category || ''} ${selectedProduct.product_description || ''} ${selectedProduct.item_sr_no || ''}`).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
       if (dimMatch) {
         const h = Number(dimMatch[1]) || 60;
         const w = Number(dimMatch[2]) || 60;
@@ -1070,7 +1307,8 @@ const NewInvoice = () => {
     }
 
     const pBox = Number(selectedProduct.retail_price || 0);
-    const pPiece = Number((pBox / pcsPerBox).toFixed(2));
+    const configuredLoosePrice = Number(selectedProduct.loose_sale_price || 0);
+    const pPiece = configuredLoosePrice > 0 ? configuredLoosePrice : Number((pBox / pcsPerBox).toFixed(2));
     const pSqm = Number((pBox / (sqmPerBox || 1)).toFixed(2));
 
     const boxQty = currentTileItem?.boxQty !== undefined ? Number(currentTileItem.boxQty) : 1;
@@ -1268,7 +1506,7 @@ const NewInvoice = () => {
         const priorUsed = consumedInInvoice[itemKey] || 0;
         const availableForRow = Math.max(0, maxAllowed - priorUsed);
 
-        if (!systemNegativeStockAllowed && Number(item.qty) > availableForRow) {
+        if (!bypassNegativeCheck && Number(item.qty) > availableForRow) {
           toast.error(`Insufficient stock for ${item.itemName} (Row #${i + 1}). Max Available: ${availableForRow.toLocaleString()}, Requested: ${Number(item.qty).toLocaleString()}`);
           setLoading(false);
           return;
@@ -1304,7 +1542,7 @@ const NewInvoice = () => {
         const priorUsed = consumedInInvoice[itemKey] || 0;
         const availableForRowPcs = Math.max(0, maxAllowedPcs - priorUsed);
 
-        if (!systemNegativeStockAllowed && reqPcs > availableForRowPcs) {
+        if (!bypassNegativeCheck && reqPcs > availableForRowPcs) {
           const avBoxes = Math.floor(availableForRowPcs / pcsPerBox);
           const avLoose = availableForRowPcs % pcsPerBox;
           toast.error(`Insufficient tile stock for ${tItem.itemName} (Tile Row #${i + 1}). Max Available: ${avBoxes} Boxes${avLoose > 0 ? ` + ${avLoose} Pcs` : ''} (${availableForRowPcs} Pcs total).`);
@@ -1440,7 +1678,7 @@ const NewInvoice = () => {
         receipt_status: (calculatedGrandTotal <= 0 && totalAllReturnsCredit > 0) ? 'Credit Adjusted' : (totalPaidCombined >= calculatedGrandTotal ? 'Paid' : 'On Credit'),
         sale_status: 'Confirm',
         shipping_address: values.shippingAddress,
-        gate_pass_no: Object.entries(values.gatePasses || {}).map(([k, v]) => `${k}: ${v}`).join(' | '),
+        gate_pass_no: values.gatePasses && Object.keys(values.gatePasses).length > 0 ? Object.entries(values.gatePasses).map(([k, v]) => `${k}: ${v}`).join(' | ') : null,
         items: itemsToSave,
         scenario_type: values.applyFbrTax ? values.taxScenario : 'Standard Retail Sale (No Tax)'
       };
@@ -1659,24 +1897,23 @@ const NewInvoice = () => {
             po_no: values.clientPoNumber || '',
             po_date: values.saleDate || null,
             gate_pass_no: (values.gatePasses && values.gatePasses[whName]) || null,
-            vehicle_no: values.transportCharges ? `Pending Dispatch` : 'Counter Delivery',
-            remarks: `Awaiting warehouse approval for ${formattedInvCode} (${whName}) [EDITED]`,
+            vehicle_no: 'Counter Delivery',
+            remarks: `Direct Counter Sale / Immediate Dispatch for ${formattedInvCode} (${whName}) [EDITED]`,
             total_quantity: whQty,
             total_amount: whBaseAmt,
             total_discount: whDiscAmt,
             total_net_amount: whNetAmt,
-            status: 'Pending',
+            status: 'Dispatched',
             items: whItems.map(i => ({
               ...i,
               orderQty: Number(i.qty || 0),
-              dispatchedQty: 0,
-              holdQty: Number(i.qty || 0)
+              dispatchedQty: Number(i.qty || 0),
+              holdQty: 0
             }))
           }]);
         }
 
         toast.success('Sales Invoice changes compiled and DCs synced successfully!');
-        triggerFeedbackSound('success', userEmail);
       } else {
         // Concurrency guard: Ensure this invoice number wasn't already inserted in parallel
         const { data: duplicateCheck } = await supabase
@@ -1743,6 +1980,9 @@ const NewInvoice = () => {
             });
           });
 
+          const workflowSettings = await fetchWorkflowSettings();
+          const requireDelivery = Boolean(workflowSettings.require_delivery_challan);
+
           for (const [whName, whItems] of Object.entries(itemsByWarehouse)) {
             const whQty = whItems.reduce((acc, i) => acc + Number(i.qty || 0), 0);
             const whBaseAmt = whItems.reduce((acc, i) => acc + (Number(i.rate || 0) * Number(i.qty || 0)), 0);
@@ -1769,6 +2009,10 @@ const NewInvoice = () => {
             }
             
             const newChallanNo = `${safePrefix}-${String(nextNum).padStart(4, '0')}`;
+            const dcStatus = requireDelivery ? 'Pending Approval' : 'Dispatched';
+            const dcRemarks = requireDelivery 
+              ? `Pending Warehouse Dispatch Approval for ${formattedInvCode} (${whName})`
+              : `Direct Counter Sale / Immediate Dispatch for ${formattedInvCode} (${whName})`;
 
             await supabase.from('delivery_challans').insert([{
               challan_no: newChallanNo,
@@ -1781,18 +2025,18 @@ const NewInvoice = () => {
               po_no: values.clientPoNumber || '',
               po_date: values.saleDate || null,
               gate_pass_no: (values.gatePasses && values.gatePasses[whName]) || null,
-              vehicle_no: values.transportCharges ? `Pending Dispatch` : 'Counter Delivery',
-              remarks: `Awaiting warehouse approval for ${formattedInvCode} (${whName})`,
+              vehicle_no: requireDelivery ? '' : 'Counter Delivery',
+              remarks: dcRemarks,
               total_quantity: whQty,
               total_amount: whBaseAmt,
               total_discount: whDiscAmt,
               total_net_amount: whNetAmt,
-              status: 'Pending',
+              status: dcStatus,
               items: whItems.map(i => ({
                 ...i,
                 orderQty: Number(i.qty || 0),
-                dispatchedQty: 0,
-                holdQty: Number(i.qty || 0)
+                dispatchedQty: requireDelivery ? 0 : Number(i.qty || 0),
+                holdQty: requireDelivery ? Number(i.qty || 0) : 0
               }))
             }]);
           }
@@ -1801,14 +2045,16 @@ const NewInvoice = () => {
           toast.error(`DC Auto-generation failed: ${dcErr.message || 'Unknown error'}`);
         }
 
-        // Update products.current_stock only — warehouse_inventory retired
-        for (const item of allMergedItems) {
-          if (!item.itemName || !item.itemName.trim()) continue;
-          const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', item.itemName).maybeSingle();
-          if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(item.qty) }).eq('id', prod.id);
+        // If requireDelivery is OFF: immediately deduct stock.
+        // If requireDelivery is ON: stock is put on Hold by the delivery challan, and deducted upon warehouse dispatch confirmation.
+        if (!requireDelivery) {
+          for (const item of allMergedItems) {
+            if (!item.itemName || !item.itemName.trim()) continue;
+            const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', item.itemName).maybeSingle();
+            if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(item.qty) }).eq('id', prod.id);
+          }
         }
         toast.success('Sales Invoice & Delivery Challan(s) logged successfully!');
-        triggerFeedbackSound('success', userEmail);
       }
 
       // ── AUTO-SYNC SALES RETURN RECORD (FOR IN-INVOICE RETURN / EXCHANGE) ──
@@ -1899,6 +2145,26 @@ const NewInvoice = () => {
         }
       } catch (retSyncErr: any) {
         console.error('Sales Return sync warning:', retSyncErr);
+      }
+
+      // ── AUTO-SYNC FINANCIAL VOUCHERS (SAV & CRV) ──
+      try {
+        const resolvedCustomer = await resolveCustomerCoaAccount(customerFinalName, customersList);
+        await syncInvoiceFinancialVouchers({
+          invoiceNo: editData?.invoice_no || values.invoiceNo,
+          customerName: resolvedCustomer.title,
+          customerCode: resolvedCustomer.code,
+          saleDate: values.saleDate || new Date().toISOString().split('T')[0],
+          grandTotal: calculatedGrandTotal,
+          paidCash: paidCash,
+          paidBank: paidBank,
+          settlementMode: values.settlementMode || 'Cash',
+          selectedBankTitle: values.selectedBankTitle,
+          itemsCount: allMergedItems.length,
+          isEdit: !!(editData && editData.id)
+        });
+      } catch (vchSyncErr: any) {
+        console.error('Financial voucher auto-sync warning:', vchSyncErr);
       }
 
       setShowCustomerModal(false);
@@ -2781,7 +3047,6 @@ const NewInvoice = () => {
                                   setSelectedRecordedCustomer(item.customerName);
                                   setCustomerModalType('recorded');
                                   fetchCustomerPastSales(item.customerName);
-                                  checkAndAlertCreditLimit(item);
                                   if (item.address && !values.shippingAddress) {
                                     setFieldValue('shippingAddress', item.address);
                                   }
@@ -2875,7 +3140,6 @@ const NewInvoice = () => {
                                     setSelectedRecordedCustomer(c.customerName);
                                     setCustomerModalType('recorded');
                                     fetchCustomerPastSales(c.customerName);
-                                    checkAndAlertCreditLimit(c);
                                     if (c.address && !values.shippingAddress) {
                                       setFieldValue('shippingAddress', c.address);
                                     }
@@ -2926,40 +3190,6 @@ const NewInvoice = () => {
                         </div>
                       )}
                     </div>
-
-                    {/* Credit Limit Status Banner for Selected Customer */}
-                    {(() => {
-                      const activeCustName = values.customerName || selectedRecordedCustomer;
-                      if (!activeCustName) return null;
-                      const custObj = customersList.find((c: any) => (c.customerName || '').toLowerCase() === activeCustName.toLowerCase());
-                      if (!custObj) return null;
-                      const limit = Number(customerCreditLimitsMap[String(custObj.id)] || 0);
-                      const bal = Number(custObj.currentBalance !== undefined ? custObj.currentBalance : (custObj.balance || 0));
-                      if (limit <= 0) return null;
-
-                      const isExceeded = bal > limit;
-                      const isNear = bal >= 0.75 * limit && !isExceeded;
-
-                      return (
-                        <div className={`mt-2 p-2.5 rounded-lg border text-xs flex items-center justify-between ${
-                          isExceeded
-                            ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 font-bold animate-pulse'
-                            : isNear
-                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-semibold'
-                            : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-                        }`}>
-                          <div className="flex items-center gap-1.5">
-                            <FiAlertTriangle className={isExceeded ? 'text-red-600' : isNear ? 'text-amber-600' : 'text-emerald-600'} />
-                            <span>
-                              {isExceeded ? '⚠️ CREDIT CEILING EXCEEDED' : isNear ? '⚠️ APPROACHING CREDIT LIMIT' : '✓ Credit Limit Active'}:
-                            </span>
-                          </div>
-                          <div className="font-mono text-[11px]">
-                            Ceiling: <strong>Rs. {limit.toLocaleString()}</strong> | Balance: <strong>Rs. {bal.toLocaleString()}</strong>
-                          </div>
-                        </div>
-                      );
-                    })()}
                   </div>
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Shipping Address (Optional):</label>
@@ -3073,79 +3303,6 @@ const NewInvoice = () => {
                     >
                       Return
                     </div>
-
-                    {/* Return Tile Toggle Pill */}
-                    <div
-                      onClick={() => {
-                        const isChecked = !values.showTileReturnSection;
-                        setFieldValue('showTileReturnSection', isChecked);
-                        const defaultReturnWh = values.dispatchWarehouse || warehousesList.find((w: string) => /fateh/i.test(w) || /a[-_ ]?39/i.test(w)) || warehousesList[0] || '';
-                        if (!isChecked) {
-                          setFieldValue('tileReturnItems', []);
-                        } else if ((values.tileReturnItems || []).length === 0) {
-                          setFieldValue('tileReturnItems', [{
-                            id: Date.now(),
-                            itemName: '',
-                            skuCode: '',
-                            warehouse: defaultReturnWh,
-                            availableQty: 0,
-                            boxQty: 1,
-                            loosePcs: 0,
-                            piecesPerBox: 4,
-                            sqmPerBox: 1.44,
-                            pricePerBox: 0,
-                            pricePerSqm: 0,
-                            pricePerPiece: 0,
-                            totalAmount: 0,
-                            totalSqm: 1.44,
-                            isTileItem: true
-                          }]);
-                        }
-                      }}
-                      className={`cursor-pointer px-3 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
-                        values.showTileReturnSection
-                          ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800'
-                          : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
-                      }`}
-                    >
-                      Return Tile
-                    </div>
-
-                    {/* Tile Products Toggle Pill */}
-                    <div
-                      onClick={() => {
-                        const isChecked = !values.showTileSection;
-                        setFieldValue('showTileSection', isChecked);
-                        if (!isChecked) {
-                          setFieldValue('tileItems', []);
-                        } else if ((values.tileItems || []).length === 0) {
-                          setFieldValue('tileItems', [{
-                            id: Date.now(),
-                            itemName: '',
-                            skuCode: '',
-                            warehouse: values.dispatchWarehouse || '',
-                            availableQty: 0,
-                            boxQty: 1,
-                            loosePcs: 0,
-                            piecesPerBox: 4,
-                            sqmPerBox: 1.44,
-                            pricePerBox: 0,
-                            pricePerSqm: 0,
-                            pricePerPiece: 0,
-                            totalAmount: 0,
-                            totalSqm: 1.44,
-                            isTileItem: true
-                          }]);
-                        }
-                      }}
-                      className={`cursor-pointer px-3 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
-                        values.showTileSection
-                          ? 'bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-800'
-                          : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
-                      }`}
-                    >
-                      Tile
-                    </div>
                   </div>
 
                   {values.applyFbrTax && (
@@ -3178,11 +3335,10 @@ const NewInvoice = () => {
                             <thead className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-black dark:text-white border-b">
                               <tr>
                                 <th className="p-2 w-8 text-center">S#</th>
-                                <th className="p-2 min-w-[220px]">Product (Name / Code)</th>
-                                <th className="p-2 w-40">Warehouse Zone Source</th>
-                                <th className="p-2 w-32 text-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold">Stock In Warehouse</th>
+                                <th className="p-2 min-w-[260px]">Product (Name / Code)</th>
+                                <th className="p-2 w-32 text-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold">Available Stock</th>
                                 <th className="p-2 w-48 text-center">Qty (UOM)</th>
-                                <th className="p-2 w-24 text-right">Sale Price</th>
+                                <th className="p-2 w-28 text-right">Sale Price</th>
                                 {showDiscount && (
                                   <>
                                     <th className="p-2 w-24 text-center bg-amber-50/80 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Discount %</th>
@@ -3209,15 +3365,13 @@ const NewInvoice = () => {
                                 const isCurrentProdNameActive = activeProdNameIndex === idx;
 
                                 const selectedProd = productsList.find(p => p.product_name === item.itemName || (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)));
-                                const rawPcs = Number(selectedProd?.pieces_per_box || selectedProd?.pcs_per_box || selectedProd?.pieces_per_packing || 0);
-                                const isTile = Boolean(
-                                  selectedProd && (
-                                    String(selectedProd.category || '').toLowerCase().includes('tile') ||
-                                    String(selectedProd.scenario_name || '').toLowerCase().includes('tile')
-                                  ) && (rawPcs > 1 || String(selectedProd.scenario_name || '').toLowerCase().includes('tile'))
-                                );
-                                const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
-                                const uomName = selectedProd?.uom ? selectedProd.uom : (isTile ? 'BOX' : 'PCS');
+                                const isTile = false;
+                                const allowLoose = Boolean(selectedProd?.allow_loose_sales);
+                                const rawPcs = Number(selectedProd?.loose_conversion_ratio || selectedProd?.pieces_per_box || selectedProd?.pcs_per_box || selectedProd?.pieces_per_packing || 1);
+                                const pcsPerBox = rawPcs > 1 ? rawPcs : 1;
+                                const bulkUnitLabel = item.uom || selectedProd?.uom || 'Unit';
+                                const looseUnitLabel = selectedProd?.loose_uom || 'Pcs';
+                                const uomName = item.uom || selectedProd?.uom || 'MTR';
 
                                 // Calculate available stock breakdown
                                 let effectiveAvailStock = Number(item.availableQty || 0);
@@ -3260,7 +3414,10 @@ const NewInvoice = () => {
                                         const nonTileList = productsList.filter(p => !isTileProduct(p));
                                         const filteredProds = nonTileList.filter(p => {
                                           if (!item.skuCode) return true;
-                                          return matchesProductSearch(p, item.skuCode);
+                                          const query = item.skuCode.toLowerCase().trim();
+                                          const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
+                                          const name = (p.product_name || '').toLowerCase();
+                                          return sku.includes(query) || name.includes(query);
                                         });
 
                                         return (
@@ -3377,7 +3534,11 @@ const NewInvoice = () => {
                                         const query = exactSelected ? '' : normText(item.itemName);
                                         const nonTileList = productsList.filter(p => !isTileProduct(p));
                                         let filteredByName = query
-                                          ? nonTileList.filter(p => matchesProductSearch(p, query))
+                                          ? nonTileList.filter(p =>
+                                              normText(p.product_name).includes(query) ||
+                                              normText(p.item_sr_no).includes(query) ||
+                                              normText(p.category).includes(query)
+                                            )
                                           : nonTileList.slice();
                                         filteredByName = filteredByName
                                           .slice()
@@ -3541,204 +3702,44 @@ const NewInvoice = () => {
                                       {hasItemError && <p className="text-red-500 text-[9px] font-bold mt-0.5">Required Field</p>}
                                     </td>
 
-                                    {/* ROW-LEVEL WAREHOUSE ZONE SOURCE */}
-                                    <td className="p-2 w-44 relative wh-container">
-                                      {(() => {
-                                        const isWhActive = activeWhIndex === idx;
-                                        const currentWh = item.warehouse !== undefined ? item.warehouse : (values.dispatchWarehouse || '');
-                                        const exactWhSelected = warehousesList.some(w => String(w || '').toLowerCase().trim() === String(currentWh || '').toLowerCase().trim());
-                                        const whQuery = exactWhSelected ? '' : currentWh.toLowerCase().trim();
-                                        let filteredWhs = whQuery
-                                          ? warehousesList.filter(w => w.toLowerCase().includes(whQuery))
-                                          : warehousesList;
-                                        if (filteredWhs.length === 0 && warehousesList.length > 0) {
-                                          filteredWhs = warehousesList;
-                                        }
-
-                                        return (
-                                          <div className="relative">
-                                            <input
-                                              type="text"
-                                              autoComplete="off"
-                                              value={currentWh}
-                                              onFocus={() => {
-                                                setActiveWhIndex(idx);
-                                                setHighlightedWhIndex(0);
-                                              }}
-                                              onClick={() => {
-                                                setActiveWhIndex(idx);
-                                              }}
-                                              onKeyDown={(e) => {
-                                                if (e.key === 'ArrowDown') {
-                                                  e.preventDefault();
-                                                  setHighlightedWhIndex(prev => prev < filteredWhs.length - 1 ? prev + 1 : 0);
-                                                } else if (e.key === 'ArrowUp') {
-                                                  e.preventDefault();
-                                                  setHighlightedWhIndex(prev => prev > 0 ? prev - 1 : filteredWhs.length - 1);
-                                                } else if (e.key === 'Enter') {
-                                                  e.preventDefault();
-                                                  if (filteredWhs[highlightedWhIndex]) {
-                                                    const selectedWh = filteredWhs[highlightedWhIndex];
-                                                    setFieldValue(`items.${idx}.warehouse`, selectedWh);
-                                                    if (item.itemName) {
-                                                      fetchStockForWarehouse(item.itemName, selectedWh).then(stock => setFieldValue(`items.${idx}.availableQty`, stock));
-                                                    }
-                                                    setActiveWhIndex(null);
-                                                  }
-                                                } else if (e.key === 'Escape' || e.key === 'Tab') {
-                                                  setActiveWhIndex(null);
-                                                }
-                                              }}
-                                              onChange={(e) => {
-                                                const typed = e.target.value;
-                                                setFieldValue(`items.${idx}.warehouse`, typed);
-                                                setActiveWhIndex(idx);
-                                                setHighlightedWhIndex(0);
-                                              }}
-                                              placeholder={`Default (${values.dispatchWarehouse || 'None'})`}
-                                              className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 pr-6 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-sm"
-                                            />
-
-                                            {Boolean(currentWh) && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setFieldValue(`items.${idx}.warehouse`, '');
-                                                  if (item.itemName) {
-                                                    fetchStockForWarehouse(item.itemName, values.dispatchWarehouse || '').then(stock => setFieldValue(`items.${idx}.availableQty`, stock));
-                                                  }
-                                                  setActiveWhIndex(null);
-                                                }}
-                                                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-meta-4 transition-colors z-10"
-                                                title="Deselect Warehouse"
-                                              >
-                                                <FiX className="w-3 h-3" />
-                                              </button>
-                                            )}
-
-                                            {/* WAREHOUSE DROPDOWN */}
-                                            {isWhActive && filteredWhs.length > 0 && (
-                                              <div className="absolute left-0 min-w-[230px] max-w-[300px] top-full mt-1 z-[99999] max-h-[200px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300">
-                                                {filteredWhs.map((wh, wIdx) => {
-                                                  const isHighlighted = wIdx === highlightedWhIndex;
-                                                  const whStock = item.itemName ? getItemWarehouseStock(item.itemName, wh) : null;
-                                                  return (
-                                                    <div
-                                                      key={wh}
-                                                      onMouseEnter={() => setHighlightedWhIndex(wIdx)}
-                                                      onMouseDown={async (e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        setFieldValue(`items.${idx}.warehouse`, wh);
-                                                        if (item.itemName) {
-                                                          const stock = await fetchStockForWarehouse(item.itemName, wh);
-                                                          setFieldValue(`items.${idx}.availableQty`, stock);
-                                                        }
-                                                        setActiveWhIndex(null);
-                                                      }}
-                                                      onClick={async (e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        setFieldValue(`items.${idx}.warehouse`, wh);
-                                                        if (item.itemName) {
-                                                          const stock = await fetchStockForWarehouse(item.itemName, wh);
-                                                          setFieldValue(`items.${idx}.availableQty`, stock);
-                                                        }
-                                                        setActiveWhIndex(null);
-                                                      }}
-                                                      className={`p-2.5 cursor-pointer transition text-xs font-bold flex items-center justify-between gap-2 ${isHighlighted ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-l-4 border-emerald-500' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80'}`}
-                                                    >
-                                                      <span className="truncate">{wh}</span>
-                                                      {item.itemName && (
-                                                        <span className={`font-mono text-[11px] font-bold shrink-0 ${whStock !== null && whStock > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                                                          {(whStock ?? 0).toLocaleString()} {item.uom || selectedProd?.uom || 'Nos'}
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                  );
-                                                })}
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                      })()}
-                                    </td>
-
-                                    {/* STOCK IN WAREHOUSE WITH LOOSE PIECES BREAKDOWN */}
+                                    {/* AVAILABLE STOCK */}
                                     <td className="p-2 text-center bg-success/5 text-xs w-[140px]">
                                       <div className="flex flex-col items-center justify-center font-mono">
                                         <span className="font-black text-success text-xs">
-                                          {isTile && pcsPerBox > 1 ? `${availBoxes.toLocaleString()} Boxes` : totalAvailStock.toLocaleString()}
+                                          {totalAvailStock.toLocaleString()}
                                         </span>
-                                        {isTile && pcsPerBox > 1 && (
-                                          <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
-                                            {availLoosePcs > 0 ? `+ ${availLoosePcs} pcs loose` : `(0 loose pcs)`}
-                                          </span>
-                                        )}
-                                        {!isTile && uomName && (
-                                          <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
-                                            {uomName}
-                                          </span>
-                                        )}
+                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
+                                          {item.uom || selectedProd?.uom || 'MTR'}
+                                        </span>
                                       </div>
                                     </td>
 
-                                    {/* QTY (UOM) WITH DEDICATED BOXES & LOOSE PIECES INPUTS FOR TILES */}
-                                    <td className="p-2 min-w-[250px]">
-                                      {isTile ? (
+                                    {/* QTY (UOM) */}
+                                    <td className="p-2 min-w-[140px]">
+                                      {allowLoose && pcsPerBox > 1 ? (
+                                        /* DUAL UNIT INPUT FOR GENERAL LOOSE SELLABLE PRODUCTS (KG+GM, LTR+ML, BOX+PCS) */
                                         (() => {
-                                          // Parse tile dimensions from product description or SKU (e.g. "60 × 60 cm" or "Size: 60 × 60 cm")
-                                          let tileWidthCm = 60;
-                                          let tileHeightCm = 60;
-                                          const desc = selectedProd?.product_description || '';
-                                          const sku = selectedProd?.item_sr_no || '';
-                                          const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
-                                            sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
-                                          if (sizeMatch) {
-                                            tileHeightCm = Number(sizeMatch[1]) || 60;
-                                            tileWidthCm = Number(sizeMatch[2]) || 60;
-                                          }
-                                          const perPieceSqm = (tileHeightCm * tileWidthCm) / 10000;
-                                          const perBoxSqm = perPieceSqm * pcsPerBox;
-
                                           const currentQty = Number(item.qty || 0);
-                                          const boxes = Math.floor(currentQty);
-                                          const loosePcs = Math.round((currentQty - boxes) * pcsPerBox);
-                                          const totalLineSqm = (boxes * perBoxSqm) + (loosePcs * perPieceSqm);
-
-                                          const isOverStock = Boolean(item.itemName && currentQty > totalAvailStock);
+                                          const bulkCount = Math.floor(currentQty);
+                                          const looseCount = Math.round((currentQty - bulkCount) * pcsPerBox);
+                                          const isOverStock = Boolean(item.itemName && Number(item.qty || 0) > totalAvailStock);
 
                                           return (
                                             <div className="flex flex-col gap-1">
-                                              {/* ── TOP BADGES: Per Box Sq.Mtr & Per Piece Sq.Mtr ── */}
-                                              <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400 px-1 font-mono">
-                                                <span className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800/60 font-bold">
-                                                  Box: {perBoxSqm.toFixed(2)} sq.m
-                                                </span>
-                                                <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60 font-bold">
-                                                  Pc: {perPieceSqm.toFixed(4)} sq.m
-                                                </span>
-                                              </div>
-
-                                              {/* ── INPUTS CONTAINER ── */}
-                                              <div className={`flex items-center gap-2 p-1.5 rounded-lg border shadow-inner transition ${isOverStock ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-300 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800/90 border-stroke dark:border-strokedark'}`}>
-                                                {/* BOXES INPUT */}
-                                                <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-primary shadow-sm">
+                                              <div className={`flex items-center gap-1.5 rounded-lg px-2 py-1 border transition shadow-inner ${isOverStock ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800 border-stroke dark:border-strokedark'}`}>
+                                                {/* BULK UNIT INPUT */}
+                                                <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded px-1.5 py-0.5 focus-within:border-primary shadow-xs">
                                                   <input
                                                     type="text"
                                                     inputMode="numeric"
                                                     onKeyDown={blockInvalidChar}
-                                                    value={(() => {
-                                                      const b = Math.floor(Number(item.qty || 0));
-                                                      return b === 0 ? '' : b;
-                                                    })()}
+                                                    value={bulkCount === 0 ? '' : bulkCount}
                                                     placeholder="0"
                                                     onChange={(e) => {
                                                       const val = e.target.value.trim();
-                                                      const newBoxes = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                      const newBulk = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
                                                       const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
-                                                      const combinedQty = Number((newBoxes + currentLoose / pcsPerBox).toFixed(3));
+                                                      const combinedQty = Number((newBulk + currentLoose / pcsPerBox).toFixed(3));
                                                       setFieldValue(`items.${idx}.qty`, combinedQty);
 
                                                       const currentRp = Math.max(0, Number(item.rp) || 0);
@@ -3748,36 +3749,32 @@ const NewInvoice = () => {
                                                         setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
                                                       }
                                                     }}
-                                                    className="w-full bg-transparent text-center font-black text-sm text-primary outline-none min-w-[36px]"
+                                                    className="w-full bg-transparent text-center font-black text-xs text-primary outline-none min-w-[28px]"
                                                   />
-                                                  <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">Box</span>
+                                                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">{bulkUnitLabel}</span>
                                                 </div>
 
-                                                <span className="text-gray-400 font-black text-sm select-none">+</span>
+                                                <span className="text-gray-400 font-black text-xs select-none">+</span>
 
-                                                {/* LOOSE PIECES INPUT */}
-                                                <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-emerald-500 shadow-sm">
+                                                {/* LOOSE SUB-UNIT INPUT */}
+                                                <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded px-1.5 py-0.5 focus-within:border-emerald-500 shadow-xs">
                                                   <input
                                                     type="text"
                                                     inputMode="numeric"
                                                     onKeyDown={blockInvalidChar}
-                                                    value={(() => {
-                                                      const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
-                                                      return currentLoose === 0 ? '' : currentLoose;
-                                                    })()}
+                                                    value={looseCount === 0 ? '' : looseCount}
                                                     placeholder={`${pcsPerBox}`}
                                                     onChange={(e) => {
                                                       const val = e.target.value.trim();
                                                       const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                                      const currentBoxes = Math.floor(Number(item.qty || 0));
+                                                      const currentBulk = Math.floor(Number(item.qty || 0));
 
-                                                      // Automatic carryover if loose pieces >= pieces_per_box
-                                                      const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
+                                                      const extraBulk = Math.floor(enteredLoose / pcsPerBox);
                                                       const remLoose = enteredLoose % pcsPerBox;
-                                                      const finalBoxes = currentBoxes + extraBoxes;
+                                                      const finalBulk = currentBulk + extraBulk;
                                                       const combinedQty = remLoose > 0
-                                                        ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3))
-                                                        : finalBoxes;
+                                                        ? Number((finalBulk + remLoose / pcsPerBox).toFixed(3))
+                                                        : finalBulk;
 
                                                       setFieldValue(`items.${idx}.qty`, combinedQty);
 
@@ -3788,34 +3785,29 @@ const NewInvoice = () => {
                                                         setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
                                                       }
                                                     }}
-                                                    className="w-full bg-transparent text-center font-black text-sm text-emerald-600 dark:text-emerald-400 outline-none min-w-[36px]"
+                                                    className="w-full bg-transparent text-center font-black text-xs text-emerald-600 dark:text-emerald-400 outline-none min-w-[28px]"
                                                   />
-                                                  <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">Pcs</span>
+                                                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">{looseUnitLabel}</span>
                                                 </div>
                                               </div>
 
-                                              {/* ── BOTTOM TOTAL SQ.MTR CALCULATION ── */}
-                                              <div className="text-center font-mono text-[10px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50/70 dark:bg-teal-950/30 rounded py-0.5 border border-teal-200/60 dark:border-teal-800/40">
-                                                Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
-                                                <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
+                                              <div className="text-center font-mono text-[9px] text-slate-500 dark:text-slate-400">
+                                                Total: <strong>{currentQty}</strong> {bulkUnitLabel} ({bulkCount} {bulkUnitLabel} + {looseCount} {looseUnitLabel})
                                               </div>
                                             </div>
                                           );
                                         })()
                                       ) : (
-                                        /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
                                         (() => {
-                                          const u = String(uomName || selectedProd?.uom || '').trim().toUpperCase();
+                                          const u = String(uomName || selectedProd?.uom || 'MTR').trim().toUpperCase();
                                           const isDecimalUom = [
-                                            'KG', 'KILOGRAM', 'GM', 'GRAM', 'TON', 'METRIC TON', 'LBS',
-                                            'LTR', 'LITER', 'LITRE', 'ML', 'GAL',
-                                            'MTR', 'METER', 'FT', 'FEET', 'INCH', 'CM', 'MM', 'YD',
-                                            'SQM', 'SQ.M', 'SQ.MTR', 'SQ.FT', 'SQF', 'SQY', 'SQUARE METER'
-                                          ].includes(u);
+                                            'MTR', 'METER', 'METERS', 'YD', 'YARD', 'YARDS', 'KG', 'LBS',
+                                            'LTR', 'FT', 'FEET', 'INCH', 'SQM', 'SQ.M'
+                                          ].some(du => u.includes(du));
                                           const isOverStock = Boolean(item.itemName && Number(item.qty || 0) > totalAvailStock);
 
                                           return (
-                                            <div className={`flex items-center gap-1.5 rounded px-2 py-1 border transition ${isOverStock ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800 border-stroke dark:border-strokedark'}`}>
+                                            <div className={`flex items-center gap-1.5 rounded px-2 py-1.5 border transition ${isOverStock ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800 border-stroke dark:border-strokedark'}`}>
                                               <input
                                                 type="text"
                                                 inputMode={isDecimalUom ? "decimal" : "numeric"}
@@ -3844,11 +3836,9 @@ const NewInvoice = () => {
                                                 placeholder="1"
                                                 className="w-full bg-transparent text-center font-black text-sm text-primary outline-none"
                                               />
-                                              {uomName && (
-                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase whitespace-nowrap select-none">
-                                                  {uomName}
-                                                </span>
-                                              )}
+                                              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase whitespace-nowrap select-none">
+                                                {uomName || selectedProd?.uom || 'MTR'}
+                                              </span>
                                             </div>
                                           );
                                         })()
@@ -3988,7 +3978,7 @@ const NewInvoice = () => {
                 </div>
 
                 {/* --- TILE INVENTORY PRODUCTS DYNAMIC FIELDARRAY --- */}
-                {values.showTileSection && (
+                {false && (
                   <div className={`border border-teal-400 dark:border-teal-800/80 bg-teal-50/20 dark:bg-teal-950/10 rounded-sm mt-6 relative ${activeTileProdIndex !== null || activeTileWhIndex !== null ? 'z-30' : 'z-20'} overflow-visible pb-4`}>
                     <FieldArray name="tileItems">
                       {({ push, remove }) => {
@@ -4051,7 +4041,14 @@ const NewInvoice = () => {
                                   const tileProducts = productsList.filter(p => isTileProduct(p));
                                   const exactTileSelected = tileProducts.some((p: any) => String(p.product_name || '').toLowerCase().trim() === String(tItem.itemName || '').toLowerCase().trim());
                                   const tileSearch = exactTileSelected ? '' : (tItem.itemName || '').toLowerCase().trim();
-                                  const filteredTileProds = tileProducts.filter((p: any) => matchesProductSearch(p, tileSearch));
+                                  const filteredTileProds = tileProducts.filter((p: any) => {
+                                    if (!tileSearch) return true;
+                                    return (
+                                      (p.product_name && p.product_name.toLowerCase().includes(tileSearch)) ||
+                                      (p.item_sr_no && p.item_sr_no.toLowerCase().includes(tileSearch)) ||
+                                      (`sku-${p.id}`.includes(tileSearch))
+                                    );
+                                  });
 
                                   const currentWh = tItem.warehouse !== undefined ? tItem.warehouse : (values.dispatchWarehouse || '');
                                   const exactTileWhSelected = warehousesList.some(w => String(w || '').toLowerCase().trim() === String(currentWh || '').toLowerCase().trim());
@@ -4405,7 +4402,7 @@ const NewInvoice = () => {
                                       <td className="p-2 w-8 text-center">
                                         <button
                                           type="button"
-                                          onClick={() => { remove(tIdx); triggerFeedbackSound('delete', userEmail); }}
+                                          onClick={() => remove(tIdx)}
                                           className="text-slate-400 hover:text-red-600 transition p-1"
                                           title="Remove tile item"
                                         >
@@ -4474,7 +4471,6 @@ const NewInvoice = () => {
                                 <tr>
                                   <th className="p-2 w-8 text-center">S#</th>
                                   <th className="p-2 min-w-[240px]">Returned Product (Name / Code)</th>
-                                  <th className="p-2 w-44">Return Warehouse Zone</th>
                                   <th className="p-2 w-32 text-center">Return Qty</th>
                                   <th className="p-2 w-32 text-right">Return Rate (RP)</th>
                                   <th className="p-2 w-36 text-right pr-4">Line Credit Total</th>
@@ -4491,7 +4487,12 @@ const NewInvoice = () => {
                                   const returnSearch = exactReturnSelected ? '' : (rItem.itemName || '').toLowerCase().trim();
                                   const filteredProducts = productsList.filter((p: any) => {
                                     if (isTileProduct(p)) return false;
-                                    return matchesProductSearch(p, returnSearch);
+                                    if (!returnSearch) return true;
+                                    return (
+                                      (p.product_name && p.product_name.toLowerCase().includes(returnSearch)) ||
+                                      (p.item_sr_no && p.item_sr_no.toLowerCase().includes(returnSearch)) ||
+                                      (`sku-${p.id}`.includes(returnSearch))
+                                    );
                                   });
 
                                   const currentWh = rItem.warehouse !== undefined ? rItem.warehouse : (values.dispatchWarehouse || '');
@@ -4654,90 +4655,6 @@ const NewInvoice = () => {
                                         </div>
                                       </td>
 
-                                      {/* RETURN WAREHOUSE SELECTOR */}
-                                      <td className="p-2 w-44 relative return-wh-container">
-                                        <div className="relative">
-                                          <input
-                                            type="text"
-                                            autoComplete="off"
-                                            value={currentWh}
-                                            onFocus={() => {
-                                              setActiveReturnWhIndex(rIdx);
-                                              setHighlightedReturnWhIndex(0);
-                                            }}
-                                            onClick={() => {
-                                              setActiveReturnWhIndex(rIdx);
-                                            }}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'ArrowDown') {
-                                                e.preventDefault();
-                                                setHighlightedReturnWhIndex(prev => prev < filteredWhs.length - 1 ? prev + 1 : 0);
-                                              } else if (e.key === 'ArrowUp') {
-                                                e.preventDefault();
-                                                setHighlightedReturnWhIndex(prev => prev > 0 ? prev - 1 : filteredWhs.length - 1);
-                                              } else if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                if (filteredWhs[highlightedReturnWhIndex]) {
-                                                  setFieldValue(`returnItems.${rIdx}.warehouse`, filteredWhs[highlightedReturnWhIndex]);
-                                                  setActiveReturnWhIndex(null);
-                                                }
-                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
-                                                setActiveReturnWhIndex(null);
-                                              }
-                                            }}
-                                            onChange={(e) => {
-                                              setFieldValue(`returnItems.${rIdx}.warehouse`, e.target.value);
-                                              setActiveReturnWhIndex(rIdx);
-                                              setHighlightedReturnWhIndex(0);
-                                            }}
-                                            placeholder={`Default (${values.dispatchWarehouse || 'None'})`}
-                                            className="w-full bg-white dark:bg-boxdark border border-rose-200 dark:border-rose-900 rounded p-1.5 pr-6 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-rose-500 shadow-sm"
-                                          />
-
-                                          {Boolean(currentWh) && (
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setFieldValue(`returnItems.${rIdx}.warehouse`, '');
-                                                setActiveReturnWhIndex(null);
-                                              }}
-                                              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-meta-4 transition-colors z-10"
-                                              title="Deselect Warehouse"
-                                            >
-                                              <FiX className="w-3 h-3" />
-                                            </button>
-                                          )}
-
-                                          {isCurrentWhActive && filteredWhs.length > 0 && (
-                                            <div className="absolute left-0 min-w-[230px] max-w-[300px] top-full mt-1 z-[99999] max-h-[180px] overflow-y-auto rounded-xl border border-rose-200 dark:border-rose-800 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin">
-                                              {filteredWhs.map((wh, wIdx) => {
-                                                const whStock = rItem.itemName ? getItemWarehouseStock(rItem.itemName, wh) : null;
-                                                return (
-                                                  <div
-                                                    key={wh}
-                                                    onMouseEnter={() => setHighlightedReturnWhIndex(wIdx)}
-                                                    onMouseDown={(e) => {
-                                                      e.preventDefault();
-                                                      e.stopPropagation();
-                                                      setFieldValue(`returnItems.${rIdx}.warehouse`, wh);
-                                                      setActiveReturnWhIndex(null);
-                                                    }}
-                                                    className={`p-2.5 cursor-pointer transition text-xs font-bold flex items-center justify-between gap-2 ${wIdx === highlightedReturnWhIndex ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-l-4 border-rose-500' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80'}`}
-                                                  >
-                                                    <span className="truncate">{wh}</span>
-                                                    {rItem.itemName && (
-                                                      <span className={`font-mono text-[11px] font-bold shrink-0 ${whStock !== null && whStock > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                                                        {(whStock ?? 0).toLocaleString()} {rItem.uom || 'Nos'}
-                                                      </span>
-                                                    )}
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </td>
 
                                       {/* RETURN QTY */}
                                       <td className="p-2 w-32">
@@ -4781,47 +4698,10 @@ const NewInvoice = () => {
                                       {/* ACTION */}
                                       <td className="p-1 w-14 text-center">
                                         <div className="flex items-center justify-center gap-1">
+                                          
                                           <button
                                             type="button"
-                                            onClick={() => {
-                                              const matchedProd = productsList.find((p: any) => 
-                                                (rItem.skuCode && String(p.item_sr_no).trim().toLowerCase() === String(rItem.skuCode).trim().toLowerCase()) ||
-                                                (rItem.itemName && String(p.product_name).trim().toLowerCase() === String(rItem.itemName).trim().toLowerCase())
-                                              );
-                                              const pcsPerBox = Number(matchedProd?.pieces_per_box ?? matchedProd?.pcs_per_box ?? 8);
-                                              const sqmPerBox = 1.44;
-                                              const bQty = Number(rItem.qty || 1);
-                                              const pBox = Number(rItem.rp || matchedProd?.retail_price || 0);
-                                              const pPiece = pBox > 0 && pcsPerBox > 0 ? (pBox / pcsPerBox) : 0;
-                                              const pSqm = pBox > 0 && sqmPerBox > 0 ? (pBox / sqmPerBox) : 0;
-                                              const newTileReturn = {
-                                                id: Date.now(),
-                                                itemName: rItem.itemName || '',
-                                                skuCode: rItem.skuCode || '',
-                                                warehouse: rItem.warehouse || values.dispatchWarehouse || '',
-                                                boxQty: bQty,
-                                                loosePcs: 0,
-                                                piecesPerBox: pcsPerBox,
-                                                sqmPerBox: sqmPerBox,
-                                                pricePerBox: pBox,
-                                                pricePerSqm: Number(pSqm.toFixed(2)),
-                                                pricePerPiece: Number(pPiece.toFixed(2)),
-                                                totalAmount: Number((bQty * pBox).toFixed(2)),
-                                                totalSqm: Number((bQty * sqmPerBox).toFixed(2)),
-                                                isTileItem: true
-                                              };
-                                              setFieldValue('showTileReturnSection', true);
-                                              setFieldValue('tileReturnItems', [...(values.tileReturnItems || []), newTileReturn]);
-                                              remove(rIdx);
-                                            }}
-                                            className="px-1 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 transition"
-                                            title="Switch this item to Tile Return (boxes, loose pcs, m²)"
-                                          >
-                                            ⇄ Tile
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => remove(rIdx)}
+                                            onClick={() => { remove(rIdx); triggerFeedbackSound('delete', userEmail); }}
                                             className="text-gray-400 hover:text-danger cursor-pointer p-0.5"
                                             title="Remove Return Item"
                                           >
@@ -4851,7 +4731,7 @@ const NewInvoice = () => {
                 )}
 
                 {/* --- RETURN TILE PRODUCTS DYNAMIC FIELDARRAY --- */}
-                {values.showTileReturnSection && (
+                {false && (
                   <div className={`border border-amber-300 dark:border-amber-900/60 bg-amber-50/20 dark:bg-amber-950/10 rounded-sm mt-6 relative ${activeTileReturnProdIndex !== null || activeTileReturnWhIndex !== null ? 'z-30' : 'z-10'} overflow-visible pb-4`}>
                     <FieldArray name="tileReturnItems">
                       {({ push, remove }) => {
@@ -4899,7 +4779,12 @@ const NewInvoice = () => {
 
                                   const filteredProducts = productsList.filter((p: any) => {
                                     if (!isTileProduct(p)) return false;
-                                    return matchesProductSearch(p, currentSearchTerm);
+                                    if (!currentSearchTerm) return true;
+                                    return (
+                                      (p.product_name && p.product_name.toLowerCase().includes(currentSearchTerm)) ||
+                                      (p.item_sr_no && p.item_sr_no.toLowerCase().includes(currentSearchTerm)) ||
+                                      (`sku-${p.id}`.includes(currentSearchTerm))
+                                    );
                                   });
 
                                   const currentWh = tItem.warehouse !== undefined ? tItem.warehouse : (values.dispatchWarehouse || '');
@@ -5353,44 +5238,6 @@ const NewInvoice = () => {
                   </div>
                 )}
 
-                {/* --- LOCATION GATE PASSES DYNAMIC SECTION --- */}
-                {(() => {
-                  const allRows = [
-                    ...values.items,
-                    ...(values.showTileSection ? (values.tileItems || []) : []),
-                    ...(values.showReturnSection ? (values.returnItems || []) : []),
-                    ...(values.showTileReturnSection ? (values.tileReturnItems || []) : [])
-                  ];
-                  const uniqueLocations = Array.from(new Set(
-                    allRows
-                      .map((i: any) => i.warehouse || values.dispatchWarehouse)
-                      .filter(Boolean)
-                  ));
-                  if (uniqueLocations.length === 0) return null;
-                  return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark mt-6">
-                      <div className="col-span-full mb-1">
-                        <h4 className="font-bold text-gray-700 dark:text-gray-300">Location Gate Passes</h4>
-                        <p className="text-xs text-gray-500">Provide a gate pass number for each dispatch location involved in this invoice.</p>
-                      </div>
-                      {uniqueLocations.map(loc => (
-                        <div key={loc as string}>
-                          <label className="block font-bold text-black dark:text-white mb-1 flex items-center gap-2">
-                            <span className="truncate">{loc as string}</span> *
-                          </label>
-                          <input 
-                            type="text" 
-                            name={`gatePasses.${loc as string}`} 
-                            value={values.gatePasses[loc as string] || ''} 
-                            onChange={handleChange} 
-                            placeholder={`Gate pass for ${loc}`} 
-                            className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && !values.gatePasses[loc as string] ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} 
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
                 <div className="flex flex-col md:flex-row justify-between items-start gap-6 border border-stroke p-4 rounded-sm bg-slate-50/10 mt-6 relative z-0">
                   <div className="w-full md:w-1/2 space-y-4">
                     {netPayableBeforeFloor < 0 ? (
@@ -5562,9 +5409,17 @@ const NewInvoice = () => {
                           {hasAttempted && errors.settlementMode && <p className="text-red-500 text-[10px] font-bold mt-1">{String(errors.settlementMode)}</p>}
                         </div>
 
+                        {/* Chart of Accounts Receiving Preview Notice */}
+                        {(values.settlementMode === 'Cash' || values.settlementMode === 'Split') && (
+                          <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] font-medium text-emerald-800 dark:text-emerald-300">
+                            <span>💵 Cash Receiving Account:</span>
+                            <span className="font-mono font-bold">1010-001 - Cash in Hand</span>
+                          </div>
+                        )}
+
                         {(values.settlementMode === 'Bank' || values.settlementMode === 'Split') && (
                           <div>
-                            <span className="font-bold text-gray-500 block mb-1">Corporate Bank Ledger Profile: *</span>
+                            <span className="font-bold text-gray-500 block mb-1">Receiving Corporate Bank Account: *</span>
                             <SearchableDropdown
                               options={banksList.map(b => `${b.bankName} - ${b.accountTitle}`)}
                               value={
@@ -5576,10 +5431,16 @@ const NewInvoice = () => {
                                 const match = banksList.find(b => `${b.bankName} - ${b.accountTitle}` === val);
                                 handleChange({ target: { name: 'selectedBankTitle', value: match ? match.accountTitle : val } });
                               }}
-                              placeholder="-- Search Account Wire Registry --"
+                              placeholder="-- Select Receiving Bank Account --"
                               className={hasAttempted && errors.selectedBankTitle ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}
                             />
                             {hasAttempted && errors.selectedBankTitle && <p className="text-red-500 text-[10px] font-bold mt-1">{String(errors.selectedBankTitle)}</p>}
+                            {values.selectedBankTitle && (
+                              <div className="mt-1 flex items-center justify-between text-[10px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded border border-blue-200 dark:border-blue-800 font-mono font-semibold">
+                                <span>🏦 Bank Chart of Account:</span>
+                                <span>{values.selectedBankTitle}</span>
+                              </div>
+                            )}
                           </div>
                         )}
 

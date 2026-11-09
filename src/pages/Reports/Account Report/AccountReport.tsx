@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import { SearchableMultiSelect } from '../../../components/SearchableMultiSelect';
+import { DEFAULT_SUB_AREAS, DEFAULT_AREAS, DEFAULT_SUBAREA_AREAS_MAP } from '../../../components/SubAreaAreaInput';
 
 const AccountReport = () => {
   const navigate = useNavigate();
@@ -40,6 +41,8 @@ const AccountReport = () => {
     subCategoryCode: [],
     controlCode: [],
     chartOfAccountCode: [],
+    city: [],
+    area: [],
     customerCategory: [],
     customer: [],
     vendor: [],
@@ -62,22 +65,14 @@ const AccountReport = () => {
       try {
         setLoading(true);
         const [custRes, vendRes, smRes, compRes, coaRes] = await Promise.all([
-          supabase.from('customers').select('*'),
+          supabase.from('customers').select('id, customerName, registrationType, primaryPhone, customer_code, customerCode, city, address, notes'),
           supabase.from('vendors').select('id, vendor_name'),
           supabase.from('salesmen').select('id, name'),
           supabase.from('companies').select('id, name'),
           supabase.from('chart_of_accounts').select('id, category_code, sub_category_code, control_code, account_code, account_title')
         ]);
 
-        if (custRes.data) {
-          setCustomers(custRes.data.map((c: any) => ({
-            ...c,
-            customerName: c.customerName || c.customername || c.name || '',
-            registrationType: c.registrationType || c.registrationtype || 'Retail / General',
-            primaryPhone: c.primaryPhone || c.primaryphone || c.phone || '',
-            customer_code: c.customer_code || c.customerCode || c.customercode || ''
-          })));
-        }
+        if (custRes.data) setCustomers(custRes.data);
         if (vendRes.data) setVendors(vendRes.data);
         if (smRes.data) setSalesmen(smRes.data);
         if (compRes.data) setCompanies(compRes.data);
@@ -156,10 +151,110 @@ const AccountReport = () => {
   const subCategoryCodeOptions = useMemo(() => getFilteredSubCategoryCodesPool(), [uniqueSubCategoryCodes, chartOfAccounts, filters.categoryCode]);
   const controlCodeOptions = useMemo(() => getFilteredControlCodesPool(), [uniqueControlCodes, chartOfAccounts, filters.categoryCode, filters.subCategoryCode]);
   const chartOfAccountOptions = useMemo(() => getFilteredChartOfAccountsPool().map(c => `${c.account_code} - ${c.account_title}`), [chartOfAccounts, filters.categoryCode, filters.subCategoryCode, filters.controlCode]);
-  const customerOptions = useMemo(() => customers.map(c => {
-    const code = c.customer_code || c.customerCode;
-    return code ? `[${code}] ${c.customerName}` : c.customerName;
-  }).filter(Boolean), [customers]);
+  const getCustomerLocation = (c: any) => {
+    let city = c.city || c.sub_area || c.subArea || '';
+    let area = c.area || '';
+
+    if (c.notes && c.notes.includes('Location:')) {
+      const match = c.notes.match(/Location:\s*([^|\n]+)(?:\s*\|\s*([^\n]+))?/);
+      if (match) {
+        const noteCity = match[1]?.trim();
+        const noteArea = match[2]?.trim();
+        if (!city) city = noteCity;
+        if (city && city.toLowerCase() === 'hyderabad' && noteCity && noteCity.toLowerCase() !== 'hyderabad') {
+          city = noteCity;
+        }
+        if (!area && noteArea) area = noteArea;
+      }
+    }
+
+    if (!city && c.address) {
+      const addr = String(c.address).toLowerCase();
+      for (const dCity of DEFAULT_SUB_AREAS) {
+        if (addr.includes(dCity.toLowerCase())) {
+          city = dCity;
+          break;
+        }
+      }
+    }
+
+    return { city: city || 'Hyderabad', area: area || '' };
+  };
+
+  const cityOptions = useMemo(() => {
+    const cities = new Set<string>();
+    customers.forEach(c => {
+      const loc = getCustomerLocation(c);
+      if (loc.city) cities.add(loc.city);
+    });
+    DEFAULT_SUB_AREAS.forEach(c => cities.add(c));
+    return Array.from(cities).filter(Boolean).sort();
+  }, [customers]);
+
+  const isCityMatch = (filterCity: string, targetCity: string) => {
+    if (!filterCity || !targetCity) return false;
+    const f = filterCity.trim().toLowerCase();
+    const t = targetCity.trim().toLowerCase();
+    if (f === t) return true;
+    if ((f === 'matli' || f === 'ماتلی') && (t === 'matli' || t === 'ماتلی')) return true;
+    return false;
+  };
+
+  const areaOptions = useMemo(() => {
+    const areas = new Set<string>();
+    const rawCityFilters = (filters.city && filters.city.length > 0 && !filters.city.includes('All'))
+      ? (Array.isArray(filters.city) ? filters.city : [filters.city])
+      : [];
+
+    if (rawCityFilters.length > 0) {
+      rawCityFilters.forEach(city => {
+        const mapped = DEFAULT_SUBAREA_AREAS_MAP[city] || [];
+        mapped.forEach(a => areas.add(a));
+        if (city.toLowerCase() === 'matli' && DEFAULT_SUBAREA_AREAS_MAP['ماتلی']) {
+          DEFAULT_SUBAREA_AREAS_MAP['ماتلی'].forEach(a => areas.add(a));
+        } else if (city === 'ماتلی' && DEFAULT_SUBAREA_AREAS_MAP['Matli']) {
+          DEFAULT_SUBAREA_AREAS_MAP['Matli'].forEach(a => areas.add(a));
+        }
+      });
+      customers.forEach(c => {
+        const loc = getCustomerLocation(c);
+        const matches = rawCityFilters.some(f => isCityMatch(f, loc.city));
+        if (matches && loc.area) areas.add(loc.area);
+      });
+    } else {
+      DEFAULT_AREAS.forEach(a => areas.add(a));
+      customers.forEach(c => {
+        const loc = getCustomerLocation(c);
+        if (loc.area) areas.add(loc.area);
+      });
+    }
+    return Array.from(areas).filter(Boolean).sort();
+  }, [customers, filters.city]);
+
+  const customerOptions = useMemo(() => {
+    let pool = customers;
+    if (filters.city && filters.city.length > 0 && !filters.city.includes('All')) {
+      const rawCityFilters = Array.isArray(filters.city) ? filters.city : [filters.city];
+      pool = pool.filter(c => {
+        const loc = getCustomerLocation(c);
+        return rawCityFilters.some(f => isCityMatch(f, loc.city));
+      });
+    }
+    if (filters.area && filters.area.length > 0 && !filters.area.includes('All')) {
+      const rawAreaFilters = Array.isArray(filters.area) ? filters.area : [filters.area];
+      pool = pool.filter(c => {
+        const loc = getCustomerLocation(c);
+        return rawAreaFilters.some(f => f.trim().toLowerCase() === (loc.area || '').trim().toLowerCase());
+      });
+    }
+    if (filters.customerCategory && filters.customerCategory.length > 0 && !filters.customerCategory.includes('All')) {
+      pool = pool.filter(c => filters.customerCategory.includes(c.registrationType || 'Retail / General'));
+    }
+    return pool.map(c => {
+      const code = c.customer_code || c.customerCode;
+      return code ? `[${code}] ${c.customerName}` : c.customerName;
+    }).filter(Boolean);
+  }, [customers, filters.city, filters.area, filters.customerCategory]);
   const customerCategoryOptions = useMemo(() => {
     const fromCust = customers.map(c => c.registrationType).filter(Boolean);
     const standard = ['Retail / General', 'Contractor / Builder', 'Wholesaler / Dealer', 'Registered Corporate'];
@@ -218,20 +313,28 @@ const AccountReport = () => {
         <p className="text-xs text-gray-400">Compile general ledgers, trial balance summaries, and corporate financial aging statements</p>
       </div>
 
-      <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[10px] uppercase text-gray-500">
-        <button type="button" onClick={() => handleTabChange(13)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 13 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Balance Detail</button>
-        <button type="button" onClick={() => handleTabChange(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Vendor Balance Detail</button>
-        <button type="button" onClick={() => handleTabChange(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>General Ledger</button>
-        <button type="button" onClick={() => handleTabChange(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Summary</button>
-        <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Operational Expenses</button>
-        <button type="button" onClick={() => handleTabChange(5)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 5 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Chart of Accounts</button>
-        <button type="button" onClick={() => handleTabChange(6)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 6 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Vendor Outstanding</button>
-        <button type="button" onClick={() => handleTabChange(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Recovery</button>
-        <button type="button" onClick={() => handleTabChange(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Voucher Report</button>
-        <button type="button" onClick={() => handleTabChange(9)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 9 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Cash & Bank Daybook</button>
-        <button type="button" onClick={() => handleTabChange(10)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 10 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Salesman Statement</button>
-        <button type="button" onClick={() => handleTabChange(11)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 11 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Trial Balance</button>
-        <button type="button" onClick={() => handleTabChange(12)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 12 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Aging Report</button>
+      <div className="flex flex-wrap items-center border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[10px] uppercase text-gray-500 px-1">
+        {/* Customer Group */}
+        <button type="button" onClick={() => handleTabChange(13)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 13 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Customer Balance Detail</button>
+        <button type="button" onClick={() => handleTabChange(2)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Customer Summary</button>
+        <button type="button" onClick={() => handleTabChange(7)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Customer Recovery</button>
+        <button type="button" onClick={() => handleTabChange(12)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 12 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Customer Aging</button>
+
+        <span className="h-4 w-[2px] bg-stroke dark:bg-strokedark mx-1"></span>
+
+        {/* Vendor Group */}
+        <button type="button" onClick={() => handleTabChange(3)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Vendor Balance Detail</button>
+        <button type="button" onClick={() => handleTabChange(6)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 6 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Vendor Outstanding</button>
+
+        <span className="h-4 w-[2px] bg-stroke dark:bg-strokedark mx-1"></span>
+
+        {/* Ledger & Accounts Group */}
+        <button type="button" onClick={() => handleTabChange(1)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>General Ledger</button>
+        <button type="button" onClick={() => handleTabChange(8)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Voucher Report</button>
+        <button type="button" onClick={() => handleTabChange(9)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 9 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Cash & Bank Daybook</button>
+        <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Operational Expenses</button>
+        <button type="button" onClick={() => handleTabChange(11)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 11 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Trial Balance</button>
+        <button type="button" onClick={() => handleTabChange(5)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 5 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Chart of Accounts</button>
       </div>
 
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
@@ -240,6 +343,27 @@ const AccountReport = () => {
 
           {(activeTab === 1 || activeTab === 13) && (
             <>
+              <SearchableMultiSelect 
+                label="City / Sub Area:" 
+                placeholder="All Cities" 
+                options={cityOptions} 
+                value={filters.city || []} 
+                onChange={(val) => {
+                  handleInputChange('city', val);
+                  handleInputChange('area', []);
+                  handleInputChange('customer', []);
+                }} 
+              />
+              <SearchableMultiSelect 
+                label="Area / Market:" 
+                placeholder="All Areas" 
+                options={areaOptions} 
+                value={filters.area || []} 
+                onChange={(val) => {
+                  handleInputChange('area', val);
+                  handleInputChange('customer', []);
+                }} 
+              />
               <SearchableMultiSelect 
                 label="Customer Category / Type:" 
                 placeholder="All Categories" 
@@ -254,7 +378,7 @@ const AccountReport = () => {
                 value={filters.customer} 
                 onChange={(val) => handleInputChange('customer', val)} 
               />
-              <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-3">
+              <div className="md:col-span-4 flex flex-wrap items-center gap-6 pt-1">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input 
                     type="checkbox" 

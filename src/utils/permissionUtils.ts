@@ -82,6 +82,19 @@ export function getModulePermissions(
 
   const cleanTarget = moduleId.toLowerCase().trim();
 
+  // If "all" is present in allowedModules, grant full access to every module
+  const hasWildcardAll = allowedModules.some(m => String(m).toLowerCase().trim() === 'all');
+  if (hasWildcardAll) {
+    return {
+      hasAccess: true,
+      level: 'full',
+      canView: true,
+      canAdd: true,
+      canEdit: true,
+      canDelete: true,
+    };
+  }
+
   // Find all tokens in allowedModules that belong to this moduleId
   const matchingTokens = allowedModules.filter(m => {
     const base = cleanBaseModuleId(String(m)).toLowerCase();

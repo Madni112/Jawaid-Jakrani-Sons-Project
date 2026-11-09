@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ClickOutside from '../ClickOutside';
-import { LuLogOut, LuBuilding2, LuMail, LuSettings } from 'react-icons/lu';
+import { LuLogOut, LuBuilding2, LuMail, LuSettings, LuLanguages, LuStore } from 'react-icons/lu';
 import { MdPerson } from 'react-icons/md';
 import { useAuth, detectPortalTenant } from '../../Context/Auth';
+import { useLanguage } from '../../Context/LanguageContext';
 import { getBrandConfig } from '../../utils/brand';
 import { supabase } from '../../Context/supabaseClient';
 import {
@@ -15,6 +16,7 @@ import {
 
 const DropdownUser = () => {
   const { logout, businessName: authBusinessName, userEmail, role, currentUser } = useAuth();
+  const { language, isRTL, toggleLanguage, t } = useLanguage();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [profile, setProfile] = useState<any>();
   const [imageError, setImageError] = useState(false);
@@ -35,9 +37,9 @@ const DropdownUser = () => {
     const themeHandler = () => {
       setAccentColor(getSavedAccentColor());
     };
-    window.addEventListener('zoaib_ali_theme_color_changed', themeHandler);
+    window.addEventListener('uzair_jibran_theme_color_changed', themeHandler);
     return () => {
-      window.removeEventListener('zoaib_ali_theme_color_changed', themeHandler);
+      window.removeEventListener('uzair_jibran_theme_color_changed', themeHandler);
     };
   }, []);
 
@@ -47,8 +49,21 @@ const DropdownUser = () => {
 
   const brand = getBrandConfig();
   const displayEmail = userEmail || profile?.email || brand.adminEmail;
-  const displayRole = role || profile?.role || 'Super Admin';
-  const displayCompanyName = authBusinessName || brand.name;
+  const rawRole = role || profile?.role || 'Super Admin';
+  const rawCompanyName = authBusinessName || brand.name;
+
+  // Translate brand company and role when in Urdu mode
+  const displayCompanyName = isRTL
+    ? ((rawCompanyName.toLowerCase().includes('uzair jibran') || rawCompanyName.toLowerCase().includes('jawaid')) ? 'جاوید جکوانی اینڈ سنز' : getUrduText(rawCompanyName))
+    : rawCompanyName;
+
+  const displayRole = isRTL
+    ? (rawRole.toLowerCase().includes('retail') || rawRole.toLowerCase().includes('cloth')
+        ? 'کلوتھ ریٹیل اینڈ ہول سیل'
+        : rawRole.toLowerCase().includes('admin')
+        ? 'سپر ایڈمن'
+        : getUrduText(rawRole))
+    : rawRole;
   const displayName = profile?.user_metadata?.full_name || profile?.user_metadata?.name || displayCompanyName;
   const isLightAccent = getContrastTextColor(accentColor) === '#0F172A';
   const roleTextColor = isLightAccent && !isDarkModeActive() ? '#0F172A' : accentColor;
@@ -111,7 +126,7 @@ const DropdownUser = () => {
       {/* <!-- Dropdown Start --> */}
       {dropdownOpen && (
         <div
-          className="absolute right-0 mt-3 flex w-80 flex-col rounded-xl border border-stroke bg-white shadow-2xl dark:border-strokedark dark:bg-boxdark z-99999 overflow-hidden animate-fadeIn"
+          className={`absolute ${isRTL ? 'left-0' : 'right-0'} mt-3 flex w-80 max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-stroke bg-white shadow-2xl dark:border-strokedark dark:bg-boxdark z-99999 overflow-hidden animate-fadeIn`}
           style={{ zIndex: 99999 }}
         >
           {/* Client Company Name & Details */}
@@ -119,7 +134,7 @@ const DropdownUser = () => {
             <div className="flex items-center gap-1.5 mb-1" style={{ color: roleTextColor }}>
               <LuBuilding2 size={15} />
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                Company / Organization
+                {isRTL ? 'کمپنی / ادارہ' : 'Company / Organization'}
               </span>
             </div>
 
@@ -128,7 +143,7 @@ const DropdownUser = () => {
             </h4>
 
             <div className="mt-2 flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-stroke/50 dark:border-strokedark/50">
-              <span className="truncate flex items-center gap-1" title={displayEmail}>
+              <span className="truncate flex items-center gap-1 font-mono" title={displayEmail}>
                 <LuMail size={12} className="shrink-0" />
                 {displayEmail}
               </span>
@@ -145,8 +160,25 @@ const DropdownUser = () => {
             </div>
           </div>
 
-          {/* Action List: Settings & Log Out */}
+          {/* Action List: Settings, Language & Log Out */}
           <div className="p-2 space-y-1">
+            {/* Quick Language Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                toggleLanguage();
+              }}
+              className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-meta-4/40 transition duration-150 ease-in-out cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <LuLanguages size={17} className="text-primary shrink-0" />
+                <span>{isRTL ? 'زبان تبدیل کریں' : 'Switch Language'}</span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                {isRTL ? '🇬🇧 English' : '🇵🇰 اردو'}
+              </span>
+            </button>
+
             <Link
               to="/settings"
               onClick={() => setDropdownOpen(false)}
@@ -165,7 +197,22 @@ const DropdownUser = () => {
                   color: isSettingsHovered ? roleTextColor : undefined,
                 }}
               />
-              <span>Settings</span>
+              <span>{isRTL ? 'سیٹنگز' : 'Settings'}</span>
+            </Link>
+
+                        {/* POS Terminal Direct Shortcut */}
+            <Link
+              to="/pos1"
+              onClick={() => setDropdownOpen(false)}
+              className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-meta-4/40 transition duration-150 ease-in-out cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <LuStore size={17} className="text-primary shrink-0" />
+                <span>{isRTL ? 'پی او ایس ٹرمینل' : 'Point of Sale (POS)'}</span>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                POS
+              </span>
             </Link>
 
             <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
@@ -175,7 +222,7 @@ const DropdownUser = () => {
               className="flex items-center gap-3 w-full px-3.5 py-2 rounded-lg text-sm font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition duration-150 ease-in-out cursor-pointer"
             >
               <LuLogOut size={16} />
-              <span>Log Out</span>
+              <span>{isRTL ? 'لاگ آؤٹ' : 'Log Out'}</span>
             </button>
           </div>
         </div>

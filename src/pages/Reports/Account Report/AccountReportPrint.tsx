@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdPrint, MdArrowBack, MdFileDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdTableChart, MdViewList } from 'react-icons/md';
@@ -9,6 +9,37 @@ import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
 import { getBrandConfig } from '../../../utils/brand';
 import ReportPagination from '../../../components/ReportPagination';
+import { DEFAULT_SUB_AREAS } from '../../../components/SubAreaAreaInput';
+
+const getCustomerLocation = (c: any) => {
+    let city = c.city || c.sub_area || c.subArea || '';
+    let area = c.area || '';
+
+    if (c.notes && c.notes.includes('Location:')) {
+        const match = c.notes.match(/Location:\s*([^|\n]+)(?:\s*\|\s*([^\n]+))?/);
+        if (match) {
+            const noteCity = match[1]?.trim();
+            const noteArea = match[2]?.trim();
+            if (!city) city = noteCity;
+            if (city && city.toLowerCase() === 'hyderabad' && noteCity && noteCity.toLowerCase() !== 'hyderabad') {
+                city = noteCity;
+            }
+            if (!area && noteArea) area = noteArea;
+        }
+    }
+
+    if (!city && c.address) {
+        const addr = String(c.address).toLowerCase();
+        for (const dCity of DEFAULT_SUB_AREAS) {
+            if (addr.includes(dCity.toLowerCase())) {
+                city = dCity;
+                break;
+            }
+        }
+    }
+
+    return { city: city || 'Hyderabad', area: area || '' };
+};
 
 const AccountReportPrint = () => {
     const location = useLocation();
@@ -132,10 +163,10 @@ const AccountReportPrint = () => {
                 // --- 📊 TAB 1 & TAB 13: CUSTOMER ACCOUNT LEDGER & BALANCE DETAIL AUDIT REPORT ---
                 if (activeTab === 1 || activeTab === 13) {
                     const [custRes, invRes, retRes, vchRes] = await Promise.all([
-                        fetchAllPages(supabase.from('customers').select('*')),
-                        fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
-                        fetchAllPages(supabase.from('sales_returns').select('*')),
-                        fetchAllPages(supabase.from('financial_vouchers').select('*'))
+                        supabase.from('customers').select('*'),
+                        supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
+                        supabase.from('sales_returns').select('*'),
+                        supabase.from('financial_vouchers').select('*')
                     ]);
 
                     if (custRes.error) throw custRes.error;
@@ -149,6 +180,30 @@ const AccountReportPrint = () => {
                     // 1. Apply Customer Category Filter
                     if (filters.customerCategory && filters.customerCategory.length > 0 && !filters.customerCategory.includes('All')) {
                         allCustomers = allCustomers.filter(c => filters.customerCategory.includes(c.registrationType || 'Retail / General'));
+                    }
+
+                    // 1b. Apply City Filter
+                    if (filters.city && filters.city.length > 0 && !filters.city.includes('All')) {
+                        const rawCityFilters = Array.isArray(filters.city) ? filters.city : [filters.city];
+                        allCustomers = allCustomers.filter(c => {
+                            const loc = getCustomerLocation(c);
+                            return rawCityFilters.some((f: string) => {
+                                const fClean = (f || '').trim().toLowerCase();
+                                const cClean = (loc.city || '').trim().toLowerCase();
+                                if (fClean === cClean) return true;
+                                if ((fClean === 'matli' || fClean === 'ماتلی') && (cClean === 'matli' || cClean === 'ماتلی')) return true;
+                                return false;
+                            });
+                        });
+                    }
+
+                    // 1c. Apply Area Filter
+                    if (filters.area && filters.area.length > 0 && !filters.area.includes('All')) {
+                        const rawAreaFilters = Array.isArray(filters.area) ? filters.area : [filters.area];
+                        allCustomers = allCustomers.filter(c => {
+                            const loc = getCustomerLocation(c);
+                            return rawAreaFilters.some((f: string) => f.toLowerCase() === loc.area.toLowerCase());
+                        });
                     }
 
                     // 2. Apply Customer Name Filter
@@ -181,9 +236,18 @@ const AccountReportPrint = () => {
                         // Match returns for this customer
                         const custReturns = allReturns.filter(r => (r.customer_name || '').trim().toLowerCase() === custName.toLowerCase());
 
-                        // Match vouchers/receipts specifically for this customer (exact customer name matching only)
+                        const custCode = String(cust.customer_code || cust.customerCode || '').trim().toLowerCase();
+                        const custNameLower = custName.toLowerCase();
+
+                        // Match all vouchers for this customer (SAV, SRV, CRV, BRV, JV, etc.)
                         const custVouchers = allVouchers.filter(v => {
-                            const voucherCust = (
+                            const vCode = String(v.account_code || v.customer_code || v.metadata?.customer_code || '').trim().toLowerCase();
+                            if (custCode && (vCode === custCode || vCode.endsWith(custCode) || custCode.endsWith(vCode))) {
+                                return true;
+                            }
+
+                            const vTitle = String(
+                                v.account_title || 
                                 v.customer_name || 
                                 v.customerName || 
                                 v.metadata?.customer_name || 
@@ -191,24 +255,141 @@ const AccountReportPrint = () => {
                                 v.meta?.customer_name || 
                                 v.meta?.customerName || 
                                 ''
-                            ).trim();
+                            ).trim().toLowerCase();
 
-                            const isReceiptType = !v.voucher_type || 
-                                v.voucher_type.toLowerCase().includes('receipt') || 
-                                v.voucher_type.toLowerCase().includes('crv') || 
-                                v.voucher_type.toLowerCase().includes('brv') || 
-                                v.meta?.moduleSource === 'sales_receipt' ||
-                                v.metadata?.moduleSource === 'sales_receipt';
+                            if (custNameLower && vTitle) {
+                                if (vTitle === custNameLower) return true;
+                                if (custNameLower.length >= 3 && vTitle.includes(custNameLower)) return true;
+                                if (vTitle.length >= 3 && custNameLower.includes(vTitle)) return true;
+                            }
 
-                            if (!isReceiptType) return false;
-
-                            // Direct customer name match
-                            if (voucherCust && voucherCust.toLowerCase() === custName.toLowerCase()) {
-                                return true;
+                            if (Array.isArray(v.items) && v.items.length > 0) {
+                                return v.items.some((it: any) => {
+                                    const itCode = String(it.accountCode || it.account_code || '').trim().toLowerCase();
+                                    const itTitle = String(it.accountTitle || it.account_title || '').trim().toLowerCase();
+                                    if (custCode && (itCode === custCode || itCode.endsWith(custCode))) return true;
+                                    if (custNameLower && (itTitle === custNameLower || (custNameLower.length >= 3 && itTitle.includes(custNameLower)))) return true;
+                                    return false;
+                                });
                             }
 
                             return false;
                         });
+
+                        // Helper to calculate impact of a voucher on this customer
+                        const getVoucherImpact = (vch: any) => {
+                            const vNo = String(vch.voucher_no || '').trim().toUpperCase();
+                            const vType = String(vch.voucher_type || '').toLowerCase();
+                            const narration = String(vch.narration || vch.notes || '').toLowerCase();
+
+                            // 1. Skip OB (Opening balance vouchers - e.g. OB-002, OB-2020-002)
+                            // Because rawCustOpening already accounts for the opening balance!
+                            const isOpening = vNo.startsWith('OB-') || narration.includes('opening balance');
+                            if (isOpening) {
+                                return { isOpening: true, debit: 0, credit: 0, type: 'Opening Balance Voucher', notes: '' };
+                            }
+
+                            // 2. SAV: Sale Amount Voucher (Sales Debit)
+                            if (vNo.startsWith('SAV-') || vType.includes('sale amount') || vType.includes('sales amount')) {
+                                const amt = Number(vch.total_amount || vch.debit || 0);
+                                return {
+                                    isOpening: false,
+                                    debit: amt,
+                                    credit: 0,
+                                    type: 'Sale Amount Voucher',
+                                    notes: vch.narration || vch.notes || 'Sale Amount Voucher Issued'
+                                };
+                            }
+
+                            // 3. SRV: Sale Return Voucher (Sales Return Credit)
+                            if (vNo.startsWith('SRV-') || vType.includes('sale return') || vType.includes('sales return')) {
+                                const amt = Number(vch.total_amount || vch.credit || 0);
+                                return {
+                                    isOpening: false,
+                                    debit: 0,
+                                    credit: amt,
+                                    type: 'Sale Return Voucher',
+                                    notes: vch.narration || vch.notes || 'Sale Return'
+                                };
+                            }
+
+                            // 4. CRV / BRV / Cash Receipt / Bank Receipt Voucher (Payment/Receipt Credit)
+                            if (vNo.startsWith('CRV-') || vNo.startsWith('BRV-') || vType.includes('receipt') || vType.includes('receive')) {
+                                const amt = Number(vch.total_amount || vch.credit || vch.amount || 0);
+                                return {
+                                    isOpening: false,
+                                    debit: 0,
+                                    credit: amt,
+                                    type: 'Receipt Voucher',
+                                    notes: vch.original_invoice_no 
+                                        ? `Against Invoice ${vch.original_invoice_no}` 
+                                        : (vch.narration || vch.notes || (vch.payment_mode ? `Mode: ${vch.payment_mode}` : 'Cash Drawer Payment'))
+                                };
+                            }
+
+                            // 5. Multi-row items check if present
+                            if (Array.isArray(vch.items) && vch.items.length > 0) {
+                                let itDr = 0;
+                                let itCr = 0;
+                                vch.items.forEach((it: any) => {
+                                    const itCode = String(it.accountCode || it.account_code || '').trim().toLowerCase();
+                                    const itTitle = String(it.accountTitle || it.account_title || '').trim().toLowerCase();
+                                    const match = (custCode && (itCode === custCode || itCode.endsWith(custCode))) ||
+                                                  (custNameLower && (itTitle === custNameLower || (custNameLower.length >= 3 && itTitle.includes(custNameLower))));
+                                    if (match) {
+                                        itDr += Number(it.debit || 0);
+                                        itCr += Number(it.credit || 0);
+                                    }
+                                });
+                                if (itDr > 0 || itCr > 0) {
+                                    return {
+                                        isOpening: false,
+                                        debit: itDr,
+                                        credit: itCr,
+                                        type: vch.voucher_type || 'Journal Voucher',
+                                        notes: vch.narration || vch.notes || 'Journal Entry'
+                                    };
+                                }
+                            }
+
+                            // 6. Generic voucher: check debit/credit
+                            const d = Number(vch.debit || 0);
+                            const c = Number(vch.credit || 0);
+                            if (d > 0 && c === 0) {
+                                return {
+                                    isOpening: false,
+                                    debit: d,
+                                    credit: 0,
+                                    type: vch.voucher_type || 'Voucher (Dr)',
+                                    notes: vch.narration || vch.notes || 'Voucher Debit Entry'
+                                };
+                            }
+                            if (c > 0 && d === 0) {
+                                return {
+                                    isOpening: false,
+                                    debit: 0,
+                                    credit: c,
+                                    type: vch.voucher_type || 'Receipt Voucher',
+                                    notes: vch.narration || vch.notes || 'Voucher Credit Entry'
+                                };
+                            }
+
+                            const tot = Number(vch.total_amount || 0);
+                            return {
+                                isOpening: false,
+                                debit: tot,
+                                credit: 0,
+                                type: vch.voucher_type || 'Voucher',
+                                notes: vch.narration || vch.notes || ''
+                            };
+                        };
+
+                        const isVoucherLinkedToInvoice = (v: any) => {
+                            const impact = getVoucherImpact(v);
+                            if (impact.isOpening || impact.credit <= 0) return false;
+                            const ref = String(v.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
+                            return Boolean(ref && customerInvoiceIdSet.has(ref));
+                        };
 
                         // Map invoice IDs for customer
                         const customerInvoiceIdSet = new Set(custInvoices.map(i => String(i.id).trim().toLowerCase()));
@@ -216,6 +397,21 @@ const AccountReportPrint = () => {
                         // Calculate Prior to DateFrom (Opening Balance)
                         let openingDebit = 0;
                         let openingCredit = 0;
+
+                        // Include customer initial opening balance from master records
+                        const rawCustOpening = Number(
+                            cust.opening_balance !== undefined && cust.opening_balance !== null && cust.opening_balance !== ''
+                                ? cust.opening_balance
+                                : (cust.balance !== undefined && cust.balance !== null && cust.balance !== ''
+                                    ? cust.balance
+                                    : cust.currentBalance || 0)
+                        );
+                        const custNature = String(cust.balance_nature || cust.balanceNature || '').toLowerCase();
+                        if (custNature.includes('cr') || custNature.includes('credit')) {
+                            openingCredit += Math.abs(rawCustOpening);
+                        } else if (rawCustOpening > 0) {
+                            openingDebit += Math.abs(rawCustOpening);
+                        }
 
                         custInvoices.forEach(inv => {
                             const d = inv.sale_date || inv.created_at;
@@ -226,10 +422,12 @@ const AccountReportPrint = () => {
                                 const initialPaid = Number(inv.cash_amount_paid || inv.amount_paid || 0);
 
                                 const linkedVouchers = custVouchers.filter(v => {
+                                    const impact = getVoucherImpact(v);
+                                    if (impact.isOpening || impact.credit <= 0) return false;
                                     const ref = String(v.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
                                     return ref === invIdStr;
                                 });
-                                const linkedVouchersSum = linkedVouchers.reduce((s, v) => s + Number(v.total_amount || v.amount || 0), 0);
+                                const linkedVouchersSum = linkedVouchers.reduce((s, v) => s + getVoucherImpact(v).credit, 0);
 
                                 const linkedReturns = custReturns.filter(r => {
                                     const ref = String(r.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
@@ -244,15 +442,16 @@ const AccountReportPrint = () => {
                             }
                         });
 
-                        // Unlinked vouchers prior to DateFrom (general advances / on-account receipts)
+                        // Unlinked vouchers prior to DateFrom (general advances / on-account receipts / SAV debits)
                         custVouchers.forEach(vch => {
-                            const ref = String(vch.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
-                            const isUnlinked = !ref || !customerInvoiceIdSet.has(ref);
-                            if (isUnlinked) {
+                            const impact = getVoucherImpact(vch);
+                            if (impact.isOpening) return;
+                            if (!isVoucherLinkedToInvoice(vch)) {
                                 const d = vch.voucher_date || vch.created_at;
                                 const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
                                 if (t < startTimestamp) {
-                                    openingCredit += Number(vch.total_amount || vch.amount || 0);
+                                    openingDebit += impact.debit;
+                                    openingCredit += impact.credit;
                                 }
                             }
                         });
@@ -286,10 +485,12 @@ const AccountReportPrint = () => {
                                 const initialPaid = Number(inv.cash_amount_paid || inv.amount_paid || 0);
 
                                 const linkedVouchers = custVouchers.filter(v => {
+                                    const impact = getVoucherImpact(v);
+                                    if (impact.isOpening || impact.credit <= 0) return false;
                                     const ref = String(v.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
                                     return ref === invIdStr;
                                 });
-                                const linkedVouchersSum = linkedVouchers.reduce((s, v) => s + Number(v.total_amount || v.amount || 0), 0);
+                                const linkedVouchersSum = linkedVouchers.reduce((s, v) => s + getVoucherImpact(v).credit, 0);
 
                                 const linkedReturns = custReturns.filter(r => {
                                     const ref = String(r.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
@@ -305,15 +506,16 @@ const AccountReportPrint = () => {
                             }
                         });
 
-                        // Unlinked vouchers within period (general advances / on-account receipts)
+                        // Unlinked vouchers within period (SAV debits, general advances, receipts)
                         custVouchers.forEach(vch => {
-                            const ref = String(vch.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
-                            const isUnlinked = !ref || !customerInvoiceIdSet.has(ref);
-                            if (isUnlinked) {
+                            const impact = getVoucherImpact(vch);
+                            if (impact.isOpening) return;
+                            if (!isVoucherLinkedToInvoice(vch)) {
                                 const d = vch.voucher_date || vch.created_at;
                                 const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
                                 if (t >= startTimestamp && t <= endTimestamp) {
-                                    periodCredit += Number(vch.total_amount || vch.amount || 0);
+                                    periodDebit += impact.debit;
+                                    periodCredit += impact.credit;
                                     txCount++;
                                 }
                             }
@@ -345,8 +547,12 @@ const AccountReportPrint = () => {
                             const initialPaid = Number(inv.cash_amount_paid || inv.amount_paid || 0);
                             const invIdStr = String(inv.id).trim().toLowerCase();
                             const linkedVouchersSum = custVouchers
-                                .filter(v => String(v.original_invoice_no || '').replace('INV-', '').trim().toLowerCase() === invIdStr)
-                                .reduce((s, v) => s + Number(v.total_amount || v.amount || 0), 0);
+                                .filter(v => {
+                                    const impact = getVoucherImpact(v);
+                                    if (impact.isOpening || impact.credit <= 0) return false;
+                                    return String(v.original_invoice_no || '').replace('INV-', '').trim().toLowerCase() === invIdStr;
+                                })
+                                .reduce((s, v) => s + getVoucherImpact(v).credit, 0);
 
                             const linkedReturnsSum = custReturns
                                 .filter(r => String(r.original_invoice_no || '').replace('INV-', '').trim().toLowerCase() === invIdStr)
@@ -365,14 +571,20 @@ const AccountReportPrint = () => {
                             balanceReasons.push(`Unpaid Invoices (${unpaidInvoices.length}): ${unpaidInvoices.slice(0, 3).map(u => `${u.invNo} [Rs. ${u.due.toLocaleString()}]`).join(', ')}${unpaidInvoices.length > 3 ? '...' : ''}`);
                         }
 
-                        // 2. Unlinked advances
+                        // 2. Unlinked vouchers
                         let unlinkedAdvTotal = 0;
+                        let unlinkedDebitTotal = 0;
                         custVouchers.forEach(vch => {
-                            const ref = String(vch.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
-                            if (!ref || !customerInvoiceIdSet.has(ref)) {
-                                unlinkedAdvTotal += Number(vch.total_amount || vch.amount || 0);
+                            const impact = getVoucherImpact(vch);
+                            if (impact.isOpening) return;
+                            if (!isVoucherLinkedToInvoice(vch)) {
+                                if (impact.credit > 0) unlinkedAdvTotal += impact.credit;
+                                if (impact.debit > 0) unlinkedDebitTotal += impact.debit;
                             }
                         });
+                        if (unlinkedDebitTotal > 0.01) {
+                            balanceReasons.push(`Sale Amount Vouchers: Rs. ${unlinkedDebitTotal.toLocaleString()}`);
+                        }
                         if (unlinkedAdvTotal > 0.01) {
                             balanceReasons.push(`Advance Receipts Logged: Rs. ${unlinkedAdvTotal.toLocaleString()}`);
                         }
@@ -401,12 +613,20 @@ const AccountReportPrint = () => {
                         }> = [];
 
                         // Beginning / Opening Balance line (Always shown as initial ledger line)
+                        const obVch = custVouchers.find(v => {
+                            const vNo = String(v.voucher_no || '').toUpperCase();
+                            const narr = String(v.narration || v.notes || '').toLowerCase();
+                            return vNo.startsWith('OB-') || narr.includes('opening balance');
+                        });
+                        const obDateStr = obVch?.voucher_date || filters.dateFrom || 'Opening';
+                        const obRawDate = obVch?.voucher_date ? obVch.voucher_date + 'T00:00:00' : (filters.dateFrom ? filters.dateFrom + 'T00:00:00' : '1970-01-01');
+
                         rawTransactions.push({
-                            date: filters.dateFrom || 'Opening',
-                            raw_date: filters.dateFrom ? filters.dateFrom + 'T00:00:00' : '1970-01-01',
-                            type: 'Beginning Balance (B/F)',
-                            refNo: '-',
-                            notes: 'Beginning / Opening Balance Brought Forward',
+                            date: obDateStr,
+                            raw_date: obRawDate,
+                            type: 'Opening Balance',
+                            refNo: obVch?.voucher_no || '-',
+                            notes: 'Opening Balance',
                             debit: openingBalance > 0 ? openingBalance : 0,
                             credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
                         });
@@ -426,24 +646,39 @@ const AccountReportPrint = () => {
                                     debit: totAmt,
                                     credit: 0
                                 });
-                            }
-                        });
 
-                        // Vouchers within period
-                        custVouchers.forEach(vch => {
-                            const d = vch.voucher_date || vch.created_at;
-                            const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
-                            if (t >= startTimestamp && t <= endTimestamp) {
-                                const vAmt = Number(vch.total_amount || vch.amount || 0);
-                                if (vAmt > 0) {
+                                const initialPaid = Number(inv.cash_amount_paid || inv.amount_paid || 0);
+                                if (initialPaid > 0) {
                                     rawTransactions.push({
                                         date: String(d).split('T')[0],
                                         raw_date: String(d),
-                                        type: 'Receipt Voucher',
-                                        refNo: vch.voucher_no || `CRV-${vch.id}`,
-                                        notes: vch.original_invoice_no ? `Against Invoice ${vch.original_invoice_no}` : (vch.payment_mode || 'Cash Drawer Payment'),
+                                        type: 'Cash Paid at Sale',
+                                        refNo: inv.invoice_no || `INV-${inv.id}`,
+                                        notes: `Upfront payment on Invoice #${inv.invoice_no || inv.id}`,
                                         debit: 0,
-                                        credit: vAmt
+                                        credit: initialPaid
+                                    });
+                                }
+                            }
+                        });
+
+                        // Vouchers within period (SAV, SRV, CRV, BRV, etc.)
+                        custVouchers.forEach(vch => {
+                            const impact = getVoucherImpact(vch);
+                            if (impact.isOpening) return;
+
+                            const d = vch.voucher_date || vch.created_at;
+                            const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
+                            if (t >= startTimestamp && t <= endTimestamp) {
+                                if (impact.debit > 0 || impact.credit > 0) {
+                                    rawTransactions.push({
+                                        date: String(d).split('T')[0],
+                                        raw_date: String(d),
+                                        type: impact.type,
+                                        refNo: vch.voucher_no || `VCH-${vch.id}`,
+                                        notes: impact.notes || (vch.narration || vch.notes || 'Voucher Entry'),
+                                        debit: impact.debit,
+                                        credit: impact.credit
                                     });
                                 }
                             }
@@ -490,7 +725,9 @@ const AccountReportPrint = () => {
                             customer_code: cust.customer_code || cust.customerCode || '-',
                             page_no: cust.page_no || cust.pageNo || '-',
                             category: cust.registrationType || 'Retail / General',
-                            phone: cust.mobileNo || cust.phoneNo || '-',
+                            city: getCustomerLocation(cust).city,
+                            area: getCustomerLocation(cust).area,
+                            phone: cust.mobileNo || cust.phoneNo || cust.primaryPhone || '-',
                             address: cust.businessAddress || cust.residentialAddress || '-',
                             opening_balance: openingBalance,
                             period_debit: periodDebit,
@@ -567,12 +804,14 @@ const AccountReportPrint = () => {
 
                 // --- 📊 TAB 12: ACCOUNT DEBIT AGING MATRIX SHEET (AGING REPORT) ---
                 else if (activeTab === 12) {
-                    const { data: invoices, error: invErr } = await supabase
-                        .from('sales_invoices')
-                        .select('*')
-                        .order('id', { ascending: true });
+                    const [invRes, custRes] = await Promise.all([
+                        supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
+                        supabase.from('customers').select('*')
+                    ]);
 
-                    if (invErr) throw invErr;
+                    if (invRes.error) throw invRes.error;
+                    const invoices = invRes.data || [];
+                    const allCustomers = custRes.data || [];
 
                     const today = new Date();
 
@@ -585,6 +824,45 @@ const AccountReportPrint = () => {
                         days_90_plus: number;
                         invoice_count: number;
                     }> = {};
+
+                    // Seed customer opening debit balances into aging schedule
+                    allCustomers.forEach(c => {
+                        const custName = c.customerName || 'General Customer';
+                        if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All') && !filters.customer.includes(custName)) {
+                            return;
+                        }
+                        const rawCustOpening = Number(
+                            c.opening_balance !== undefined && c.opening_balance !== null && c.opening_balance !== ''
+                                ? c.opening_balance
+                                : (c.balance !== undefined && c.balance !== null && c.balance !== ''
+                                    ? c.balance
+                                    : c.currentBalance || 0)
+                        );
+                        const custNature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
+                        let effectiveOpening = rawCustOpening;
+                        if (custNature.includes('cr') || custNature.includes('credit')) {
+                            effectiveOpening = -Math.abs(rawCustOpening);
+                        } else if (rawCustOpening > 0) {
+                            effectiveOpening = Math.abs(rawCustOpening);
+                        }
+
+                        if (effectiveOpening > 0.5) {
+                            if (!customerAgingMap[custName]) {
+                                customerAgingMap[custName] = {
+                                    customer_name: custName,
+                                    total_due: 0,
+                                    days_0_30: 0,
+                                    days_31_60: 0,
+                                    days_61_90: 0,
+                                    days_90_plus: 0,
+                                    invoice_count: 0
+                                };
+                            }
+                            const entry = customerAgingMap[custName];
+                            entry.total_due += effectiveOpening;
+                            entry.days_0_30 += effectiveOpening;
+                        }
+                    });
 
                     (invoices || []).forEach(inv => {
                         const custName = inv.customer_name || 'General Customer';
@@ -638,10 +916,10 @@ const AccountReportPrint = () => {
                 // --- 📊 TAB 3: VENDOR BALANCE DETAIL REPORT ---
                 else if (activeTab === 3) {
                     const [vendRes, purRes, vchRes, pretRes] = await Promise.all([
-                        fetchAllPages(supabase.from('vendors').select('*')),
-                        fetchAllPages(supabase.from('supplier_purchases').select('*').order('id', { ascending: true })),
-                        fetchAllPages(supabase.from('financial_vouchers').select('*')),
-                        fetchAllPages(supabase.from('purchase_returns').select('*'))
+                        supabase.from('vendors').select('*'),
+                        supabase.from('supplier_purchases').select('*').order('id', { ascending: true }),
+                        supabase.from('financial_vouchers').select('*'),
+                        supabase.from('purchase_returns').select('*')
                     ]);
 
                     let allVendors = vendRes.data || [];
@@ -662,20 +940,149 @@ const AccountReportPrint = () => {
 
                         const vendPurchases = allPurchases.filter(p => (p.supplier_name || p.vendor_name || '').trim().toLowerCase() === vName);
 
+                        const vendCode = String(vend.vendor_code || vend.vendorCode || vend.account_code || '').trim().toLowerCase();
+                        const vNameLower = vName.toLowerCase();
+
+                        // Match all vouchers for this vendor (PAV, PRV, VPV, CPV, BPV, JV, etc.)
                         const vendVouchers = allVouchers.filter(v => {
-                            const vParty = (v.supplier_name || v.vendor_name || v.customer_name || v.customerName || v.metadata?.vendor_name || v.metadata?.party_name || '').trim().toLowerCase();
-                            const isPaymentType = !v.voucher_type ||
-                                v.voucher_type.toLowerCase().includes('payment') ||
-                                v.voucher_type.toLowerCase().includes('bpv') ||
-                                v.voucher_type.toLowerCase().includes('cpv');
-                            if (!isPaymentType) return false;
-                            return vParty === vName;
+                            const vCode = String(v.account_code || v.vendor_code || v.metadata?.vendor_code || '').trim().toLowerCase();
+                            if (vendCode && (vCode === vendCode || vCode.endsWith(vendCode) || vendCode.endsWith(vCode))) {
+                                return true;
+                            }
+
+                            const vParty = String(
+                                v.supplier_name || 
+                                v.vendor_name || 
+                                v.account_title || 
+                                v.metadata?.vendor_name || 
+                                v.metadata?.party_name || 
+                                ''
+                            ).trim().toLowerCase();
+
+                            if (vNameLower && vParty) {
+                                if (vParty === vNameLower) return true;
+                                if (vNameLower.length >= 3 && vParty.includes(vNameLower)) return true;
+                                if (vParty.length >= 3 && vNameLower.includes(vParty)) return true;
+                            }
+
+                            if (Array.isArray(v.items) && v.items.length > 0) {
+                                return v.items.some((it: any) => {
+                                    const itCode = String(it.accountCode || it.account_code || '').trim().toLowerCase();
+                                    const itTitle = String(it.accountTitle || it.account_title || '').trim().toLowerCase();
+                                    if (vendCode && (itCode === vendCode || itCode.endsWith(vendCode))) return true;
+                                    if (vNameLower && (itTitle === vNameLower || (vNameLower.length >= 3 && itTitle.includes(vNameLower)))) return true;
+                                    return false;
+                                });
+                            }
+
+                            return false;
                         });
 
-                        const vendReturns = allReturns.filter(r => (r.supplier_name || r.vendor_name || '').trim().toLowerCase() === vName);
+                        // Helper to calculate impact of a voucher on this vendor
+                        const getVendorVoucherImpact = (vch: any) => {
+                            const vNo = String(vch.voucher_no || '').trim().toUpperCase();
+                            const vType = String(vch.voucher_type || '').toLowerCase();
+                            const narration = String(vch.narration || vch.notes || '').toLowerCase();
+
+                            // Skip OB vouchers
+                            const isOpening = vNo.startsWith('OB-') || vNo.startsWith('OBV-') || narration.includes('opening balance');
+                            if (isOpening) {
+                                return { isOpening: true, debit: 0, credit: 0, type: 'Opening Balance Voucher', notes: '' };
+                            }
+
+                            // PAV: Purchase Amount Voucher -> Credit (Payable to vendor)
+                            if (vNo.startsWith('PAV-') || vType.includes('purchase amount')) {
+                                const amt = Number(vch.total_amount || vch.credit || 0);
+                                return {
+                                    isOpening: false,
+                                    credit: amt,
+                                    debit: 0,
+                                    type: 'Purchase Amount Voucher',
+                                    notes: vch.narration || vch.notes || 'Purchase Amount Voucher'
+                                };
+                            }
+
+                            // PRV: Purchase Return Voucher -> Debit (Reduces payable)
+                            if (vNo.startsWith('PRV-') || vType.includes('purchase return')) {
+                                const amt = Number(vch.total_amount || vch.debit || 0);
+                                return {
+                                    isOpening: false,
+                                    credit: 0,
+                                    debit: amt,
+                                    type: 'Purchase Return Voucher',
+                                    notes: vch.narration || vch.notes || 'Purchase Return Voucher'
+                                };
+                            }
+
+                            // VPV / CPV / BPV / Payment Voucher -> Debit (Reduces payable)
+                            if (vNo.startsWith('VPV-') || vNo.startsWith('CPV-') || vNo.startsWith('BPV-') || vType.includes('payment')) {
+                                const amt = Number(vch.total_amount || vch.debit || vch.amount || 0);
+                                return {
+                                    isOpening: false,
+                                    credit: 0,
+                                    debit: amt,
+                                    type: 'Payment Voucher',
+                                    notes: vch.narration || vch.notes || (vch.payment_mode ? `Paid via ${vch.payment_mode}` : 'Supplier Payout')
+                                };
+                            }
+
+                            // Multi-row items check
+                            if (Array.isArray(vch.items) && vch.items.length > 0) {
+                                let itDr = 0;
+                                let itCr = 0;
+                                vch.items.forEach((it: any) => {
+                                    const itCode = String(it.accountCode || it.account_code || '').trim().toLowerCase();
+                                    const itTitle = String(it.accountTitle || it.account_title || '').trim().toLowerCase();
+                                    const match = (vendCode && (itCode === vendCode || itCode.endsWith(vendCode))) ||
+                                                  (vNameLower && (itTitle === vNameLower || (vNameLower.length >= 3 && itTitle.includes(vNameLower))));
+                                    if (match) {
+                                        itDr += Number(it.debit || 0);
+                                        itCr += Number(it.credit || 0);
+                                    }
+                                });
+                                if (itDr > 0 || itCr > 0) {
+                                    return {
+                                        isOpening: false,
+                                        debit: itDr,
+                                        credit: itCr,
+                                        type: vch.voucher_type || 'Journal Voucher',
+                                        notes: vch.narration || vch.notes || 'Journal Entry'
+                                    };
+                                }
+                            }
+
+                            // Generic debit / credit
+                            const d = Number(vch.debit || 0);
+                            const c = Number(vch.credit || 0);
+                            if (d > 0 && c === 0) {
+                                return { isOpening: false, debit: d, credit: 0, type: vch.voucher_type || 'Payment Voucher', notes: vch.narration || vch.notes || '' };
+                            }
+                            if (c > 0 && d === 0) {
+                                return { isOpening: false, debit: 0, credit: c, type: vch.voucher_type || 'Purchase Voucher', notes: vch.narration || vch.notes || '' };
+                            }
+
+                            const tot = Number(vch.total_amount || 0);
+                            return { isOpening: false, debit: tot, credit: 0, type: vch.voucher_type || 'Payment Voucher', notes: vch.narration || vch.notes || '' };
+                        };
+
+                        const vendReturns = allReturns.filter(r => (r.supplier_name || r.vendor_name || '').trim().toLowerCase() === vNameLower);
 
                         let openingCredit = 0; // Purchases (Payable)
                         let openingDebit = 0;  // Payments / Debit Notes (Reduces Payable)
+
+                        const rawVendOpening = Number(
+                            vend.opening_balance !== undefined && vend.opening_balance !== null && vend.opening_balance !== ''
+                                ? vend.opening_balance
+                                : (vend.balance !== undefined && vend.balance !== null && vend.balance !== ''
+                                    ? vend.balance
+                                    : vend.current_balance || 0)
+                        );
+                        const vendNature = String(vend.balance_nature || vend.balanceNature || '').toLowerCase();
+                        if (vendNature.includes('dr') || vendNature.includes('debit')) {
+                            openingDebit += Math.abs(rawVendOpening);
+                        } else if (rawVendOpening > 0) {
+                            openingCredit += Math.abs(rawVendOpening);
+                        }
 
                         vendPurchases.forEach(pur => {
                             const d = pur.purchase_date || pur.created_at;
@@ -689,10 +1096,13 @@ const AccountReportPrint = () => {
                         });
 
                         vendVouchers.forEach(vch => {
+                            const impact = getVendorVoucherImpact(vch);
+                            if (impact.isOpening) return;
                             const d = vch.voucher_date || vch.created_at;
                             const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
                             if (t < startTimestamp) {
-                                openingDebit += Number(vch.total_amount || vch.amount || 0);
+                                openingCredit += impact.credit;
+                                openingDebit += impact.debit;
                             }
                         });
 
@@ -723,10 +1133,13 @@ const AccountReportPrint = () => {
                         });
 
                         vendVouchers.forEach(vch => {
+                            const impact = getVendorVoucherImpact(vch);
+                            if (impact.isOpening) return;
                             const d = vch.voucher_date || vch.created_at;
                             const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
                             if (t >= startTimestamp && t <= endTimestamp) {
-                                periodDebit += Number(vch.total_amount || vch.amount || 0);
+                                periodCredit += impact.credit;
+                                periodDebit += impact.debit;
                                 txCount++;
                             }
                         });
@@ -754,12 +1167,20 @@ const AccountReportPrint = () => {
                         }> = [];
 
                         // Beginning / Opening Balance line (Always shown as initial vendor ledger line)
+                        const obVendVch = vendVouchers.find(v => {
+                            const vNo = String(v.voucher_no || '').toUpperCase();
+                            const narr = String(v.narration || v.notes || '').toLowerCase();
+                            return vNo.startsWith('OB-') || vNo.startsWith('OBV-') || narr.includes('opening balance');
+                        });
+                        const obVendDateStr = obVendVch?.voucher_date || filters.dateFrom || 'Opening';
+                        const obVendRawDate = obVendVch?.voucher_date ? obVendVch.voucher_date + 'T00:00:00' : (filters.dateFrom ? filters.dateFrom + 'T00:00:00' : '1970-01-01');
+
                         rawTransactions.push({
-                            date: filters.dateFrom || 'Opening',
-                            raw_date: filters.dateFrom ? filters.dateFrom + 'T00:00:00' : '1970-01-01',
-                            type: 'Beginning Balance (B/F)',
-                            refNo: '-',
-                            notes: 'Beginning / Opening Balance Brought Forward',
+                            date: obVendDateStr,
+                            raw_date: obVendRawDate,
+                            type: 'Opening Balance',
+                            refNo: obVendVch?.voucher_no || '-',
+                            notes: 'Opening Balance',
                             debit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
                             credit: openingBalance > 0 ? openingBalance : 0,
                         });
@@ -860,6 +1281,8 @@ const AccountReportPrint = () => {
 
                     if (voucherErr) throw voucherErr;
 
+                    const { data: vendorsData } = await supabase.from('vendors').select('*');
+
                     let pool = purchasesData || [];
 
                     const selectedVendors = filters.supplier || filters.vendor;
@@ -927,6 +1350,37 @@ const AccountReportPrint = () => {
                         calculatedVendorOutstandingRows.sort((a, b) => Number(a.total_amount) - Number(b.total_amount));
                     }
 
+                    // Add vendor opening credit balances (payables)
+                    (vendorsData || []).forEach((v: any) => {
+                        const rawBal = Number(v.current_balance !== undefined && v.current_balance !== null
+                            ? v.current_balance
+                            : (v.balance !== undefined && v.balance !== null ? v.balance : v.opening_balance || 0));
+                        const nature = String(v.balance_nature || v.balanceNature || '').toLowerCase();
+                        let effectiveBal = rawBal;
+                        if (nature.includes('dr') || nature.includes('debit')) {
+                            effectiveBal = -Math.abs(rawBal);
+                        } else if (rawBal > 0) {
+                            effectiveBal = Math.abs(rawBal);
+                        }
+
+                        if (effectiveBal > 0.5) {
+                            const vName = v.vendor_name || v.name || 'Supplier';
+                            if (selectedVendors && selectedVendors.length > 0 && !selectedVendors.includes('All') && !selectedVendors.includes(vName)) {
+                                return;
+                            }
+                            calculatedVendorOutstandingRows.unshift({
+                                id: `vend-ob-${v.id}`,
+                                purchase_no: v.vendor_code || `OB-${v.id}`,
+                                supplier_name: vName,
+                                purchase_date: v.created_at ? v.created_at.split('T')[0] : 'Opening',
+                                payment_term: 'Opening Balance',
+                                gross_amount: effectiveBal,
+                                paid_amount: 0,
+                                total_amount: effectiveBal
+                            });
+                        }
+                    });
+
                     setReportRows(calculatedVendorOutstandingRows);
                 }
 
@@ -985,13 +1439,15 @@ const AccountReportPrint = () => {
 
                 // --- 📊 TAB 11: GENERAL TRIAL BALANCE AUDIT WORKBOOK ---
                 else if (activeTab === 11) {
-                    const { data: sales } = await fetchAllPages(supabase.from('sales_invoices').select('*'));
-                    const { data: purchases } = await fetchAllPages(supabase.from('supplier_purchases').select('*'));
-                    const { data: sReturns } = await fetchAllPages(supabase.from('sales_returns').select('*'));
-                    const { data: pReturns } = await fetchAllPages(supabase.from('purchase_returns').select('*'));
-                    const { data: vouchers } = await fetchAllPages(supabase.from('financial_vouchers').select('*'));
-                    const { data: banks } = await fetchAllPages(supabase.from('banks').select('*'));
-                    const { data: products } = await fetchAllPages(supabase.from('products').select('*'));
+                    const { data: sales } = await supabase.from('sales_invoices').select('*');
+                    const { data: purchases } = await supabase.from('supplier_purchases').select('*');
+                    const { data: sReturns } = await supabase.from('sales_returns').select('*');
+                    const { data: pReturns } = await supabase.from('purchase_returns').select('*');
+                    const { data: vouchers } = await supabase.from('financial_vouchers').select('*');
+                    const { data: banks } = await supabase.from('banks').select('*');
+                    const { data: products } = await supabase.from('products').select('*');
+                    const { data: customersData } = await supabase.from('customers').select('*');
+                    const { data: vendorsData } = await supabase.from('vendors').select('*');
 
                     const grossSalesSum = (sales || []).reduce((acc, s) => acc + Number(s.total_amount || 0), 0);
                     const salesReturnsSum = (sReturns || []).reduce((acc, r) => acc + Number(r.payout_amount_paid || r.total_amount || 0), 0);
@@ -999,6 +1455,19 @@ const AccountReportPrint = () => {
                     const purchaseReturnsSum = (pReturns || []).reduce((acc, r) => acc + Number(r.amount_received || r.total_amount || 0), 0);
 
                     let totalReceivables = 0;
+                    (customersData || []).forEach((c: any) => {
+                        const rawBal = Number(c.currentBalance !== undefined && c.currentBalance !== null && c.currentBalance !== ''
+                            ? c.currentBalance
+                            : (c.balance !== undefined && c.balance !== null && c.balance !== '' ? c.balance : c.opening_balance || 0));
+                        const nature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
+                        let effectiveBal = rawBal;
+                        if (nature.includes('cr') || nature.includes('credit')) {
+                            effectiveBal = -Math.abs(rawBal);
+                        } else if (rawBal > 0) {
+                            effectiveBal = Math.abs(rawBal);
+                        }
+                        if (effectiveBal > 0) totalReceivables += effectiveBal;
+                    });
                     (sales || []).forEach(s => {
                         const tot = Number(s.total_amount || 0);
                         const paid = Number(s.cash_amount_paid || s.amount_paid || 0);
@@ -1006,6 +1475,19 @@ const AccountReportPrint = () => {
                     });
 
                     let totalPayables = 0;
+                    (vendorsData || []).forEach((v: any) => {
+                        const rawBal = Number(v.current_balance !== undefined && v.current_balance !== null
+                            ? v.current_balance
+                            : (v.balance !== undefined && v.balance !== null ? v.balance : v.opening_balance || 0));
+                        const nature = String(v.balance_nature || v.balanceNature || '').toLowerCase();
+                        let effectiveBal = rawBal;
+                        if (nature.includes('dr') || nature.includes('debit')) {
+                            effectiveBal = -Math.abs(rawBal);
+                        } else if (rawBal > 0) {
+                            effectiveBal = Math.abs(rawBal);
+                        }
+                        if (effectiveBal > 0) totalPayables += effectiveBal;
+                    });
                     (purchases || []).forEach(p => {
                         const tot = Number(p.total_amount || 0);
                         const paid = Number(p.amount_paid_now || p.paid_amount || 0);
@@ -1052,6 +1534,22 @@ const AccountReportPrint = () => {
                     }));
 
                     const customerReceivablesMap: Record<string, number> = {};
+                    (customersData || []).forEach((c: any) => {
+                        const rawBal = Number(c.currentBalance !== undefined && c.currentBalance !== null && c.currentBalance !== ''
+                            ? c.currentBalance
+                            : (c.balance !== undefined && c.balance !== null && c.balance !== '' ? c.balance : c.opening_balance || 0));
+                        const nature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
+                        let effectiveBal = rawBal;
+                        if (nature.includes('cr') || nature.includes('credit')) {
+                            effectiveBal = -Math.abs(rawBal);
+                        } else if (rawBal > 0) {
+                            effectiveBal = Math.abs(rawBal);
+                        }
+                        if (effectiveBal > 0) {
+                            const cName = c.customerName || 'General Customer';
+                            customerReceivablesMap[cName] = (customerReceivablesMap[cName] || 0) + effectiveBal;
+                        }
+                    });
                     (sales || []).forEach(s => {
                         const tot = Number(s.total_amount || 0);
                         const paid = Number(s.cash_amount_paid || s.amount_paid || 0);
@@ -1775,7 +2273,7 @@ const AccountReportPrint = () => {
             `📅 *Period:* ${periodText}`,
             `📑 *Audited Entries:* ${reportRows.length}`,
             `━━━━━━━━━━━━━━━━━━━━━`,
-            `_Automated ERP Accounts Ledger_`
+            `_Automated Financial Accounts Ledger_`
         ];
         window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
     };
@@ -1969,6 +2467,9 @@ const AccountReportPrint = () => {
                             {activeTab === 13 && `Customer Account Balance & Outstanding Detail Report${activeViewMode === 'detailed' ? ' (Detailed Invoices)' : ' (Summary Balances)'}`}
                         </b></span>
                         <span>Duration Window Block: {activeTab === 11 ? `As of ${new Date().toISOString().split('T')[0]}` : `${filters.dateFrom || 'Initial'} up to ${filters.dateTo || 'Today'}`}</span>
+                        {filters.city && filters.city.length > 0 && !filters.city.includes('All') && (
+                            <span>City / Region: <b className="text-black uppercase">{Array.isArray(filters.city) ? filters.city.join(', ') : filters.city}{filters.area && filters.area.length > 0 ? ` (${Array.isArray(filters.area) ? filters.area.join(', ') : filters.area})` : ''}</b></span>
+                        )}
                     </div>
                 </div>
 
@@ -2028,8 +2529,14 @@ const AccountReportPrint = () => {
                                                                 {cust.category || 'Retail / General'}
                                                             </span>
                                                         </div>
-                                                        <div className="text-[10px] text-slate-600 mt-1 font-mono flex gap-4">
+                                                        <div className="text-[10px] text-slate-600 mt-1 font-mono flex flex-wrap gap-4">
                                                             <span>📞 Phone: <b className="text-slate-800">{cust.phone || '-'}</b></span>
+                                                            {cust.city && (
+                                                                <span>🏙️ City: <b className="text-slate-800">{cust.city}</b></span>
+                                                            )}
+                                                            {cust.area && (
+                                                                <span>🏘️ Area: <b className="text-slate-800">{cust.area}</b></span>
+                                                            )}
                                                             {cust.address && cust.address !== '-' && (
                                                                 <span>📍 Address: <b className="text-slate-800">{cust.address}</b></span>
                                                             )}

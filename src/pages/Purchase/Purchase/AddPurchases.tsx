@@ -2,12 +2,69 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import { FiTrash2, FiPlus, FiArrowLeft, FiCheckCircle, FiPrinter } from 'react-icons/fi';
-import { logActivity } from '../../../service/auditLogger';
+import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
+
+// Helper to resolve or auto-register Vendor Chart of Accounts (2010-XXXX)
+const resolveVendorCoaAccount = async (vendorName: string, vendorsList: any[] = []) => {
+  const cleanName = (vendorName || '').trim();
+  if (!cleanName) return { code: '2010-001', title: 'Demo Vendor' };
+
+  // 1. Match from vendorsList
+  const matched = vendorsList.find(v =>
+    (v.vendor_name || v.supplier_name || v.name || '').trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  const existingCode = matched?.vendor_code || matched?.supplier_code || matched?.coa_code;
+  if (existingCode && String(existingCode).startsWith('2010-')) {
+    return { code: String(existingCode).trim(), title: matched.vendor_name || cleanName };
+  }
+
+  // 2. Query chart_of_accounts
+  try {
+    const { data: coaRows } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code, account_title')
+      .ilike('account_title', cleanName)
+      .limit(1);
+
+    if (coaRows && coaRows.length > 0 && coaRows[0].account_code) {
+      return { code: coaRows[0].account_code, title: coaRows[0].account_title || cleanName };
+    }
+
+    const { data: allVendCoa } = await supabase
+      .from('chart_of_accounts')
+      .select('account_code')
+      .ilike('account_code', '2010-%');
+
+    let maxSeq = 0;
+    (allVendCoa || []).forEach(r => {
+      const match = String(r.account_code || '').match(/2010-(\d+)/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    });
+
+    const nextCode = `2010-${String(maxSeq + 1).padStart(3, '0')}`;
+    await supabase.from('chart_of_accounts').insert([{
+      account_code: nextCode,
+      account_title: cleanName,
+      category_code: '2. LIABILITIES',
+      sub_category_code: 'Current Liabilities',
+      control_code: 'Vendor',
+      notes: `Vendor account for ${cleanName} (Auto-registered from Purchase Bill)`
+    }]);
+
+    return { code: nextCode, title: cleanName };
+  } catch (err) {
+    console.warn('resolveVendorCoaAccount in purchases error:', err);
+    return { code: '2010-001', title: cleanName };
+  }
+};
 
 const AddPurchases = () => {
   const { tenantId } = useAuth();
@@ -97,23 +154,21 @@ const AddPurchases = () => {
         const { count } = await supabase.from('supplier_purchases').select('*', { count: 'exact', head: true });
         setDefaultPurchaseNo(String((count || 0) + 1).padStart(2, '0'));
 
-        const [ { data: rData }, { data: iData } ] = await Promise.all([
-          supabase.from('grn_receipts').select('*').in('status', ['Confirm', 'Partially Received']).order('created_at', { ascending: false }),
-          supabase.from('grn_items').select('*')
-        ]);
-        if (rData) {
-          const itemsByGrn: Record<string, any[]> = {};
-          (iData || []).forEach((it: any) => {
-            const gId = String(it.grn_id || '');
-            if (!itemsByGrn[gId]) itemsByGrn[gId] = [];
-            itemsByGrn[gId].push(it);
-          });
-          const combined = rData.map((g: any) => ({
-            ...g,
-            grn_items: itemsByGrn[String(g.id)] || []
-          }));
-          setPendingGrns(combined);
-        }
+        const { data: grnData } = await supabase.from('grn_receipts').select('*, grn_items(*)').in('status', ['Confirm', 'Partially Received']).order('created_at', { ascending: false });
+        if (grnData) {
+            setPendingGrns(grnData);
+            const importId = location.state?.importGrnId;
+            if (importId) {
+              const matchedGrn = grnData.find((g: any) => g.id === importId);
+              if (matchedGrn) {
+                setTimeout(() => {
+                  if (formikRef.current) {
+                    handleApplyGrn(matchedGrn, formikRef.current.setFieldValue);
+                  }
+                }, 300);
+              }
+            }
+          }
 
         if (vendorError) throw vendorError;
 
@@ -126,14 +181,8 @@ const AddPurchases = () => {
         })).sort((a: any, b: any) => a.vendor_name.localeCompare(b.vendor_name));
 
         const { data: locData } = await supabase.from('inventory_locations').select('id, name').order('name', { ascending: true });
-        const { data: prodData } = await fetchAllPages(supabase.from('products').select('id, product_name, purchase_price, uom, item_sr_no, pieces_per_box, pcs_per_box, category, scenario_name, product_description'));
-        const { data: rawBankData } = await supabase.from('banks').select('*');
-        const bankData = (rawBankData || []).map((b: any) => ({
-          ...b,
-          bankName: b.bankName || b.bankname || '',
-          accountTitle: b.accountTitle || b.accounttitle || b.account_title || '',
-          accountNumber: b.accountNumber || b.accountnumber || ''
-        }));
+        const { data: prodData } = await supabase.from('products').select('id, product_name, purchase_price, uom, item_sr_no, pieces_per_box, pcs_per_box, category, scenario_name, product_description, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price, loose_purchase_price');
+        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
 
         setSuppliers(normalizedVendors);
         if (locData) setLocations(locData);
@@ -379,16 +428,23 @@ const AddPurchases = () => {
                 }
               }
 
+              const workflowSettings = await fetchWorkflowSettings();
+              const requireInward = Boolean(workflowSettings.require_inward_challan);
+
               if (!isEditMode && !grnIdToUse) {
-                // Auto-generate a Pending Inward GRN for direct purchases so it goes to the approval queue
+                // If requireInward is ON: generate a "Pending Inward" GRN with accepted_qty=0 so warehouse must verify & accept/reject/hold
+                // If requireInward is OFF: generate an immediately "Confirm" GRN with full accepted_qty
+                const grnStatus = requireInward ? 'Pending Inward' : 'Confirm';
+                const grnRemarks = requireInward ? 'Pending Warehouse Inward Verification' : 'Direct Inward / Verified Purchase';
+
                 const { data: grnData, error: grnError } = await supabase
                   .from('grn_receipts')
                   .insert([{
                     grn_no: `GRN-${values.purchaseNo || Date.now()}`,
                     vendor_name: values.supplierName,
                     receipt_date: values.purchaseDate,
-                    status: 'Pending Inward',
-                    remarks: 'Auto-generated from Direct Purchase'
+                    status: grnStatus,
+                    remarks: grnRemarks
                   }])
                   .select('id')
                   .single();
@@ -401,7 +457,10 @@ const AddPurchases = () => {
                   product_name: item.itemName,
                   warehouse_name: item.warehouse || values.targetWarehouse || locations[0]?.name || 'Main Warehouse',
                   qty: Number(item.qty),
-                  uom: 'EACH' // Assuming standard, edit later if needed
+                  uom: item.uom || 'MTR',
+                  accepted_qty: requireInward ? 0 : Number(item.qty),
+                  rejected_qty: 0,
+                  hold_qty: requireInward ? Number(item.qty) : 0
                 }));
 
                 const { error: grnItemsError } = await supabase.from('grn_items').insert(itemsToInsert);
@@ -417,12 +476,14 @@ const AddPurchases = () => {
                 purchase_type: values.applyTax ? 'GST Standard Item' : 'No Tax',
                 payment_term: paymentTermLabel,
                 amount_paid: totalPaid,
+                paid_amount: totalPaid,
                 cash_amount_paid: values.settlementMode === 'Bank' ? 0 : Number(values.cashAmountPaid || 0),
                 bank_amount_paid: values.settlementMode === 'Cash' ? 0 : Number(values.bankAmountPaid || 0),
                 selected_bank_title: values.selectedBankTitle || null,
                 additional_charges: Number(values.additionalCharges || 0),
                 total_amount: totalBillAmount,
                 remaining_balance: remainingBalance,
+                balance_amount: remainingBalance,
                 remarks: values.remarks.trim() || null,
                 notes: values.remarks.trim() || null,
                 items: values.items,
@@ -438,21 +499,9 @@ const AddPurchases = () => {
 
               if (isEditMode) {
                 const { error } = await supabase.from('supplier_purchases').update(databasePayload).eq('id', editData.id);
-                if (error) throw error;
-
-                logActivity({
-                  action: 'UPDATE',
-                  tableName: 'supplier_purchases',
-                  details: {
-                    id: editData.id,
-                    purchase_number: values.purchaseNo,
-                    supplier_name: values.supplierName,
-                    total_amount: calculatedGrandTotal,
-                    item_count: (values.items || []).length,
-                    warehouse: values.targetWarehouse,
-                    event: `Updated procurement batch ${values.purchaseNo} from ${values.supplierName}`
-                  }
-                });
+                if (error) {
+                  throw error;
+                }
 
                 // Sync updated items back to linked GRN so Inward Challan stays accurate
                 const linkedGrnId = values.grnId || editData?.metadata?.grn_id || editData?.grn_id || null;
@@ -473,19 +522,16 @@ const AddPurchases = () => {
                       Number(eg.qty) === Number(item.qty)
                     );
 
-                    const acceptedQty = matched ? matched.accepted_qty : null;
-                    const rejectedQty = matched ? matched.rejected_qty : 0;
-                    const holdQty = matched ? matched.hold_qty : 0;
-
-                    const isUnverified = (acceptedQty == null) || (acceptedQty === 0 && rejectedQty === 0 && Number(item.qty) > 0);
-                    if (isUnverified) hasUnverified = true;
+                    const acceptedQty = Number(item.qty || 0);
+                    const rejectedQty = 0;
+                    const holdQty = 0;
 
                     return {
                       grn_id: linkedGrnId,
                       product_name: item.itemName,
                       warehouse_name: item.warehouse || values.targetWarehouse || locations[0]?.name || 'Main Warehouse',
                       qty: Number(item.qty),
-                      uom: item.uom || 'EACH',
+                      uom: item.uom || 'MTR',
                       accepted_qty: acceptedQty,
                       rejected_qty: rejectedQty,
                       hold_qty: holdQty
@@ -494,12 +540,119 @@ const AddPurchases = () => {
                   await supabase.from('grn_items').insert(updatedGrnItems);
 
                   // Update GRN header date/vendor and status
-                  const newStatus = hasUnverified ? 'Partially Received' : 'Confirm';
                   await supabase.from('grn_receipts').update({
                     vendor_name: values.supplierName,
                     receipt_date: values.purchaseDate,
-                    status: newStatus
+                    status: 'Confirm'
                   }).eq('id', linkedGrnId);
+                }
+
+                // ── AUTO-SYNC FINANCIAL VOUCHERS ON UPDATE (PAV & VPV) ──
+                try {
+                  const resolvedVendor = await resolveVendorCoaAccount(values.supplierName, suppliers);
+                  const purchaseIdentifier = values.purchaseNo || editData?.purchase_no || `PUR-${String(editData.id).padStart(4, '0')}`;
+                  const vDate = values.purchaseDate || new Date().toISOString().split('T')[0];
+
+                  // 1. Update PAV
+                  const { data: existingPav } = await supabase
+                    .from('financial_vouchers')
+                    .select('id, metadata')
+                    .or(`original_invoice_no.eq.${purchaseIdentifier},metadata->>linkedPurchaseNo.eq.${purchaseIdentifier}`)
+                    .ilike('voucher_no', 'PAV-%')
+                    .maybeSingle();
+
+                  if (existingPav) {
+                    await supabase.from('financial_vouchers').update({
+                      total_amount: totalBillAmount,
+                      debit: 0,
+                      credit: totalBillAmount,
+                      account_code: resolvedVendor.code,
+                      account_title: resolvedVendor.title,
+                      voucher_date: vDate,
+                      narration: `Purchase procurement bill from ${resolvedVendor.title} (Bill #${purchaseIdentifier}, ${values.items.length} items)`,
+                      original_invoice_no: purchaseIdentifier,
+                      items: [
+                        {
+                          accountCode: resolvedVendor.code,
+                          accountTitle: resolvedVendor.title,
+                          particulars: `Purchase Bill #${purchaseIdentifier}`,
+                          debit: 0,
+                          credit: totalBillAmount
+                        }
+                      ]
+                    }).eq('id', existingPav.id);
+                  }
+
+                  // 2. Update VPV
+                  const { data: existingVpv } = await supabase
+                    .from('financial_vouchers')
+                    .select('id, metadata')
+                    .or(`original_invoice_no.eq.${purchaseIdentifier},metadata->>linkedPurchaseNo.eq.${purchaseIdentifier}`)
+                    .ilike('voucher_no', 'VPV-%')
+                    .maybeSingle();
+
+                  if (totalPaid > 0) {
+                    const paidCash = values.settlementMode === 'Bank' ? 0 : Number(values.cashAmountPaid || 0);
+                    const paidBank = values.settlementMode === 'Cash' ? 0 : Number(values.bankAmountPaid || 0);
+
+                    let bankCoaCode = '1020-001';
+                    let bankCoaTitle = values.selectedBankTitle || 'Bank Account';
+                    if (paidBank > 0 && values.selectedBankTitle) {
+                      const { data: bankCoaRows } = await supabase
+                        .from('chart_of_accounts')
+                        .select('account_code, account_title')
+                        .ilike('account_title', `%${values.selectedBankTitle.trim()}%`)
+                        .limit(1);
+                      if (bankCoaRows && bankCoaRows[0]) {
+                        bankCoaCode = bankCoaRows[0].account_code;
+                        bankCoaTitle = bankCoaRows[0].account_title;
+                      }
+                    }
+
+                    const vpvItems: any[] = [
+                      {
+                        accountCode: resolvedVendor.code,
+                        accountTitle: resolvedVendor.title,
+                        particulars: `Payment for Purchase Bill #${purchaseIdentifier}`,
+                        debit: totalPaid,
+                        credit: 0
+                      }
+                    ];
+                    if (paidCash > 0) {
+                      vpvItems.push({
+                        accountCode: '1010-001',
+                        accountTitle: 'Cash in Hand',
+                        particulars: `Cash paid from drawer`,
+                        debit: 0,
+                        credit: paidCash
+                      });
+                    }
+                    if (paidBank > 0) {
+                      vpvItems.push({
+                        accountCode: bankCoaCode,
+                        accountTitle: bankCoaTitle,
+                        particulars: `Bank wire payment from ${bankCoaTitle}`,
+                        debit: 0,
+                        credit: paidBank
+                      });
+                    }
+
+                    if (existingVpv) {
+                      await supabase.from('financial_vouchers').update({
+                        total_amount: totalPaid,
+                        debit: totalPaid,
+                        credit: 0,
+                        account_code: resolvedVendor.code,
+                        account_title: resolvedVendor.title,
+                        voucher_date: vDate,
+                        items: vpvItems
+                      }).eq('id', existingVpv.id);
+                    }
+                  } else if (existingVpv) {
+                    await supabase.from('financial_vouchers').delete().eq('id', existingVpv.id);
+                  }
+                } catch (vchErr) {
+                  console.warn('Voucher auto-sync in update purchase warning:', vchErr);
                 }
 
                 toast.success('Procurement inventory batch updated successfully!');
@@ -511,24 +664,169 @@ const AddPurchases = () => {
               } else {
                 const { data: insertedData, error } = await supabase.from('supplier_purchases').insert([databasePayload]).select('id').single();
                 if (error) throw error;
-
-                logActivity({
-                  action: 'INSERT',
-                  tableName: 'supplier_purchases',
-                  details: {
-                    id: insertedData?.id,
-                    purchase_number: values.purchaseNo,
-                    supplier_name: values.supplierName,
-                    total_amount: calculatedGrandTotal,
-                    item_count: (values.items || []).length,
-                    warehouse: values.targetWarehouse,
-                    event: `Recorded procurement batch ${values.purchaseNo} from ${values.supplierName}`
-                  }
-                });
-                // If the purchase was imported from an existing GRN, mark that GRN as Billed.
-                // If it was auto-generated (values.grnId is null), we leave it as Pending Inward for approval.
                 if (values.grnId) {
                   await supabase.from('grn_receipts').update({ status: 'Billed' }).eq('id', values.grnId);
+                } else if (grnIdToUse && !requireInward) {
+                  await supabase.from('grn_receipts').update({ status: 'Confirm' }).eq('id', grnIdToUse);
+                }
+
+                // If requireInward is OFF, immediately update products.current_stock for direct counter purchase
+                if (!requireInward) {
+                  for (const item of values.items) {
+                    if (!item.itemName || !item.itemName.trim()) continue;
+                    const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', item.itemName).maybeSingle();
+                    if (prod) {
+                      await supabase.from('products').update({ current_stock: Number(prod.current_stock || 0) + Number(item.qty || 0) }).eq('id', prod.id);
+                    }
+                  }
+                }
+
+                // ── AUTO-SYNC FINANCIAL VOUCHERS (PAV & VPV) ──
+                try {
+                  const resolvedVendor = await resolveVendorCoaAccount(values.supplierName, suppliers);
+                  const purchaseIdentifier = values.purchaseNo || (insertedData?.id ? `PUR-${String(insertedData.id).padStart(4, '0')}` : 'PUR-BILL');
+                  const vDate = values.purchaseDate || new Date().toISOString().split('T')[0];
+
+                  // 1. PAV (Purchase Amount Voucher)
+                  const pavNarration = `Purchase procurement bill from ${resolvedVendor.title} (Bill #${purchaseIdentifier}, ${values.items.length} items)`;
+                  const { data: pavRows } = await supabase
+                    .from('financial_vouchers')
+                    .select('voucher_no')
+                    .ilike('voucher_no', 'PAV-%');
+
+                  let maxPavSeq = 0;
+                  (pavRows || []).forEach(v => {
+                    const match = String(v.voucher_no || '').match(/PAV-(\d+)/i);
+                    if (match && match[1]) {
+                      const num = parseInt(match[1], 10);
+                      if (num > maxPavSeq) maxPavSeq = num;
+                    }
+                  });
+                  const nextPavNo = `PAV-${String(maxPavSeq + 1).padStart(3, '0')}`;
+
+                  await supabase.from('financial_vouchers').insert([{
+                    voucher_no: nextPavNo,
+                    voucher_type: 'Purchase Amount Voucher',
+                    voucher_date: vDate,
+                    total_amount: totalBillAmount,
+                    debit: 0,
+                    credit: totalBillAmount,
+                    account_code: resolvedVendor.code,
+                    account_title: resolvedVendor.title,
+                    narration: pavNarration,
+                    original_invoice_no: purchaseIdentifier,
+                    items: [
+                      {
+                        accountCode: resolvedVendor.code,
+                        accountTitle: resolvedVendor.title,
+                        particulars: `Purchase Bill #${purchaseIdentifier}`,
+                        debit: 0,
+                        credit: totalBillAmount
+                      }
+                    ],
+                    metadata: {
+                      preset: 'PAV',
+                      auto_generated: true,
+                      linkedPurchaseNo: purchaseIdentifier,
+                      moduleSource: 'purchase_bill'
+                    }
+                  }]);
+
+                  // 2. VPV (Vendor Payment Voucher) IF UPFRONT PAYMENT MADE
+                  if (totalPaid > 0) {
+                    const paidCash = values.settlementMode === 'Bank' ? 0 : Number(values.cashAmountPaid || 0);
+                    const paidBank = values.settlementMode === 'Cash' ? 0 : Number(values.bankAmountPaid || 0);
+
+                    let bankCoaCode = '1020-001';
+                    let bankCoaTitle = values.selectedBankTitle || 'Bank Account';
+                    if (paidBank > 0 && values.selectedBankTitle) {
+                      try {
+                        const { data: bankCoaRows } = await supabase
+                          .from('chart_of_accounts')
+                          .select('account_code, account_title')
+                          .ilike('account_title', `%${values.selectedBankTitle.trim()}%`)
+                          .limit(1);
+                        if (bankCoaRows && bankCoaRows[0]) {
+                          bankCoaCode = bankCoaRows[0].account_code;
+                          bankCoaTitle = bankCoaRows[0].account_title;
+                        }
+                      } catch (bErr) {
+                        console.warn('Bank COA lookup warning:', bErr);
+                      }
+                    }
+
+                    const vpvItems: any[] = [
+                      {
+                        accountCode: resolvedVendor.code,
+                        accountTitle: resolvedVendor.title,
+                        particulars: `Payment for Purchase Bill #${purchaseIdentifier}`,
+                        debit: totalPaid,
+                        credit: 0
+                      }
+                    ];
+                    if (paidCash > 0) {
+                      vpvItems.push({
+                        accountCode: '1010-001',
+                        accountTitle: 'Cash in Hand',
+                        particulars: `Cash paid from drawer`,
+                        debit: 0,
+                        credit: paidCash
+                      });
+                    }
+                    if (paidBank > 0) {
+                      vpvItems.push({
+                        accountCode: bankCoaCode,
+                        accountTitle: bankCoaTitle,
+                        particulars: `Bank wire payment from ${bankCoaTitle}`,
+                        debit: 0,
+                        credit: paidBank
+                      });
+                    }
+
+                    const modeDesc = paidCash > 0 && paidBank > 0
+                      ? `Cash: Rs. ${paidCash} + Bank: Rs. ${paidBank}`
+                      : paidBank > 0
+                      ? `Bank Transfer: Rs. ${paidBank} (${bankCoaCode})`
+                      : `Cash Payment: Rs. ${paidCash}`;
+
+                    const { data: vpvRows } = await supabase
+                      .from('financial_vouchers')
+                      .select('voucher_no')
+                      .ilike('voucher_no', 'VPV-%');
+
+                    let maxVpvSeq = 0;
+                    (vpvRows || []).forEach(v => {
+                      const match = String(v.voucher_no || '').match(/VPV-(\d+)/i);
+                      if (match && match[1]) {
+                        const num = parseInt(match[1], 10);
+                        if (num > maxVpvSeq) maxVpvSeq = num;
+                      }
+                    });
+                    const nextVpvNo = `VPV-${String(maxVpvSeq + 1).padStart(3, '0')}`;
+
+                    await supabase.from('financial_vouchers').insert([{
+                      voucher_no: nextVpvNo,
+                      voucher_type: 'Vendor Payment Voucher',
+                      voucher_date: vDate,
+                      total_amount: totalPaid,
+                      debit: totalPaid,
+                      credit: 0,
+                      account_code: resolvedVendor.code,
+                      account_title: resolvedVendor.title,
+                      narration: `Payment disbursed to ${resolvedVendor.title} for Purchase Bill #${purchaseIdentifier} (${modeDesc})`,
+                      original_invoice_no: purchaseIdentifier,
+                      items: vpvItems,
+                      metadata: {
+                        preset: 'VPV',
+                        auto_generated: true,
+                        linkedPurchaseNo: purchaseIdentifier,
+                        settlementMode: values.settlementMode,
+                        moduleSource: 'purchase_bill'
+                      }
+                    }]);
+                  }
+                } catch (vchErr) {
+                  console.warn('Voucher auto-sync in insert purchase warning:', vchErr);
                 }
 
                 toast.success('Procurement inventory batch recorded successfully!');
@@ -563,7 +861,7 @@ const AddPurchases = () => {
 
 
                 {/* ── TOP 2-COLUMN HEADER BAR ── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark relative z-10">
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Inbound Purchase Date: *</label>
                     <input
@@ -683,7 +981,7 @@ const AddPurchases = () => {
                 </div>
 
                 {/* 🌟 TAX & DISCOUNT TOGGLE BAR: CLEAN & UNCLUTTERED DEFAULT UI */}
-                <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-meta-4/20 border border-stroke dark:border-strokedark rounded-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-meta-4/20 border border-stroke dark:border-strokedark rounded-sm relative z-0">
                   <div className="flex items-center gap-6">
                     {/* Tax Invoicing Toggle (Commented out - ready to be re-enabled if client requests GST/FBR Purchase Tax) */}
                     {/*
@@ -767,8 +1065,8 @@ const AddPurchases = () => {
                 </div>
 
                 {/* ── PRODUCT ITEM CATALOG ENTRY TABLE ── */}
-                <div className="border border-stroke dark:border-strokedark rounded-sm relative z-30 overflow-visible pb-16">
-                  <div className="w-full min-w-max">
+                <div className="border border-stroke dark:border-strokedark rounded-sm relative z-20 overflow-x-auto pb-44">
+                  <div className="w-full min-w-[980px]">
                     <table className="w-full table-auto border-collapse text-left">
                       <thead>
                         <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
@@ -809,7 +1107,11 @@ const AddPurchases = () => {
                                   String(matchedProduct.scenario_name || '').toLowerCase().includes('tile')
                                 ) && (rawPcs > 1 || String(matchedProduct.scenario_name || '').toLowerCase().includes('tile'))
                               );
-                              const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
+                              const allowLoose = Boolean(matchedProduct?.allow_loose_sales || isTile);
+                              const looseRatio = Number(matchedProduct?.loose_conversion_ratio || rawPcs || (isTile ? 4 : 1)) || 1;
+                              const pcsPerBox = looseRatio > 1 ? looseRatio : (isTile ? 4 : 1);
+                              const bulkUnitLabel = matchedProduct?.uom || (isTile ? 'Box' : 'Unit');
+                              const looseUnitLabel = matchedProduct?.loose_uom || (isTile ? 'Pcs' : 'Units');
                               const uomString = matchedProduct ? matchedProduct.uom : 'NOS';
                               const lineTotals = calculatePurchaseLineTotals(item, values.applyTax);
                               const isCurrentActive = activeSkuIndex === idx;
@@ -917,7 +1219,7 @@ const AddPurchases = () => {
                                                     <p className="font-mono font-bold text-black dark:text-white text-xs">{prod.item_sr_no || `SKU-${prod.id}`}</p>
                                                     <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[160px]">{prod.product_name}</p>
                                                   </div>
-                                                  <span className="font-mono font-bold text-emerald-600 text-right shrink-0">Rs. {Number(prod.purchase_price || 0).toLocaleString()}</span>
+                                                  <span className="font-mono font-bold text-emerald-600">Rs. {Number(prod.purchase_price || 0).toLocaleString()}</span>
                                                 </div>
                                               ))}
                                             </div>
@@ -1045,7 +1347,7 @@ const AddPurchases = () => {
                                     </select>
                                   </td>
 
-                                  {/* Arrived Qty with Dedicated Boxes & Loose Pieces & Sq.Mtr for Tiles */}
+                                  {/* Arrived Qty with Dedicated Boxes & Loose Pieces & Sq.Mtr for Tiles or Loose Products */}
                                   <td className="p-3 min-w-[260px]">
                                     {isTile ? (
                                       (() => {
@@ -1156,6 +1458,82 @@ const AddPurchases = () => {
                                           </div>
                                         );
                                       })()
+                                    ) : allowLoose && pcsPerBox > 1 ? (
+                                      /* DYNAMIC DUAL INPUT FOR GENERAL PRODUCTS WITH ALLOW LOOSE (KG+GM, LTR+ML, BOX+PCS) */
+                                      (() => {
+                                        const currentQty = Number(item.qty || 0);
+                                        const bulkCount = Math.floor(currentQty);
+                                        const looseCount = Math.round((currentQty - bulkCount) * pcsPerBox);
+
+                                        return (
+                                          <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-stroke dark:border-strokedark shadow-inner">
+                                              {/* BULK UNIT INPUT */}
+                                              <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-primary shadow-sm">
+                                                <input
+                                                  type="text"
+                                                  inputMode="numeric"
+                                                  onKeyDown={blockInvalidChar}
+                                                  value={bulkCount === 0 ? '' : bulkCount}
+                                                  placeholder="0"
+                                                  onChange={(e) => {
+                                                    const val = e.target.value.trim();
+                                                    const newBulk = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                    const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                    const combinedQty = Number((newBulk + currentLoose / pcsPerBox).toFixed(3));
+                                                    setFieldValue(`items.${idx}.qty`, combinedQty);
+
+                                                    const cost = combinedQty * (Number(item.rate) || 0);
+                                                    if (Number(item.discountPer) > 0) {
+                                                      setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
+                                                    }
+                                                  }}
+                                                  className="w-full bg-transparent text-center font-black text-sm text-primary outline-none min-w-[36px]"
+                                                />
+                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">{bulkUnitLabel}</span>
+                                              </div>
+
+                                              <span className="text-gray-400 font-black text-sm select-none">+</span>
+
+                                              {/* LOOSE SUB-UNIT INPUT */}
+                                              <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-emerald-500 shadow-sm">
+                                                <input
+                                                  type="text"
+                                                  inputMode="numeric"
+                                                  onKeyDown={blockInvalidChar}
+                                                  value={looseCount === 0 ? '' : looseCount}
+                                                  placeholder={`${pcsPerBox}`}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value.trim();
+                                                    const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                    const currentBulk = Math.floor(Number(item.qty || 0));
+
+                                                    const extraBulk = Math.floor(enteredLoose / pcsPerBox);
+                                                    const remLoose = enteredLoose % pcsPerBox;
+                                                    const finalBulk = currentBulk + extraBulk;
+                                                    const combinedQty = remLoose > 0
+                                                      ? Number((finalBulk + remLoose / pcsPerBox).toFixed(3))
+                                                      : finalBulk;
+
+                                                    setFieldValue(`items.${idx}.qty`, combinedQty);
+
+                                                    const cost = combinedQty * (Number(item.rate) || 0);
+                                                    if (Number(item.discountPer) > 0) {
+                                                      setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
+                                                    }
+                                                  }}
+                                                  className="w-full bg-transparent text-center font-black text-sm text-emerald-600 dark:text-emerald-400 outline-none min-w-[36px]"
+                                                />
+                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">{looseUnitLabel}</span>
+                                              </div>
+                                            </div>
+
+                                            <div className="text-center font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                                              Total: <strong>{currentQty}</strong> {bulkUnitLabel} ({bulkCount} {bulkUnitLabel} + {looseCount} {looseUnitLabel})
+                                            </div>
+                                          </div>
+                                        );
+                                      })()
                                     ) : (
                                       /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
                                       (() => {
@@ -1203,28 +1581,65 @@ const AddPurchases = () => {
                                   </td>
 
                                   {/* Cost Price */}
-                                  <td className="p-3 w-36 min-w-[120px]">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      onKeyDown={blockInvalidChar}
-                                      name={`items.${idx}.rate`}
-                                      value={item.rate}
-                                      onChange={(e) => {
-                                        const newRate = Math.max(0, Number(e.target.value) || 0);
-                                        setFieldValue(`items.${idx}.rate`, newRate);
-                                        const cost = (Number(item.qty) || 0) * newRate;
-                                        if (Number(item.discountPer) > 0) {
-                                          setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
-                                        }
-                                      }}
-                                      className="w-full rounded border border-stroke dark:border-strokedark p-1.5 bg-transparent font-black font-mono text-right outline-none focus:border-primary text-xs"
-                                    />
-                                    {isTile && pcsPerBox > 1 && (
-                                      <div className="text-[10px] text-gray-400 dark:text-gray-500 font-mono text-right mt-1">
-                                        ≈ Rs. {(Number(item.rate || 0) / pcsPerBox).toFixed(2)} / pc
+                                  <td className="p-3 w-40 min-w-[140px]">
+                                    <div className="flex flex-col gap-1.5">
+                                      {/* Bulk / Main Rate Input */}
+                                      <div className="relative">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          onKeyDown={blockInvalidChar}
+                                          name={`items.${idx}.rate`}
+                                          value={item.rate}
+                                          onChange={(e) => {
+                                            const newRate = Math.max(0, Number(e.target.value) || 0);
+                                            setFieldValue(`items.${idx}.rate`, newRate);
+                                            const cost = (Number(item.qty) || 0) * newRate;
+                                            if (Number(item.discountPer) > 0) {
+                                              setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
+                                            }
+                                          }}
+                                          className="w-full rounded border border-stroke dark:border-strokedark p-1.5 bg-transparent font-black font-mono text-right outline-none focus:border-primary text-xs"
+                                        />
+                                        {((isTile || allowLoose) && pcsPerBox > 1) && (
+                                          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-400 select-none uppercase">
+                                            /{bulkUnitLabel}
+                                          </span>
+                                        )}
                                       </div>
-                                    )}
+
+                                      {/* Loose Unit Price Editable Input */}
+                                      {((isTile || allowLoose) && pcsPerBox > 1) && (
+                                        <div className="flex items-center gap-1 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded px-1.5 py-0.5">
+                                          <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                                            /{looseUnitLabel}:
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            onKeyDown={blockInvalidChar}
+                                            value={(() => {
+                                              const currentRate = Number(item.rate || 0);
+                                              const lPrice = Number((currentRate / pcsPerBox).toFixed(2));
+                                              return isNaN(lPrice) ? '' : lPrice;
+                                            })()}
+                                            onChange={(e) => {
+                                              const enteredLoosePrice = Math.max(0, Number(e.target.value) || 0);
+                                              const newBulkRate = Number((enteredLoosePrice * pcsPerBox).toFixed(2));
+                                              setFieldValue(`items.${idx}.rate`, newBulkRate);
+                                              const cost = (Number(item.qty) || 0) * newBulkRate;
+                                              if (Number(item.discountPer) > 0) {
+                                                setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
+                                              }
+                                            }}
+                                            placeholder="0"
+                                            className="w-full bg-transparent font-mono font-bold text-[11px] text-right text-emerald-700 dark:text-emerald-400 outline-none"
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
                                   </td>
 
                                   {/* Discount Columns */}

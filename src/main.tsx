@@ -6,7 +6,6 @@ import './css/style.css';
 import './css/satoshi.css';
 import 'jsvectormap/dist/css/jsvectormap.css';
 import 'flatpickr/dist/flatpickr.min.css';
-import { getBrandConfig } from './utils/brand';
 
 // Safely provide window.global in browser without Vite AST corruption
 if (typeof window !== 'undefined' && typeof (window as any).global === 'undefined') {
@@ -69,7 +68,7 @@ class RootErrorBoundary extends React.Component<
                 letterSpacing: '-0.02em',
               }}
             >
-              {getBrandConfig().fullName} ERP
+              AL MUHAMMADI ERP
             </h2>
             <p
               style={{

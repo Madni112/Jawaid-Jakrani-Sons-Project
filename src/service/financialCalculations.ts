@@ -1,4 +1,4 @@
-import { supabase, fetchAllPages } from '../Context/supabaseClient';
+import { supabase } from '../Context/supabaseClient';
 
 export interface BankBalanceItem {
   id: string | number;
@@ -85,20 +85,24 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       productsRes,
       customerReceiptsRes,
       openStocksRes,
-      dynamicStockRes
+      dynamicStockRes,
+      customersRes,
+      vendorsRes
     ] = await Promise.allSettled([
-      fetchAllPages(supabase.from('sales_invoices').select('*')),
-      fetchAllPages(supabase.from('supplier_purchases').select('*')),
-      fetchAllPages(supabase.from('sales_returns').select('*')),
-      fetchAllPages(supabase.from('sales_return_receipts').select('*')),
-      fetchAllPages(supabase.from('purchase_returns').select('*')),
-      fetchAllPages(supabase.from('purchase_return_receipts').select('*')),
-      fetchAllPages(supabase.from('financial_vouchers').select('*')),
-      fetchAllPages(supabase.from('banks').select('*')),
-      fetchAllPages(supabase.from('products').select('*')),
-      fetchAllPages(supabase.from('customer_recoveries').select('*')),
-      fetchAllPages(supabase.from('opening_stocks').select('*')),
-      supabase.rpc('calculate_dynamic_stock_by_location', { p_location: 'All', p_start_date: startOfCurrentMonthStr, p_end_date: null })
+      supabase.from('sales_invoices').select('*'),
+      supabase.from('supplier_purchases').select('*'),
+      supabase.from('sales_returns').select('*'),
+      supabase.from('sales_return_receipts').select('*'),
+      supabase.from('purchase_returns').select('*'),
+      supabase.from('purchase_return_receipts').select('*'),
+      supabase.from('financial_vouchers').select('*'),
+      supabase.from('banks').select('*'),
+      supabase.from('products').select('*'),
+      supabase.from('customer_recoveries').select('*'),
+      supabase.from('opening_stocks').select('*'),
+      supabase.rpc('calculate_dynamic_stock_by_location', { p_location: 'All', p_start_date: startOfCurrentMonthStr, p_end_date: null }),
+      supabase.from('customers').select('*'),
+      supabase.from('vendors').select('*')
     ]);
 
     const invoicesList = (salesInvoicesRes.status === 'fulfilled' && Array.isArray(salesInvoicesRes.value.data)) ? salesInvoicesRes.value.data : [];
@@ -114,6 +118,8 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     const customerRecList = (customerReceiptsRes.status === 'fulfilled' && Array.isArray(customerReceiptsRes.value.data)) ? customerReceiptsRes.value.data : [];
     const openStocksList = (openStocksRes.status === 'fulfilled' && Array.isArray(openStocksRes.value.data)) ? openStocksRes.value.data : [];
     const dynamicStockList = (dynamicStockRes.status === 'fulfilled' && Array.isArray(dynamicStockRes.value.data)) ? dynamicStockRes.value.data : [];
+    const customersList = (customersRes && customersRes.status === 'fulfilled' && Array.isArray(customersRes.value.data)) ? customersRes.value.data : [];
+    const vendorsList = (vendorsRes && vendorsRes.status === 'fulfilled' && Array.isArray(vendorsRes.value.data)) ? vendorsRes.value.data : [];
 
     // --- 2. Calculate Today's & Monthly Net Sales & Purchases ---
     let todaysSales = 0;
@@ -389,6 +395,28 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     let totalReceivables = 0;
     let thisMonthReceivables = 0;
 
+    // 5a. Customer Ledger Balances & Opening Balances (Debit = Receivable)
+    customersList.forEach((c: any) => {
+      const rawBal = Number(c.currentBalance !== undefined && c.currentBalance !== null && c.currentBalance !== ''
+        ? c.currentBalance
+        : (c.balance !== undefined && c.balance !== null && c.balance !== '' ? c.balance : c.opening_balance || 0));
+      const nature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
+      let effectiveBal = rawBal;
+      if (nature.includes('cr') || nature.includes('credit')) {
+        effectiveBal = -Math.abs(rawBal);
+      } else if (rawBal > 0) {
+        effectiveBal = Math.abs(rawBal);
+      }
+
+      if (effectiveBal > 0) {
+        totalReceivables += effectiveBal;
+        if (isThisMonth(c.created_at)) {
+          thisMonthReceivables += effectiveBal;
+        }
+      }
+    });
+
+    // 5b. Unpaid Sales Invoices
     invoicesList.forEach((inv: any) => {
       const invIdStr = String(inv.id).trim().toLowerCase();
       const tot = Number(inv.total_amount || 0);
@@ -420,6 +448,28 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     let totalPayables = 0;
     let thisMonthPayables = 0;
 
+    // 5c. Vendor Ledger Balances & Opening Balances (Credit = Payable)
+    vendorsList.forEach((v: any) => {
+      const rawBal = Number(v.current_balance !== undefined && v.current_balance !== null
+        ? v.current_balance
+        : (v.balance !== undefined && v.balance !== null ? v.balance : v.opening_balance || 0));
+      const nature = String(v.balance_nature || v.balanceNature || '').toLowerCase();
+      let effectiveBal = rawBal;
+      if (nature.includes('dr') || nature.includes('debit')) {
+        effectiveBal = -Math.abs(rawBal);
+      } else if (rawBal > 0) {
+        effectiveBal = Math.abs(rawBal);
+      }
+
+      if (effectiveBal > 0) {
+        totalPayables += effectiveBal;
+        if (isThisMonth(v.created_at)) {
+          thisMonthPayables += effectiveBal;
+        }
+      }
+    });
+
+    // 5d. Unpaid Supplier Purchases
     purchasesList.forEach((pur: any) => {
       const purIdStr = String(pur.id).trim().toLowerCase();
       const tot = Number(pur.total_amount || 0);
@@ -464,25 +514,10 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     // Compute comprehensive stock valuation across all products
     (productsList || []).forEach((p: any) => {
       const pName = String(p.product_name || p.name || '').trim().toLowerCase();
-      const pCode = String(p.item_sr_no || p.item_code || p.sku || '').trim().toLowerCase();
-      const unitPrice = Number(p.purchase_price || p.purchasePrice || p.cost_price || p.retail_price || p.sale_price || 0);
-
-      const isMatch = (item: any) => {
-        const itemCode = String(item.item_code || item.item_sr_no || item.skuCode || item.sku || item.code || '').trim().toLowerCase();
-        if (pCode && itemCode) {
-          return pCode === itemCode;
-        }
-        const iName = String(item.product_name || item.itemName || item.item_name || item.item_details || item.pDescription || '').trim().toLowerCase();
-        return iName === pName;
-      };
+      const unitPrice = priceMap[pName] || Number(p.retail_price || p.sale_price || 0);
 
       // 1. Initial Opening Stock from opening_stocks table
-      const prodOs = (openStocksList || []).filter((o: any) => {
-        const oCode = String(o.item_code || o.skuCode || o.itemCode || '').trim().toLowerCase();
-        const oName = String(o.product_name || o.item_name || o.itemName || '').trim().toLowerCase();
-        if (pCode && oCode) return pCode === oCode;
-        return oName === pName;
-      });
+      const prodOs = (openStocksList || []).filter((o: any) => String(o.product_name || o.item_name || o.itemName || '').trim().toLowerCase() === pName);
       const osQty = prodOs.reduce((acc: number, o: any) => acc + Number(o.quantity || o.qty || 0), 0);
 
       // 2. Purchases Prior vs This Month
@@ -492,7 +527,8 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
         const pDate = String(pur.created_at || pur.purchase_date || '').split('T')[0];
         const items = Array.isArray(pur.items) ? pur.items : (typeof pur.items === 'string' ? JSON.parse(pur.items || '[]') : []);
         items.forEach((it: any) => {
-          if (isMatch(it)) {
+          const itName = String(it.product_name || it.itemName || it.itemDetails || '').trim().toLowerCase();
+          if (itName === pName) {
             const q = Number(it.quantity || it.qty || 0);
             if (pDate && pDate < startOfCurrentMonthStr) {
               priorPurchases += q;
@@ -510,7 +546,8 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
         const iDate = String(inv.created_at || inv.sale_date || inv.invoice_date || '').split('T')[0];
         const items = Array.isArray(inv.items) ? inv.items : (typeof inv.items === 'string' ? JSON.parse(inv.items || '[]') : []);
         items.forEach((it: any) => {
-          if (isMatch(it)) {
+          const itName = String(it.product_name || it.itemName || it.pDescription || '').trim().toLowerCase();
+          if (itName === pName) {
             const q = Number(it.qty || it.quantity || 0);
             if (iDate && iDate < startOfCurrentMonthStr) {
               priorSales += q;
@@ -528,7 +565,8 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
         const rDate = String(sr.created_at || sr.return_date || '').split('T')[0];
         const items = Array.isArray(sr.items) ? sr.items : (typeof sr.items === 'string' ? JSON.parse(sr.items || '[]') : []);
         items.forEach((it: any) => {
-          if (isMatch(it)) {
+          const itName = String(it.product_name || it.item_name || it.itemName || '').trim().toLowerCase();
+          if (itName === pName) {
             const q = Number(it.quantity || it.qty || 0);
             if (rDate && rDate < startOfCurrentMonthStr) {
               priorSalesReturns += q;
@@ -546,7 +584,8 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
         const prDate = String(pr.created_at || pr.return_date || '').split('T')[0];
         const items = Array.isArray(pr.items) ? pr.items : (typeof pr.items === 'string' ? JSON.parse(pr.items || '[]') : []);
         items.forEach((it: any) => {
-          if (isMatch(it)) {
+          const itName = String(it.product_name || it.item_name || it.itemName || '').trim().toLowerCase();
+          if (itName === pName) {
             const q = Number(it.quantity || it.qty || 0);
             if (prDate && prDate < startOfCurrentMonthStr) {
               priorPurchaseReturns += q;
@@ -745,31 +784,23 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
  */
 export const recalculateInvoiceSettlementStatus = async (invoiceId: string | number) => {
   try {
-    const rawVal = String(invoiceId || '').trim();
-    if (!rawVal) return;
+    const rawInvId = String(invoiceId || '').replace(/\D/g, '');
+    if (!rawInvId) return;
 
-    const cleanInvId = rawVal.replace(/\D/g, '');
-    let invQuery = supabase
+    const { data: inv } = await supabase
       .from('sales_invoices')
-      .select('id, invoice_no, total_amount, cash_amount_paid, bank_amount');
+      .select('id, total_amount, cash_amount_paid, bank_amount')
+      .eq('id', Number(rawInvId))
+      .maybeSingle();
 
-    if (cleanInvId && !isNaN(Number(cleanInvId))) {
-      invQuery = invQuery.or(`id.eq.${Number(cleanInvId)},invoice_no.ilike.${rawVal}`);
-    } else {
-      invQuery = invQuery.ilike('invoice_no', rawVal);
-    }
-
-    const { data: inv } = await invQuery.maybeSingle();
     if (!inv) return;
-
-    const actualInvNo = inv.invoice_no || `INV-${inv.id}`;
 
     // 1. Fetch all subsequent receipt vouchers for this invoice
     const { data: remVouchers } = await supabase
       .from('financial_vouchers')
       .select('total_amount')
       .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher,voucher_type.eq.Cash & Bank Receipt Voucher')
-      .or(`original_invoice_no.eq.${inv.id},original_invoice_no.eq.INV-${inv.id},original_invoice_no.eq.${actualInvNo}`);
+      .or(`original_invoice_no.eq.${rawInvId},original_invoice_no.eq.INV-${rawInvId}`);
 
     const subsequentVoucherPaid = (remVouchers || []).reduce(
       (sum: number, v: any) => sum + (Number(v.total_amount) || 0),
@@ -780,7 +811,7 @@ export const recalculateInvoiceSettlementStatus = async (invoiceId: string | num
     const { data: returns } = await supabase
       .from('sales_returns')
       .select('total_amount')
-      .or(`original_invoice_no.eq.${inv.id},original_invoice_no.eq.INV-${inv.id},original_invoice_no.eq.${actualInvNo}`);
+      .or(`original_invoice_no.eq.${rawInvId},original_invoice_no.eq.INV-${rawInvId}`);
 
     const totalReturned = (returns || []).reduce(
       (sum: number, r: any) => sum + (Number(r.total_amount) || 0),
@@ -805,7 +836,7 @@ export const recalculateInvoiceSettlementStatus = async (invoiceId: string | num
     await supabase
       .from('sales_invoices')
       .update({ receipt_status: targetStatus })
-      .eq('id', inv.id);
+      .eq('id', Number(rawInvId));
 
     return targetStatus;
   } catch (err) {

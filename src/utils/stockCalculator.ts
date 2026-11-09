@@ -8,11 +8,12 @@
  *             - sold - purchaseReturned - rejected - transferredOut
  */
 
-import { supabase, fetchAllPages } from '../Context/supabaseClient';
+import { supabase } from '../Context/supabaseClient';
 
 export interface WarehouseBreakdown {
   opening: number;
   purchased: number;
+  manufactured: number;
   sold: number;
   salesReturned: number;
   purchaseReturned: number;
@@ -72,7 +73,7 @@ function balancesMatch(name: string, wh: string) {
 
 function zeroBreakdown(available: number): WarehouseBreakdown {
   return {
-    opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
+    opening: 0, purchased: 0, manufactured: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
     rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0, purchaseHold: 0,
     available, onHand: available,
   };
@@ -94,15 +95,15 @@ async function fetchAllStockData() {
     { data: stockTransfers },
     { data: deliveryChallans },
   ] = await Promise.all([
-    fetchAllPages(supabase.from('opening_stocks').select('product_name, itemname, quantity, qty, location, item_code, skucode')),
-    fetchAllPages(supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse')),
-    fetchAllPages(supabase.from('grn_receipts').select('*')),
-    fetchAllPages(supabase.from('grn_items').select('*')),
-    fetchAllPages(supabase.from('sales_invoices').select('items, sale_status, dispatch_warehouse')),
-    fetchAllPages(supabase.from('sales_returns').select('items, status, inward_status, received_items, warehouse_name')),
-    fetchAllPages(supabase.from('purchase_returns').select('items, status')),
-    fetchAllPages(supabase.from('stock_transfers').select('items, from_location, to_location, status')),
-    fetchAllPages(supabase.from('delivery_challans').select('items, status, dispatch_warehouse')),
+    supabase.from('opening_stocks').select('product_name, "itemName", quantity, qty, location, item_code, "skuCode"'),
+    supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse'),
+    supabase.from('grn_receipts').select('*'),
+    supabase.from('grn_items').select('*'),
+    supabase.from('sales_invoices').select('items, sale_status, dispatch_warehouse'),
+    supabase.from('sales_returns').select('items, status, inward_status, received_items, warehouse_name'),
+    supabase.from('purchase_returns').select('items, status'),
+    supabase.from('stock_transfers').select('items, from_location, to_location, status'),
+    supabase.from('delivery_challans').select('items, status, dispatch_warehouse'),
   ]);
 
   const itemsByGrn: Record<string, any[]> = {};
@@ -128,7 +129,7 @@ function buildBreakdown(
   const getWh = (whName: string) => {
     const key = String(whName || 'Global / Unassigned').trim();
     if (!whBreakdowns[key]) {
-      whBreakdowns[key] = { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0, purchaseHold: 0 };
+      whBreakdowns[key] = { opening: 0, purchased: 0, manufactured: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0, purchaseHold: 0 };
     }
     return whBreakdowns[key];
   };
@@ -137,14 +138,14 @@ function buildBreakdown(
 
   const isMatch = (item: any) => {
     const itemCode = String(item.item_code || item.item_sr_no || item.skuCode || item.sku || item.code || '').trim().toLowerCase();
-    if (pCode && itemCode) {
-      return pCode === itemCode;
-    }
-    if (pCode) {
-      return false;
-    }
     const iName = String(item.product_name || item.itemName || item.item_name || item.item_details || item.pDescription || '').trim().toLowerCase();
-    return iName === name;
+    if (pCode && itemCode && pCode === itemCode) {
+      return true;
+    }
+    if (name && iName && iName === name) {
+      return true;
+    }
+    return false;
   };
 
   // 1. Opening stocks
@@ -176,8 +177,9 @@ function buildBreakdown(
       metadata?.grn_id ||
       (Array.isArray(metadata?.grn_ids) && metadata.grn_ids.length > 0) ||
       (grnReceipts || []).some((g: any) =>
-        (p.purchase_no && g.grn_no?.includes(p.purchase_no)) ||
-        (p.id && g.metadata?.linkedPurchaseId === p.id)
+        (p.purchase_no && (g.grn_no?.includes(p.purchase_no) || g.grn_number?.includes(p.purchase_no))) ||
+        (p.id && (g.purchase_id === p.id || g.metadata?.linkedPurchaseId === p.id)) ||
+        (metadata?.grn_id && g.id === metadata.grn_id)
       );
     if (termClean !== 'cancel' && termClean !== 'deleted' && termClean !== 'draft' && !hasGrn) {
       const items = Array.isArray(p.items) ? p.items : JSON.parse(p.items || '[]');
@@ -333,18 +335,20 @@ function buildBreakdown(
     });
   });
 
+  const totalManufactured = 0;
   const totalAvailable =
-    (totalOpening + totalPurchased + totalSalesReturned) - totalSold - totalPurchaseReturned - totalRejected;
+    (totalOpening + totalPurchased + totalManufactured + totalSalesReturned) - totalSold - totalPurchaseReturned - totalRejected;
 
   const byWarehouse: Record<string, WarehouseBreakdown> = {};
   Object.keys(whBreakdowns).forEach((key) => {
     const w = whBreakdowns[key];
     const tIn = w.transferredIn || 0;
     const tOut = w.transferredOut || 0;
-    const avail = (w.opening + w.purchased + w.salesReturned + tIn) - w.sold - w.purchaseReturned - (w.rejected || 0) - tOut;
+    const avail = (w.opening + w.purchased + (w.manufactured || 0) + w.salesReturned + tIn) - w.sold - w.purchaseReturned - (w.rejected || 0) - tOut;
     byWarehouse[key] = {
       opening: w.opening,
       purchased: w.purchased,
+      manufactured: w.manufactured || 0,
       sold: w.sold,
       salesReturned: w.salesReturned,
       purchaseReturned: w.purchaseReturned,
@@ -371,12 +375,13 @@ export async function getDetailedBreakdown(productName: string, productCode?: st
   const res = buildBreakdown(productName.trim().toLowerCase(), data, productCode);
 
   const agg = {
-    opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
+    opening: 0, purchased: 0, manufactured: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
     hold: 0, purchaseHold: 0, rejected: 0, transferredIn: 0, transferredOut: 0,
   };
   Object.values(res.byWarehouse).forEach((w: any) => {
     agg.opening += w.opening || 0;
     agg.purchased += w.purchased || 0;
+    agg.manufactured += w.manufactured || 0;
     agg.sold += w.sold || 0;
     agg.salesReturned += w.salesReturned || 0;
     agg.purchaseReturned += w.purchaseReturned || 0;

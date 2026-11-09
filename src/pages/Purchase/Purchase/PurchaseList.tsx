@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
 import TablePagination from '../../../components/TablePagination';
 import { useAuth } from '../../../Context/Auth';
 import { useModal } from '../../../Context/Modal';
+import { useLanguage } from '../../../Context/LanguageContext';
 import { MdStore, MdPerson, MdEvent } from 'react-icons/md';
 import PurchaseStockModal from './PurchaseStockModal';
 
 const PurchaseList = () => {
   const navigate = useNavigate();
   const { tenantId } = useAuth();
+  const { isRTL } = useLanguage();
   const { showModal, hideModal } = useModal();
   const [purchases, setPurchases] = useState<any[]>([]);
   const [purchaseAllocationsMap, setPurchaseAllocationsMap] = useState<Record<string, { totalPaid: number; due: number }>>({});
@@ -26,19 +28,21 @@ const PurchaseList = () => {
   const fetchProcurementLogs = async () => {
     try {
       setLoading(true);
-      const { data: purData, error: purError } = await fetchAllPages(
-        supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false })
-      );
+      const { data: purData, error: purError } = await supabase
+        .from('supplier_purchases')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (purError) throw purError;
 
-      const { data: vouchersData } = await fetchAllPages(
-        supabase.from('financial_vouchers').select('*').or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher')
-      );
+      const { data: vouchersData } = await supabase
+        .from('financial_vouchers')
+        .select('*')
+        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher');
 
-      const { data: pReturnsData } = await fetchAllPages(
-        supabase.from('purchase_returns').select('*')
-      );
+      const { data: pReturnsData } = await supabase
+        .from('purchase_returns')
+        .select('*');
 
       // Group purchases by vendor
       const purchasesByVendor: Record<string, any[]> = {};
@@ -467,6 +471,13 @@ const PurchaseList = () => {
         await supabase.from('grn_receipts').delete().eq('id', targetRecord.metadata.grn_id);
       }
 
+      // Cascade delete financial vouchers linked to this purchase (PAV & VPV)
+      const purchaseIdent = targetRecord?.purchase_no || `PUR-${String(id).padStart(4, '0')}`;
+      await supabase
+        .from('financial_vouchers')
+        .delete()
+        .or(`original_invoice_no.eq.${purchaseIdent},metadata->>linkedPurchaseNo.eq.${purchaseIdent}`);
+
       const { error } = await supabase.from('supplier_purchases').delete().eq('id', id);
       if (error) throw error;
 
@@ -509,15 +520,15 @@ const PurchaseList = () => {
       
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-black dark:text-white">Wholesale Purchase Log Registry</h2>
-          <p className="text-xs text-gray-400">Manage inward vendor supply consignments and trace batch arrivals</p>
+          <h2 className="text-xl font-bold text-black dark:text-white">{isRTL ? "ہول سیل خریداری رجسٹر (Purchases)" : "Wholesale Purchase Log Registry"}</h2>
+          <p className="text-xs text-gray-400">{isRTL ? "سپلائرز سے مال کی آمد، کنسائنمنٹس اور بیجز کا انتظام کریں" : "Manage inward vendor supply consignments and trace batch arrivals"}</p>
         </div>
         <button
           type="button"
           onClick={() => navigate('/Purchase/Purchases/Add')}
           className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
         >
-          + Log New Supply
+          {isRTL ? "+ نیا مال درج کریں" : "+ Log New Supply"}
         </button>
       </div>
 
@@ -525,7 +536,7 @@ const PurchaseList = () => {
         
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">Show</span>
+            <span className="text-xs text-gray-500">{isRTL ? "دکھائیں" : "Show"}</span>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
@@ -536,7 +547,7 @@ const PurchaseList = () => {
               <option value={20}>20</option>
               <option value={50}>50</option>
             </select>
-            <span className="text-xs text-gray-500">entries</span>
+            <span className="text-xs text-gray-500">{isRTL ? "ریکارڈز" : "entries"}</span>
           </div>
 
           <div className="w-full sm:w-auto">
@@ -544,7 +555,7 @@ const PurchaseList = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by order # or vendor name..."
+              placeholder={isRTL ? "آرڈر نمبر یا وینڈر کے نام سے تلاش کریں..." : "Search by order # or vendor name..."}
               className="w-full sm:w-64 rounded border border-stroke bg-transparent py-1.5 px-3 text-xs outline-none focus:border-primary dark:border-strokedark"
             />
           </div>
@@ -554,22 +565,22 @@ const PurchaseList = () => {
           <table className="w-full table-auto border-collapse">
             <thead>
               <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                <th className="py-4 px-4 font-semibold w-16 whitespace-nowrap">S#</th>
-                <th className="py-4 px-4 font-semibold whitespace-nowrap">Purchase No</th>
-                <th className="py-4 px-4 font-semibold whitespace-nowrap">Vendor Profile</th>
-                <th className="py-4 px-4 font-semibold whitespace-nowrap">Stock Receiving Location</th>
-                <th className="py-4 px-4 font-semibold text-center whitespace-nowrap">Entry Date</th>
-                <th className="py-4 px-4 font-semibold text-center whitespace-nowrap">Payment Term</th>
-                <th className="py-4 px-4 font-semibold text-right pr-4 whitespace-nowrap">Total Bill</th>
-                <th className="py-4 px-4 font-semibold text-right pr-6 whitespace-nowrap">Payment / Due Status</th>
-                <th className="py-4 px-4 font-semibold w-24 text-center whitespace-nowrap">Actions</th>
+                <th className="py-4 px-4 font-semibold w-16 whitespace-nowrap">{isRTL ? "نمبر شمار" : "S#"}</th>
+                <th className="py-4 px-4 font-semibold whitespace-nowrap">{isRTL ? "پرچیز نمبر" : "Purchase No"}</th>
+                <th className="py-4 px-4 font-semibold whitespace-nowrap">{isRTL ? "وینڈر پروفائل" : "Vendor Profile"}</th>
+                <th className="py-4 px-4 font-semibold whitespace-nowrap">{isRTL ? "مال وصولی گودام" : "Stock Receiving Location"}</th>
+                <th className="py-4 px-4 font-semibold text-center whitespace-nowrap">{isRTL ? "اندراج تاریخ" : "Entry Date"}</th>
+                <th className="py-4 px-4 font-semibold text-center whitespace-nowrap">{isRTL ? "ادائیگی کی شرط" : "Payment Term"}</th>
+                <th className="py-4 px-4 font-semibold text-right pr-4 whitespace-nowrap">{isRTL ? "کل بل" : "Total Bill"}</th>
+                <th className="py-4 px-4 font-semibold text-right pr-6 whitespace-nowrap">{isRTL ? "ادائیگی کی صورتحال" : "Payment / Due Status"}</th>
+                <th className="py-4 px-4 font-semibold w-24 text-center whitespace-nowrap">{isRTL ? "کارروائی" : "Actions"}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr><td colSpan={9} className="text-center py-12 text-sm"><Spinner /></td></tr>
               ) : paginatedPurchases.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No supply restock logs recorded yet.</td></tr>
+                <tr><td colSpan={9} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">{isRTL ? "ابھی تک خریداری کا کوئی لاگ درج نہیں ہوا۔" : "No supply restock logs recorded yet."}</td></tr>
               ) : (
                 paginatedPurchases.map((pur, idx) => {
                   const serialNumber = startIndex + idx + 1;

@@ -5,11 +5,8 @@ import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { useAuth } from '../../../Context/Auth';
-import { logActivity } from '../../../service/auditLogger';
 
 const AddDeliveryChallan = () => {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -44,12 +41,7 @@ const AddDeliveryChallan = () => {
         setFetchingData(isEditMode);
 
         // 1. Load active customers directory lists
-        const { data: rawCustData } = await supabase.from('customers').select('*');
-        const custData = (rawCustData || []).map((c: any) => ({
-          ...c,
-          customerName: c.customerName || c.customername || c.name || '',
-          customer_code: c.customer_code || c.customerCode || c.customercode || ''
-        }));
+        const { data: custData } = await supabase.from('customers').select('id, customerName, customer_code, customerCode');
         if (custData) setCustomers(custData);
 
         // 2. Hydrate form values with existing dataset properties if updating
@@ -216,20 +208,6 @@ const AddDeliveryChallan = () => {
                   .eq('id', editData.id);
 
                 if (error) throw error;
-
-                logActivity({
-                  action: 'UPDATE',
-                  tableName: 'delivery_challans',
-                  details: {
-                    challan_no: editData.challan_no || `DC-ID-${editData.id}`,
-                    customer_name: values.customerName,
-                    amount: netAmount,
-                    total_amount: netAmount,
-                    event: 'Updated Delivery Challan'
-                  },
-                  performedBy: user?.name || user?.email || 'User'
-                });
-
                 toast.success(`Challan updated: ${computedStatus}`);
               } else {
                 const safePrefix = (values.dispatchWarehouse || 'Main Warehouse').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -257,20 +235,6 @@ const AddDeliveryChallan = () => {
                   .insert([{ ...databasePayload, challan_no: newChallanNo }]);
 
                 if (error) throw error;
-
-                logActivity({
-                  action: 'INSERT',
-                  tableName: 'delivery_challans',
-                  details: {
-                    challan_no: newChallanNo,
-                    customer_name: values.customerName,
-                    amount: netAmount,
-                    total_amount: netAmount,
-                    event: 'Created Delivery Challan'
-                  },
-                  performedBy: user?.name || user?.email || 'User'
-                });
-
                 toast.success('Challan logged successfully!');
               }
               navigate('/Delivery-Challan/List'); // Redirect back straight to historical records grid

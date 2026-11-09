@@ -4,6 +4,7 @@ import { FiBell } from 'react-icons/fi';
 import { supabase } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import { triggerFeedbackSound } from '../../utils/audioFeedback';
+import { useLanguage } from '../../Context/LanguageContext';
 
 const NotificationDropdown = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -11,6 +12,7 @@ const NotificationDropdown = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
   
   const { role, userLocationName, tenantId, userEmail } = useAuth();
+  const { isRTL } = useLanguage();
   
   const trigger = useRef<any>(null);
   const dropdown = useRef<any>(null);
@@ -158,7 +160,7 @@ const NotificationDropdown = () => {
         ref={dropdown}
         onFocus={() => setDropdownOpen(true)}
         onBlur={() => setDropdownOpen(false)}
-        className={`absolute -right-27 mt-2.5 flex h-90 w-75 flex-col rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark sm:right-0 sm:w-80 ${
+        className={`absolute ${isRTL ? 'left-0 sm:left-0' : '-right-27 sm:right-0'} mt-2.5 flex h-90 w-75 flex-col rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark sm:w-80 ${
           dropdownOpen === true ? 'block' : 'hidden'
         }`}
       >
@@ -179,7 +181,7 @@ const NotificationDropdown = () => {
               <li key={notif.id}>
                 <Link
                   className="flex flex-col gap-2.5 border-t border-stroke px-4.5 py-3 hover:bg-gray-2 dark:border-strokedark dark:hover:bg-meta-4 transition"
-                  to={`${tenantId ? `/${tenantId}` : ''}${notif.link}`}
+                  to={notif.link}
                   onClick={() => markAsRead(notif.id)}
                 >
                   <p className="text-sm">
