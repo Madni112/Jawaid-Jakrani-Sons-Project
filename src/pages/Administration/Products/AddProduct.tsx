@@ -430,7 +430,8 @@ const AddProduct = () => {
               let unitLabel = 'cm';
               if (unit === 'in') {
                 unitLabel = 'in';
-                sqMetersPerTile = (h > 0 && w > 0) ? (h * 0.0254) * (w * 0.0254) : 0;
+                // Tile Industry Trade standard (1 in = nominal 2.5 cm / 0.025 m, so 24" x 24" = 0.6m x 0.6m = 0.36 sq.m)
+                sqMetersPerTile = (h > 0 && w > 0) ? (h * 0.025) * (w * 0.025) : 0;
               } else if (unit === 'm') {
                 unitLabel = 'm';
                 sqMetersPerTile = (h > 0 && w > 0) ? h * w : 0;
@@ -567,7 +568,8 @@ const AddProduct = () => {
             let unitSuffix = 'cm';
             if (unit === 'in') {
               unitSuffix = 'in';
-              sqMetersPerTile = (tileH > 0 && tileW > 0) ? (tileH * 0.0254) * (tileW * 0.0254) : 0;
+              // Tile Industry Trade standard (1 in = nominal 2.5 cm / 0.025 m, so 24" x 24" = 0.6m x 0.6m = 0.36 sq.m)
+              sqMetersPerTile = (tileH > 0 && tileW > 0) ? (tileH * 0.025) * (tileW * 0.025) : 0;
             } else if (unit === 'm') {
               unitSuffix = 'm';
               sqMetersPerTile = (tileH > 0 && tileW > 0) ? tileH * tileW : 0;
@@ -1272,7 +1274,7 @@ const AddProduct = () => {
                       <div>
                         <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Area per Tile:</span>
                         <strong className="text-slate-900 dark:text-white font-mono font-bold text-sm">
-                          {sqMetersPerTile.toFixed(4)} sq.m
+                          {Number(sqMetersPerTile.toFixed(4))} sq.m
                         </strong>
                       </div>
 
@@ -1281,7 +1283,7 @@ const AddProduct = () => {
                           Total Coverage Per Box:
                         </span>
                         <strong className="text-teal-800 dark:text-teal-300 font-mono font-black text-lg">
-                          {totalSqMetersPerBox.toFixed(4)} sq.m
+                          {Number(totalSqMetersPerBox.toFixed(4))} sq.m
                         </strong>
                         <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono ml-2">
                           / Box
