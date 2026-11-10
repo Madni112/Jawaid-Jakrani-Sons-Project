@@ -369,6 +369,7 @@ const ProductList = () => {
 
   // ---- Server-side pagination (only the current page is loaded) ----
   const PRODUCT_PAGE_COLS = 'id, product_name, item_sr_no, category, sub_category, sub_sub_category, bin, uom, retail_price, purchase_price, mrp, min_stock_alert, product_description, item_type, pieces_per_box, pcs_per_box, pieces_per_packing, scenario_name, service_charges, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_purchase_price, loose_sale_price';
+  const PRODUCT_PAGE_COLS_FALLBACK = 'id, product_name, item_sr_no, category, sub_category, sub_sub_category, bin, uom, retail_price, purchase_price, mrp, min_stock_alert, product_description, item_type, pieces_per_box, pcs_per_box, pieces_per_packing, scenario_name, service_charges';
 
   const stockForProduct = (productName: string) => {
     const n = String(productName || '').trim().toLowerCase();
@@ -434,7 +435,13 @@ const ProductList = () => {
 
         let detQ = supabase.from('products').select(PRODUCT_PAGE_COLS);
         detQ = applyFilters(detQ, term);
-        const { data: details } = await detQ;
+        let { data: details, error: detErr } = await detQ;
+        if (detErr && (detErr.message?.includes('allow_loose_sales') || detErr.code === '42703')) {
+          let retryDetQ = supabase.from('products').select(PRODUCT_PAGE_COLS_FALLBACK);
+          retryDetQ = applyFilters(retryDetQ, term);
+          const res = await retryDetQ;
+          details = res.data;
+        }
         const byId: Record<string, any> = {};
         (details || []).forEach((d: any) => { byId[d.id] = d; });
 
@@ -462,7 +469,16 @@ const ProductList = () => {
       q = q.order(sortKey, { ascending: asc });
       q = q.range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
 
-      const { data, error } = await q;
+      let { data, error } = await q;
+      if (error && (error.message?.includes('allow_loose_sales') || error.code === '42703')) {
+        let retryQ = supabase.from('products').select(PRODUCT_PAGE_COLS_FALLBACK);
+        retryQ = applyFilters(retryQ, term);
+        retryQ = retryQ.order(sortKey, { ascending: asc });
+        retryQ = retryQ.range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
+        const retryRes = await retryQ;
+        data = retryRes.data;
+        error = retryRes.error;
+      }
       if (error) throw error;
 
       setProducts((data || []).map((row: any) => {

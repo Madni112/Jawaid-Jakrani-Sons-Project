@@ -484,37 +484,51 @@ export function applyAccentColor(hexColor: string) {
 
       /* Light / Translucent Background Tints */
       .bg-emerald-50,
-      .bg-emerald-50\\/80,
-      .bg-emerald-600\\/10,
-      .bg-emerald-500\\/10,
-      .bg-emerald-500\\/20,
+      .bg-emerald-50\/80,
+      .bg-emerald-600\/10,
+      .bg-emerald-500\/10,
+      .bg-emerald-500\/20,
       .bg-teal-50,
-      .bg-teal-50\\/80,
-      .bg-teal-600\\/10,
-      .bg-teal-500\\/10,
-      .bg-teal-500\\/20,
-      .bg-primary\\/10,
-      .bg-primary\\/5 {
+      .bg-teal-50\/80,
+      .bg-teal-50\/50,
+      .bg-teal-50\/20,
+      .bg-teal-100,
+      .bg-teal-100\/70,
+      .bg-teal-100\/50,
+      .bg-teal-100\/40,
+      .bg-teal-200\/80,
+      .bg-teal-600\/10,
+      .bg-teal-500\/10,
+      .bg-teal-500\/20,
+      .bg-primary\/10,
+      .bg-primary\/5 {
         background-color: rgba(${r}, ${g}, ${b}, 0.1) !important;
       }
 
-      .bg-emerald-600\\/70,
-      .bg-emerald-600\\/80,
-      .bg-primary\\/70 {
+      .bg-emerald-600\/70,
+      .bg-emerald-600\/80,
+      .bg-primary\/70 {
         background-color: rgba(${r}, ${g}, ${b}, 0.75) !important;
       }
 
       /* Dark Mode Translucent Backgrounds */
-      .dark .bg-emerald-500\\/15,
-      .dark .bg-emerald-950\\/30,
-      .dark .bg-emerald-900\\/30,
-      .dark .bg-emerald-500\\/20,
-      .dark .bg-teal-500\\/15,
-      .dark .bg-teal-950\\/30,
-      .dark .bg-teal-900\\/30,
-      .dark .bg-teal-500\\/20,
-      .dark .bg-teal-950\\/20,
-      .dark .bg-primary\\/20 {
+      .dark .bg-emerald-500\/15,
+      .dark .bg-emerald-950\/30,
+      .dark .bg-emerald-900\/30,
+      .dark .bg-emerald-500\/20,
+      .dark .bg-teal-500\/15,
+      .dark .bg-teal-950\/60,
+      .dark .bg-teal-950\/40,
+      .dark .bg-teal-950\/30,
+      .dark .bg-teal-950\/20,
+      .dark .bg-teal-950\/10,
+      .dark .bg-teal-900\/40,
+      .dark .bg-teal-900\/30,
+      .dark .bg-teal-900\/20,
+      .dark .bg-teal-900\/10,
+      .dark .bg-teal-800\/80,
+      .dark .bg-teal-500\/20,
+      .dark .bg-primary\/20 {
         background-color: rgba(${r}, ${g}, ${b}, 0.18) !important;
       }
 
@@ -528,9 +542,12 @@ export function applyAccentColor(hexColor: string) {
       html:not(.dark) .text-emerald-600,
       html:not(.dark) .text-emerald-500,
       html:not(.dark) .text-emerald-700,
+      html:not(.dark) .text-teal-950,
+      html:not(.dark) .text-teal-900,
+      html:not(.dark) .text-teal-800,
+      html:not(.dark) .text-teal-700,
       html:not(.dark) .text-teal-600,
       html:not(.dark) .text-teal-500,
-      html:not(.dark) .text-teal-700,
       html:not(.dark) .text-primary {
         color: ${safeLightText} !important;
       }
@@ -540,10 +557,16 @@ export function applyAccentColor(hexColor: string) {
       html.dark .text-emerald-500,
       html.dark .text-emerald-400,
       html.dark .text-emerald-700,
+      html.dark .text-teal-950,
+      html.dark .text-teal-900,
+      html.dark .text-teal-800,
+      html.dark .text-teal-700,
       html.dark .text-teal-600,
       html.dark .text-teal-500,
       html.dark .text-teal-400,
-      html.dark .text-teal-700,
+      html.dark .text-teal-300,
+      html.dark .text-teal-200,
+      html.dark .text-teal-100,
       html.dark .text-primary {
         color: ${safeDarkText} !important;
       }
@@ -575,6 +598,11 @@ export function applyAccentColor(hexColor: string) {
       .border-emerald-500\\/20,
       .border-teal-600,
       .border-teal-500,
+      .border-teal-400,
+      .border-teal-300,
+      .border-teal-200,
+      .divide-teal-200,
+      .divide-teal-100,
       .border-teal-500\\/20,
       .border-primary,
       .border-primary\\/40,
@@ -584,6 +612,15 @@ export function applyAccentColor(hexColor: string) {
       .focus\\:border-teal-600:focus,
       .focus\\:border-primary:focus {
         border-color: ${hexColor} !important;
+      }
+
+      .dark .border-teal-800,
+      .dark .border-teal-800\\/80,
+      .dark .border-teal-800\\/40,
+      .dark .border-teal-700,
+      .dark .divide-teal-800\\/40,
+      .dark .divide-teal-900\\/40 {
+        border-color: rgba(${r}, ${g}, ${b}, 0.35) !important;
       }
 
       /* Glow / Shadows */

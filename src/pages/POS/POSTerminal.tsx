@@ -1499,7 +1499,7 @@ export const POSTerminal: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         
         {/* ── TOP POS NAVBAR ── */}
-        <header className="h-16 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2 sm:gap-3 z-40 relative w-full max-w-full overflow-hidden">
+        <header className="h-16 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2 sm:gap-3 z-40 relative w-full max-w-full overflow-visible">
           
           {/* Left: Terminal pill & Live clock */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
@@ -1722,9 +1722,18 @@ export const POSTerminal: React.FC = () => {
                     <div className="mt-2 flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100 dark:border-slate-800">
                       <span className="text-slate-400 font-medium">Drawer Status:</span>
                       {activeShift ? (
-                        <span className="font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                          Shift Active
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileDropdownOpen(false);
+                            handleOpenDrawerModal();
+                          }}
+                          className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-1.5 py-0.5 rounded cursor-pointer transition flex items-center gap-1"
+                          title="Click to manage cash drawer or close shift"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>Shift Active (Manage)</span>
+                        </button>
                       ) : (
                         <button
                           type="button"
@@ -1732,13 +1741,33 @@ export const POSTerminal: React.FC = () => {
                             setProfileDropdownOpen(false);
                             handleOpenDrawerModal();
                           }}
-                          className="font-bold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded cursor-pointer"
+                          className="font-bold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded cursor-pointer transition"
                         >
                           Open Drawer
                         </button>
                       )}
                     </div>
                   </div>
+
+                  {/* Cash Drawer & Business Day Operations */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      handleOpenDrawerModal();
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    <LuBanknote size={16} className={activeShift ? "text-emerald-500" : "text-amber-500"} />
+                    <div className="flex-1 text-left flex items-center justify-between">
+                      <span>Cash Drawer & Day</span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
+                        activeShift ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                      }`}>
+                        {activeShift ? 'Shift Active' : 'Day Closed'}
+                      </span>
+                    </div>
+                  </button>
 
                   {/* Settings Button (Opens In-POS Settings Modal) */}
                   <button

@@ -16,6 +16,74 @@ export interface SoundCategory {
   tones: ToneOption[];
 }
 
+
+export interface PosSoundPackOption {
+  id: string;
+  name: string;
+  urName: string;
+  category: string;
+  description: string;
+  sampleKeys: string;
+  iconType: string;
+}
+
+export const POS_SOUNDPACKS: PosSoundPackOption[] = [
+  {
+    id: 'pos_pack_dtmf',
+    name: 'Banking ATM & Telecom DTMF',
+    urName: 'بینک اے ٹی ایم و ٹیلی فون ٹون',
+    category: 'Harmonic Dual-Tone',
+    description: 'Authentic dual-frequency harmonic audio tone per digit (0–9), matching standard banking ATMs and telecommunications keypads.',
+    sampleKeys: 'Digits 0–9 harmonic tones',
+    iconType: 'atm',
+  },
+  {
+    id: 'pos_pack_mechanical',
+    name: 'Tactile Mechanical Keyboard (Blue Switch)',
+    urName: 'مکینیکل کی بورڈ کلک',
+    category: 'Acoustic Switch',
+    description: 'Crisp, tactile Cherry MX Blue switch click with micro-spring resonance and satisfying bottom-out clack on every keystroke.',
+    sampleKeys: 'Tactile click + spring ping',
+    iconType: 'keyboard',
+  },
+  {
+    id: 'pos_pack_digital',
+    name: 'Modern Electronic Cash Register',
+    urName: 'ماڈرن الیکٹرانک کیش رجسٹر بیپ',
+    category: 'Melodic Sine Scale',
+    description: 'Ascending musical major scale tones (C5 to D6) per digit, smooth and ultra-clean for retail environments.',
+    sampleKeys: 'Ascending scale (C5 → D6)',
+    iconType: 'register',
+  },
+  {
+    id: 'pos_pack_bubble',
+    name: 'Haptic Water Bubble Pop',
+    urName: 'ہلکا ببل پوپ اثر',
+    category: 'Organic Percussion',
+    description: 'Soft, playful water drop pops with rising pitch per key, gentle and soothing for high-volume cashiers.',
+    sampleKeys: 'Playful water pop & drops',
+    iconType: 'bubble',
+  },
+  {
+    id: 'pos_pack_cyber',
+    name: 'Cyberpunk Radar Beep',
+    urName: 'سائبر پنک ہائی ٹیک ٹون',
+    category: 'Sci-Fi Synth',
+    description: 'Futuristic high-tech frequency pulse with subtle resonance decay, high-tech atelier counter aesthetic.',
+    sampleKeys: 'Laser radar chirp & pulse',
+    iconType: 'cyber',
+  },
+  {
+    id: 'pos_pack_ratchet',
+    name: 'Vintage Cashier Spring Ratchet',
+    urName: 'ونٹیج مکینیکل اسپرنگ اسٹوک',
+    category: 'Vintage Hardware',
+    description: 'Mechanical metal spring-wound ratchet click from classic heavy-duty cash registers.',
+    sampleKeys: 'Spring ratchet double-click',
+    iconType: 'ratchet',
+  },
+];
+
 export const SOUND_CATEGORIES: SoundCategory[] = [
   {
     id: 'notification',
@@ -976,6 +1044,181 @@ class SoundEngine {
   playWarningTone(): void { this.playHazardSiren(); }
   playNotificationChime(): void { this.playModernDigitalChime(); }
   playDeleteTone(): void { this.playTrashWhoosh(); }
+
+  // ═════════════════════════════════════════════════════════════
+  // 6. POS KEYPAD SOUNDPACKS & SYNTHESIS
+  // ═════════════════════════════════════════════════════════════
+
+  playPosKeypadDigit(digit: string, soundpackId?: string): void {
+    const pack = soundpackId || getSavedPosSoundPack();
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    switch (pack) {
+      case 'pos_pack_dtmf': {
+        // Dual-tone multi-frequency (ATM / Telephone keypad)
+        let lowFreq = 941;
+        let highFreq = 1336;
+        if (['1', '2', '3'].includes(digit)) lowFreq = 697;
+        else if (['4', '5', '6'].includes(digit)) lowFreq = 770;
+        else if (['7', '8', '9'].includes(digit)) lowFreq = 852;
+        else lowFreq = 941; // 0, clear, backspace
+
+        if (['1', '4', '7'].includes(digit)) highFreq = 1209;
+        else if (['2', '5', '8', '0'].includes(digit)) highFreq = 1336;
+        else if (['3', '6', '9'].includes(digit)) highFreq = 1477;
+        else highFreq = 1209;
+
+        [lowFreq, highFreq].forEach((freq) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.linearRampToValueAtTime(0.12, now + 0.006);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.085);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.095);
+        });
+        break;
+      }
+
+      case 'pos_pack_mechanical': {
+        // Tactile mechanical switch click (Cherry MX Blue)
+        const dNum = parseInt(digit) || 5;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(3200 + dNum * 80, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.032);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.24, now + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.038);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.042);
+
+        // Micro plastic bottom-out clack
+        const noise = ctx.createBufferSource();
+        const nBuffer = this.getNoiseBuffer();
+        if (nBuffer) {
+          noise.buffer = nBuffer;
+          const filter = ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(4500, now);
+          filter.Q.setValueAtTime(3, now);
+          const nGain = ctx.createGain();
+          nGain.gain.setValueAtTime(0.16, now);
+          nGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.024);
+          noise.connect(filter);
+          filter.connect(nGain);
+          nGain.connect(ctx.destination);
+          noise.start(now);
+          noise.stop(now + 0.028);
+        }
+        break;
+      }
+
+      case 'pos_pack_digital': {
+        // Melodic musical scale sine blip (C5 to D6)
+        const scale: Record<string, number> = {
+          '1': 523.25, '2': 587.33, '3': 659.25,
+          '4': 698.46, '5': 783.99, '6': 880.00,
+          '7': 987.77, '8': 1046.50, '9': 1174.66,
+          '0': 440.00, 'clear': 392.00, 'backspace': 349.23
+        };
+        const freq = scale[digit] || 523.25;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.18, now + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.105);
+        break;
+      }
+
+      case 'pos_pack_bubble': {
+        // Haptic water bubble pop
+        const dNum = parseInt(digit) || 5;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        const startFreq = 480 + dNum * 65;
+        osc.frequency.setValueAtTime(startFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(startFreq * 1.8, now + 0.018);
+        osc.frequency.exponentialRampToValueAtTime(startFreq * 0.4, now + 0.055);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.26, now + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.065);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.075);
+        break;
+      }
+
+      case 'pos_pack_cyber': {
+        // Futuristic sci-fi blip with harmonic resonance
+        const dNum = parseInt(digit) || 3;
+        const baseFreq = 950 + dNum * 80;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.linearRampToValueAtTime(baseFreq * 0.7, now + 0.055);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.18, now + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.065);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.075);
+        break;
+      }
+
+      case 'pos_pack_ratchet': {
+        // Mechanical spring ratchet click
+        [0, 0.016].forEach((offset) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(1800, now + offset);
+          osc.frequency.exponentialRampToValueAtTime(300, now + offset + 0.018);
+
+          gain.gain.setValueAtTime(0.001, now + offset);
+          gain.gain.linearRampToValueAtTime(0.15, now + offset + 0.002);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.02);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + offset);
+          osc.stop(now + offset + 0.022);
+        });
+        break;
+      }
+
+      default:
+        break;
+    }
+  }
+
 }
 
 export const soundEngine = new SoundEngine();
@@ -1053,3 +1296,51 @@ export const triggerFeedbackSound = (
     console.warn('Audio feedback failed:', err);
   }
 };
+
+
+/**
+ * POS Keypad Audio Configuration & Storage Helpers
+ */
+export function getSavedPosSoundPack(): string {
+  if (typeof window === 'undefined') return 'pos_pack_dtmf';
+  try {
+    return localStorage.getItem('alm_pos_keypad_soundpack') || 'pos_pack_dtmf';
+  } catch (_) {
+    return 'pos_pack_dtmf';
+  }
+}
+
+export function setSavedPosSoundPack(packId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('alm_pos_keypad_soundpack', packId);
+    window.dispatchEvent(new CustomEvent('alm_pos_soundpack_changed', { detail: packId }));
+  } catch (_) {}
+}
+
+export function isPosKeypadAudioEnabled(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const val = localStorage.getItem('alm_pos_keypad_sound_enabled');
+    return val !== 'false';
+  } catch (_) {
+    return true;
+  }
+}
+
+export function setPosKeypadAudioEnabled(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('alm_pos_keypad_sound_enabled', String(enabled));
+    window.dispatchEvent(new CustomEvent('alm_pos_soundpack_changed', { detail: { enabled } }));
+  } catch (_) {}
+}
+
+export function triggerPosKeypadSound(digit: string, overridePackId?: string): void {
+  if (!isPosKeypadAudioEnabled() && !overridePackId) return;
+  try {
+    soundEngine.playPosKeypadDigit(digit, overridePackId);
+  } catch (err) {
+    console.warn('POS keypad audio failed:', err);
+  }
+}

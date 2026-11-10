@@ -642,7 +642,7 @@ export const VendorImportModal: React.FC<VendorImportModalProps> = ({
         const { data: insertedData, error: insertErr } = await supabase
           .from('vendors')
           .insert(insertPayloads)
-          .select('id, vendor_name, name, vendor_code');
+          .select('id, vendor_name, name');
 
         if (insertErr) {
           throw insertErr;

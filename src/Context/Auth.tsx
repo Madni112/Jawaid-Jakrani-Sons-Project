@@ -547,6 +547,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const canAccessSetting = (tabId: string): boolean => {
+    // System audio and POS keypad sounds are workstation preferences - always accessible
+    if (tabId === 'pos_sound' || tabId === 'sound_effects') return true;
+
     const isMasterDeveloper = Boolean(
       userEmail &&
       (

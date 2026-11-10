@@ -646,9 +646,13 @@ function VoucherList({ voucherTypePreset }: VoucherListProps) {
                       </td>
                       <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 font-medium max-w-xs">
                         <div className="flex flex-col gap-0.5">
-                          {(v.account_title || v.account_code) && (
+                          {(v.account_title || v.customer_name || v.customerName || v.party_name || v.account_code) && (
                             <div className="text-[11px] font-bold text-black dark:text-white">
-                              {v.account_title || v.account_code} {v.debit > 0 ? `(Dr: ${Number(v.debit).toLocaleString()})` : v.credit > 0 ? `(Cr: ${Number(v.credit).toLocaleString()})` : ''}
+                              {v.account_title || v.customer_name || v.customerName || v.party_name || v.account_code}
+                              {v.account_code && (v.account_title || v.customer_name || v.customerName) && (
+                                <span className="ml-1 text-[10px] text-gray-500 font-mono font-normal">({v.account_code})</span>
+                              )}
+                              {v.debit > 0 ? ` (Dr: ${Number(v.debit).toLocaleString()})` : v.credit > 0 ? ` (Cr: ${Number(v.credit).toLocaleString()})` : ''}
                             </div>
                           )}
                           {!isOB && v.items && v.items.filter((it: any) => it.accountCode !== '3010-001').map((item: any, itIdx: number) => {

@@ -671,7 +671,11 @@ const NewInvoice = () => {
       try {
         setInitialLoading(true);
         const { data: rawCust } = await supabase.from('customers').select('*');
-        const { data: prod } = await supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price');
+        let { data: prod, error: prodErr } = await supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price');
+        if (prodErr && (prodErr.message?.includes('allow_loose_sales') || prodErr.code === '42703')) {
+          const fallbackRes = await supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges');
+          prod = fallbackRes.data;
+        }
         const { data: sm } = await supabase.from('salesmen').select('id, name, invoice_name, invoice_names');
         const { data: trans } = await supabase.from('logistics_transportation').select('id, name, base_charges');
         const { data: locMaster } = await supabase.from('inventory_locations').select('name');

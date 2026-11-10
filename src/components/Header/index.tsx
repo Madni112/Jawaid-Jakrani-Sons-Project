@@ -30,6 +30,7 @@ import {
   LuCreditCard,
   LuHardDrive,
   LuTrash2,
+  LuKeyboard,
 } from 'react-icons/lu';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
@@ -64,6 +65,7 @@ export const SETTINGS_NAV_TABS: SettingsNavTab[] = [
   { id: 'theme', label: 'Theme & Appearance', urLabel: 'تھیم اور اسٹائل', icon: LuPalette },
   { id: 'credit_limits', label: 'Customer Credit Limits', urLabel: 'کسٹمر کریڈٹ لمٹس', icon: LuCreditCard },
   { id: 'sound_effects', label: 'Audio', urLabel: 'آڈیو', icon: LuVolume2 },
+  { id: 'pos_sound', label: 'POS Keypad Sounds', urLabel: 'پی او ایس آوازیں', icon: LuKeyboard },
   { id: 'backup', label: 'Data Backup', urLabel: 'ڈیٹا بیک اپ', icon: LuHardDrive },
   { id: 'workflow_logistics', label: 'Gate Pass & Workflow', urLabel: 'گیٹ پاس و ورک فلو', icon: LuSlidersHorizontal },
   { id: 'alm_factory_reset', label: 'Factory Reset ERP', urLabel: 'فیکٹری ری سیٹ', icon: LuTrash2 },

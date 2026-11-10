@@ -61,7 +61,25 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
                 readonly={true}
                 onCancel={() => openHistoryModal()} 
               />,
-              "View GRN Details",
+              "View Inward Challan Details",
+              undefined,
+              "max-w-6xl"
+            );
+          }}
+          onEdit={(id) => {
+            showModal(
+              <VerifyInward 
+                inwardId={id} 
+                locationFilter={locationFilter}
+                readonly={false}
+                isEditMode={true}
+                onSuccess={() => {
+                  fetchPendingInwards();
+                  openHistoryModal();
+                }}
+                onCancel={() => openHistoryModal()} 
+              />,
+              "Edit Inward Challan & QC Quantities",
               undefined,
               "max-w-6xl"
             );

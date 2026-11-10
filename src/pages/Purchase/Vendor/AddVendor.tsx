@@ -95,7 +95,7 @@ const AddVendor = () => {
         if (!isEditMode) {
           const [coaRes, vendRes] = await Promise.all([
             supabase.from('chart_of_accounts').select('account_code, control_code'),
-            supabase.from('vendors').select('vendor_code, vendorCode')
+            supabase.from('vendors').select('id, vendor_name').catch(() => ({ data: [] }))
           ]);
 
           let maxNum = 0;
@@ -402,6 +402,8 @@ const AddVendor = () => {
 
             if (saveResponse.error) throw saveResponse.error;
 
+            const savedVendorId = saveResponse.data?.[0]?.id || editData?.id || id;
+
             // Two-Way Sync with Chart of Accounts (COA) & financial_vouchers
             if (cleanCode) {
               try {
@@ -470,9 +472,17 @@ const AddVendor = () => {
                   };
 
                   if (existV) {
-                    await supabase.from('financial_vouchers').update(vPayload).eq('id', existV.id);
+                    let vRes = await supabase.from('financial_vouchers').update(vPayload).eq('id', existV.id);
+                    if (vRes.error && (vRes.error.message?.includes('account_title') || vRes.error.code === '42703')) {
+                      const { account_title, ...cleanVPayload } = vPayload;
+                      await supabase.from('financial_vouchers').update(cleanVPayload).eq('id', existV.id);
+                    }
                   } else {
-                    await supabase.from('financial_vouchers').insert([vPayload]);
+                    let vRes = await supabase.from('financial_vouchers').insert([vPayload]);
+                    if (vRes.error && (vRes.error.message?.includes('account_title') || vRes.error.code === '42703')) {
+                      const { account_title, ...cleanVPayload } = vPayload;
+                      await supabase.from('financial_vouchers').insert([cleanVPayload]);
+                    }
                   }
                 } else if (existV) {
                   // If opening balance was reset to 0, remove the obsolete OB voucher

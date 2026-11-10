@@ -4,7 +4,7 @@ import ClickOutside from '../ClickOutside';
 import { LuLogOut, LuBuilding2, LuMail, LuSettings, LuLanguages, LuStore } from 'react-icons/lu';
 import { MdPerson } from 'react-icons/md';
 import { useAuth, detectPortalTenant } from '../../Context/Auth';
-import { useLanguage } from '../../Context/LanguageContext';
+import { useLanguage, getUrduText } from '../../Context/LanguageContext';
 import { getBrandConfig } from '../../utils/brand';
 import { supabase } from '../../Context/supabaseClient';
 import {

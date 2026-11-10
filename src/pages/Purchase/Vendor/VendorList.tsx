@@ -32,10 +32,14 @@ const VendorList = () => {
     const fetchRegisteredVendorsAndCOA = async () => {
         try {
             setLoading(true);
-            const [vendRes, coaRes] = await Promise.all([
-                supabase.from('vendors').select('*').order('vendor_code', { ascending: true }),
-                supabase.from('chart_of_accounts').select('*').order('account_code', { ascending: true })
-            ]);
+            let vendPromise = supabase.from('vendors').select('*').order('vendor_code', { ascending: true });
+            const coaPromise = supabase.from('chart_of_accounts').select('*').order('account_code', { ascending: true });
+
+            let [vendRes, coaRes] = await Promise.all([vendPromise, coaPromise]);
+
+            if (vendRes.error && (vendRes.error.message?.includes('vendor_code') || vendRes.error.code === '42703')) {
+                vendRes = await supabase.from('vendors').select('*').order('id', { ascending: true });
+            }
 
             if (vendRes.error) throw vendRes.error;
             setVendors(vendRes.data || []);

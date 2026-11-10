@@ -488,11 +488,17 @@ const PurchaseList = () => {
     }
   };
 
-  const filteredPurchases = purchases.filter(p =>
-    (p.purchase_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.supplier_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.target_warehouse || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPurchases = purchases.filter(p => {
+    const rawNo = p.purchase_no || '';
+    const formattedNo = rawNo.toUpperCase().startsWith('PUR-') ? rawNo : `PUR-${rawNo}`;
+    const term = searchTerm.toLowerCase();
+    return (
+      rawNo.toLowerCase().includes(term) ||
+      formattedNo.toLowerCase().includes(term) ||
+      (p.supplier_name || '').toLowerCase().includes(term) ||
+      (p.target_warehouse || '').toLowerCase().includes(term)
+    );
+  });
 
   const totalEntries = filteredPurchases.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
@@ -592,11 +598,16 @@ const PurchaseList = () => {
                   const dueAmt = alloc ? alloc.due : Math.max(0, totalAmt - paidAmt);
                   const term = pur.payment_term || 'On Credit';
                   const vendorName = pur.supplier_name || 'General Vendor';
+                  const formattedPurchaseNo = pur.purchase_no
+                    ? (String(pur.purchase_no).toUpperCase().startsWith('PUR-')
+                        ? pur.purchase_no
+                        : `PUR-${pur.purchase_no}`)
+                    : `PUR-${pur.id}`;
 
                   return (
                     <tr key={pur.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
                       <td className="py-3.5 px-4 text-gray-400 whitespace-nowrap">{serialNumber}</td>
-                      <td className="py-3.5 px-4 font-mono font-black text-primary whitespace-nowrap">{pur.purchase_no}</td>
+                      <td className="py-3.5 px-4 font-mono font-black text-primary whitespace-nowrap">{formattedPurchaseNo}</td>
                       <td className="py-3.5 px-4 flex items-center gap-1.5 whitespace-nowrap"><MdPerson className="text-gray-400 shrink-0" size={16} />{vendorName}</td>
                       <td className="py-3.5 px-4">
                         <div className="flex flex-col gap-1">

@@ -656,6 +656,7 @@ const AddCustomer: React.FC = () => {
         }
       };
 
+      let customerRecordId: any = editData?.id || id || null;
       let saveResponse = await executeSave(sanitizedPayload);
 
       // Auto-fallback: if PostgREST still reports any missing column in schema cache, strip it and retry

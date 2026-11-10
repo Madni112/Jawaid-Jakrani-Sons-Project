@@ -324,8 +324,7 @@ export const adminRoutes = [
         label: 'Goods Receipt (GRN)',
         path: '/Purchase/GRN/List',
         component: <GRNList />,
-        icon: MdInventory,
-        hideFromSidebar: true
+        icon: MdInventory
       },
       {
         label: 'Purchase Receipt',

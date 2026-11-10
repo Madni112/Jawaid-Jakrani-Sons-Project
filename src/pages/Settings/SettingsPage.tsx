@@ -2,6 +2,7 @@ import { executeErpFactoryReset } from '../../utils/erpResetManager';
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  LuKeyboard,
   LuUser,
   LuPalette,
   LuSettings,
@@ -75,6 +76,7 @@ import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
 import { getBrandConfig } from '../../utils/brand';
 import WorkflowSettingsTab from './WorkflowSettingsTab';
+import POSSoundSettingsTab from './POSSoundSettingsTab';
 import useColorMode from '../../hooks/useColorMode';
 import {
   PRESET_THEME_COLORS,
@@ -182,6 +184,14 @@ const SETTINGS_TABS: TabItem[] = [
     description: 'POS audio feedback for billing & scanning',
     urDescription: 'بلنگ اور اسکیننگ پر آڈیو فیڈ بیک',
     icon: LuVolume2,
+  },
+  {
+    id: 'pos_sound',
+    label: 'POS & System Audio Chimes',
+    urLabel: 'پی او ایس آوازیں',
+    description: 'PIN keypad audio studio & keywise soundpacks',
+    urDescription: 'کی پیڈ ساؤنڈ پیکس اور پن کوڈ آوازیں',
+    icon: LuKeyboard,
   },
   {
     id: 'backup',
@@ -372,6 +382,7 @@ const SettingsPage: React.FC = () => {
   const location = useLocation();
   const searchTab = new URLSearchParams(location.search).get('tab');
   const [activeTab, setActiveTabState] = useState<string>(searchTab || 'profile');
+  const [audioSubTab, setAudioSubTab] = useState<'system' | 'pos'>(() => (searchTab === 'pos_sound' ? 'pos' : 'system'));
 
   const setActiveTab = (tabId: string) => {
     setActiveTabState(tabId);
@@ -3942,111 +3953,181 @@ const SettingsPage: React.FC = () => {
             );
           })()}
 
-          {/* TAB 4: AUDIO & SOUND EFFECTS */}
-          {activeTab === 'sound_effects' && (
+          {/* TAB 4: AUDIO & SOUND EFFECTS (SYSTEM CHIMES + POS KEYPAD SOUNDS) */}
+          {(activeTab === 'sound_effects' || activeTab === 'pos_sound') && (
             <div className="space-y-6">
-              {/* Header card */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-2xl shrink-0">
-                      <LuVolume2 />
+              {/* Sub-Tabs Pill Navigation: 1. System Chimes | 2. POS Keypad Sounds */}
+              <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAudioSubTab('system');
+                    setActiveTab('sound_effects');
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === 'sound_effects'
+                      ? 'bg-primary text-white shadow-sm ring-1 ring-primary/40'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <LuVolume2 size={16} />
+                  <span>1. System Chimes & Alerts</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAudioSubTab('pos');
+                    setActiveTab('pos_sound');
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === 'pos_sound'
+                      ? 'bg-primary text-white shadow-sm ring-1 ring-primary/40'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <LuKeyboard size={16} />
+                  <span>2. POS & System Audio Chimes</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    activeTab === 'pos_sound' ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
+                  }`}>
+                    POS Mode
+                  </span>
+                </button>
+              </div>
+
+              {/* ── SUB-TAB 1: SYSTEM & BILLING AUDIO CHIMES ── */}
+              {activeTab === 'sound_effects' && (
+                <div className="space-y-6">
+                  {/* Header Card (Head Option) */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-2xl shrink-0">
+                          <LuVolume2 />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                            {isRTL ? "سسٹم اور بلنگ آڈیو اثرات" : "System & Billing Audio Chimes"}
+                          </h2>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            {isRTL ? "سیلز انوائس بنانے، اسکیننگ اور الرٹس کے دوران کیشیئرز کے لیے آڈیو فیڈ بیک۔" : "Interactive sound feedback for cashiers during sales invoice creation, scanning, and alerts."}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Per-User Master Sound Switch (Head Option) */}
+                      <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          {isRTL ? (soundEnabled ? 'آڈیو فعال ہے' : 'آڈیو میوٹ ہے') : (soundEnabled ? 'Audio Active' : 'Audio Muted')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSound(!soundEnabled)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                            soundEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                              soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                        {isRTL ? "POS اور سسٹم آڈیو اثرات" : "POS & System Audio Chimes"}
-                      </h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {isRTL ? "سیلز انوائس بنانے، اسکیننگ اور الرٹس کے دوران کیشیئرز کے لیے آڈیو فیڈ بیک۔" : "Interactive sound feedback for cashiers during sales invoice creation, scanning, and alerts."}
+
+                    {/* Per-User Station Info Banner */}
+                    <div className="mt-5 p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-xs text-blue-800 dark:text-blue-300 flex items-center gap-2.5">
+                      <LuSparkles className="text-base shrink-0" />
+                      <div>
+                        <strong>User-Isolated Preference:</strong> Sound effects are saved strictly for your user profile (
+                        <code>{userEmail || 'current_user'}</code>) on this browser workstation. Turning sound off here will not mute sounds for any other cashier.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sound Preview & Customization Cards - HIDDEN IF DISABLED */}
+                  {soundEnabled ? (
+                    <div className="space-y-3.5 animate-fadeIn">
+                      {SOUND_CATEGORIES.map((cat) => {
+                        const visualConfig = {
+                          notification: {
+                            icon: <LuBell />,
+                            accentColorClass: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600',
+                            btnBgClass: 'bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40',
+                            btnTextClass: 'text-indigo-700 dark:text-indigo-300',
+                          },
+                          success: {
+                            icon: <LuCheckCircle2 />,
+                            accentColorClass: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600',
+                            btnBgClass: 'bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40',
+                            btnTextClass: 'text-emerald-700 dark:text-emerald-300',
+                          },
+                          scan: {
+                            icon: <LuSparkles />,
+                            accentColorClass: 'bg-sky-50 dark:bg-sky-950/40 text-sky-600',
+                            btnBgClass: 'bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/40',
+                            btnTextClass: 'text-sky-700 dark:text-sky-300',
+                          },
+                          warning: {
+                            icon: <LuAlertTriangle />,
+                            accentColorClass: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600',
+                            btnBgClass: 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40',
+                            btnTextClass: 'text-amber-700 dark:text-amber-300',
+                          },
+                          delete: {
+                            icon: <LuXCircle />,
+                            accentColorClass: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600',
+                            btnBgClass: 'bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40',
+                            btnTextClass: 'text-rose-700 dark:text-rose-300',
+                          },
+                        }[cat.id] || {
+                          icon: <LuVolume2 />,
+                          accentColorClass: 'bg-slate-100 text-slate-600',
+                          btnBgClass: 'bg-slate-100',
+                          btnTextClass: 'text-slate-700',
+                        };
+
+                        return (
+                          <SoundToneCard
+                            key={cat.id}
+                            category={cat}
+                            userEmail={userEmail}
+                            icon={visualConfig.icon}
+                            accentColorClass={visualConfig.accentColorClass}
+                            btnBgClass={visualConfig.btnBgClass}
+                            btnTextClass={visualConfig.btnTextClass}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-3 animate-fadeIn">
+                      <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 mx-auto flex items-center justify-center text-2xl">
+                        <LuVolumeX size={28} />
+                      </div>
+                      <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">System Audio Feedback Muted</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                        Chimes for barcode scans, invoice printing, and notifications are currently disabled. Turn on the head audio switch above to customize and test individual tones.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSound(true)}
+                        className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-md hover:opacity-90 transition cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <LuVolume2 size={14} />
+                        <span>Enable Audio Chimes</span>
+                      </button>
                     </div>
-                  </div>
-
-                  {/* Per-User Master Sound Switch */}
-                  <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {isRTL ? (soundEnabled ? 'آڈیو فعال ہے' : 'آڈیو میوٹ ہے') : (soundEnabled ? 'Audio Active' : 'Audio Muted')}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleSound(!soundEnabled)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        soundEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                          soundEnabled ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
+                  )}
                 </div>
+              )}
 
-                {/* Per-User Station Info Banner */}
-                <div className="mt-5 p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-xs text-blue-800 dark:text-blue-300 flex items-center gap-2.5">
-                  <LuSparkles className="text-base shrink-0" />
-                  <div>
-                    <strong>User-Isolated Preference:</strong> Sound effects are saved strictly for your user profile (
-                    <code>{userEmail || 'current_user'}</code>) on this browser workstation. Turning sound off here will not mute sounds for any other cashier.
-                  </div>
-                </div>
-              </div>
-
-              {/* Sound Preview & Customization Cards - Elegant Full-Width Rows */}
-              <div className="space-y-3.5">
-                {SOUND_CATEGORIES.map((cat) => {
-                  const visualConfig = {
-                    notification: {
-                      icon: <LuBell />,
-                      accentColorClass: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600',
-                      btnBgClass: 'bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40',
-                      btnTextClass: 'text-indigo-700 dark:text-indigo-300',
-                    },
-                    success: {
-                      icon: <LuCheckCircle2 />,
-                      accentColorClass: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600',
-                      btnBgClass: 'bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40',
-                      btnTextClass: 'text-emerald-700 dark:text-emerald-300',
-                    },
-                    scan: {
-                      icon: <LuSparkles />,
-                      accentColorClass: 'bg-sky-50 dark:bg-sky-950/40 text-sky-600',
-                      btnBgClass: 'bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/40',
-                      btnTextClass: 'text-sky-700 dark:text-sky-300',
-                    },
-                    warning: {
-                      icon: <LuAlertTriangle />,
-                      accentColorClass: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600',
-                      btnBgClass: 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40',
-                      btnTextClass: 'text-amber-700 dark:text-amber-300',
-                    },
-                    delete: {
-                      icon: <LuXCircle />,
-                      accentColorClass: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600',
-                      btnBgClass: 'bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40',
-                      btnTextClass: 'text-rose-700 dark:text-rose-300',
-                    },
-                  }[cat.id] || {
-                    icon: <LuVolume2 />,
-                    accentColorClass: 'bg-slate-100 text-slate-600',
-                    btnBgClass: 'bg-slate-100',
-                    btnTextClass: 'text-slate-700',
-                  };
-
-                  return (
-                    <SoundToneCard
-                      key={cat.id}
-                      category={cat}
-                      userEmail={userEmail}
-                      icon={visualConfig.icon}
-                      accentColorClass={visualConfig.accentColorClass}
-                      btnBgClass={visualConfig.btnBgClass}
-                      btnTextClass={visualConfig.btnTextClass}
-                    />
-                  );
-                })}
-              </div>
+              {/* ── SUB-TAB 2: POS KEYPAD & PIN SOUNDS (HEAD OPTION + CONDITIONAL VISIBILITY) ── */}
+              {activeTab === 'pos_sound' && (
+                <POSSoundSettingsTab isRTL={isRTL} accentColorClass="text-primary" />
+              )}
             </div>
           )}
 

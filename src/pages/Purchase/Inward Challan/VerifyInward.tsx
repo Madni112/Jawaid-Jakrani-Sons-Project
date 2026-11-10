@@ -6,7 +6,7 @@ import Spinner from '../../../ui/Spinner';
 import { MdCheckCircle, MdArrowBack } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
 
-const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly }: { inwardId?: string, locationFilter?: string, onSuccess?: () => void, onCancel?: () => void, readonly?: boolean }) => {
+const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly, isEditMode }: { inwardId?: string, locationFilter?: string, onSuccess?: () => void, onCancel?: () => void, readonly?: boolean, isEditMode?: boolean }) => {
   const params = useParams();
   const idToUse = inwardId || params.id;
   const navigate = useNavigate();
@@ -26,15 +26,34 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
   const fetchChallanData = async () => {
     setLoading(true);
     try {
-      // Fetch Header
-      const { data: grnData, error: grnError } = await supabase
-        .from('grn_receipts')
-        .select('*')
-        .eq('id', idToUse)
-        .single();
+      // Fetch Header & Purchases in parallel
+      const [ { data: grnData, error: grnError }, { data: purchasesData } ] = await Promise.all([
+        supabase.from('grn_receipts').select('*').eq('id', idToUse).single(),
+        supabase.from('supplier_purchases').select('id, purchase_no, bill_no, metadata, created_at')
+      ]);
 
       if (grnError) throw grnError;
-      setChallan(grnData);
+
+      const linkedPur = (purchasesData || []).find((p: any) =>
+        p.metadata?.grn_id === idToUse ||
+        (Array.isArray(p.metadata?.grn_ids) && p.metadata.grn_ids.includes(idToUse)) ||
+        (p.purchase_no && grnData?.grn_no && String(grnData.grn_no).includes(String(p.purchase_no)))
+      );
+
+      const resolvedPurchaseNo = linkedPur?.purchase_no
+        ? (String(linkedPur.purchase_no).toUpperCase().startsWith('PUR-')
+            ? String(linkedPur.purchase_no).toUpperCase()
+            : `PUR-${linkedPur.purchase_no}`)
+        : (grnData?.grn_no ? `PUR-${grnData.grn_no.replace(/^GRN-/, '')}` : 'PUR-01');
+
+      const resolvedChallanNo = grnData?.challan_no || (grnData?.grn_no ? `IC-${grnData.grn_no.replace(/^GRN-/, '')}` : 'IC-01');
+
+      setChallan({
+        ...grnData,
+        purchase_no: resolvedPurchaseNo,
+        challan_no: resolvedChallanNo,
+        linked_purchase: linkedPur
+      });
 
       // Fetch Items
       const { data: itemsData, error: itemsError } = await supabase
@@ -60,19 +79,22 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
         const totalQty = Number(item.qty || 0);
         const prevAccepted = Number(item.accepted_qty || 0);
         const prevRejected = Number(item.rejected_qty || 0);
-        const remainingHold = item.accepted_qty == null 
+        const prevHold = Number(item.hold_qty ?? (item.accepted_qty == null ? totalQty : Math.max(0, totalQty - prevAccepted - prevRejected)));
+        
+        const remainingHold = isEditMode 
           ? totalQty 
-          : Math.max(0, Number((totalQty - prevAccepted - prevRejected).toFixed(3)));
+          : (item.accepted_qty == null ? totalQty : Math.max(0, Number((totalQty - prevAccepted - prevRejected).toFixed(3))));
 
         return {
           ...item,
           totalQty,
           prevAccepted,
           prevRejected,
+          prevHold,
           remainingHold,
-          receiveNow: remainingHold, // Default to receiving whatever is pending on hold
-          rejectNow: 0,
-          newHold: 0,
+          receiveNow: isEditMode ? prevAccepted : remainingHold,
+          rejectNow: isEditMode ? prevRejected : 0,
+          newHold: isEditMode ? prevHold : 0,
           rejectReason: item.reject_reason || '',
           isTile,
           pcsPerBox
@@ -111,12 +133,14 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
     
     let val = Number(value);
     if (isNaN(val) || val < 0) val = 0;
-    const pool = Number(newItems[index].remainingHold || 0);
+    const pool = isEditMode
+      ? Number(newItems[index].totalQty || 0)
+      : Number(newItems[index].remainingHold || 0);
     if (val > pool) val = pool;
 
     newItems[index][field] = val;
 
-    // 3-way dynamic auto-balance so receiveNow + newHold + rejectNow = remainingHold
+    // 3-way dynamic auto-balance so receiveNow + newHold + rejectNow = pool
     if (field === 'receiveNow') {
       const remAfterRec = Math.max(0, Number((pool - val).toFixed(3)));
       if (Number(newItems[index].rejectNow || 0) > remAfterRec) {
@@ -152,14 +176,21 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
       toast.error('Please provide a reason for all rejected items.');
       return;
     }
-    if (!window.confirm('Are you sure you want to confirm this Inward Challan? Stock will be updated.')) return;
+    const confirmMsg = isEditMode
+      ? 'Are you sure you want to save these stock adjustments? Physical inventory will be recalculated.'
+      : 'Are you sure you want to confirm this Inward Challan? Stock will be updated.';
+    if (!window.confirm(confirmMsg)) return;
 
     setSubmitting(true);
     try {
-      // 1. Update Items in DB with cumulative totals
+      // 1. Update Items in DB with cumulative totals or direct values on edit
       for (const item of items) {
-        const finalAccepted = Number((Number(item.prevAccepted || 0) + Number(item.receiveNow || 0)).toFixed(3));
-        const finalRejected = Number((Number(item.prevRejected || 0) + Number(item.rejectNow || 0)).toFixed(3));
+        const finalAccepted = isEditMode
+          ? Number(Number(item.receiveNow || 0).toFixed(3))
+          : Number((Number(item.prevAccepted || 0) + Number(item.receiveNow || 0)).toFixed(3));
+        const finalRejected = isEditMode
+          ? Number(Number(item.rejectNow || 0).toFixed(3))
+          : Number((Number(item.prevRejected || 0) + Number(item.rejectNow || 0)).toFixed(3));
         const finalHold = Math.max(0, Number((Number(item.totalQty || 0) - finalAccepted - finalRejected).toFixed(3)));
 
         await supabase
@@ -173,12 +204,16 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
           .eq('id', item.id);
       }
 
-      // 3. Update GRN Header
+      // 2. Update GRN Header
       const updatedAllItems = allItems.map(original => {
         const updated = items.find(i => i.id === original.id);
         if (updated) {
-          const finalAccepted = Number((Number(updated.prevAccepted || 0) + Number(updated.receiveNow || 0)).toFixed(3));
-          const finalRejected = Number((Number(updated.prevRejected || 0) + Number(updated.rejectNow || 0)).toFixed(3));
+          const finalAccepted = isEditMode
+            ? Number(Number(updated.receiveNow || 0).toFixed(3))
+            : Number((Number(updated.prevAccepted || 0) + Number(updated.receiveNow || 0)).toFixed(3));
+          const finalRejected = isEditMode
+            ? Number(Number(updated.rejectNow || 0).toFixed(3))
+            : Number((Number(updated.prevRejected || 0) + Number(updated.rejectNow || 0)).toFixed(3));
           const finalHold = Math.max(0, Number((Number(updated.totalQty || 0) - finalAccepted - finalRejected).toFixed(3)));
           return {
             finalAccepted,
@@ -201,17 +236,19 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
         }
       });
 
-      const allItemsCompleted = updatedAllItems.every(i => i.finalHold === 0);
+      const hasPendingHold = updatedAllItems.some(i => Number(i.finalHold) > 0);
       const allRejected = updatedAllItems.every(i => i.finalAccepted === 0 && i.finalRejected >= i.qty);
       const hasRejections = updatedAllItems.some(i => i.finalRejected > 0);
 
-      let newStatus = 'Partially Received';
-      if (allItemsCompleted) {
-        if (allRejected) newStatus = 'Rejected';
-        else if (hasRejections) newStatus = 'Partially Received';
-        else newStatus = 'Confirm';
-      } else {
+      let newStatus = 'Confirm';
+      if (hasPendingHold) {
+        newStatus = 'Pending Inward';
+      } else if (allRejected) {
+        newStatus = 'Rejected';
+      } else if (hasRejections) {
         newStatus = 'Partially Received';
+      } else {
+        newStatus = 'Confirm';
       }
 
       const { error: grnError } = await supabase
@@ -221,7 +258,11 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
 
       if (grnError) throw grnError;
 
-      toast.success(`Inward Challan Verified Successfully! Status: ${newStatus}`);
+      const toastMessage = hasPendingHold
+        ? `Inward Challan updated! Items with hold moved back to Active Queue.`
+        : `Inward Challan updated successfully! Status: ${newStatus}`;
+      toast.success(toastMessage);
+
       if (onSuccess) onSuccess();
       else navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Inward-Challan/List`);
     } catch (err: any) {
@@ -251,7 +292,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
             <MdCheckCircle className="text-emerald-600" size={24} />
-            {readonly ? 'View Stock Receipt Details' : 'Receive Inward Stock (Incremental)'}
+            {readonly ? 'View Inward Challan Details' : (isEditMode ? 'Edit Inward Challan & QC Adjustments' : 'Receive Inward Stock (Incremental)')}
           </h2>
           <button
             onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Inward-Challan/List`)}
@@ -264,18 +305,26 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
 
       <div className={inwardId ? '' : 'rounded-2xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6'}>
         {/* Header Info */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 pb-6 border-b border-stroke dark:border-strokedark">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8 pb-6 border-b border-stroke dark:border-strokedark">
           <div>
-            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1">Purchase #</p>
-            <p className="text-lg font-mono font-bold text-black dark:text-white">{challan.purchase_no || challan.grn_no}</p>
+            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1 text-[11px]">Purchase #</p>
+            <p className="text-lg font-mono font-bold text-primary">{challan.purchase_no || 'PUR-01'}</p>
+            <span className="text-[11px] font-mono text-gray-500 block mt-0.5">GRN: {challan.grn_no}</span>
           </div>
           <div>
-            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1">Vendor Name</p>
-            <p className="text-sm font-bold text-black dark:text-white">{challan.vendor_name}</p>
+            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1 text-[11px]">Inward Challan #</p>
+            <p className="text-lg font-mono font-bold text-black dark:text-white">{challan.challan_no || (challan.grn_no ? challan.grn_no.replace(/^GRN-/, 'IC-') : 'IC-01')}</p>
+            <span className="inline-flex rounded py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60 mt-0.5">
+              {challan.status === 'Confirm' ? 'Verified & Received' : (challan.status || 'Received')}
+            </span>
           </div>
           <div>
-            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1">Expected Receipt Date</p>
-            <p className="text-sm font-bold text-black dark:text-white">{challan.receipt_date}</p>
+            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1 text-[11px]">Vendor Name</p>
+            <p className="text-sm font-bold text-black dark:text-white">{challan.vendor_name || '—'}</p>
+          </div>
+          <div>
+            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1 text-[11px]">Receipt Date</p>
+            <p className="text-sm font-bold text-black dark:text-white">{challan.receipt_date || '—'}</p>
           </div>
         </div>
 
@@ -283,8 +332,14 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-sm text-black dark:text-white">Inspection & Receiving Checklist</h3>
           {!readonly && (
-            <span className="text-[11px] text-gray-500 bg-slate-100 dark:bg-meta-4 px-2.5 py-1 rounded-md">
-              ⚡ Incremental Mode: Enter newly arrived stock to add to previous receipts
+            <span className={`text-[11px] px-2.5 py-1 rounded-md ${
+              isEditMode 
+                ? 'text-amber-800 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold'
+                : 'text-gray-500 bg-slate-100 dark:bg-meta-4'
+            }`}>
+              {isEditMode 
+                ? '⚡ History Adjustment Mode: Modify Accepted, Hold, or Rejected quantities. Stock will auto-sync.'
+                : '⚡ Incremental Mode: Enter newly arrived stock to add to previous receipts'}
             </span>
           )}
         </div>
@@ -305,10 +360,18 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
                   </>
                 ) : (
                   <>
-                    <th className="py-3 px-3 border-b border-stroke dark:border-strokedark text-center text-emerald-700 dark:text-emerald-400">Previously Received</th>
-                    <th className="py-3 px-3 border-b border-stroke dark:border-strokedark text-center text-emerald-600 dark:text-emerald-400 min-w-[140px]">Receive Now</th>
-                    <th className="py-3 px-3 border-b border-stroke dark:border-strokedark text-center text-amber-600 dark:text-amber-400 min-w-[140px]">Still On Hold (Pending)</th>
-                    <th className="py-3 px-3 border-b border-stroke dark:border-strokedark text-center text-rose-600 dark:text-rose-400 min-w-[140px]">Reject Now</th>
+                    <th className="py-3 px-3 border-b border-stroke dark:border-strokedark text-center text-emerald-700 dark:text-emerald-400">
+                      {isEditMode ? 'Original Accepted' : 'Previously Received'}
+                    </th>
+                    <th className="py-3 px-3 border-b border-stroke dark:border-strokedark text-center text-emerald-600 dark:text-emerald-400 min-w-[140px]">
+                      {isEditMode ? 'Accepted Qty' : 'Receive Now'}
+                    </th>
+                    <th className="py-3 px-3 border-b border-stroke dark:border-strokedark text-center text-amber-600 dark:text-amber-400 min-w-[140px]">
+                      {isEditMode ? 'On Hold (Quarantine)' : 'Still On Hold (Pending)'}
+                    </th>
+                    <th className="py-3 px-3 border-b border-stroke dark:border-strokedark text-center text-rose-600 dark:text-rose-400 min-w-[140px]">
+                      {isEditMode ? 'Rejected Qty' : 'Reject Now'}
+                    </th>
                     <th className="py-3 px-3 border-b border-stroke dark:border-strokedark min-w-[130px]">Reject Reason</th>
                   </>
                 )}
@@ -627,7 +690,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
               className="flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2 font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50 shadow-sm cursor-pointer"
             >
               {submitting ? <Spinner /> : <MdCheckCircle size={16} />}
-              Confirm Inward Verification
+              {isEditMode ? 'Save & Apply Adjustments' : 'Confirm Inward Verification'}
             </button>
           )}
         </div>

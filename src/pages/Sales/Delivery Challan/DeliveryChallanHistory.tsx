@@ -6,7 +6,10 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
 import { useAuth } from '../../../Context/Auth';
+import { useModal } from '../../../Context/Modal';
 import { FiCheckCircle, FiTruck, FiX, FiClock, FiPlusCircle, FiAlertCircle, FiPrinter, FiCalendar } from 'react-icons/fi';
+import { MdHistory, MdAssignmentReturn } from 'react-icons/md';
+import DeliveryChallanProcessedHistory from './DeliveryChallanProcessedHistory';
 
 // Helper to get exact date in Pakistan Time (YYYY-MM-DD)
 const getPakistanDate = () => {
@@ -22,7 +25,10 @@ import { logActivity } from '../../../service/auditLogger';
 const DeliveryChallanHistory = () => {
   const navigate = useNavigate();
   const { tenantId, userLocationName, user } = useAuth();
+  const { showModal, hideModal } = useModal();
+  const [activeTab, setActiveTab] = useState<'SALES' | 'PURCHASE_RETURNS'>('SALES');
   const [challans, setChallans] = useState<any[]>([]);
+  const [purchaseReturns, setPurchaseReturns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [productsMaster, setProductsMaster] = useState<any[]>([]);
 
@@ -50,6 +56,7 @@ const DeliveryChallanHistory = () => {
 
   useEffect(() => {
     fetchChallans();
+    fetchPurchaseReturns();
     fetchTransportList();
     fetchProducts();
   }, []);
@@ -111,6 +118,20 @@ const DeliveryChallanHistory = () => {
     }
   };
 
+  const fetchPurchaseReturns = async () => {
+    try {
+      let query = supabase.from('purchase_returns').select('*').order('created_at', { ascending: false });
+      if (userLocationName) {
+        query = query.or(`source_warehouse.eq.${userLocationName},warehouse_name.eq.${userLocationName}`);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      setPurchaseReturns(data || []);
+    } catch (err: any) {
+      console.error('Failed to load purchase returns:', err);
+    }
+  };
+
   const handleDelete = async (id: string | number) => {
     if (window.confirm('Are you completely sure you want to delete this delivery challan? This cannot be undone.')) {
       try {
@@ -149,6 +170,27 @@ const DeliveryChallanHistory = () => {
       console.error('Failed to mark as printed', err);
     }
     navigate(`${tenantId ? `/${tenantId}` : ''}/Delivery-Challan/Print/${challan.id}`);
+  };
+
+  const openProcessedHistoryModal = () => {
+    showModal(
+      <DeliveryChallanProcessedHistory
+        locationFilter={userLocationName}
+        isPurchaseReturn={activeTab === 'PURCHASE_RETURNS'}
+        onPrint={(rec) => {
+          hideModal();
+          if (activeTab === 'PURCHASE_RETURNS') {
+            navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Print/${rec.id}`);
+          } else {
+            handlePrintClick(rec);
+          }
+        }}
+        onClose={() => hideModal()}
+      />,
+      activeTab === 'PURCHASE_RETURNS' ? "Processed Purchase Return Outwards" : "Processed Delivery Challans & Gate Passes",
+      undefined,
+      "max-w-5xl"
+    );
   };
 
   // Open the Approval Popup Modal
@@ -504,16 +546,34 @@ const DeliveryChallanHistory = () => {
     }
   }, [filteredChallans, productsMaster]);
 
-  // Pagination bounds based on grouped invoices
-  const totalEntries = groupedInvoices.length;
-  const totalPages = Math.ceil(totalEntries / pageSize);
+  // Live filter purchase returns
+  const filteredPurchaseReturns = React.useMemo(() => {
+    return purchaseReturns.filter(pr => {
+      const q = searchTerm.toLowerCase();
+      const matchesGeneral =
+        String(pr.return_no || '').toLowerCase().includes(q) ||
+        String(pr.vendor_name || '').toLowerCase().includes(q) ||
+        String(pr.purchase_no || '').toLowerCase().includes(q) ||
+        String(pr.source_warehouse || pr.warehouse_name || '').toLowerCase().includes(q);
+      const matchesItems = Array.isArray(pr.items) && pr.items.some((it: any) =>
+        String(it.itemName || it.product_name || '').toLowerCase().includes(q)
+      );
+      return matchesGeneral || matchesItems;
+    });
+  }, [purchaseReturns, searchTerm]);
+
+  // Pagination bounds based on active tab
+  const isSalesTab = activeTab === 'SALES';
+  const totalEntries = isSalesTab ? groupedInvoices.length : filteredPurchaseReturns.length;
+  const totalPages = Math.ceil(totalEntries / pageSize) || 1;
   const startIndex = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalEntries);
   const paginatedInvoices = groupedInvoices.slice(startIndex, startIndex + pageSize);
+  const paginatedPurchaseReturns = filteredPurchaseReturns.slice(startIndex, startIndex + pageSize);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, pageSize]);
+  }, [searchTerm, pageSize, activeTab]);
 
   return (
     <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 relative">
@@ -878,11 +938,63 @@ const DeliveryChallanHistory = () => {
       )}
 
       {/* Top Header Controls row */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
         <div className="flex-1">
-          <h4 className="text-xl font-semibold text-black dark:text-white">Delivery Challan / Gate Pass Registry</h4>
+          <h4 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
+            <FiTruck size={24} className="text-primary" />
+            Delivery Challan / Gate Pass Registry
+          </h4>
           <p className="text-xs text-gray-500 mt-0.5">Authorize, dispatch, and track warehouse goods gate-pass fulfillment</p>
         </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={openProcessedHistoryModal}
+            className="flex items-center justify-center gap-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-meta-4 dark:hover:bg-meta-4/80 px-4 py-2 text-sm font-bold text-gray-700 dark:text-gray-300 transition w-full sm:w-auto cursor-pointer shadow-xs"
+          >
+            <MdHistory size={18} />
+            {activeTab === 'PURCHASE_RETURNS' ? 'Return History' : 'Processed History'}
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark mb-5">
+        <button
+          type="button"
+          onClick={() => { setActiveTab('SALES'); setCurrentPage(1); }}
+          className={`pb-3 px-4 text-xs font-black uppercase tracking-wider transition border-b-2 flex items-center gap-2 cursor-pointer ${
+            activeTab === 'SALES'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-500 hover:text-black dark:hover:text-white'
+          }`}
+        >
+          <FiTruck size={16} />
+          Customer Deliveries (Sales DC)
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            activeTab === 'SALES' ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-meta-4 text-slate-500'
+          }`}>
+            {groupedInvoices.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setActiveTab('PURCHASE_RETURNS'); setCurrentPage(1); }}
+          className={`pb-3 px-4 text-xs font-black uppercase tracking-wider transition border-b-2 flex items-center gap-2 cursor-pointer ${
+            activeTab === 'PURCHASE_RETURNS'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-500 hover:text-black dark:hover:text-white'
+          }`}
+        >
+          <MdAssignmentReturn size={16} />
+          Purchase Returns (Supplier Outward)
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            purchaseReturns.length > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 dark:bg-meta-4 text-slate-500'
+          }`}>
+            {purchaseReturns.length}
+          </span>
+        </button>
       </div>
 
       {/* Datatable Filters Wrapper */}
@@ -898,7 +1010,7 @@ const DeliveryChallanHistory = () => {
               <option key={size} value={size} className="dark:bg-boxdark">{size}</option>
             ))}
           </select>
-          <span>invoices</span>
+          <span>{activeTab === 'PURCHASE_RETURNS' ? 'returns' : 'invoices'}</span>
         </div>
 
         <div className="flex items-center gap-2 text-sm w-full sm:w-auto text-gray-500 dark:text-gray-400">
@@ -907,14 +1019,104 @@ const DeliveryChallanHistory = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search invoice, customer, challan..."
+            placeholder={activeTab === 'PURCHASE_RETURNS' ? "Search vendor, return #, item..." : "Search invoice, customer, challan..."}
             className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none focus:border-primary text-sm text-black dark:text-white"
           />
         </div>
       </div>
 
-      {/* Core Table Layout: Grouped by Invoice with Nested Sub-Challan Entries */}
-      <div className="space-y-4">
+      {activeTab === 'PURCHASE_RETURNS' ? (
+        <div className="rounded-2xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6 overflow-hidden">
+          <div className="max-w-full overflow-x-auto">
+            <table className="w-full table-auto border-collapse text-left">
+              <thead>
+                <tr className="bg-slate-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider border-b border-stroke text-slate-700 dark:text-white">
+                  <th className="py-3.5 px-4 whitespace-nowrap">Debit Note / Return #</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">Date</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">Vendor / Supplier</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">Items Summary</th>
+                  <th className="py-3.5 px-4 text-center whitespace-nowrap">Dispatch Warehouse</th>
+                  <th className="py-3.5 px-4 text-center whitespace-nowrap">Return Amount</th>
+                  <th className="py-3.5 px-4 text-center whitespace-nowrap">Status</th>
+                  <th className="py-3.5 px-4 text-center w-28 whitespace-nowrap">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={8} className="text-center py-12"><Spinner /></td></tr>
+                ) : paginatedPurchaseReturns.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-12 text-slate-500 font-bold italic">
+                      No purchase returns logged for outward dispatch.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedPurchaseReturns.map((ret) => {
+                    const items = Array.isArray(ret.items) ? ret.items : [];
+                    return (
+                      <tr key={ret.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white">
+                        <td className="py-3 px-4 font-bold font-mono whitespace-nowrap">
+                          <span className="text-primary">{ret.return_no || `PR-${ret.id}`}</span>
+                          {ret.purchase_no && (
+                            <div className="text-[10px] text-gray-400 font-normal">Pur #{ret.purchase_no}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-gray-500 whitespace-nowrap">
+                          {ret.return_date || String(ret.created_at || '').substring(0, 10)}
+                        </td>
+                        <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">
+                          {ret.vendor_name}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-0.5 max-w-[260px]">
+                            {items.map((it: any, idx: number) => (
+                              <div key={idx} className="text-[10px] text-slate-700 dark:text-slate-200">
+                                <span className="font-bold">{it.itemName || it.product_name}</span>
+                                <span className="ml-1 text-primary font-mono font-bold">
+                                  ({it.qty} {it.uom || 'Nos'})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <span className="inline-flex rounded-md py-0.5 px-2 text-[10px] font-black uppercase tracking-wide bg-slate-100 dark:bg-meta-4 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-600">
+                            {ret.source_warehouse || ret.warehouse_name || '—'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">
+                          Rs. {Number(ret.total_amount || 0).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <span className={`inline-flex rounded-md py-0.5 px-2.5 text-[9px] font-black uppercase tracking-wide ${
+                            ret.status === 'Refunded' || ret.status === 'Dispatched'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-amber-100 text-amber-800 border border-amber-300'
+                          }`}>
+                            {ret.status || 'Pending Outward'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Print/${ret.id}`)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-bold transition shadow-sm cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 mx-auto"
+                          >
+                            <FiPrinter size={13} />
+                            Gate Pass
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* Core Table Layout: Grouped by Invoice with Nested Sub-Challan Entries */
+        <div className="space-y-4">
         {loading ? (
           <div className="py-12 text-center bg-white dark:bg-boxdark rounded-xl border border-stroke"><Spinner /></div>
         ) : paginatedInvoices.length === 0 ? (
@@ -1161,6 +1363,7 @@ const DeliveryChallanHistory = () => {
           })()
         )}
       </div>
+      )}
 
       {/* Footer statistics logic pagination arrays mapping */}
       <TablePagination
@@ -1170,7 +1373,7 @@ const DeliveryChallanHistory = () => {
           startIndex={startIndex}
           endIndex={endIndex}
           onPageChange={setCurrentPage}
-          itemName="entries"
+          itemName={activeTab === 'PURCHASE_RETURNS' ? 'returns' : 'invoices'}
         />
       {/* VIEW HOLD SUMMARY MODAL */}
       {viewHoldModalData && (

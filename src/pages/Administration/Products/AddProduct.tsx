@@ -507,10 +507,16 @@ const AddProduct = () => {
               }
 
               if (isEditMode) {
-                const { error } = await supabase
+                let { error } = await supabase
                   .from('products')
                   .update(databasePayload)
                   .eq('id', editData.id);
+
+                if (error && (error.message?.includes('allow_loose_sales') || error.code === '42703' || error.message?.includes('schema cache'))) {
+                  const { allow_loose_sales, loose_uom, loose_conversion_ratio, loose_purchase_price, loose_sale_price, ...cleanPayload } = databasePayload;
+                  const retry = await supabase.from('products').update(cleanPayload).eq('id', editData.id);
+                  error = retry.error;
+                }
 
                 if (error) throw error;
 
@@ -530,9 +536,15 @@ const AddProduct = () => {
 
                 toast.success('Product updated successfully!');
               } else {
-                const { error } = await supabase
+                let { error } = await supabase
                   .from('products')
                   .insert([databasePayload]);
+
+                if (error && (error.message?.includes('allow_loose_sales') || error.code === '42703' || error.message?.includes('schema cache'))) {
+                  const { allow_loose_sales, loose_uom, loose_conversion_ratio, loose_purchase_price, loose_sale_price, ...cleanPayload } = databasePayload;
+                  const retry = await supabase.from('products').insert([cleanPayload]);
+                  error = retry.error;
+                }
 
                 if (error) throw error;
 

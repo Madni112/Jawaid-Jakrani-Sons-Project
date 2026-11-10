@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../Context/supabaseClient';
-import { MdVisibility } from 'react-icons/md';
+import { MdVisibility, MdEdit } from 'react-icons/md';
 import Spinner from '../../../ui/Spinner';
 
 interface InwardChallanHistoryProps {
   onView: (id: string) => void;
+  onEdit?: (id: string) => void;
   locationFilter?: string;
 }
 
-const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, locationFilter }) => {
+const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, onEdit, locationFilter }) => {
   const [challans, setChallans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,30 +21,52 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, loc
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const [ { data: grns, error }, { data: purchases } ] = await Promise.all([
-        supabase.from('grn_receipts').select('*, grn_items(*)').neq('status', 'Pending Inward').order('created_at', { ascending: false }),
-        supabase.from('supplier_purchases').select('purchase_no, metadata')
+      const [ receiptsRes, itemsRes, { data: purchases } ] = await Promise.all([
+        supabase.from('grn_receipts').select('*').neq('status', 'Pending Inward').order('created_at', { ascending: false }),
+        supabase.from('grn_items').select('*'),
+        supabase.from('supplier_purchases').select('id, purchase_no, metadata')
       ]);
       
-      if (error) throw error;
+      if (receiptsRes.error) throw receiptsRes.error;
 
-      let filteredGrns = grns || [];
+      const itemsByGrn: Record<string, any[]> = {};
+      (itemsRes.data || []).forEach((it: any) => {
+        const gId = String(it.grn_id || '');
+        if (!itemsByGrn[gId]) itemsByGrn[gId] = [];
+        itemsByGrn[gId].push(it);
+      });
+
+      const combinedGrns = (receiptsRes.data || []).map((g: any) => ({
+        ...g,
+        grn_items: itemsByGrn[String(g.id)] || []
+      }));
+
+      const mapped = combinedGrns.map((g: any) => {
+        const pur = (purchases || []).find((p: any) =>
+          p.metadata?.grn_id === g.id ||
+          (Array.isArray(p.metadata?.grn_ids) && p.metadata.grn_ids.includes(g.id))
+        );
+        const resolvedChallanNo = g.challan_no || (g.grn_no ? g.grn_no.replace(/^GRN-/, 'IC-') : 'IC-01');
+        return { 
+          ...g, 
+          purchase_no: pur?.purchase_no || '',
+          challan_no: resolvedChallanNo
+        };
+      });
+
+      let filteredGrns = mapped;
       if (locationFilter && locationFilter !== 'ALL') {
-        filteredGrns = filteredGrns.filter(g => {
+        filteredGrns = filteredGrns.filter((g: any) => {
           const items = g.grn_items || [];
+          if (items.length === 0) return true;
           return items.some((item: any) => {
-            const isShop = String(item.warehouse_name).toUpperCase() === 'SHOP';
+            const isShop = String(item.warehouse_name || '').toUpperCase().includes('SHOP');
             return locationFilter === 'SHOP' ? isShop : !isShop;
           });
         });
       }
 
-      const mapped = filteredGrns.map(g => {
-        const pur = (purchases || []).find(p => p.metadata?.grn_id === g.id);
-        return { ...g, purchase_no: pur?.purchase_no || '' };
-      });
-
-      setChallans(mapped);
+      setChallans(filteredGrns);
     } catch (err: any) {
       console.error('Failed to load history:', err);
     } finally {
@@ -90,13 +113,16 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, loc
                 filtered.map((rec) => (
                   <tr key={rec.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white">
                     <td className="py-3 px-4 font-bold font-mono whitespace-nowrap">
-                      {rec.purchase_no ? (
-                        <div className="flex flex-col">
-                          <span className="text-primary">PUR-{rec.purchase_no}</span>
-                        </div>
-                      ) : (
-                        <span className="text-primary">{rec.grn_no}</span>
-                      )}
+                      <div className="flex flex-col">
+                        <span className="text-primary font-bold">
+                          {rec.purchase_no 
+                            ? (String(rec.purchase_no).toUpperCase().startsWith('PUR-') ? rec.purchase_no : `PUR-${rec.purchase_no}`)
+                            : (rec.grn_no ? `PUR-${rec.grn_no.replace(/^GRN-/, '')}` : 'PUR-01')}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-normal">
+                          IC: {rec.challan_no || (rec.grn_no ? rec.grn_no.replace(/^GRN-/, 'IC-') : 'IC-01')}
+                        </span>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{rec.receipt_date}</td>
                     <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">{rec.vendor_name}</td>
@@ -110,13 +136,24 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, loc
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">
-                      <button
-                        onClick={() => onView(rec.id)}
-                        className="bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 p-1.5 rounded transition shadow-sm cursor-pointer"
-                        title="View GRN"
-                      >
-                        <MdVisibility size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => onView(rec.id)}
+                          className="bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 p-1.5 rounded transition shadow-sm cursor-pointer"
+                          title="View Inward Challan"
+                        >
+                          <MdVisibility size={16} />
+                        </button>
+                        {onEdit && (
+                          <button
+                            onClick={() => onEdit(rec.id)}
+                            className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-400 p-1.5 rounded transition shadow-sm cursor-pointer"
+                            title="Edit Quantities (Accepted / Hold / Rejected)"
+                          >
+                            <MdEdit size={16} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
