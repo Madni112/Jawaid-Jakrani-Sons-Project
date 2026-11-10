@@ -233,7 +233,13 @@ const PurchaseList = () => {
                       <button
                         onClick={() => {
                           hideModal();
-                          navigate('/Purchase/Purchases/Add', { state: { importGrnId: g.id } });
+                          navigate('/Purchase/Purchases/Add', { 
+                            state: { 
+                              importGrnId: g.id,
+                              importGrn: g,
+                              isTilePurchase: true 
+                            } 
+                          });
                         }}
                         className="px-3 py-1 bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700 transition shadow-xs text-xs whitespace-nowrap"
                       >

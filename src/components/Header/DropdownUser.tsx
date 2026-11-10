@@ -11,7 +11,9 @@ import {
   applyAccentColor,
   getSavedAccentColor,
   getContrastTextColor,
+  getSafeAccentTextColor,
   isDarkModeActive,
+  getEffectiveNavbarDesign,
 } from '../../constant/themeConfig';
 
 const DropdownUser = () => {
@@ -58,13 +60,16 @@ const DropdownUser = () => {
     : rawCompanyName;
 
   const displayRole = isRTL
-    ? (rawRole.toLowerCase().includes('retail') || rawRole.toLowerCase().includes('cloth')
-        ? 'کلوتھ ریٹیل اینڈ ہول سیل'
+    ? (rawRole.toLowerCase().includes('tile')
+        ? 'ٹائل ایمپوریم اینڈ ہول سیل'
+        : rawRole.toLowerCase().includes('retail') || rawRole.toLowerCase().includes('wholesale')
+        ? 'ٹائل ایمپوریم اینڈ ہول سیل'
         : rawRole.toLowerCase().includes('admin')
         ? 'سپر ایڈمن'
         : getUrduText(rawRole))
     : rawRole;
   const displayName = profile?.user_metadata?.full_name || profile?.user_metadata?.name || displayCompanyName;
+  const isDarkNav = getEffectiveNavbarDesign() === 'theme-2' || isDarkModeActive();
   const isLightAccent = getContrastTextColor(accentColor) === '#0F172A';
   const roleTextColor = isLightAccent && !isDarkModeActive() ? '#0F172A' : accentColor;
 
@@ -76,12 +81,12 @@ const DropdownUser = () => {
         to="#"
       >
         <span className="hidden text-right lg:block shrink-0">
-          <span className="block text-xs sm:text-sm font-bold text-black dark:text-white truncate max-w-[110px] xl:max-w-[150px]">
+          <span className={`block text-xs sm:text-sm font-bold whitespace-nowrap ${isDarkNav ? 'text-white' : 'text-slate-900 dark:text-white'}`} title={displayCompanyName}>
             {displayCompanyName}
           </span>
           <span
             className="block text-[11px] font-semibold"
-            style={{ color: roleTextColor }}
+            style={{ color: isDarkNav ? (accentColor === '#800020' ? '#FFC4C0' : getSafeAccentTextColor(accentColor, true)) : roleTextColor }}
           >
             {displayRole}
           </span>
@@ -107,7 +112,7 @@ const DropdownUser = () => {
         )}
 
         <svg
-          className="hidden fill-current sm:block shrink-0"
+          className={`hidden sm:block shrink-0 fill-current ${isDarkNav ? 'text-white/80' : 'text-slate-600 dark:text-slate-400'}`}
           width="12"
           height="8"
           viewBox="0 0 12 8"

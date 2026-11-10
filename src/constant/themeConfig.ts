@@ -317,16 +317,111 @@ export function isNHTTheme2Active(): boolean {
   return false;
 }
 
+export type NavbarLayoutMode = 'floating' | 'classic';
+
 export function getNavbarLayoutMode(): NavbarLayoutMode {
-  if (typeof window === 'undefined') return 'sticky';
-  return (localStorage.getItem('uzair_jibran_navbar_layout_mode') as NavbarLayoutMode) || 'sticky';
+  if (typeof window === 'undefined') return 'classic';
+  const saved = localStorage.getItem('zoaib_ali_navbar_layout_mode') 
+    || localStorage.getItem('nht_navbar_layout_mode')
+    || localStorage.getItem('uzair_jibran_navbar_layout_mode');
+  if (saved === 'floating' || saved === 'sticky') return 'floating';
+  if (saved === 'classic' || saved === 'normal') return 'classic';
+  return 'classic';
 }
 
 export function setNavbarLayoutMode(mode: NavbarLayoutMode) {
   if (typeof window !== 'undefined') {
+    localStorage.setItem('zoaib_ali_navbar_layout_mode', mode);
+    localStorage.setItem('nht_navbar_layout_mode', mode);
     localStorage.setItem('uzair_jibran_navbar_layout_mode', mode);
+    window.dispatchEvent(new Event('zoaib_ali_navbar_layout_changed'));
+    window.dispatchEvent(new Event('nht_navbar_layout_changed'));
     window.dispatchEvent(new Event('uzair_jibran_navbar_layout_changed'));
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENT DESIGN & ARCHITECTURE PRESETS (Theme 1 vs Theme 2 Modularity)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ComponentDesignMode = 'auto' | 'theme-1' | 'theme-2';
+export type FooterLayoutMode = 'floating' | 'classic';
+
+export function getFooterLayoutMode(): FooterLayoutMode {
+  if (typeof window === 'undefined') return 'classic';
+  const saved = localStorage.getItem('nht_footer_layout_mode') as FooterLayoutMode;
+  if (saved === 'floating' || saved === 'classic') return saved;
+  return getSidebarLayoutMode() === 'floating' ? 'floating' : 'classic';
+}
+
+export function setFooterLayoutMode(mode: FooterLayoutMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('nht_footer_layout_mode', mode);
+    window.dispatchEvent(new Event('nht_footer_settings_changed'));
+  }
+}
+
+export function getFooterDesignMode(): ComponentDesignMode {
+  if (typeof window === 'undefined') return 'auto';
+  const saved = localStorage.getItem('nht_footer_design_mode') as ComponentDesignMode;
+  if (saved === 'theme-1' || saved === 'theme-2' || saved === 'auto') return saved;
+  return 'auto';
+}
+
+export function setFooterDesignMode(mode: ComponentDesignMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('nht_footer_design_mode', mode);
+    window.dispatchEvent(new Event('nht_footer_settings_changed'));
+  }
+}
+
+export function getEffectiveFooterDesign(): 'theme-1' | 'theme-2' {
+  const mode = getFooterDesignMode();
+  if (mode === 'theme-1') return 'theme-1';
+  if (mode === 'theme-2') return 'theme-2';
+  return isNHTTheme2Active() ? 'theme-2' : 'theme-1';
+}
+
+export function getSidebarDesignMode(): ComponentDesignMode {
+  if (typeof window === 'undefined') return 'auto';
+  const saved = localStorage.getItem('nht_sidebar_design_mode') as ComponentDesignMode;
+  if (saved === 'theme-1' || saved === 'theme-2' || saved === 'auto') return saved;
+  return 'auto';
+}
+
+export function setSidebarDesignMode(mode: ComponentDesignMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('nht_sidebar_design_mode', mode);
+    window.dispatchEvent(new Event('nht_sidebar_design_changed'));
+  }
+}
+
+export function getEffectiveSidebarDesign(): 'theme-1' | 'theme-2' {
+  const mode = getSidebarDesignMode();
+  if (mode === 'theme-1') return 'theme-1';
+  if (mode === 'theme-2') return 'theme-2';
+  return isNHTTheme2Active() ? 'theme-2' : 'theme-1';
+}
+
+export function getNavbarDesignMode(): ComponentDesignMode {
+  if (typeof window === 'undefined') return 'auto';
+  const saved = localStorage.getItem('nht_navbar_design_mode') as ComponentDesignMode;
+  if (saved === 'theme-1' || saved === 'theme-2' || saved === 'auto') return saved;
+  return 'auto';
+}
+
+export function setNavbarDesignMode(mode: ComponentDesignMode) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('nht_navbar_design_mode', mode);
+    window.dispatchEvent(new Event('nht_navbar_design_changed'));
+  }
+}
+
+export function getEffectiveNavbarDesign(): 'theme-1' | 'theme-2' {
+  const mode = getNavbarDesignMode();
+  if (mode === 'theme-1') return 'theme-1';
+  if (mode === 'theme-2') return 'theme-2';
+  return isNHTTheme2Active() ? 'theme-2' : 'theme-1';
 }
 
 export function getContrastTextColor(hexColor?: string): '#FFFFFF' | '#0F172A' {

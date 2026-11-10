@@ -216,7 +216,13 @@ const GRNList = () => {
                                                 </button>
                                                 {grn.status !== 'Billed' && (
                                                     <button 
-                                                        onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Add`, { state: { importGrnId: grn.id } })}
+                                                        onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Add`, { 
+                                                            state: { 
+                                                                importGrnId: grn.id,
+                                                                importGrn: grn,
+                                                                isTilePurchase: true 
+                                                            } 
+                                                        })}
                                                         className="p-1.5 bg-purple-50 text-purple-600 rounded hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 transition"
                                                         title="Make Purchase Bill (Enter Prices)"
                                                     >

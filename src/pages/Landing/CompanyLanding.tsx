@@ -76,10 +76,10 @@ const CompanyLanding: React.FC = () => {
             <div>
               <div className="flex items-center gap-1.5 font-black text-sm sm:text-base tracking-tight leading-tight">
                 <span className="text-emerald-600 dark:text-emerald-400">AL MUHAMMADI</span>
-                <span className="text-slate-900 dark:text-white">CLOTH</span>
+                <span className="text-slate-900 dark:text-white">TILE EMPORIUM</span>
               </div>
               <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono tracking-wider uppercase font-semibold">
-                Textile & Wholesale ERP System
+                Tile Emporium & Sanitary Wholesale ERP System
               </p>
             </div>
           </div>
@@ -136,17 +136,17 @@ const CompanyLanding: React.FC = () => {
             {/* Release Badge */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 text-emerald-700 dark:text-emerald-400 text-[11px] font-mono font-bold shadow-inner">
               <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-              <span>TEXTILE ERP ECOSYSTEM • RELEASE V2.4</span>
+              <span>TILE EMPORIUM ERP ECOSYSTEM • RELEASE V2.4</span>
             </div>
 
             {/* H1 Headline */}
             <h1 className="text-3xl sm:text-5xl lg:text-[46px] font-black tracking-tight text-slate-950 dark:text-white leading-[1.15]">
-              The Operating System for Modern Textile & Cloth Enterprise.
+              The Operating System for Modern Tile & Sanitary Enterprise.
             </h1>
 
             {/* Subtitle Details */}
             <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base leading-relaxed max-w-xl">
-              Consolidate high-volume cloth distribution, multi-godown fabric inventory, computerized wholesale billing, and customer credit ledgers into a single, synchronized source of truth.
+              Consolidate high-volume tile distribution, box & piece inventory with sqm conversions, computerized wholesale billing, and customer credit ledgers into a single, synchronized source of truth.
             </p>
 
             {/* Dual Button Group (High-contrast: White on dark theme, Black on light theme) */}
@@ -294,7 +294,7 @@ const CompanyLanding: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-rose-500/80" />
                     <span className="w-2 h-2 rounded-full bg-amber-500/80" />
                     <span className="w-2 h-2 rounded-full bg-emerald-500/80" />
-                    <span className="ml-1 text-slate-300 font-bold">UJC_DAEMON</span>
+                    <span className="ml-1 text-slate-300 font-bold">AM_DAEMON</span>
                   </div>
                   <span className="text-emerald-400 font-bold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> ACTIVE
@@ -326,10 +326,10 @@ const CompanyLanding: React.FC = () => {
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs font-mono text-slate-600 dark:text-slate-400">
           <span className="text-slate-800 dark:text-slate-300 uppercase tracking-wider font-bold">ERP ARCHITECTURE —</span>
           <span className="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition">
-            <LuCheck className="text-emerald-600 dark:text-emerald-400" /> Multi-Godown Stock
+            <LuCheck className="text-emerald-600 dark:text-emerald-400" /> Multi-Warehouse Stock
           </span>
           <span className="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition">
-            <LuCheck className="text-emerald-600 dark:text-emerald-400" /> Wholesale Barcode Invoicing
+            <LuCheck className="text-emerald-600 dark:text-emerald-400" /> Wholesale Box & Pcs Invoicing
           </span>
           <span className="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition">
             <LuCheck className="text-emerald-600 dark:text-emerald-400" /> Delivery Challan Queues
@@ -354,11 +354,11 @@ const CompanyLanding: React.FC = () => {
         </div>
 
         <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-950 dark:text-white max-w-3xl mx-auto">
-          Built for High-Velocity Textile & Cloth Distribution
+          Built for High-Velocity Tile & Building Material Distribution
         </h2>
         
         <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mt-3">
-          Designed specifically for cloth merchants, wholesalers, and retail chains requiring uncompromising audit accuracy and zero operational latency.
+          Designed specifically for tile emporiums, ceramic wholesalers, and retail showrooms requiring uncompromising audit accuracy and zero operational latency.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12 text-left">
@@ -372,20 +372,20 @@ const CompanyLanding: React.FC = () => {
               <span className="text-[10px] font-mono uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wider">
                 Module 01 • Billing Core
               </span>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Smart Digital Invoicing</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Smart Tile Invoicing</h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Automated sales bills with instant barcode lookup, multi-rate tiers, customer discounts, and integrated delivery challan gate passes.
+                Automated sales bills with instant box and loose piece calculations, square metre rates, customer discounts, and integrated delivery challan gate passes.
               </p>
             </div>
 
             <div className="pt-6 mt-6 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap gap-1.5 text-[10px] font-mono text-slate-600 dark:text-slate-400">
-              <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Barcode Dispatch</span>
+              <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Box / Pcs Dispatch</span>
               <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Delivery Challan</span>
               <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Return Credits</span>
             </div>
           </div>
 
-          {/* Card 2: Fabric & Thaan Inventory */}
+          {/* Card 2: Tile & Sanitary Inventory */}
           <div className="bg-white dark:bg-[#0B101D]/80 border border-slate-200 dark:border-slate-800 hover:border-teal-500/50 rounded-2xl p-6 sm:p-7 shadow-lg dark:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between group">
             <div className="space-y-4">
               <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-200 dark:border-teal-500/25 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
@@ -394,15 +394,15 @@ const CompanyLanding: React.FC = () => {
               <span className="text-[10px] font-mono uppercase font-bold text-teal-600 dark:text-teal-400 tracking-wider">
                 Module 02 • Stock Lifecycle
               </span>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Fabric & Thaan Inventory</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tiles & Ceramic Inventory</h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Detailed metre and thaan tracking across Shop Counters, Main Warehouse, and Godowns. Inter-location transfer orders with holding gatepass queue.
+                Detailed Box and Pieces tracking with Sqm conversion across Showroom, Main Warehouse, and Godowns. Inter-location transfer orders with holding gatepass queue.
               </p>
             </div>
 
             <div className="pt-6 mt-6 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap gap-1.5 text-[10px] font-mono text-slate-600 dark:text-slate-400">
-              <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Thaan / Metre Units</span>
-              <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Godown Transfers</span>
+              <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Box / Pcs Units</span>
+              <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Warehouse Transfers</span>
               <span className="px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">Reorder Alerts</span>
             </div>
           </div>
@@ -449,7 +449,7 @@ const CompanyLanding: React.FC = () => {
                 Abdul Sattar — NHT ENTERPRISES
               </div>
               <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm leading-relaxed">
-                Developed and maintained natively by <strong className="text-slate-900 dark:text-white font-semibold">Abdul Sattar</strong>. Specialized in bespoke textile ERP solutions, high-velocity wholesale invoicing, multi-godown fabric inventory, and encrypted double-entry financial engines.
+                Developed and maintained natively by <strong className="text-slate-900 dark:text-white font-semibold">Abdul Sattar</strong>. Specialized in bespoke tile & sanitary ERP solutions, high-velocity wholesale invoicing, multi-warehouse tile inventory with box & piece tracking, and encrypted double-entry financial engines.
               </p>
               
               {/* Stat Callouts matching Stitch mockup */}
@@ -619,11 +619,11 @@ const CompanyLanding: React.FC = () => {
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-950 dark:text-white max-w-2xl mx-auto">
-            Ready to streamline your cloth wholesale & retail operations?
+            Ready to streamline your tile & sanitary wholesale & retail operations?
           </h2>
 
           <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm max-w-xl mx-auto mt-3 leading-relaxed">
-            Consolidate your fabric inventory, wholesale customer bills, and accounting ledgers into a secure, computerized ERP designed for rapid commercial growth.
+            Consolidate your tile & ceramic inventory, wholesale customer bills, delivery challans, and accounting ledgers into a secure, computerized ERP designed for rapid commercial growth.
           </p>
 
           {/* High-contrast CTA buttons: White on dark theme, Black on light theme */}
@@ -677,7 +677,7 @@ const CompanyLanding: React.FC = () => {
           </div>
 
           <div className="text-center sm:text-right text-[11px]">
-            Engineered and maintained natively by <span className="text-slate-700 dark:text-slate-300 font-semibold">NHT ENTERPRISES (Abdul Sattar)</span> for <span className="text-emerald-600 dark:text-emerald-400 font-semibold">AL MUHAMMADI</span>.
+            Engineered and maintained natively by <span className="text-slate-700 dark:text-slate-300 font-semibold">NHT ENTERPRISES (Abdul Sattar)</span> for <span className="text-emerald-600 dark:text-emerald-400 font-semibold">AL MUHAMMADI TILE EMPORIUM</span>.
           </div>
         </div>
       </footer>

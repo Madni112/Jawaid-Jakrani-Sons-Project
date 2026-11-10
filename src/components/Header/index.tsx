@@ -17,6 +17,12 @@ import {
   LuFileText,
   LuReceipt,
   LuUsers,
+  LuUser,
+  LuShieldCheck,
+  LuPalette,
+  LuCreditCard,
+  LuHardDrive,
+  LuTrash2,
   LuPackage,
   LuSlidersHorizontal,
   LuBarChart3,
@@ -24,17 +30,9 @@ import {
   LuBuilding2,
   LuRefreshCw,
   LuSparkles,
-  LuUser,
-  LuShieldCheck,
-  LuPalette,
-  LuCreditCard,
-  LuHardDrive,
-  LuTrash2,
-  LuKeyboard,
 } from 'react-icons/lu';
 import { useAuth } from '../../Context/Auth';
-import { useLanguage } from '../../Context/LanguageContext';
-import { getBrandConfig } from '../../utils/brand';
+import { getBrandConfig, detectIsAlm } from '../../utils/brand';
 import { supabase } from '../../Context/supabaseClient';
 import {
   isUserAudioEnabled,
@@ -44,32 +42,10 @@ import {
 import {
   NavbarLayoutMode,
   getNavbarLayoutMode,
+  getEffectiveNavbarDesign,
   getSavedSidebarColor,
-  getSavedAccentColor,
   getContrastTextColor,
-  MasterThemePreset,
-  getMasterThemePreset,
-  isNHTTheme2Active,
 } from '../../constant/themeConfig';
-
-export interface SettingsNavTab {
-  id: string;
-  label: string;
-  urLabel: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-}
-
-export const SETTINGS_NAV_TABS: SettingsNavTab[] = [
-  { id: 'profile', label: 'Profile', urLabel: 'پروفائل', icon: LuUser },
-  { id: 'security_devices', label: 'Login Devices & Security', urLabel: 'لاگ ان ڈیوائسز', icon: LuShieldCheck },
-  { id: 'theme', label: 'Theme & Appearance', urLabel: 'تھیم اور اسٹائل', icon: LuPalette },
-  { id: 'credit_limits', label: 'Customer Credit Limits', urLabel: 'کسٹمر کریڈٹ لمٹس', icon: LuCreditCard },
-  { id: 'sound_effects', label: 'Audio', urLabel: 'آڈیو', icon: LuVolume2 },
-  { id: 'pos_sound', label: 'POS Keypad Sounds', urLabel: 'پی او ایس آوازیں', icon: LuKeyboard },
-  { id: 'backup', label: 'Data Backup', urLabel: 'ڈیٹا بیک اپ', icon: LuHardDrive },
-  { id: 'workflow_logistics', label: 'Gate Pass & Workflow', urLabel: 'گیٹ پاس و ورک فلو', icon: LuSlidersHorizontal },
-  { id: 'alm_factory_reset', label: 'Factory Reset ERP', urLabel: 'فیکٹری ری سیٹ', icon: LuTrash2 },
-];
 
 export interface GlobalSearchItem {
   id: string;
@@ -115,8 +91,68 @@ const Header = (props: {
   setSidebarOpen: (arg0: boolean) => void;
 }) => {
   const navigate = useNavigate();
-  const { userEmail, userLocationName, canAccessSetting } = useAuth();
-  const { language, isRTL, toggleLanguage, t } = useLanguage();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { userEmail, userLocationName, tenantId } = useAuth();
+
+  const isSettingsPage = /(^|\/)settings\/?$/i.test(location.pathname);
+  const activeSettingsTab = searchParams.get('tab') || 'profile';
+
+  const isAlmPortal = detectIsAlm();
+  const settingsNavTabs = useMemo(() => [
+    { id: 'profile', label: 'Profile', icon: LuUser },
+    { id: 'security_devices', label: 'Login Devices & Security', icon: LuShieldCheck },
+    { id: 'theme', label: 'Theme & Appearance', icon: LuPalette },
+    { id: 'stock_control', label: 'Inventory & Stock Governance', icon: LuPackage },
+    { id: 'credit_limits', label: 'Customer Credit Limits', icon: LuCreditCard },
+    { id: 'sound_effects', label: 'Audio', icon: LuVolume2 },
+    { id: 'backup', label: 'Data Backup', icon: LuHardDrive },
+    ...(isAlmPortal
+      ? [{ id: 'alm_factory_reset', label: 'Factory Reset ERP', icon: LuTrash2 }]
+      : []),
+  ], [isAlmPortal]);
+
+  // Keyboard Navigation: Shift + ArrowRight / ArrowLeft to cycle tabs in Settings
+  useEffect(() => {
+    if (!isSettingsPage) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input, textarea, or contentEditable
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        e.preventDefault();
+        const currentIndex = settingsNavTabs.findIndex(
+          (t) => t.id === activeSettingsTab
+        );
+        const safeIndex = currentIndex === -1 ? 0 : currentIndex;
+        let nextIndex: number;
+
+        if (e.key === 'ArrowRight') {
+          nextIndex = (safeIndex + 1) % settingsNavTabs.length;
+        } else {
+          nextIndex = (safeIndex - 1 + settingsNavTabs.length) % settingsNavTabs.length;
+        }
+
+        const targetTab = settingsNavTabs[nextIndex];
+        if (targetTab) {
+          setSearchParams({ tab: targetTab.id });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSettingsPage, activeSettingsTab, settingsNavTabs, setSearchParams, userEmail]);
 
   // 1. Live Digital Clock State
   const [timeString, setTimeString] = useState<string>('');
@@ -166,120 +202,36 @@ const Header = (props: {
     const handleSidebarColorChange = () => {
       setSidebarColor(getSavedSidebarColor());
     };
-    window.addEventListener('uzair_jibran_sidebar_color_changed', handleSidebarColorChange);
-    return () => window.removeEventListener('uzair_jibran_sidebar_color_changed', handleSidebarColorChange);
+    window.addEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
+    return () => window.removeEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
   }, []);
 
-  // 4. Navbar Layout Mode (Floating Modern vs Classic Edge)
+  // 4. Navbar Layout Mode & Design Style (Theme 1 vs Theme 2)
   const [navbarMode, setNavbarMode] = useState<NavbarLayoutMode>(getNavbarLayoutMode());
+  const [navbarDesign, setNavbarDesign] = useState<'theme-1' | 'theme-2'>(() => getEffectiveNavbarDesign());
 
   useEffect(() => {
     const updateNavbarMode = () => {
       setNavbarMode(getNavbarLayoutMode());
+      setNavbarDesign(getEffectiveNavbarDesign());
     };
+    window.addEventListener('zoaib_ali_navbar_layout_changed', updateNavbarMode);
+    window.addEventListener('nht_navbar_layout_changed', updateNavbarMode);
     window.addEventListener('uzair_jibran_navbar_layout_changed', updateNavbarMode);
+    window.addEventListener('nht_navbar_design_changed', updateNavbarMode);
+    window.addEventListener('jakwani_master_theme_preset_changed', updateNavbarMode);
     window.addEventListener('storage', updateNavbarMode);
     return () => {
+      window.removeEventListener('zoaib_ali_navbar_layout_changed', updateNavbarMode);
+      window.removeEventListener('nht_navbar_layout_changed', updateNavbarMode);
       window.removeEventListener('uzair_jibran_navbar_layout_changed', updateNavbarMode);
+      window.removeEventListener('nht_navbar_design_changed', updateNavbarMode);
+      window.removeEventListener('jakwani_master_theme_preset_changed', updateNavbarMode);
       window.removeEventListener('storage', updateNavbarMode);
     };
   }, []);
 
-  // Master Theme Preset State (NHT Theme 1 vs NHT Theme 2 vs Custom)
-  const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
-
-  useEffect(() => {
-    const updateMasterPreset = () => {
-      setMasterPreset(getMasterThemePreset());
-    };
-    window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
-    window.addEventListener('storage', updateMasterPreset);
-    return () => {
-      window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
-      window.removeEventListener('storage', updateMasterPreset);
-    };
-  }, []);
-
-  // 5. Settings Route & Tabs Synchronization
-  const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const isSettings = location.pathname.toLowerCase().startsWith('/settings');
-  const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
-
-  useEffect(() => {
-    const handleAccentChange = () => setAccentColor(getSavedAccentColor());
-    window.addEventListener('uzair_jibran_accent_color_changed', handleAccentChange);
-    return () => window.removeEventListener('uzair_jibran_accent_color_changed', handleAccentChange);
-  }, []);
-
-  const [activeSettingsTab, setActiveSettingsTab] = useState<string>(
-    () => searchParams.get('tab') || 'profile'
-  );
-
-  useEffect(() => {
-    const p = searchParams.get('tab') || 'profile';
-    setActiveSettingsTab(p);
-  }, [location.pathname, searchParams]);
-
-  useEffect(() => {
-    const handleSettingsTabEvt = (e: any) => {
-      if (e.detail) {
-        setActiveSettingsTab(e.detail);
-      }
-    };
-    window.addEventListener('jakwani_settings_tab_changed', handleSettingsTabEvt);
-    return () => window.removeEventListener('jakwani_settings_tab_changed', handleSettingsTabEvt);
-  }, []);
-
-  const handleSelectSettingsTab = (tabId: string) => {
-    setActiveSettingsTab(tabId);
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set('tab', tabId);
-    setSearchParams(newParams, { replace: true });
-    window.dispatchEvent(new CustomEvent('jakwani_settings_tab_changed', { detail: tabId }));
-  };
-
-  // Keyboard shortcut: Shift + Left / Right Arrow to cycle between Settings Tabs
-  useEffect(() => {
-    if (!isSettings) return;
-
-    const handleTabKeyDown = (e: KeyboardEvent) => {
-      if (!e.shiftKey) return;
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-
-      const activeEl = document.activeElement;
-      const isInput =
-        activeEl &&
-        (activeEl.tagName === 'INPUT' ||
-          activeEl.tagName === 'TEXTAREA' ||
-          (activeEl as HTMLElement).isContentEditable);
-
-      if (isInput) return;
-
-      e.preventDefault();
-
-      const currentIndex = SETTINGS_NAV_TABS.findIndex((t) => t.id === activeSettingsTab);
-      const total = SETTINGS_NAV_TABS.length;
-      if (currentIndex === -1) return;
-
-      let nextIndex = currentIndex;
-      if (e.key === 'ArrowRight') {
-        nextIndex = (currentIndex + 1) % total;
-      } else if (e.key === 'ArrowLeft') {
-        nextIndex = (currentIndex - 1 + total) % total;
-      }
-
-      const nextTab = SETTINGS_NAV_TABS[nextIndex];
-      if (nextTab) {
-        handleSelectSettingsTab(nextTab.id);
-      }
-    };
-
-    window.addEventListener('keydown', handleTabKeyDown);
-    return () => window.removeEventListener('keydown', handleTabKeyDown);
-  }, [isSettings, activeSettingsTab, searchParams]);
-
-  // 6. Command Palette / Live Global Search State
+  // 4. Command Palette / Live Global Search State
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFilter, setSearchFilter] = useState<CategoryFilter>('ALL');
@@ -505,243 +457,241 @@ const Header = (props: {
     <>
       <header
         className={`shrink-0 z-40 flex duration-200 ease-in-out transition-all ${
-          navbarMode === 'classic' || masterPreset === 'nht-2'
-            ? 'w-full rounded-none border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#0B0F17]/95 shadow-2xs'
-            : 'w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#111827]/95 shadow-xs min-[751px]:shadow-md'
+          navbarMode === 'classic'
+            ? navbarDesign === 'theme-2'
+              ? 'w-full rounded-none border-b border-white/10 backdrop-blur-xl bg-[#161618] text-white shadow-2xs'
+              : 'w-full rounded-none border-b border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/90 dark:bg-[#0B0F17]/90 shadow-2xs'
+            : navbarDesign === 'theme-2'
+              ? 'w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-white/10 backdrop-blur-xl bg-[#161618] text-white shadow-lg'
+              : 'w-auto min-[751px]:mx-3.5 min-[751px]:mt-3.5 rounded-none min-[751px]:rounded-2xl border-b min-[751px]:border border-slate-200/80 dark:border-slate-800/80 backdrop-blur-xl bg-white/95 dark:bg-[#111827]/95 shadow-xs min-[751px]:shadow-md'
         }`}
       >
         <div className="flex flex-grow items-center justify-between px-3 py-2 sm:px-4 2xl:px-6 gap-2 sm:gap-3 w-full min-w-0">
           
-          {isSettings ? (
-            /* =========================================================================
-             * SETTINGS NAVBAR MODE: Back to Dashboard + Centered Tabs (Icons + Active Name)
-             * ========================================================================= */
-            <div className="flex flex-1 items-center justify-between gap-2 sm:gap-4 min-w-0">
-              {/* Back to Dashboard Button */}
-              <Link
-                to="/dashboard"
-                className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs transition-all cursor-pointer shrink-0 group"
-                title={isRTL ? "ڈیش بورڈ پر واپس جائیں" : "Back to Dashboard"}
-              >
-                <LuArrowLeft className={`text-sm group-hover:-translate-x-0.5 transition-transform ${isRTL ? 'rotate-180 group-hover:translate-x-0.5' : ''}`} />
-                <span>{isRTL ? "ڈیش بورڈ" : "Dashboard"}</span>
-              </Link>
-
-              {/* Centered Segmented Dock: Icons Only + Name of Active Tab */}
-              <div className="flex-1 flex items-center justify-center overflow-x-auto no-scrollbar py-0.5 px-1 min-w-0">
-                <div className="flex items-center gap-1 sm:gap-1.5 p-1 rounded-2xl bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 shadow-2xs">
-                  {SETTINGS_NAV_TABS.filter((tab) => !canAccessSetting || canAccessSetting(tab.id)).map((tab) => {
-                    const TabIcon = tab.icon;
-                    const isActive = activeSettingsTab === tab.id;
-                    const isDanger = tab.id === 'alm_factory_reset';
-                    const tabTitle = isRTL ? tab.urLabel : tab.label;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => handleSelectSettingsTab(tab.id)}
-                        title={`${tabTitle} (Shift + ← / →)`}
-                        className={`flex items-center gap-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer shrink-0 select-none ${
-                          isActive
-                            ? isDanger
-                              ? 'bg-red-600 text-white shadow-md ring-1 ring-red-400 px-3.5 py-1.5'
-                              : 'bg-primary text-white shadow-md ring-1 ring-primary/40 px-3.5 py-1.5'
-                            : isDanger
-                            ? 'text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 w-8.5 h-8.5 justify-center'
-                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-700/70 w-8.5 h-8.5 justify-center'
-                        }`}
-                        style={
-                          isActive && !isDanger && accentColor && (accentColor.toLowerCase() === '#ffffff' || accentColor.toLowerCase() === '#fff')
-                            ? { color: '#0F172A', border: '1px solid #CBD5E1' }
-                            : undefined
-                        }
-                      >
-                        <TabIcon size={16} className={`shrink-0 ${!isActive && isDanger ? 'text-red-500' : ''}`} />
-                        {isActive && <span className="animate-fadeIn">{tabTitle}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Keyboard Shortcut Hint (Desktop) */}
-              <div
-                className="hidden xl:flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 font-mono shrink-0 select-none"
-                title="Keyboard navigation: hold Shift and press Left or Right Arrow"
-              >
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold">Shift</kbd>
-                <span>+</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold">← / →</kbd>
-              </div>
-            </div>
-          ) : (
-            /* =========================================================================
-             * STANDARD ERP NAVBAR: Mobile Menu, Portal Badge, New Sale, Search
-             * ========================================================================= */
+          {isSettingsPage ? (
+            /* ── SETTINGS SINGLE-ROW HEADER (Matches Image 1) ── */
             <>
-              {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button (or Amal Dashboard Title in Theme 2) */}
-              {(masterPreset === 'nht-2' || isNHTTheme2Active()) && location.pathname === '/dashboard' ? (
-                <div className="flex items-center gap-3 shrink-0">
-                  <button
-                    aria-controls="sidebar"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      props.setSidebarOpen(!props.sidebarOpen);
-                    }}
-                    className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
-                  >
-                    <MdMenu size={20} />
-                  </button>
-                  <div>
-                    <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
-                      Dashboard
-                    </h1>
-                    <p className="text-[10px] sm:text-[11px] text-slate-400">
-                      Last updated: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="hidden sm:flex p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ml-1"
-                    title="Reload"
-                  >
-                    <LuRefreshCw size={13} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-                  {/* Mobile Sidebar Toggle */}
-                  <button
-                    aria-controls="sidebar"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      props.setSidebarOpen(!props.sidebarOpen);
-                    }}
-                    className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
-                  >
-                    <MdMenu size={20} />
-                  </button>
+              {/* Left Side: Back to Dashboard */}
+              <div className="flex items-center shrink-0">
+                <Link
+                  to={tenantId ? `/${tenantId}/dashboard` : "/dashboard"}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs shrink-0 ${
+                    navbarDesign === 'theme-2'
+                      ? 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80'
+                  }`}
+                  title="Exit Settings and return to Dashboard"
+                >
+                  <LuArrowLeft size={15} />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </Link>
+              </div>
 
-                  {/* Dynamic Portal & Branch Badge */}
-                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs shrink-0">
-                    <span className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    <span className="text-[11px] font-extrabold text-primary uppercase tracking-wider">
-                      {portalCode}
-                    </span>
-                    <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
-                    <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate max-w-[90px] xl:max-w-[130px]">
-                      {branchLabel === 'Portal Active' && isRTL ? 'پورٹل فعال' : branchLabel}
-                    </span>
-                  </div>
+              {/* Center: Single-row Settings Tabs (Icons only, Active tab expanded with label) */}
+              <div className="flex-1 flex items-center justify-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar mx-1 sm:mx-2 min-w-0 py-0.5">
+                {settingsNavTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeSettingsTab === tab.id;
+                  const isDanger = tab.id === 'alm_factory_reset';
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setSearchParams({ tab: tab.id })}
+                      title={`${tab.label} (Press Shift + ← / → to switch)`}
+                      className={`flex items-center gap-1.5 rounded-xl transition-all duration-200 cursor-pointer select-none shrink-0 ${
+                        isActive
+                          ? isDanger
+                            ? 'px-3 py-1.5 bg-red-600 text-white shadow-xs font-bold ring-2 ring-red-500/30'
+                            : 'px-3 py-1.5 bg-primary text-white shadow-xs font-bold ring-2 ring-primary/30'
+                          : isDanger
+                          ? 'p-2 text-red-400 hover:bg-red-950/40 rounded-xl'
+                          : navbarDesign === 'theme-2'
+                          ? 'p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl'
+                          : 'p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white rounded-xl'
+                      }`}
+                    >
+                      <Icon
+                        size={isActive ? 15 : 17}
+                        className={
+                          isActive
+                            ? 'text-white shrink-0'
+                            : isDanger
+                            ? 'text-red-400 shrink-0'
+                            : navbarDesign === 'theme-2'
+                            ? 'text-slate-300 shrink-0'
+                            : 'text-slate-500 dark:text-slate-400 shrink-0'
+                        }
+                      />
+                      {isActive && (
+                        <span className="text-xs font-bold whitespace-nowrap animate-fadeIn">
+                          {tab.label}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
-                  {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
-                  <Link
-                    to="/sales/invoice/add"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
-                    style={{
-                      backgroundColor: sidebarColor,
-                      color: getContrastTextColor(sidebarColor),
-                    }}
-                    title={isRTL ? 'نئی سیل انوائس بنائیں' : 'Create a New Sales Invoice'}
-                  >
-                    <LuPlus className="text-sm stroke-[3]" />
-                    <span className="hidden md:inline">{isRTL ? 'نئی سیل' : 'New Sale'}</span>
-                  </Link>
+              {/* Right Side: Fast Sound, Notifications, Dark Mode, Profile */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={toggleSound}
+                  className={`p-1.5 sm:p-2 rounded-full border transition flex items-center justify-center cursor-pointer shadow-2xs shrink-0 ${
+                    audioActive
+                      ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'
+                      : navbarDesign === 'theme-2'
+                      ? 'border-white/15 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                  title={audioActive ? 'POS Sound Effects: ON' : 'POS Sound Effects: MUTED'}
+                >
+                  {audioActive ? <LuVolume2 size={16} /> : <LuVolumeX size={16} />}
+                </button>
+
+                <NotificationDropdown />
+                <DarkModeSwitcher />
+                <div className={`h-6 w-px hidden sm:block shrink-0 ${navbarDesign === 'theme-2' ? 'bg-white/15' : 'bg-slate-200 dark:bg-slate-800'}`} />
+                <DropdownUser />
+              </div>
+            </>
+          ) : (
+            /* ── NORMAL ERP NAVBAR (Every other page) ── */
+            <>
+              {/* Left Side: Mobile Menu + Portal/Branch Pill + New Sale Button */}
+              <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                {/* Mobile Sidebar Toggle */}
+                <button
+                  aria-controls="sidebar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.setSidebarOpen(!props.sidebarOpen);
+                  }}
+                  className="z-99999 block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-2xs min-[751px]:hidden text-slate-700 dark:text-slate-200 hover:text-primary transition cursor-pointer"
+                >
+                  <MdMenu size={20} />
+                </button>
+
+                {/* Dynamic Portal & Branch Badge */}
+                <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold shadow-2xs shrink-0 ${
+                  navbarDesign === 'theme-2'
+                    ? 'bg-white/10 border-white/15 text-slate-200'
+                    : 'bg-slate-100/80 dark:bg-slate-800/80 border-slate-200/70 dark:border-slate-700/70 text-slate-600 dark:text-slate-300'
+                }`}>
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] font-extrabold text-primary uppercase tracking-wider">
+                    {portalCode}
+                  </span>
+                  <span className={`text-[10px] ${navbarDesign === 'theme-2' ? 'text-slate-500' : 'text-slate-300 dark:text-slate-600'}`}>•</span>
+                  <span className={`text-[11px] font-medium truncate max-w-[90px] xl:max-w-[130px] ${navbarDesign === 'theme-2' ? 'text-slate-200' : 'text-slate-600 dark:text-slate-300'}`}>
+                    {branchLabel}
+                  </span>
                 </div>
-              )}
+
+                {/* Quick Action: New Sale Button (Harmonized with Sidebar Color) */}
+                <Link
+                  to="/sales/invoice/add"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0 border border-black/10 dark:border-white/10"
+                  style={{
+                    backgroundColor: sidebarColor,
+                    color: getContrastTextColor(sidebarColor),
+                  }}
+                  title="Create a New Sales Invoice"
+                >
+                  <LuPlus className="text-sm stroke-[3]" />
+                  <span className="hidden md:inline">New Sale</span>
+                </Link>
+              </div>
 
               {/* Center: Command Palette / Quick Search Trigger */}
               <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-1 sm:mx-2 hidden md:block min-w-0">
                 <button
                   type="button"
                   onClick={() => setSearchOpen(true)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition text-xs cursor-pointer shadow-2xs"
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border transition text-xs cursor-pointer shadow-2xs ${
+                    navbarDesign === 'theme-2'
+                      ? 'border-white/15 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <LuSearch className="text-sm text-slate-400 shrink-0" />
-                    <span className="truncate">{t('search_placeholder', 'Search invoices, customers, products...')}</span>
+                    <LuSearch className={`text-sm shrink-0 ${navbarDesign === 'theme-2' ? 'text-slate-400' : 'text-slate-400'}`} />
+                    <span className="truncate">Search invoices, customers, products...</span>
                   </div>
-                  <kbd className="hidden 2xl:inline-flex items-center gap-0.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 shadow-2xs shrink-0">
+                  <kbd className={`hidden 2xl:inline-flex items-center gap-0.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md border shadow-2xs shrink-0 ${
+                    navbarDesign === 'theme-2'
+                      ? 'bg-white/10 border-white/15 text-slate-300'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                  }`}>
                     <span>Ctrl</span>
                     <span>K</span>
                   </kbd>
                 </button>
               </div>
+
+              {/* Right Side: Tools & Profile */}
+              <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                {/* Mobile Search Button */}
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition md:hidden cursor-pointer"
+                  title="Quick Search (Ctrl + K)"
+                >
+                  <LuSearch size={18} />
+                </button>
+
+                {/* Live Clock (Only time on xl, full date on 2xl) */}
+                <div className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold shrink-0 ${
+                  navbarDesign === 'theme-2'
+                    ? 'border-white/15 bg-white/5 text-slate-200'
+                    : 'border-slate-200/60 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300'
+                }`}>
+                  <LuClock className="text-xs text-primary shrink-0" />
+                  <span className={`font-mono text-[11px] font-bold ${navbarDesign === 'theme-2' ? 'text-white' : 'text-slate-800 dark:text-slate-100'}`}>
+                    {timeString}
+                  </span>
+                  <span className={`hidden 2xl:inline text-[10px] ${navbarDesign === 'theme-2' ? 'text-slate-500' : 'text-slate-400'}`}>•</span>
+                  <span className={`hidden 2xl:inline text-[11px] font-medium ${navbarDesign === 'theme-2' ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {dateString}
+                  </span>
+                </div>
+
+                {/* Fast Sound Mute / Unmute Button */}
+                <button
+                  type="button"
+                  onClick={toggleSound}
+                  className={`p-1.5 sm:p-2 rounded-full border transition flex items-center justify-center cursor-pointer shadow-2xs shrink-0 ${
+                    audioActive
+                      ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'
+                      : navbarDesign === 'theme-2'
+                      ? 'border-white/15 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                  title={audioActive ? 'POS Sound Effects: ON (Click to Mute)' : 'POS Sound Effects: MUTED (Click to Turn On)'}
+                >
+                  {audioActive ? <LuVolume2 size={16} /> : <LuVolumeX size={16} />}
+                </button>
+
+                {/* Header Notifications Dropdown */}
+                <NotificationDropdown />
+
+                {/* Dark Mode Switcher */}
+                <DarkModeSwitcher />
+
+                {/* Subtle Divider */}
+                <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block shrink-0" />
+
+                {/* User Profile Dropdown */}
+                <DropdownUser />
+              </div>
             </>
           )}
 
-          {/* Right Side: Tools & Profile */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {/* Mobile Search Button */}
-            {!isSettings && (
-              <button
-                type="button"
-                onClick={() => setSearchOpen(true)}
-                className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition md:hidden cursor-pointer"
-                title="Quick Search (Ctrl + K)"
-              >
-                <LuSearch size={18} />
-              </button>
-            )}
-
-            {/* Live Clock (Only time on xl, full date on 2xl) */}
-            {!isSettings && (
-              <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
-                <LuClock className="text-xs text-primary shrink-0" />
-                <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-100">
-                  {timeString}
-                </span>
-                <span className="hidden 2xl:inline text-[10px] text-slate-400">•</span>
-                <span className="hidden 2xl:inline text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                  {dateString}
-                </span>
-              </div>
-            )}
-
-            {/* Fast Sound Mute / Unmute Button */}
-            <button
-              type="button"
-              onClick={toggleSound}
-              className={`p-1.5 sm:p-2 rounded-full border transition flex items-center justify-center cursor-pointer shadow-2xs shrink-0 ${
-                audioActive
-                  ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-              }`}
-              title={audioActive ? 'POS Sound Effects: ON (Click to Mute)' : 'POS Sound Effects: MUTED (Click to Turn On)'}
-            >
-              {audioActive ? <LuVolume2 size={16} /> : <LuVolumeX size={16} />}
-            </button>
-
-            {/* Header Notifications Dropdown */}
-            <NotificationDropdown />
-
-            {/* Dark Mode Switcher */}
-            <DarkModeSwitcher />
-
-            {/* Language Switcher (Urdu / English) */}
-            <button
-              type="button"
-              onClick={toggleLanguage}
-              className={`px-2.5 py-1 sm:px-3 sm:py-1 rounded-full border text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 select-none ${
-                isRTL
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
-                  : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-              title={isRTL ? 'Switch to English layout (LTR)' : 'اردو لے آؤٹ میں تبدیل کریں (RTL)'}
-            >
-              <span className="text-sm leading-none">{isRTL ? '🇵🇰' : '🇬🇧'}</span>
-              <span className="tracking-wide font-medium">{isRTL ? 'اردو' : 'English'}</span>
-            </button>
-
-            {/* Subtle Divider */}
-            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block shrink-0" />
-
-            {/* User Profile Dropdown */}
-            <DropdownUser />
-          </div>
         </div>
       </header>
 

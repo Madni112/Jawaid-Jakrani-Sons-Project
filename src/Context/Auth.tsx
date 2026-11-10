@@ -48,16 +48,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<string | null>(() => {
     try {
       const saved = localStorage.getItem('zac_user_role');
-      if (saved && saved.toLowerCase().includes('tiles')) {
-        return 'Cloth Retail & Wholesale';
+      if (saved && (saved.toLowerCase().includes('cloth') || saved.toLowerCase().includes('textile'))) {
+        return 'Tile Retail & Wholesale';
       }
-      return saved || 'Cloth Retail & Wholesale';
+      return saved || 'Tile Retail & Wholesale';
     } catch (_) {
-      return 'Cloth Retail & Wholesale';
+      return 'Tile Retail & Wholesale';
     }
   });
   const [tenantId, setTenantId] = useState<string | null>('uzair');
-  const [businessName, setBusinessName] = useState<string | null>('AL MUHAMMADI');
+  const [businessName, setBusinessName] = useState<string | null>('AL MUHAMMADI TILE EMPORIUM');
   const [userEmail, setUserEmail] = useState<string | null>(() => {
     try {
       return localStorage.getItem('zac_user_email') || null;
@@ -245,8 +245,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (tenantRecord.business_activity) {
               userRole = tenantRecord.business_activity;
             }
-            if (userRole && userRole.toLowerCase().includes('tiles')) {
-              userRole = 'Cloth Retail & Wholesale';
+            if (userRole && (userRole.toLowerCase().includes('cloth') || userRole.toLowerCase().includes('textile'))) {
+              userRole = 'Tile Retail & Wholesale';
             }
             if (tenantRecord.name) empName = tenantRecord.name;
             if (Array.isArray(tenantRecord.allowed_modules) && tenantRecord.allowed_modules.length > 0) {
@@ -278,8 +278,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userPermissions = metadata.allowed_modules || appMetadata.allowed_modules || getModulesForRole(userRole);
       }
 
-      if (userRole && userRole.toLowerCase().includes('tiles')) {
-        userRole = 'Cloth Retail & Wholesale';
+      if (userRole && (userRole.toLowerCase().includes('cloth') || userRole.toLowerCase().includes('textile'))) {
+        userRole = 'Tile Retail & Wholesale';
       }
 
       setIsAuthenticated(true);
@@ -287,7 +287,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUserEmail(email || null);
       setRole(userRole);
       setTenantId('uzair');
-      setBusinessName('AL MUHAMMADI');
+      setBusinessName('AL MUHAMMADI TILE EMPORIUM');
       setAllowedModules(userPermissions);
       setUserLocationId(locId);
       setUserLocationName(locName);

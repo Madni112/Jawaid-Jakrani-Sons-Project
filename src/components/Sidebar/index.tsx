@@ -39,6 +39,7 @@ import {
   MasterThemePreset,
   getMasterThemePreset,
   isNHTTheme2Active,
+  getEffectiveSidebarDesign,
   getReportLayoutMode,
   ReportLayoutMode,
 } from '../../constant/themeConfig';
@@ -860,20 +861,24 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
   // Master Theme Preset State (NHT Theme 1 vs NHT Theme 2 vs Custom)
   const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
+  const [sidebarDesign, setSidebarDesign] = useState<'theme-1' | 'theme-2'>(() => getEffectiveSidebarDesign());
 
   useEffect(() => {
     const updateMasterPreset = () => {
       setMasterPreset(getMasterThemePreset());
+      setSidebarDesign(getEffectiveSidebarDesign());
     };
     window.addEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+    window.addEventListener('nht_sidebar_design_changed', updateMasterPreset);
     window.addEventListener('storage', updateMasterPreset);
     return () => {
       window.removeEventListener('jakwani_master_theme_preset_changed', updateMasterPreset);
+      window.removeEventListener('nht_sidebar_design_changed', updateMasterPreset);
       window.removeEventListener('storage', updateMasterPreset);
     };
   }, []);
 
-  const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
+  const isTheme2 = sidebarDesign === 'theme-2';
 
   const [wasContrastAdjusted, setWasContrastAdjusted] = useState(false);
 
@@ -1056,17 +1061,30 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
             to="/dashboard"
             className="flex items-center gap-3 transition-opacity duration-200 hover:opacity-90 min-w-0"
           >
-            <div className={`w-10 h-10 rounded-xl ${themeStyles.brandCard} p-1 flex items-center justify-center shadow-md shrink-0 border overflow-hidden select-none`}>
+            <div className={`w-9.5 h-9.5 rounded-xl ${themeStyles.brandCard} p-1 flex items-center justify-center shadow-md shrink-0 border overflow-hidden select-none`}>
               <img src={sidebarThemeMode === 'light' ? IconDark : IconLight} alt="Logo" className="w-full h-full object-contain" />
             </div>
 
-            <div className="flex flex-col min-w-0">
-              <span className={`font-black tracking-tight text-sm ${themeStyles.brandText} leading-tight truncate ${isRTL ? 'font-sans' : 'font-cinzel'}`}>
-                {isRTL ? 'جاوید جکوانی اینڈ سنز' : (brand.fullName || 'AL MUHAMMADI')}
-              </span>
-              <span className={`text-[10px] font-mono tracking-wider uppercase ${themeStyles.brandSub} font-bold`}>
-                ERP
-              </span>
+            <div className="flex flex-col min-w-0 justify-center">
+              {isRTL ? (
+                <span className="font-black text-xs text-white font-sans leading-tight">
+                  المحمّدی ٹائل ایمپوریم
+                </span>
+              ) : (
+                <>
+                  <div className="flex items-center gap-1.5 leading-none">
+                    <span className={`font-black tracking-wide text-xs ${themeStyles.brandText} font-cinzel whitespace-nowrap`}>
+                      {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'AL MUHAMMADI'}
+                    </span>
+                    <span className="px-1 py-0.5 rounded text-[8px] font-mono font-black tracking-wider bg-primary/20 text-primary dark:bg-white/10 dark:text-rose-300 uppercase shrink-0">
+                      ERP
+                    </span>
+                  </div>
+                  <span className="text-[9.5px] font-extrabold tracking-widest text-slate-400 dark:text-slate-400 uppercase leading-none mt-1 whitespace-nowrap">
+                    {brand.brandSuffix || 'TILE EMPORIUM'}
+                  </span>
+                </>
+              )}
             </div>
           </NavLink>
         ) : (
@@ -1188,7 +1206,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               {userEmail ? userEmail.split('@')[0].toUpperCase() : 'MUHAMMAD SAAD'}
             </span>
             <span className="text-[9px] text-neutral-400 truncate uppercase tracking-wider font-semibold mt-0.5">
-              {brand.fullName || 'AL MUHAMMADI TILES EMPOR...'}
+              {brand.fullName || 'AL MUHAMMADI TILE EMPORIUM'}
             </span>
           </div>
           <button

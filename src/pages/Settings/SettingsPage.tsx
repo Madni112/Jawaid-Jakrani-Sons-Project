@@ -106,6 +106,19 @@ import {
   ReportLayoutMode,
   getReportLayoutMode,
   setReportLayoutMode,
+  FooterLayoutMode,
+  getFooterLayoutMode,
+  setFooterLayoutMode,
+  ComponentDesignMode,
+  getFooterDesignMode,
+  setFooterDesignMode,
+  getEffectiveFooterDesign,
+  getSidebarDesignMode,
+  setSidebarDesignMode,
+  getEffectiveSidebarDesign,
+  getNavbarDesignMode,
+  setNavbarDesignMode,
+  getEffectiveNavbarDesign,
 } from '../../constant/themeConfig';
 import {
   fetchSystemMasterConfig,
@@ -587,11 +600,23 @@ const SettingsPage: React.FC = () => {
 
   const handleApplyMasterPreset = (preset: 'nht-1' | 'nht-2') => {
     if (preset === 'nht-1') {
+      // 1. Layout Geometries: Floating for Theme 1
       setSidebarLayout('floating');
       setSidebarLayoutMode('floating');
       setNavbarLayout('floating');
-      setNavbarLayoutMode('sticky');
+      setNavbarLayoutMode('floating');
+      setFooterLayout('floating');
+      setFooterLayoutMode('floating');
 
+      // 2. Preferred Component Design Presets for Theme 1
+      setSidebarDesign('theme-1');
+      setSidebarDesignMode('theme-1');
+      setNavbarDesign('theme-1');
+      setNavbarDesignMode('theme-1');
+      setFooterDesign('theme-1');
+      setFooterDesignMode('theme-1');
+
+      // 3. Cyber Teal / Cyan Theme 1 Accents
       applyAccentColor('#06B6D4');
       setSelectedAccentColor('#06B6D4');
       setAppliedAccentColor('#06B6D4');
@@ -616,15 +641,27 @@ const SettingsPage: React.FC = () => {
       }
 
       toast.success(
-        isRTL ? '✨ NHT تھیم 1 (جدید فلوٹنگ لے آؤٹ) فعال ہو گئی!' : '✨ NHT Theme 1 (Modern Floating) activated!',
+        isRTL ? '✨ NHT تھیم 1 (جدید فلوٹنگ لے آؤٹ) فعال ہو گئی!' : '✨ NHT Theme 1 (Modern Floating Architecture) activated!',
         { id: 'master-theme-toast' }
       );
     } else {
+      // 1. Layout Geometries: Classic for Theme 2
       setSidebarLayout('classic');
       setSidebarLayoutMode('classic');
       setNavbarLayout('classic');
-      setNavbarLayoutMode('sticky');
+      setNavbarLayoutMode('classic');
+      setFooterLayout('classic');
+      setFooterLayoutMode('classic');
 
+      // 2. Preferred Component Design Presets for Theme 2
+      setSidebarDesign('theme-2');
+      setSidebarDesignMode('theme-2');
+      setNavbarDesign('theme-2');
+      setNavbarDesignMode('theme-2');
+      setFooterDesign('theme-2');
+      setFooterDesignMode('theme-2');
+
+      // 3. Burgundy Wine Theme 2 Accents
       applyAccentColor('#800020');
       setSelectedAccentColor('#800020');
       setAppliedAccentColor('#800020');
@@ -649,7 +686,7 @@ const SettingsPage: React.FC = () => {
       }
 
       toast.success(
-        isRTL ? '🏛️ NHT تھیم 2 (کلاسک ایگزیکٹو لے آؤٹ) فعال ہو گئی!' : '🏛️ NHT Theme 2 (Classic Executive) activated!',
+        isRTL ? '🏛️ NHT تھیم 2 (کلاسک ایگزیکٹو لے آؤٹ) فعال ہو گئی!' : '🏛️ NHT Theme 2 (Classic Executive Architecture) activated!',
         { id: 'master-theme-toast' }
       );
     }
@@ -775,10 +812,20 @@ const SettingsPage: React.FC = () => {
   const [wasSidebarAdjusted, setWasSidebarAdjusted] = useState<boolean>(false);
   const [sidebarAppliedRecently, setSidebarAppliedRecently] = useState<boolean>(false);
 
-  // Layout Styles: Sidebar (Floating vs Classic) & Navbar (Sticky vs Normal) & Reports (Modern vs Classic)
+  // Layout Styles: Sidebar, Navbar, Footer (Floating vs Classic) & Component Designs (Theme 1 vs Theme 2)
   const [sidebarLayout, setSidebarLayout] = useState<SidebarLayoutMode>(() => getSidebarLayoutMode());
   const [navbarLayout, setNavbarLayout] = useState<NavbarLayoutMode>(() => getNavbarLayoutMode());
+  const [footerLayout, setFooterLayout] = useState<FooterLayoutMode>(() => getFooterLayoutMode());
   const [reportLayout, setReportLayout] = useState<ReportLayoutMode>(() => getReportLayoutMode());
+
+  // Component Design Overrides (Auto / Theme 1 / Theme 2)
+  const [sidebarDesign, setSidebarDesign] = useState<ComponentDesignMode>(() => getSidebarDesignMode());
+  const [navbarDesign, setNavbarDesign] = useState<ComponentDesignMode>(() => getNavbarDesignMode());
+  const [footerDesign, setFooterDesign] = useState<ComponentDesignMode>(() => getFooterDesignMode());
+
+  const effectiveSidebarDesign = sidebarDesign === 'theme-1' ? 'theme-1' : sidebarDesign === 'theme-2' ? 'theme-2' : (masterThemePreset === 'nht-2' ? 'theme-2' : 'theme-1');
+  const effectiveNavbarDesign = navbarDesign === 'theme-1' ? 'theme-1' : navbarDesign === 'theme-2' ? 'theme-2' : (masterThemePreset === 'nht-2' ? 'theme-2' : 'theme-1');
+  const effectiveFooterDesign = footerDesign === 'theme-1' ? 'theme-1' : footerDesign === 'theme-2' ? 'theme-2' : (masterThemePreset === 'nht-2' ? 'theme-2' : 'theme-1');
 
   const handleSetReportLayout = (mode: ReportLayoutMode) => {
     setReportLayout(mode);
@@ -798,8 +845,22 @@ const SettingsPage: React.FC = () => {
     toast.success(
       mode === 'floating'
         ? '🚀 Floating Modern Sidebar activated!'
-        : '🏛️ {isRTL ? "کلاسک ایج" : "Classic Edge"} Sidebar activated!',
+        : '🏛️ Classic Edge Sidebar activated!',
       { id: 'sidebar-layout-toast' }
+    );
+  };
+
+  const handleSetSidebarDesign = (mode: ComponentDesignMode) => {
+    markAsCustom();
+    setSidebarDesign(mode);
+    setSidebarDesignMode(mode);
+    toast.success(
+      mode === 'theme-1'
+        ? '🌟 Sidebar Theme 1 Design activated!'
+        : mode === 'theme-2'
+        ? '⚡ Sidebar Theme 2 (Modern Flyout) activated!'
+        : '🔄 Sidebar Design synced with Master Theme!',
+      { id: 'sidebar-design-toast' }
     );
   };
 
@@ -810,8 +871,48 @@ const SettingsPage: React.FC = () => {
     toast.success(
       mode === 'floating'
         ? '🚀 Floating Modern Navbar activated!'
-        : '🏛️ {isRTL ? "کلاسک فل" : "Classic Full"}-Width Navbar activated!',
+        : '🏛️ Classic Full-Width Navbar activated!',
       { id: 'navbar-layout-toast' }
+    );
+  };
+
+  const handleSetNavbarDesign = (mode: ComponentDesignMode) => {
+    markAsCustom();
+    setNavbarDesign(mode);
+    setNavbarDesignMode(mode);
+    toast.success(
+      mode === 'theme-1'
+        ? '🌟 Navbar Theme 1 Design activated!'
+        : mode === 'theme-2'
+        ? '⚡ Navbar Theme 2 (Command Strip) activated!'
+        : '🔄 Navbar Design synced with Master Theme!',
+      { id: 'navbar-design-toast' }
+    );
+  };
+
+  const handleSetFooterLayout = (mode: FooterLayoutMode) => {
+    markAsCustom();
+    setFooterLayout(mode);
+    setFooterLayoutMode(mode);
+    toast.success(
+      mode === 'floating'
+        ? '🚀 Floating Modern Footer activated!'
+        : '🏛️ Classic Full-Width Footer activated!',
+      { id: 'footer-layout-toast' }
+    );
+  };
+
+  const handleSetFooterDesign = (mode: ComponentDesignMode) => {
+    markAsCustom();
+    setFooterDesign(mode);
+    setFooterDesignMode(mode);
+    toast.success(
+      mode === 'theme-1'
+        ? '🌟 Footer Theme 1 (Executive Card Dock) activated!'
+        : mode === 'theme-2'
+        ? '⚡ Footer Theme 2 (Sleek Command Strip) activated!'
+        : '🔄 Footer Design synced with Master Theme!',
+      { id: 'footer-design-toast' }
     );
   };
 
@@ -821,10 +922,12 @@ const SettingsPage: React.FC = () => {
     setSidebarLayoutMode(mode);
     setNavbarLayout(mode);
     setNavbarLayoutMode(mode);
+    setFooterLayout(mode);
+    setFooterLayoutMode(mode);
     toast.success(
       mode === 'floating'
-        ? '🚀 Full Floating Workspace (Sidebar & Navbar) activated!'
-        : '🏛️ Full {isRTL ? "کلاسک ایج" : "Classic Edge"} Workspace (Sidebar & Navbar) activated!',
+        ? '🚀 Full Floating Workspace (Sidebar, Navbar & Footer) activated!'
+        : '🏛️ Full Classic Workspace (Sidebar, Navbar & Footer) activated!',
       { id: 'preset-layout-toast' }
     );
   };
@@ -1846,10 +1949,10 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs font-black tracking-wide truncate">
-                                    AL MUHAMMADI
+                                    {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'AL MUHAMMADI'}
                                   </div>
                                   <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
-                                    Cloth ERP
+                                    {brand.brandSuffix || 'TILE EMPORIUM'}
                                   </div>
                                 </div>
                                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-bold border border-blue-500/20">
@@ -2162,7 +2265,7 @@ const SettingsPage: React.FC = () => {
                                   title="Portal Active indicator"
                                 />
                                 <span className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-100 hidden sm:inline">
-                                  UJC • Portal Active
+                                  {portalCode || 'AM'} • Portal Active
                                 </span>
                                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                                   Theme Studio
@@ -3233,88 +3336,281 @@ const SettingsPage: React.FC = () => {
                                 {/* Granular Individual Controls */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   {/* Left Sidebar Style */}
-                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3">
                                     <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-slate-900 dark:text-white">Left Sidebar Style</span>
+                                      <div>
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white block">Left Sidebar Style</span>
+                                        <p className="text-[10px] text-slate-400">Configure layout geometry and visual architecture.</p>
+                                      </div>
                                       <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'}
+                                        {sidebarLayout === 'floating' ? 'Floating' : 'Classic'} • {effectiveSidebarDesign === 'theme-2' ? 'Theme 2' : 'Theme 1'}
                                       </span>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSetSidebarLayout('floating')}
-                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
-                                          sidebarLayout === 'floating'
-                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
-                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                                        }`}
-                                      >
-                                        <div className="flex items-center justify-between w-full">
-                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
-                                          {sidebarLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 leading-tight">Rounded detached card with shadow.</p>
-                                      </button>
 
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSetSidebarLayout('classic')}
-                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
-                                          sidebarLayout === 'classic'
-                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
-                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                                        }`}
-                                      >
-                                        <div className="flex items-center justify-between w-full">
-                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
-                                          {sidebarLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 leading-tight">Original edge-to-edge flush sidebar.</p>
-                                      </button>
+                                    {/* Layout Geometry */}
+                                    <div>
+                                      <span className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 block mb-1.5">
+                                        Layout Geometry (Select 1 of 2):
+                                      </span>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetSidebarLayout('floating')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[68px] ${
+                                            sidebarLayout === 'floating'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
+                                            {sidebarLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Rounded detached card with shadow.</p>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetSidebarLayout('classic')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[68px] ${
+                                            sidebarLayout === 'classic'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
+                                            {sidebarLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Edge-to-edge flush sidebar.</p>
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Design Preset */}
+                                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                                      <span className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 block mb-1.5">
+                                        Design Preset (Select 1 of 2):
+                                      </span>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetSidebarDesign('theme-1')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[65px] ${
+                                            effectiveSidebarDesign === 'theme-1'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Theme 1 Design</span>
+                                            {effectiveSidebarDesign === 'theme-1' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Hierarchical tree with accent badges.</p>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetSidebarDesign('theme-2')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[65px] ${
+                                            effectiveSidebarDesign === 'theme-2'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Theme 2 Design</span>
+                                            {effectiveSidebarDesign === 'theme-2' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Amal multi-tier flyout with micro-dock.</p>
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
 
                                   {/* Top Navbar Style */}
-                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3">
                                     <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-slate-900 dark:text-white">Top Navbar Style</span>
+                                      <div>
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white block">Top Navbar Style</span>
+                                        <p className="text-[10px] text-slate-400">Configure top header geometry and styling.</p>
+                                      </div>
                                       <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                        {navbarLayout === 'floating' ? 'Floating' : 'Classic'}
+                                        {navbarLayout === 'floating' ? 'Floating' : 'Classic'} • {effectiveNavbarDesign === 'theme-2' ? 'Theme 2' : 'Theme 1'}
                                       </span>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSetNavbarLayout('floating')}
-                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
-                                          navbarLayout === 'floating'
-                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
-                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                                        }`}
-                                      >
-                                        <div className="flex items-center justify-between w-full">
-                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
-                                          {navbarLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 leading-tight">Floating pill card with elevation.</p>
-                                      </button>
 
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSetNavbarLayout('classic')}
-                                        className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[80px] ${
-                                          navbarLayout === 'classic'
-                                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
-                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                                        }`}
-                                      >
-                                        <div className="flex items-center justify-between w-full">
-                                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
-                                          {navbarLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
-                                        </div>
-                                        <p className="text-[10px] text-slate-400 leading-tight">Edge-to-edge full width navbar.</p>
-                                      </button>
+                                    {/* Layout Geometry */}
+                                    <div>
+                                      <span className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 block mb-1.5">
+                                        Layout Geometry (Select 1 of 2):
+                                      </span>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetNavbarLayout('floating')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[68px] ${
+                                            navbarLayout === 'floating'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
+                                            {navbarLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Floating pill card with elevation.</p>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetNavbarLayout('classic')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[68px] ${
+                                            navbarLayout === 'classic'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
+                                            {navbarLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Edge-to-edge full width navbar.</p>
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Design Preset */}
+                                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                                      <span className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 block mb-1.5">
+                                        Design Preset (Select 1 of 2):
+                                      </span>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetNavbarDesign('theme-1')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[65px] ${
+                                            effectiveNavbarDesign === 'theme-1'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Theme 1 Design</span>
+                                            {effectiveNavbarDesign === 'theme-1' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Executive portal bar with quick actions.</p>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetNavbarDesign('theme-2')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[65px] ${
+                                            effectiveNavbarDesign === 'theme-2'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Theme 2 Design</span>
+                                            {effectiveNavbarDesign === 'theme-2' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Streamlined dark command strip.</p>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Footer Style & Architecture (NEW option after Top Navbar Style) */}
+                                  <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <span className="text-xs font-bold text-slate-900 dark:text-white block">Footer Style & Architecture</span>
+                                        <p className="text-[10px] text-slate-400">Configure bottom footer geometry and corporate styling.</p>
+                                      </div>
+                                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                        {footerLayout === 'floating' ? 'Floating' : 'Classic'} • {effectiveFooterDesign === 'theme-2' ? 'Theme 2' : 'Theme 1'}
+                                      </span>
+                                    </div>
+
+                                    {/* Layout Geometry */}
+                                    <div>
+                                      <span className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 block mb-1.5">
+                                        Layout Geometry (Select 1 of 2):
+                                      </span>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetFooterLayout('floating')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[68px] ${
+                                            footerLayout === 'floating'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🚀 Floating</span>
+                                            {footerLayout === 'floating' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Rounded detached card with elevation.</p>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetFooterLayout('classic')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[68px] ${
+                                            footerLayout === 'classic'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🏛️ Classic</span>
+                                            {footerLayout === 'classic' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Edge-to-edge full width flush footer.</p>
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Design Preset */}
+                                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                                      <span className="text-[10.5px] font-semibold text-slate-600 dark:text-slate-300 block mb-1.5">
+                                        Design Preset (Select 1 of 2):
+                                      </span>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetFooterDesign('theme-1')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[65px] ${
+                                            effectiveFooterDesign === 'theme-1'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Theme 1 Design</span>
+                                            {effectiveFooterDesign === 'theme-1' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Executive card dock with developer telemetry.</p>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetFooterDesign('theme-2')}
+                                          className={`p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[65px] ${
+                                            effectiveFooterDesign === 'theme-2'
+                                              ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Theme 2 Design</span>
+                                            {effectiveFooterDesign === 'theme-2' && <LuCheck size={13} className="text-blue-600 stroke-[3]" />}
+                                          </div>
+                                          <p className="text-[9.5px] text-slate-400 leading-tight">Sleek dark high-density command strip.</p>
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
 

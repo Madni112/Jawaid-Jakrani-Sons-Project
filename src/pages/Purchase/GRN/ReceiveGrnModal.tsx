@@ -29,14 +29,30 @@ const ReceiveGrnModal: React.FC<ReceiveGrnModalProps> = ({ onClose, defaultLocat
   const fetchActiveGrns = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('grn_receipts')
-        .select('*, grn_items(*)')
-        .neq('status', 'Billed')
-        .order('created_at', { ascending: false });
+      const [receiptsRes, itemsRes] = await Promise.all([
+        supabase
+          .from('grn_receipts')
+          .select('*')
+          .neq('status', 'Billed')
+          .order('created_at', { ascending: false }),
+        supabase.from('grn_items').select('*')
+      ]);
 
-      if (error) throw error;
-      setGrns(data || []);
+      if (receiptsRes.error) throw receiptsRes.error;
+
+      const itemsByGrn: Record<string, any[]> = {};
+      (itemsRes.data || []).forEach((it: any) => {
+        const gId = String(it.grn_id || '');
+        if (!itemsByGrn[gId]) itemsByGrn[gId] = [];
+        itemsByGrn[gId].push(it);
+      });
+
+      const combined = (receiptsRes.data || []).map((g: any) => ({
+        ...g,
+        grn_items: itemsByGrn[String(g.id)] || []
+      }));
+
+      setGrns(combined);
     } catch (err: any) {
       console.error('Failed to fetch open GRNs:', err);
     } finally {

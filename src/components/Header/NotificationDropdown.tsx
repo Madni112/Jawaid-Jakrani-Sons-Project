@@ -4,15 +4,25 @@ import { FiBell } from 'react-icons/fi';
 import { supabase } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import { triggerFeedbackSound } from '../../utils/audioFeedback';
-import { useLanguage } from '../../Context/LanguageContext';
+import { getEffectiveNavbarDesign } from '../../constant/themeConfig';
 
 const NotificationDropdown = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [navbarDesign, setNavbarDesign] = useState<'theme-1' | 'theme-2'>(() => getEffectiveNavbarDesign());
+
+  useEffect(() => {
+    const handleDesignChange = () => setNavbarDesign(getEffectiveNavbarDesign());
+    window.addEventListener('nht_navbar_design_changed', handleDesignChange);
+    window.addEventListener('jakwani_master_theme_preset_changed', handleDesignChange);
+    return () => {
+      window.removeEventListener('nht_navbar_design_changed', handleDesignChange);
+      window.removeEventListener('jakwani_master_theme_preset_changed', handleDesignChange);
+    };
+  }, []);
   
   const { role, userLocationName, tenantId, userEmail } = useAuth();
-  const { isRTL } = useLanguage();
   
   const trigger = useRef<any>(null);
   const dropdown = useRef<any>(null);
@@ -143,24 +153,29 @@ const NotificationDropdown = () => {
           setDropdownOpen(!dropdownOpen);
         }}
         to="#"
-        className="relative flex h-8.5 w-8.5 items-center justify-center rounded-full border-[0.5px] border-stroke bg-gray hover:text-primary dark:border-strokedark dark:bg-meta-4 dark:text-white transition"
+        className={`relative flex h-8.5 w-8.5 items-center justify-center rounded-full transition cursor-pointer shadow-2xs ${
+          navbarDesign === 'theme-2'
+            ? 'border border-white/15 bg-white/10 hover:bg-white/20 text-white'
+            : 'border-[0.5px] border-stroke bg-gray hover:text-primary dark:border-strokedark dark:bg-meta-4 dark:text-white'
+        }`}
+        title="Notifications"
       >
         <span
-          className={`absolute -top-0.5 right-0 z-1 h-2 w-2 rounded-full bg-meta-1 ${
-            notifying === false ? 'hidden' : 'inline'
-          }`}
+          className={`absolute -top-0.5 right-0 z-1 h-2.5 w-2.5 rounded-full ${
+            navbarDesign === 'theme-2' ? 'bg-red-500 ring-2 ring-[#161618]' : 'bg-meta-1'
+          } ${notifying === false ? 'hidden' : 'inline'}`}
         >
-          <span className="absolute -z-1 inline-flex h-full w-full animate-ping rounded-full bg-meta-1 opacity-75"></span>
+          <span className="absolute -z-1 inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
         </span>
 
-        <FiBell size={18} />
+        <FiBell size={17} className={navbarDesign === 'theme-2' ? 'text-white' : ''} />
       </Link>
 
       <div
         ref={dropdown}
         onFocus={() => setDropdownOpen(true)}
         onBlur={() => setDropdownOpen(false)}
-        className={`absolute ${isRTL ? 'left-0 sm:left-0' : '-right-27 sm:right-0'} mt-2.5 flex h-90 w-75 flex-col rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark sm:w-80 ${
+        className={`absolute -right-27 mt-2.5 flex h-90 w-75 flex-col rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark sm:right-0 sm:w-80 ${
           dropdownOpen === true ? 'block' : 'hidden'
         }`}
       >
@@ -181,7 +196,7 @@ const NotificationDropdown = () => {
               <li key={notif.id}>
                 <Link
                   className="flex flex-col gap-2.5 border-t border-stroke px-4.5 py-3 hover:bg-gray-2 dark:border-strokedark dark:hover:bg-meta-4 transition"
-                  to={notif.link}
+                  to={`${tenantId ? `/${tenantId}` : ''}${notif.link}`}
                   onClick={() => markAsRead(notif.id)}
                 >
                   <p className="text-sm">

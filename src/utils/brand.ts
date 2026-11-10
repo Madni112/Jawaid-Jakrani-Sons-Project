@@ -26,16 +26,16 @@ export function getBrandConfig(): BrandConfig {
   return {
     isAlm: true,
     code: 'AM',
-    name: 'AL MUHAMMADI',
-    fullName: 'AL MUHAMMADI',
+    name: 'AL MUHAMMADI TILE EMPORIUM',
+    fullName: 'AL MUHAMMADI TILE EMPORIUM',
     brandWord1: 'AL',
     brandWord2: 'MUHAMMADI',
-    brandSuffix: 'ENTERPRISE ERP',
+    brandSuffix: 'TILE EMPORIUM',
     shortName: 'AM',
-    portalName: 'Al Muhammadi (AM)',
+    portalName: 'Al Muhammadi Tile Emporium (AM)',
     adminEmail: 'admin@almuhammadi.com',
     supportPhone: '0312-8039911',
     address: 'Main Showroom & Warehouse, Pakistan',
-    tagline: 'Enterprise Management Suite',
+    tagline: 'Tile Emporium & Sanitary Management Suite',
   };
 }

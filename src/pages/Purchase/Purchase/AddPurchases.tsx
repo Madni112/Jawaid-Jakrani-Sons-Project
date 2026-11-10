@@ -8,6 +8,7 @@ import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import { FiTrash2, FiPlus, FiArrowLeft, FiCheckCircle, FiPrinter } from 'react-icons/fi';
 import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
+import { detectIsAlm } from '../../../utils/brand';
 
 // Helper to resolve or auto-register Vendor Chart of Accounts (2010-XXXX)
 const resolveVendorCoaAccount = async (vendorName: string, vendorsList: any[] = []) => {
@@ -95,30 +96,176 @@ const AddPurchases = () => {
   const [defaultPurchaseNo, setDefaultPurchaseNo] = useState('');
 
   const location = useLocation();
+  const [importedGrnData, setImportedGrnData] = useState<any>(location.state?.importGrn || null);
 
-    const handleApplyGrn = (grn: any, setFieldValue: any) => {
-      if (!grn) return;
-      setFieldValue('grnId', grn.id);
-      if (grn.vendor_name) setFieldValue('supplierName', grn.vendor_name);
-      if (grn.receipt_date) setFieldValue('purchaseDate', grn.receipt_date);
-      if (grn.grn_items && grn.grn_items.length > 0) {
-        const mappedItems = grn.grn_items.map((gi: any) => {
-          const prod = productList.find(p => String(p.product_name || '').trim().toLowerCase() === String(gi.product_name || '').trim().toLowerCase());
-          const qtyToBill = Number(gi.accepted_qty != null ? gi.accepted_qty : gi.qty || 1);
-          return {
-            itemName: gi.product_name,
-            qty: qtyToBill,
-            uom: gi.uom || prod?.uom || 'Nos',
-            purchasePrice: Number(prod?.purchase_price || 0),
-            taxPercent: 0,
-            warehouse: gi.warehouse_name || locations[0]?.name || 'Main Warehouse',
-            remarks: ''
-          };
+  const parseGrnItemsToTilesAndStandard = (
+    grnItems: any[],
+    products: any[],
+    locs: any[]
+  ) => {
+    const isAlm = detectIsAlm();
+    const tileItems: any[] = [];
+    const standardItems: any[] = [];
+
+    (grnItems || []).forEach((gi: any, idx: number) => {
+      const prod =
+        (products || []).find(
+          (p: any) =>
+            String(p.product_name || '').trim().toLowerCase() ===
+            String(gi.product_name || '').trim().toLowerCase()
+        ) ||
+        (products || []).find(
+          (p: any) =>
+            gi.skuCode &&
+            (String(p.item_sr_no || '').trim().toLowerCase() === String(gi.skuCode || '').trim().toLowerCase() ||
+              `sku-${p.id}`.toLowerCase() === String(gi.skuCode || '').trim().toLowerCase())
+        );
+
+      const name = String(gi.product_name || prod?.product_name || '').toLowerCase();
+      const uom = String(gi.uom || prod?.uom || '').toUpperCase();
+      const desc = String(prod?.product_description || '').toLowerCase();
+      const cat = String(prod?.category || '').toLowerCase();
+      const sub = String(prod?.sub_category || '').toLowerCase();
+      const hasTileDimensions =
+        /\d+(\.\d+)?\s*[xX×*]\s*\d+(\.\d+)?/.test(name) ||
+        /\d+(\.\d+)?\s*[xX×*]\s*\d+(\.\d+)?/.test(desc);
+
+      const isTile =
+        isTileProduct(prod) ||
+        hasTileDimensions ||
+        uom === 'BOX' ||
+        uom === 'SQM' ||
+        uom === 'SQ.M' ||
+        uom === 'MTR' ||
+        name.includes('tile') ||
+        name.includes('matt') ||
+        name.includes('gloss') ||
+        name.includes('porcelain') ||
+        name.includes('ceramic') ||
+        name.includes('granite') ||
+        cat.includes('tile') ||
+        sub.includes('tile') ||
+        isAlm;
+
+      if (isTile) {
+        let pcsPerBox = Number(
+          prod?.pieces_per_box || prod?.pcs_per_box || prod?.pieces_per_packing || 0
+        );
+        if (pcsPerBox <= 1) {
+          const match = String(prod?.product_description || '').match(/Box:\s*(\d+)\s*pcs/i);
+          if (match && Number(match[1]) > 0) pcsPerBox = Number(match[1]);
+          else pcsPerBox = 4;
+        }
+
+        let sqmPerBox = 1.44;
+        const matchSqm = String(prod?.product_description || '').match(/([\d\.]+)\s*sq\.m/i);
+        if (matchSqm && Number(matchSqm[1]) > 0) {
+          sqmPerBox = Number(matchSqm[1]);
+        } else {
+          const dimMatch = String(
+            `${prod?.sub_category || ''} ${prod?.product_description || ''} ${prod?.item_sr_no || ''} ${gi.product_name || ''}`
+          ).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
+          if (dimMatch) {
+            const h = Number(dimMatch[1]) || 60;
+            const w = Number(dimMatch[2]) || 60;
+            sqmPerBox = Number((((h / 100) * (w / 100)) * pcsPerBox).toFixed(2));
+          }
+        }
+
+        const pBox = Number(prod?.purchase_price || 0);
+        const confLooseCost = Number(prod?.loose_purchase_price || 0);
+        const pPiece = confLooseCost > 0 ? confLooseCost : Number((pBox / pcsPerBox).toFixed(2));
+        const pSqm = Number((pBox / (sqmPerBox || 1)).toFixed(2));
+
+        const totalRawQty = Number(
+          gi.accepted_qty != null ? gi.accepted_qty : gi.qty != null ? gi.qty : 1
+        );
+
+        let boxQty = totalRawQty;
+        let loosePcs = 0;
+        if (totalRawQty % 1 !== 0 && pcsPerBox > 1) {
+          boxQty = Math.floor(totalRawQty);
+          const fraction = totalRawQty - boxQty;
+          loosePcs = Math.round(fraction * pcsPerBox);
+        }
+
+        const lineTotal = Number(((boxQty * pBox) + (loosePcs * pPiece)).toFixed(2));
+        const lineSqm = Number(
+          ((boxQty * sqmPerBox) + ((loosePcs / pcsPerBox) * sqmPerBox)).toFixed(2)
+        );
+
+        tileItems.push({
+          id: `tile-${idx}-${Date.now()}`,
+          itemName: gi.product_name,
+          skuCode: prod?.item_sr_no || gi.skuCode || (prod ? `SKU-${prod.id}` : ''),
+          warehouse: gi.warehouse_name || (locs && locs[0]?.name) || 'Main Warehouse',
+          boxQty: boxQty,
+          loosePcs: loosePcs,
+          totalSqm: lineSqm,
+          costPricePerBox: pBox,
+          costPricePerPiece: pPiece,
+          costPricePerSqm: pSqm,
+          totalAmount: lineTotal,
+          piecesPerBox: pcsPerBox,
+          sqmPerBox: sqmPerBox,
         });
-        setFieldValue('items', mappedItems);
-        toast.success(`Imported ${mappedItems.length} items from ${grn.grn_no}! Enter prices to complete bill.`);
+      } else {
+        const qtyToBill = Number(gi.accepted_qty != null ? gi.accepted_qty : gi.qty || 1);
+        standardItems.push({
+          itemName: gi.product_name,
+          skuCode: prod?.item_sr_no || '',
+          qty: qtyToBill,
+          rate: Number(prod?.purchase_price || 0),
+          uom: gi.uom || prod?.uom || 'Nos',
+          taxPercent: 0,
+          warehouse: gi.warehouse_name || (locs && locs[0]?.name) || 'Main Warehouse',
+          remarks: '',
+          discountPer: 0,
+          discountAmt: 0,
+          gstRate: 18,
+          gstAmt: 0,
+        });
       }
-    };
+    });
+
+    return { tileItems, standardItems };
+  };
+
+  const handleApplyGrn = (
+    grn: any,
+    setFieldValue: any,
+    productsOverride?: any[],
+    locationsOverride?: any[]
+  ) => {
+    if (!grn) return;
+    setImportedGrnData(grn);
+    const prods = productsOverride || productList || [];
+    const locs = locationsOverride || locations || [];
+
+    setFieldValue('grnId', grn.id);
+    if (grn.vendor_name) setFieldValue('supplierName', grn.vendor_name);
+    if (grn.receipt_date) setFieldValue('purchaseDate', grn.receipt_date);
+    if (grn.remarks) setFieldValue('remarks', grn.remarks);
+
+    const { tileItems: mappedTiles, standardItems: mappedStandard } =
+      parseGrnItemsToTilesAndStandard(grn.grn_items || [], prods, locs);
+
+    if (mappedTiles.length > 0) {
+      setFieldValue('showTileSection', true);
+      setFieldValue('tileItems', mappedTiles);
+    }
+
+    if (mappedStandard.length > 0) {
+      setFieldValue('items', mappedStandard);
+    } else if (mappedTiles.length > 0) {
+      setFieldValue('items', []);
+    }
+
+    const totalCount = mappedTiles.length + mappedStandard.length;
+    toast.success(
+      `Imported ${totalCount} items from ${grn.grn_no}! Enter prices to complete bill.`
+    );
+  };
 
   const navigate = useNavigate();
   const formikRef = React.useRef<any>(null);
@@ -156,52 +303,74 @@ const AddPurchases = () => {
     const fetchPurchaseMetadata = async () => {
       try {
         setMetadataLoading(true);
-        const { data: vendorData, error: vendorError } = await supabase
-          .from('vendors')
-          .select('*');
-        
-        // Auto-generate serial purchaseNo
-        const { count } = await supabase.from('supplier_purchases').select('*', { count: 'exact', head: true });
-        setDefaultPurchaseNo(String((count || 0) + 1).padStart(2, '0'));
 
-        const { data: grnData } = await supabase.from('grn_receipts').select('*, grn_items(*)').in('status', ['Confirm', 'Partially Received']).order('created_at', { ascending: false });
-        if (grnData) {
-            setPendingGrns(grnData);
-            const importId = location.state?.importGrnId;
-            if (importId) {
-              const matchedGrn = grnData.find((g: any) => g.id === importId);
-              if (matchedGrn) {
-                setTimeout(() => {
-                  if (formikRef.current) {
-                    handleApplyGrn(matchedGrn, formikRef.current.setFieldValue);
-                  }
-                }, 300);
-              }
-            }
-          }
+        const [vendorRes, countRes, locRes, bankRes] = await Promise.all([
+          supabase.from('vendors').select('*'),
+          supabase.from('supplier_purchases').select('*', { count: 'exact', head: true }),
+          supabase.from('inventory_locations').select('id, name').order('name', { ascending: true }),
+          supabase.from('banks').select('id, bankName, accountTitle, accountNumber')
+        ]);
 
-        if (vendorError) throw vendorError;
+        if (countRes.count !== null && countRes.count !== undefined) {
+          setDefaultPurchaseNo(String((countRes.count || 0) + 1).padStart(2, '0'));
+        }
 
-        const normalizedVendors = (vendorData || []).map((v: any) => ({
+        const normalizedVendors = (vendorRes.data || []).map((v: any) => ({
           id: v.id,
           vendor_name: v.vendor_name || v.name || 'Unnamed Vendor',
           contact_person: v.contact_person || v.contact || '',
           phone: v.phone || v.mobile || '',
           city: v.city || ''
         })).sort((a: any, b: any) => a.vendor_name.localeCompare(b.vendor_name));
+        setSuppliers(normalizedVendors);
 
-        const { data: locData } = await supabase.from('inventory_locations').select('id, name').order('name', { ascending: true });
+        const locData = locRes.data || [];
+        if (locRes.data) setLocations(locRes.data);
+        if (bankRes.data) setBankAccountsList(bankRes.data);
+
         let { data: prodData, error: prodErr } = await supabase.from('products').select('id, product_name, purchase_price, uom, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price, loose_purchase_price');
         if (prodErr && (prodErr.message?.includes('allow_loose_sales') || prodErr.code === '42703')) {
           const fallbackRes = await supabase.from('products').select('id, product_name, purchase_price, uom, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description');
           prodData = fallbackRes.data;
         }
-        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
-
-        setSuppliers(normalizedVendors);
-        if (locData) setLocations(locData);
         if (prodData) setProductList(prodData);
-        if (bankData) setBankAccountsList(bankData);
+
+        // Fetch GRNs using separate queries to prevent PGRST200 schema foreign key error
+        try {
+          const [receiptsRes, itemsRes] = await Promise.all([
+            supabase.from('grn_receipts').select('*').in('status', ['Confirm', 'Partially Received']).order('created_at', { ascending: false }),
+            supabase.from('grn_items').select('*')
+          ]);
+          const itemsByGrn: Record<string, any[]> = {};
+          (itemsRes.data || []).forEach((it: any) => {
+            const gId = String(it.grn_id || '');
+            if (!itemsByGrn[gId]) itemsByGrn[gId] = [];
+            itemsByGrn[gId].push(it);
+          });
+          const combinedGrns = (receiptsRes.data || []).map((g: any) => ({
+            ...g,
+            grn_items: itemsByGrn[String(g.id)] || []
+          }));
+          setPendingGrns(combinedGrns);
+
+          const importId = location.state?.importGrnId;
+          const passedGrn = location.state?.importGrn;
+          const matchedGrn = (passedGrn && (!importId || passedGrn.id === importId))
+            ? passedGrn
+            : (importId ? combinedGrns.find((g: any) => g.id === importId) : null);
+
+          if (matchedGrn) {
+            setImportedGrnData(matchedGrn);
+            setTimeout(() => {
+              if (formikRef.current) {
+                handleApplyGrn(matchedGrn, formikRef.current.setFieldValue, prodData, locData);
+              }
+            }, 60);
+          }
+        } catch (grnErr) {
+          console.warn('Error fetching GRNs:', grnErr);
+        }
+
       } catch (err: any) {
         toast.error('Failed to load system procurement metadata lookup profiles: ' + err.message);
       } finally {
@@ -439,11 +608,65 @@ const AddPurchases = () => {
         }))
       };
     }
+    const isAlm = detectIsAlm();
+    const isTileInitial = Boolean(
+      location.state?.isTilePurchase ||
+      location.state?.importGrnId ||
+      location.state?.importGrn ||
+      importedGrnData ||
+      isAlm
+    );
+
+    let initTileItems: any[] = [];
+    let initStandardItems: any[] = [
+      {
+        itemName: '',
+        skuCode: '',
+        warehouse: locations[0]?.name || '',
+        qty: 1,
+        rate: 0,
+        discountPer: 0,
+        discountAmt: 0,
+        gstRate: 18,
+        gstAmt: 0
+      }
+    ];
+    let initSupplier = '';
+    let initDate = new Date().toISOString().split('T')[0];
+    let initGrnId = location.state?.importGrnId || null;
+    let initRemarks = '';
+    let shouldShowTiles = isTileInitial;
+
+    const grnSource = importedGrnData || location.state?.importGrn;
+    if (grnSource) {
+      initGrnId = grnSource.id || initGrnId;
+      initSupplier = grnSource.vendor_name || '';
+      initDate = grnSource.receipt_date || initDate;
+      initRemarks = grnSource.remarks || '';
+
+      const { tileItems: parsedTiles, standardItems: parsedStandard } =
+        parseGrnItemsToTilesAndStandard(
+          grnSource.grn_items || [],
+          productList,
+          locations
+        );
+
+      if (parsedTiles.length > 0) {
+        initTileItems = parsedTiles;
+        shouldShowTiles = true;
+      }
+      if (parsedStandard.length > 0) {
+        initStandardItems = parsedStandard;
+      } else if (parsedTiles.length > 0) {
+        initStandardItems = [];
+      }
+    }
+
     return {
-      grnId: null,
+      grnId: initGrnId,
       purchaseNo: defaultPurchaseNo,
-      supplierName: '',
-      purchaseDate: new Date().toISOString().split('T')[0],
+      supplierName: initSupplier,
+      purchaseDate: initDate,
       applyTax: false,
       showDiscount: false,
       showAdditionalCharges: false,
@@ -452,24 +675,12 @@ const AddPurchases = () => {
       selectedBankTitle: '',
       cashAmountPaid: 0,
       bankAmountPaid: 0,
-      remarks: '',
-      showTileSection: false,
-      tileItems: [],
-      items: [
-        {
-          itemName: '',
-          skuCode: '',
-          warehouse: locations[0]?.name || '',
-          qty: 1,
-          rate: 0,
-          discountPer: 0,
-          discountAmt: 0,
-          gstRate: 18,
-          gstAmt: 0
-        }
-      ]
+      remarks: initRemarks,
+      showTileSection: shouldShowTiles,
+      tileItems: initTileItems,
+      items: initStandardItems
     };
-  }, [isEditMode, editData, defaultPurchaseNo, locations]);
+  }, [isEditMode, editData, defaultPurchaseNo, locations, importedGrnData, productList]);
 
   if (loading) return <div className="flex h-64 items-center justify-center bg-white dark:bg-boxdark"><Spinner /></div>;
   if (metadataLoading) return <div className="flex h-64 items-center justify-center bg-white dark:bg-boxdark"><Spinner /></div>;
