@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
@@ -9,6 +9,7 @@ import { useAuth } from '../../../Context/Auth';
 import { FiTrash2, FiPlus, FiArrowLeft, FiCheckCircle, FiPrinter } from 'react-icons/fi';
 import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
 import { detectIsAlm } from '../../../utils/brand';
+import { getWarehouseAvailableStock, getTotalAvailableStock, fetchStockDataset } from '../../../utils/stockCalculator';
 
 // Helper to resolve or auto-register Vendor Chart of Accounts (2010-XXXX)
 const resolveVendorCoaAccount = async (vendorName: string, vendorsList: any[] = []) => {
@@ -67,6 +68,145 @@ const resolveVendorCoaAccount = async (vendorName: string, vendorsList: any[] = 
   }
 };
 
+// Searchable Destination Warehouse selector matching description dropdown UX
+const WarehouseSearchableSelect: React.FC<{
+  value: string;
+  onChange: (val: string) => void;
+  locations: any[];
+  selectedProductName?: string;
+  getWarehouseStock: (productName: string, warehouseName: string) => { text: string; hasStock: boolean; qty: number };
+  isTile?: boolean;
+}> = ({ value, onChange, locations, selectedProductName, getWarehouseStock, isTile }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+        setSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  const query = (isOpen ? search : '').toLowerCase().trim();
+  const filtered = locations.filter(loc =>
+    !query || (loc.name || '').toLowerCase().includes(query)
+  );
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          autoComplete="off"
+          value={isOpen ? search : (value || '')}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearch('');
+            setHighlightedIndex(0);
+          }}
+          onChange={e => {
+            setSearch(e.target.value);
+            setIsOpen(true);
+            setHighlightedIndex(0);
+          }}
+          onKeyDown={e => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setHighlightedIndex(prev => prev < filtered.length - 1 ? prev + 1 : 0);
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setHighlightedIndex(prev => prev > 0 ? prev - 1 : filtered.length - 1);
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              if (filtered[highlightedIndex]) {
+                onChange(filtered[highlightedIndex].name);
+                setIsOpen(false);
+                setSearch('');
+              }
+            } else if (e.key === 'Escape') {
+              setIsOpen(false);
+              setSearch('');
+            }
+          }}
+          placeholder="Select or Search Warehouse..."
+          className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 pr-6 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
+        />
+        <span
+          onClick={() => {
+            setIsOpen(prev => !prev);
+            if (!isOpen) {
+              setSearch('');
+              inputRef.current?.focus();
+            }
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 cursor-pointer select-none"
+        >
+          ▼
+        </span>
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 top-full mt-1.5 z-[999999] min-w-[280px] w-full max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
+          {filtered.length > 0 ? (
+            filtered.map((loc, lIdx) => {
+              const stock = getWarehouseStock(selectedProductName || '', loc.name);
+              const isSelected = value === loc.name;
+              const isHighlighted = highlightedIndex === lIdx;
+              return (
+                <div
+                  key={loc.id || lIdx}
+                  onMouseEnter={() => setHighlightedIndex(lIdx)}
+                  onMouseDown={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onChange(loc.name);
+                    setIsOpen(false);
+                    setSearch('');
+                  }}
+                  className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                    isHighlighted || isSelected
+                      ? 'bg-primary/10 border-l-4 border-primary text-black dark:text-white font-bold'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-100'
+                  }`}
+                >
+                  <div className="truncate pr-2 font-bold">{loc.name}</div>
+                  <div className="shrink-0 text-right">
+                    {selectedProductName ? (
+                      <span
+                        className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                          isSelected
+                            ? 'bg-primary text-white'
+                            : stock.hasStock
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
+                        Stock: {stock.text}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No item chosen</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="p-3 text-center text-xs text-slate-400 italic">No warehouse found</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AddPurchases = () => {
   const { tenantId } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -94,6 +234,8 @@ const AddPurchases = () => {
   const [grnSearchTerm, setGrnSearchTerm] = useState('');
 
   const [defaultPurchaseNo, setDefaultPurchaseNo] = useState('');
+  const [stockDataset, setStockDataset] = useState<any>(null);
+  const [totalStockMap, setTotalStockMap] = useState<Record<string, number>>({});
 
   const location = useLocation();
   const [importedGrnData, setImportedGrnData] = useState<any>(location.state?.importGrn || null);
@@ -103,34 +245,39 @@ const AddPurchases = () => {
     products: any[],
     locs: any[]
   ) => {
-    const isAlm = detectIsAlm();
     const tileItems: any[] = [];
     const standardItems: any[] = [];
 
     (grnItems || []).forEach((gi: any, idx: number) => {
+      const rawName = String(gi.product_name || gi.itemName || gi.item_name || '').trim();
+      const rawSku = String(gi.skuCode || gi.sku_code || '').trim();
+
       const prod =
         (products || []).find(
           (p: any) =>
-            String(p.product_name || '').trim().toLowerCase() ===
-            String(gi.product_name || '').trim().toLowerCase()
+            String(p.product_name || '').trim().toLowerCase() === rawName.toLowerCase()
         ) ||
         (products || []).find(
           (p: any) =>
-            gi.skuCode &&
-            (String(p.item_sr_no || '').trim().toLowerCase() === String(gi.skuCode || '').trim().toLowerCase() ||
-              `sku-${p.id}`.toLowerCase() === String(gi.skuCode || '').trim().toLowerCase())
+            rawSku &&
+            (String(p.item_sr_no || '').trim().toLowerCase() === rawSku.toLowerCase() ||
+              `sku-${p.id}`.toLowerCase() === rawSku.toLowerCase())
         );
 
-      const name = String(gi.product_name || prod?.product_name || '').toLowerCase();
+      const name = String(rawName || prod?.product_name || '').toLowerCase();
       const uom = String(gi.uom || prod?.uom || '').toUpperCase();
       const desc = String(prod?.product_description || '').toLowerCase();
       const cat = String(prod?.category || '').toLowerCase();
       const sub = String(prod?.sub_category || '').toLowerCase();
-      const hasTileDimensions =
-        /\d+(\.\d+)?\s*[xX×*]\s*\d+(\.\d+)?/.test(name) ||
-        /\d+(\.\d+)?\s*[xX×*]\s*\d+(\.\d+)?/.test(desc);
+      const isNonTile = /jalli|drain|grate|grating|waste|strainer|trap|pipe|pvc|sanitary|faucet|mixer|basin|commode|tap|sink|hardware|grout|bond/i.test(name) ||
+                        /sanitary|plumbing|hardware|accessories|cp fittings/i.test(cat);
 
-      const isTile =
+      const hasTileDimensions = !isNonTile && (
+        /\d+(\.\d+)?\s*[xX×*]\s*\d+(\.\d+)?/.test(name) ||
+        /\d+(\.\d+)?\s*[xX×*]\s*\d+(\.\d+)?/.test(desc)
+      );
+
+      const isTile = !isNonTile && (
         isTileProduct(prod) ||
         hasTileDimensions ||
         uom === 'BOX' ||
@@ -144,8 +291,8 @@ const AddPurchases = () => {
         name.includes('ceramic') ||
         name.includes('granite') ||
         cat.includes('tile') ||
-        sub.includes('tile') ||
-        isAlm;
+        sub.includes('tile')
+      );
 
       if (isTile) {
         let pcsPerBox = Number(
@@ -163,7 +310,7 @@ const AddPurchases = () => {
           sqmPerBox = Number(matchSqm[1]);
         } else {
           const dimMatch = String(
-            `${prod?.sub_category || ''} ${prod?.product_description || ''} ${prod?.item_sr_no || ''} ${gi.product_name || ''}`
+            `${prod?.sub_category || ''} ${prod?.product_description || ''} ${prod?.item_sr_no || ''} ${rawName}`
           ).match(/(\d+(?:\.\d+)?)\s*(?:[xX×*])\s*(\d+(?:\.\d+)?)/);
           if (dimMatch) {
             const h = Number(dimMatch[1]) || 60;
@@ -196,9 +343,9 @@ const AddPurchases = () => {
 
         tileItems.push({
           id: `tile-${idx}-${Date.now()}`,
-          itemName: gi.product_name,
-          skuCode: prod?.item_sr_no || gi.skuCode || (prod ? `SKU-${prod.id}` : ''),
-          warehouse: gi.warehouse_name || (locs && locs[0]?.name) || 'Main Warehouse',
+          itemName: rawName || prod?.product_name || 'Tile Product',
+          skuCode: prod?.item_sr_no || rawSku || (prod ? `SKU-${prod.id}` : ''),
+          warehouse: gi.warehouse_name || gi.warehouseName || (locs && locs[0]?.name) || 'Main Warehouse',
           boxQty: boxQty,
           loosePcs: loosePcs,
           totalSqm: lineSqm,
@@ -212,13 +359,13 @@ const AddPurchases = () => {
       } else {
         const qtyToBill = Number(gi.accepted_qty != null ? gi.accepted_qty : gi.qty || 1);
         standardItems.push({
-          itemName: gi.product_name,
-          skuCode: prod?.item_sr_no || '',
+          itemName: rawName || prod?.product_name || '',
+          skuCode: prod?.item_sr_no || rawSku || '',
           qty: qtyToBill,
           rate: Number(prod?.purchase_price || 0),
           uom: gi.uom || prod?.uom || 'Nos',
           taxPercent: 0,
-          warehouse: gi.warehouse_name || (locs && locs[0]?.name) || 'Main Warehouse',
+          warehouse: gi.warehouse_name || gi.warehouseName || (locs && locs[0]?.name) || 'Main Warehouse',
           remarks: '',
           discountPer: 0,
           discountAmt: 0,
@@ -253,6 +400,9 @@ const AddPurchases = () => {
     if (mappedTiles.length > 0) {
       setFieldValue('showTileSection', true);
       setFieldValue('tileItems', mappedTiles);
+    } else {
+      setFieldValue('showTileSection', false);
+      setFieldValue('tileItems', []);
     }
 
     if (mappedStandard.length > 0) {
@@ -268,10 +418,31 @@ const AddPurchases = () => {
   };
 
   const navigate = useNavigate();
+  const { id } = useParams();
   const formikRef = React.useRef<any>(null);
+  const [fetchedRecord, setFetchedRecord] = useState<any | null>(null);
 
-  const editData = location.state?.purchaseRecord;
-  const isEditMode = !!editData;
+  const editData = location.state?.purchaseRecord || fetchedRecord;
+  const isEditMode = Boolean(id || location.state?.purchaseRecord);
+
+  useEffect(() => {
+    if (id && !location.state?.purchaseRecord) {
+      const fetchPurchaseById = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('supplier_purchases')
+            .select('*')
+            .eq('id', id)
+            .single();
+          if (error) throw error;
+          if (data) setFetchedRecord(data);
+        } catch (err: any) {
+          toast.error('Failed to load purchase record: ' + err.message);
+        }
+      };
+      fetchPurchaseById();
+    }
+  }, [id, location.state]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -328,12 +499,17 @@ const AddPurchases = () => {
         if (locRes.data) setLocations(locRes.data);
         if (bankRes.data) setBankAccountsList(bankRes.data);
 
-        let { data: prodData, error: prodErr } = await supabase.from('products').select('id, product_name, purchase_price, uom, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price, loose_purchase_price');
+        let { data: prodData, error: prodErr } = await supabase.from('products').select('id, product_name, purchase_price, uom, current_stock, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price, loose_purchase_price');
         if (prodErr && (prodErr.message?.includes('allow_loose_sales') || prodErr.code === '42703')) {
-          const fallbackRes = await supabase.from('products').select('id, product_name, purchase_price, uom, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description');
+          const fallbackRes = await supabase.from('products').select('id, product_name, purchase_price, uom, current_stock, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description');
           prodData = fallbackRes.data;
         }
         if (prodData) setProductList(prodData);
+
+        // Fetch stock dataset for live overall and location-specific stock calculations
+        fetchStockDataset().then(ds => {
+          if (ds) setStockDataset(ds);
+        }).catch(() => {});
 
         // Fetch GRNs using separate queries to prevent PGRST200 schema foreign key error
         try {
@@ -355,11 +531,21 @@ const AddPurchases = () => {
 
           const importId = location.state?.importGrnId;
           const passedGrn = location.state?.importGrn;
-          const matchedGrn = (passedGrn && (!importId || passedGrn.id === importId))
+          let matchedGrn = (passedGrn && (!importId || passedGrn.id === importId))
             ? passedGrn
             : (importId ? combinedGrns.find((g: any) => g.id === importId) : null);
 
           if (matchedGrn) {
+            if (!matchedGrn.grn_items || matchedGrn.grn_items.length === 0) {
+              try {
+                const { data: directItems } = await supabase.from('grn_items').select('*').eq('grn_id', matchedGrn.id);
+                if (directItems && directItems.length > 0) {
+                  matchedGrn = { ...matchedGrn, grn_items: directItems };
+                }
+              } catch (e) {
+                console.warn('Could not fetch direct items for GRN:', e);
+              }
+            }
             setImportedGrnData(matchedGrn);
             setTimeout(() => {
               if (formikRef.current) {
@@ -421,6 +607,11 @@ const AddPurchases = () => {
     const scn = String(p.scenario_name || '').toLowerCase().trim();
     const desc = String(p.product_description || '').toLowerCase().trim();
     const name = String(p.product_name || '').toLowerCase().trim();
+
+    const isNonTile = /jalli|drain|grate|grating|waste|strainer|trap|pipe|pvc|sanitary|faucet|mixer|basin|commode|tap|sink|hardware|grout|bond/i.test(name) ||
+                      /sanitary|plumbing|hardware|accessories|cp fittings/i.test(cat);
+    if (isNonTile) return false;
+
     return (
       subsub.includes('tile') ||
       cat.includes('tile') ||
@@ -430,6 +621,92 @@ const AddPurchases = () => {
       desc.includes('area/box:') ||
       name.includes('tile')
     );
+  };
+
+  // Calculate live overall stock map for products
+  useEffect(() => {
+    let isCancelled = false;
+    const calculateStock = async () => {
+      if (!productList || productList.length === 0) return;
+      const map: Record<string, number> = {};
+      if (stockDataset) {
+        if (stockDataset.balancesMode && Array.isArray(stockDataset.balances)) {
+          stockDataset.balances.forEach((r: any) => {
+            const name = String(r.product_name || '').toLowerCase().trim();
+            map[name] = (map[name] || 0) + (Number(r.quantity) || 0);
+          });
+        } else {
+          for (const p of productList) {
+            const name = (p.product_name || '').toLowerCase().trim();
+            try {
+              const val = await getTotalAvailableStock(p.product_name, stockDataset);
+              map[name] = val;
+            } catch {
+              map[name] = Number(p.current_stock || 0);
+            }
+          }
+        }
+      }
+      productList.forEach(p => {
+        const name = (p.product_name || '').toLowerCase().trim();
+        if (map[name] === undefined) {
+          map[name] = Number(p.current_stock || 0);
+        }
+      });
+      if (!isCancelled) {
+        setTotalStockMap(map);
+      }
+    };
+    calculateStock();
+    return () => { isCancelled = true; };
+  }, [stockDataset, productList]);
+
+  const getOverallStockNumber = (p: any): number => {
+    if (!p) return 0;
+    const name = String(p.product_name || p.itemName || '').toLowerCase().trim();
+    if (totalStockMap[name] !== undefined) return totalStockMap[name];
+    return Number(p.current_stock || 0);
+  };
+
+  const formatProductStock = (p: any, forcedQty?: number): string => {
+    if (!p) return '-';
+    const total = forcedQty !== undefined ? forcedQty : getOverallStockNumber(p);
+    if (isTileProduct(p)) {
+      let pcsPerBox = Number(p.pieces_per_box || p.pcs_per_box || p.pieces_per_packing || 4);
+      if (pcsPerBox <= 1) {
+        const match = String(p.product_description || '').match(/Box:\s*(\d+)\s*pcs/i);
+        if (match && Number(match[1]) > 0) pcsPerBox = Number(match[1]);
+        else pcsPerBox = 4;
+      }
+      const boxes = Math.floor(total);
+      let loose = Math.round((total - boxes) * pcsPerBox);
+      if (loose >= pcsPerBox) {
+        const addB = Math.floor(loose / pcsPerBox);
+        return `${boxes + addB} Bx`;
+      }
+      if (boxes === 0 && loose === 0) return '0 Bx';
+      if (loose === 0) return `${boxes} Bx`;
+      if (boxes === 0) return `${loose} Pcs`;
+      return `${boxes} Bx, ${loose} Pcs`;
+    }
+    return `${total} ${p.uom || 'units'}`;
+  };
+
+  const getWarehouseStockInfo = (productName: string, warehouseName: string) => {
+    if (!productName || !warehouseName) return { text: '-', hasStock: false, qty: 0 };
+    const p = productList.find(pr => (pr.product_name || '').toLowerCase().trim() === productName.toLowerCase().trim());
+    let qty = 0;
+    if (stockDataset) {
+      qty = getWarehouseAvailableStock(productName, warehouseName, stockDataset);
+    } else if (p) {
+      qty = Number(p.current_stock || 0);
+    }
+    const formatted = formatProductStock(p || { product_name: productName }, qty);
+    return {
+      text: formatted,
+      hasStock: qty > 0,
+      qty
+    };
   };
 
   const handleTileProductSelection = (p: any, tIdx: number, currentTileItem: any, setFieldValue: any) => {
@@ -511,10 +788,6 @@ const AddPurchases = () => {
       setFieldValue(`tileItems.${tIdx}.costPricePerPiece`, pPiece);
     } else if (field === 'costPricePerPiece') {
       pPiece = val;
-      pBox = Number((val * pcsPerBox).toFixed(2));
-      pSqm = Number((pBox / sqmPerBox).toFixed(2));
-      setFieldValue(`tileItems.${tIdx}.costPricePerBox`, pBox);
-      setFieldValue(`tileItems.${tIdx}.costPricePerSqm`, pSqm);
       setFieldValue(`tileItems.${tIdx}.costPricePerPiece`, pPiece);
     } else if (field === 'boxQty') {
       boxQty = val;
@@ -533,7 +806,21 @@ const AddPurchases = () => {
   const calculatePurchaseLineTotals = (item: any, applyTax: boolean) => {
     const qty = Math.max(0, Number(item.qty) || 0);
     const rate = Math.max(0, Number(item.rate) || 0);
-    const grossTotal = qty * rate;
+    const pMatch = (productList || []).find((p: any) => p.product_name === item.itemName || p.item_sr_no === item.itemCode || (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)));
+    const isTile = pMatch ? isTileProduct(pMatch) : false;
+    const allowLoose = Boolean(pMatch?.allow_loose_sales || isTile);
+    const rawPcs = Number(pMatch?.pieces_per_box ?? pMatch?.pcs_per_box ?? pMatch?.pieces_per_packing ?? 0);
+    const pcsPerBox = Number(pMatch?.loose_conversion_ratio) > 0 ? Number(pMatch.loose_conversion_ratio) : (rawPcs > 0 ? rawPcs : (isTile ? 4 : 1));
+
+    let grossTotal = qty * rate;
+    if (allowLoose && pcsPerBox > 1) {
+      const bulkCount = Math.floor(qty);
+      const looseCount = Math.round((qty - bulkCount) * pcsPerBox);
+      const pieceRate = item.pieceRate !== undefined && item.pieceRate !== ''
+        ? Number(item.pieceRate)
+        : (Number(pMatch?.loose_purchase_price) > 0 ? Number(pMatch.loose_purchase_price) : (pcsPerBox > 0 ? rate / pcsPerBox : 0));
+      grossTotal = Number(((bulkCount * rate) + (looseCount * pieceRate)).toFixed(2));
+    }
     const discountAmt = Math.max(0, Number(item.discountAmt) || 0);
     const remainingCost = Math.max(0, grossTotal - discountAmt);
 
@@ -608,14 +895,7 @@ const AddPurchases = () => {
         }))
       };
     }
-    const isAlm = detectIsAlm();
-    const isTileInitial = Boolean(
-      location.state?.isTilePurchase ||
-      location.state?.importGrnId ||
-      location.state?.importGrn ||
-      importedGrnData ||
-      isAlm
-    );
+    const isTileInitial = Boolean(location.state?.isTilePurchase);
 
     let initTileItems: any[] = [];
     let initStandardItems: any[] = [
@@ -644,9 +924,13 @@ const AddPurchases = () => {
       initDate = grnSource.receipt_date || initDate;
       initRemarks = grnSource.remarks || '';
 
+      const itemsToParse = (grnSource.grn_items && grnSource.grn_items.length > 0)
+        ? grnSource.grn_items
+        : (importedGrnData?.grn_items || []);
+
       const { tileItems: parsedTiles, standardItems: parsedStandard } =
         parseGrnItemsToTilesAndStandard(
-          grnSource.grn_items || [],
+          itemsToParse,
           productList,
           locations
         );
@@ -654,7 +938,10 @@ const AddPurchases = () => {
       if (parsedTiles.length > 0) {
         initTileItems = parsedTiles;
         shouldShowTiles = true;
+      } else {
+        shouldShowTiles = false;
       }
+
       if (parsedStandard.length > 0) {
         initStandardItems = parsedStandard;
       } else if (parsedTiles.length > 0) {
@@ -783,12 +1070,24 @@ const AddPurchases = () => {
                       }
                     });
 
-                    // Compare against total new quantities in values.items
+                    // Compare against total new quantities in values.items and values.tileItems
                     for (const [pKey, acceptedTotal] of Object.entries(acceptedByProduct)) {
                       if (acceptedTotal <= 0) continue;
-                      const newTotalForProduct = values.items
+                      let newTotalForProduct = values.items
                         .filter((i: any) => String(i.itemName || '').trim().toLowerCase() === pKey)
                         .reduce((sum: number, i: any) => sum + Number(i.qty || 0), 0);
+
+                      if (values.showTileSection && Array.isArray(values.tileItems)) {
+                        const tileTotal = values.tileItems
+                          .filter((t: any) => String(t.itemName || '').trim().toLowerCase() === pKey)
+                          .reduce((sum: number, t: any) => {
+                            const ppb = Math.max(1, Number(t.piecesPerBox) || 4);
+                            const bQty = Number(t.boxQty || 0);
+                            const lPcs = Number(t.loosePcs || 0);
+                            return sum + (bQty + (lPcs / ppb));
+                          }, 0);
+                        newTotalForProduct += tileTotal;
+                      }
 
                       // Tolerance of 0.0001 for floating-point rounding
                       if (newTotalForProduct < (acceptedTotal - 0.0001)) {
@@ -1084,6 +1383,50 @@ const AddPurchases = () => {
                         voucher_date: vDate,
                         items: vpvItems
                       }).eq('id', existingVpv.id);
+                    } else {
+                      const modeDesc = paidCash > 0 && paidBank > 0 ? 'Cash & Bank' : (paidBank > 0 ? 'Bank' : 'Cash');
+                      const { data: vpvRows } = await supabase
+                        .from('financial_vouchers')
+                        .select('voucher_no')
+                        .or('voucher_no.ilike.VPV-%,voucher_no.ilike.VPR-%');
+
+                      const usedSeqs = new Set<number>();
+                      (vpvRows || []).forEach((v: any) => {
+                        const match = String(v.voucher_no || '').match(/(?:VPV|VPR)-(\d+)/i);
+                        if (match && match[1]) {
+                          const num = parseInt(match[1], 10);
+                          if (!isNaN(num) && num > 0) usedSeqs.add(num);
+                        }
+                      });
+                      let nextSeq = 1;
+                      while (usedSeqs.has(nextSeq)) {
+                        nextSeq++;
+                      }
+                      const nextVpvNo = `VPV-${String(nextSeq).padStart(3, '0')}`;
+
+                      await supabase.from('financial_vouchers').insert([{
+                        voucher_no: nextVpvNo,
+                        voucher_type: 'Vendor Payment Voucher',
+                        voucher_date: vDate,
+                        total_amount: totalPaid,
+                        debit: totalPaid,
+                        credit: 0,
+                        account_code: resolvedVendor.code,
+                        account_title: resolvedVendor.title,
+                        customer_name: resolvedVendor.title,
+                        customerName: resolvedVendor.title,
+                        party_name: resolvedVendor.title,
+                        narration: `Payment disbursed to ${resolvedVendor.title} for Purchase Bill #${purchaseIdentifier} (${modeDesc})`,
+                        original_invoice_no: purchaseIdentifier,
+                        items: vpvItems,
+                        metadata: {
+                          preset: 'VPV',
+                          auto_generated: true,
+                          linkedPurchaseNo: purchaseIdentifier,
+                          settlementMode: values.settlementMode,
+                          moduleSource: 'purchase_bill'
+                        }
+                      }]);
                     }
                   } else if (existingVpv) {
                     await supabase.from('financial_vouchers').delete().eq('id', existingVpv.id);
@@ -1232,17 +1575,21 @@ const AddPurchases = () => {
                     const { data: vpvRows } = await supabase
                       .from('financial_vouchers')
                       .select('voucher_no')
-                      .ilike('voucher_no', 'VPV-%');
+                      .or('voucher_no.ilike.VPV-%,voucher_no.ilike.VPR-%');
 
-                    let maxVpvSeq = 0;
+                    const usedSeqs = new Set<number>();
                     (vpvRows || []).forEach(v => {
-                      const match = String(v.voucher_no || '').match(/VPV-(\d+)/i);
+                      const match = String(v.voucher_no || '').match(/(?:VPV|VPR)-(\d+)/i);
                       if (match && match[1]) {
                         const num = parseInt(match[1], 10);
-                        if (num > maxVpvSeq) maxVpvSeq = num;
+                        if (!isNaN(num) && num > 0) usedSeqs.add(num);
                       }
                     });
-                    const nextVpvNo = `VPV-${String(maxVpvSeq + 1).padStart(3, '0')}`;
+                    let nextSeq = 1;
+                    while (usedSeqs.has(nextSeq)) {
+                      nextSeq++;
+                    }
+                    const nextVpvNo = `VPV-${String(nextSeq).padStart(3, '0')}`;
 
                     await supabase.from('financial_vouchers').insert([{
                       voucher_no: nextVpvNo,
@@ -1305,8 +1652,19 @@ const AddPurchases = () => {
 
 
 
-                {/* ── TOP 2-COLUMN HEADER BAR ── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark relative z-10">
+                {/* ── TOP 3-COLUMN HEADER BAR ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark relative z-10">
+                  <div>
+                    <label className="block font-bold text-gray-500 mb-1">Purchase #: *</label>
+                    <input
+                      type="text"
+                      name="purchaseNo"
+                      value={values.purchaseNo}
+                      readOnly
+                      className="w-full rounded border border-stroke dark:border-strokedark bg-gray-100 dark:bg-meta-4 cursor-not-allowed p-2 text-sm font-bold font-mono text-gray-600 dark:text-gray-300 outline-none"
+                    />
+                  </div>
+
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Inbound Purchase Date: *</label>
                     <input
@@ -1314,7 +1672,7 @@ const AddPurchases = () => {
                       name="purchaseDate"
                       value={values.purchaseDate}
                       onChange={handleChange}
-                      className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && errors.purchaseDate ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
+                      className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.purchaseDate ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
                     />
                   </div>
 
@@ -1521,38 +1879,319 @@ const AddPurchases = () => {
                       }}
                       className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border shadow-xs ${
                         values.showTileSection
-                          ? 'bg-teal-600 text-white border-teal-600 shadow-teal-500/20'
-                          : 'bg-teal-50 text-teal-800 border-teal-300 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-700 hover:bg-teal-100 dark:hover:bg-teal-900/50'
+                          ? 'bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-700 shadow-slate-900/10'
+                          : 'bg-white text-slate-700 border-stroke dark:bg-boxdark dark:text-slate-200 dark:border-strokedark hover:border-primary'
                       }`}
                     >
                       {values.showTileSection ? '✓ Tiles Enabled' : '+ Purchase Tiles'}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <label className={`text-[11px] font-bold whitespace-nowrap ${touched.purchaseNo && errors.purchaseNo ? 'text-red-500' : 'text-gray-500'}`}>Purchase Order Ref: *</label>
-                    <input
-                      type="text"
-                      name="purchaseNo"
-                      value={values.purchaseNo}
-                      readOnly
-                      className={`w-32 rounded border bg-gray-50 dark:bg-meta-4 cursor-not-allowed p-1 text-xs font-bold font-mono text-gray-500 outline-none ${
-                        touched.purchaseNo && errors.purchaseNo ? 'border-red-500' : 'border-stroke dark:border-strokedark'
-                      }`}
-                    />
-                  </div>
+                  
                 </div>
 
+                {/* ── DEDICATED TILE PURCHASES DYNAMIC CONTAINER ── */}
+                {values.showTileSection && (
+                  <div className={`border border-stroke dark:border-strokedark bg-white dark:bg-boxdark rounded-sm mt-6 relative ${activeTileSkuIndex !== null || activeTileProdIndex !== null ? 'z-30' : 'z-20'} overflow-visible pb-4 shadow-xs`}>
+                    <FieldArray name="tileItems">
+                      {({ push, remove }) => {
+                        const tileTotalSum = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.totalAmount || 0)), 0);
+                        const totalBoxesCount = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.boxQty || 0)), 0);
+                        const totalLoosePcsCount = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.loosePcs || 0)), 0);
+                        const totalSqmCount = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.totalSqm || 0)), 0);
+                        const tileProducts = productList.filter(p => isTileProduct(p));
+
+                        return (
+                          <div className="w-full min-w-[980px]">
+                            {/* Header Bar */}
+                            <div className="p-3 bg-slate-50 dark:bg-meta-4/20 border-b border-stroke dark:border-strokedark flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 rounded bg-slate-900 dark:bg-slate-700 text-white font-mono text-[10px] font-black tracking-wider uppercase">
+                                  Tiles
+                                </span>
+                                <span className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                                  Tile Purchases (Boxes, Loose Pieces & Sq. Mtr Inward)
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
+                                <span>Boxes: <strong className="font-black text-black dark:text-white">{totalBoxesCount}</strong></span>
+                                <span>Pcs: <strong className="font-black text-black dark:text-white">{totalLoosePcsCount}</strong></span>
+                                <span>Total Sq.M: <strong className="font-black text-slate-900 dark:text-white bg-slate-200/80 dark:bg-slate-700 px-2 py-0.5 rounded shadow-xs">{totalSqmCount.toFixed(2)} m²</strong></span>
+                                <span className="text-slate-900 dark:text-white font-black text-sm">
+                                  Total Tiles: Rs. {tileTotalSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Table */}
+                            <table className="w-full table-auto border-collapse text-left">
+                              <thead className="bg-gray-100 dark:bg-meta-4/40 text-[10px] font-black uppercase text-slate-700 dark:text-slate-200 border-b border-stroke dark:border-strokedark">
+                                <tr>
+                                  <th className="p-3 w-10 text-center">S#</th>
+                                  <th className="p-3 min-w-[280px]">Tile Code / Description</th>
+                                  <th className="p-3 w-52">Destination Warehouse</th>
+                                  <th className="p-3 w-28 text-center">Arrived Boxes</th>
+                                  <th className="p-3 w-24 text-center">Loose Pcs</th>
+                                  <th className="p-3 w-32 text-right">Cost (Per Box)</th>
+                                  <th className="p-3 w-32 text-right">Cost (Per Sq.M)</th>
+                                  <th className="p-3 w-28 text-right">Cost (Per Pc)</th>
+                                  <th className="p-3 w-36 text-right pr-4 font-mono">Line Total</th>
+                                  <th className="p-3 w-10 text-center"></th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                                {(values.tileItems || []).map((tItem: any, tIdx: number) => {
+                                  const isCurrentProdActive = activeTileProdIndex === tIdx;
+
+                                  const filteredTileProds = tileProducts.filter(p => {
+                                    if (!tItem.itemName) return true;
+                                    const q = (tItem.itemName || '').toLowerCase().trim();
+                                    const name = (p.product_name || '').toLowerCase();
+                                    const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
+                                    const cat = (p.category || '').toLowerCase();
+                                    return name.includes(q) || sku.includes(q) || cat.includes(q);
+                                  });
+
+                                  return (
+                                    <tr
+                                      key={tItem.id || tIdx}
+                                      className={`text-xs transition ${
+                                        isCurrentProdActive
+                                          ? 'relative z-50 bg-slate-100/80 dark:bg-meta-4/40'
+                                          : 'relative z-10 bg-white/70 dark:bg-boxdark/70 hover:bg-slate-50/50 dark:hover:bg-meta-4/10'
+                                      }`}
+                                    >
+                                      <td className="p-3 text-center text-gray-400 font-sans">{tIdx + 1}</td>
+
+                                      {/* Tile Code / Description Searchable Dropdown */}
+                                      <td className="p-3 relative tile-prod-container min-w-[280px]">
+                                        <div className="relative">
+                                          <input
+                                            type="text"
+                                            autoComplete="off"
+                                            value={tItem.itemName || ''}
+                                            onFocus={() => {
+                                              setActiveTileProdIndex(tIdx);
+                                              setActiveTileSkuIndex(null);
+                                              setHighlightedTileProdIndex(0);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                setHighlightedTileProdIndex(prev => prev < filteredTileProds.length - 1 ? prev + 1 : 0);
+                                              } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                setHighlightedTileProdIndex(prev => prev > 0 ? prev - 1 : filteredTileProds.length - 1);
+                                              } else if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                if (filteredTileProds[highlightedTileProdIndex]) {
+                                                  handleTileProductSelection(filteredTileProds[highlightedTileProdIndex], tIdx, tItem, setFieldValue);
+                                                  setActiveTileProdIndex(null);
+                                                }
+                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
+                                                setActiveTileProdIndex(null);
+                                              }
+                                            }}
+                                            onChange={(e) => {
+                                              setFieldValue(`tileItems.${tIdx}.itemName`, e.target.value);
+                                              setActiveTileProdIndex(tIdx);
+                                              setHighlightedTileProdIndex(0);
+                                            }}
+                                            placeholder="Search by code or tile description..."
+                                            className="w-full rounded border border-stroke dark:border-strokedark p-2 text-xs bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white focus:border-primary shadow-xs"
+                                          />
+                                          {tItem.skuCode && (
+                                            <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                                              Code: <span className="font-bold text-slate-600 dark:text-slate-300">{tItem.skuCode}</span>
+                                            </div>
+                                          )}
+                                          {isCurrentProdActive && (
+                                            <div className="absolute left-0 top-full mt-1 z-[999999] min-w-[360px] max-w-[460px] max-h-60 overflow-y-auto bg-white dark:bg-[#1A222C] border border-stroke dark:border-strokedark rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
+                                              {filteredTileProds.length > 0 ? (
+                                                filteredTileProds.map((p: any, pIdx: number) => {
+                                                  const stockStr = formatProductStock(p);
+                                                  const displaySku = p.item_sr_no || `SKU-${p.id}`;
+                                                  const isHighlighted = highlightedTileProdIndex === pIdx;
+                                                  return (
+                                                    <div
+                                                      key={p.id}
+                                                      onMouseEnter={() => setHighlightedTileProdIndex(pIdx)}
+                                                      onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleTileProductSelection(p, tIdx, tItem, setFieldValue);
+                                                        setActiveTileProdIndex(null);
+                                                      }}
+                                                      className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                                                        isHighlighted
+                                                          ? 'bg-slate-100 dark:bg-slate-800 border-l-4 border-primary text-black dark:text-white font-bold'
+                                                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-100'
+                                                      }`}
+                                                    >
+                                                      <div className="min-w-0 pr-2">
+                                                        <span className="font-bold block truncate max-w-[210px]">{p.product_name}</span>
+                                                        <span className="text-[10px] opacity-80 block font-mono text-slate-500">
+                                                          Code: {displaySku} • {p.sub_sub_category || p.category || 'Tile'}
+                                                        </span>
+                                                      </div>
+                                                      <div className="text-right shrink-0 flex flex-col items-end">
+                                                        <span className="font-mono font-bold block text-emerald-600 dark:text-emerald-400">
+                                                          Rs. {Number(p.purchase_price || 0).toLocaleString()}
+                                                        </span>
+                                                        <div className="flex items-center gap-1 mt-0.5">
+                                                          <span className="text-[10px] opacity-75">{p.pieces_per_box || 4} pcs/bx</span>
+                                                          <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">
+                                                            Stock: {stockStr}
+                                                          </span>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })
+                                              ) : (
+                                                <div className="p-3 text-center text-xs text-slate-400 italic">No matching tile found</div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+
+                                      {/* Destination Warehouse */}
+                                      <td className="p-3 w-52">
+                                        <WarehouseSearchableSelect
+                                          value={tItem.warehouse || locations[0]?.name || 'Main Warehouse'}
+                                          onChange={(val) => setFieldValue(`tileItems.${tIdx}.warehouse`, val)}
+                                          locations={locations}
+                                          selectedProductName={tItem.itemName}
+                                          getWarehouseStock={getWarehouseStockInfo}
+                                          isTile={true}
+                                        />
+                                      </td>
+
+                                      {/* Arrived Boxes */}
+                                      <td className="p-3 w-28 text-center">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          onKeyDown={blockInvalidChar}
+                                          value={tItem.boxQty ?? 0}
+                                          onChange={(e) => updateTileRowCalcs('boxQty', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
+                                          className="w-full text-center font-black font-mono bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-primary shadow-xs"
+                                        />
+                                      </td>
+
+                                      {/* Loose Pcs */}
+                                      <td className="p-3 w-24 text-center">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          onKeyDown={blockInvalidChar}
+                                          value={tItem.loosePcs ?? 0}
+                                          onChange={(e) => updateTileRowCalcs('loosePcs', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
+                                          className="w-full text-center font-black font-mono bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-primary shadow-xs"
+                                        />
+                                      </td>
+
+                                      {/* Cost Price Per Box */}
+                                      <td className="p-3 w-32 text-right">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          onKeyDown={blockInvalidChar}
+                                          value={tItem.costPricePerBox ?? 0}
+                                          onChange={(e) => updateTileRowCalcs('costPricePerBox', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
+                                          className="w-full text-right font-black font-mono bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-primary shadow-xs"
+                                        />
+                                      </td>
+
+                                      {/* Cost Price Per Sq.M */}
+                                      <td className="p-3 w-32 text-right">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          onKeyDown={blockInvalidChar}
+                                          value={tItem.costPricePerSqm ?? 0}
+                                          onChange={(e) => updateTileRowCalcs('costPricePerSqm', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
+                                          className="w-full text-right font-black font-mono bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-primary shadow-xs"
+                                        />
+                                      </td>
+
+                                      {/* Cost Price Per Piece */}
+                                      <td className="p-3 w-28 text-right">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          onKeyDown={blockInvalidChar}
+                                          value={tItem.costPricePerPiece ?? 0}
+                                          onChange={(e) => updateTileRowCalcs('costPricePerPiece', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
+                                          className="w-full text-right font-black font-mono bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-primary shadow-xs"
+                                        />
+                                      </td>
+
+                                      {/* Line Total */}
+                                      <td className="p-3 text-right pr-4 text-slate-900 dark:text-white font-black font-mono">
+                                        Rs. {Number(tItem.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      </td>
+
+                                      {/* Delete */}
+                                      <td className="p-3 text-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => remove(tIdx)}
+                                          className="text-gray-400 hover:text-danger transition cursor-pointer"
+                                        >
+                                          <FiTrash2 size={14} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+
+                            {/* Append Tile Row Button */}
+                            <div className="p-3 bg-slate-50 dark:bg-meta-4/20 border-t border-stroke dark:border-strokedark flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => push({
+                                  id: `tile-${Date.now()}`,
+                                  itemName: '',
+                                  skuCode: '',
+                                  warehouse: locations[0]?.name || 'Main Warehouse',
+                                  boxQty: 1,
+                                  loosePcs: 0,
+                                  totalSqm: 0,
+                                  costPricePerBox: 0,
+                                  costPricePerPiece: 0,
+                                  costPricePerSqm: 0,
+                                  totalAmount: 0,
+                                  piecesPerBox: 4,
+                                  sqmPerBox: 1.44
+                                })}
+                                className="inline-flex items-center gap-1 bg-slate-900 dark:bg-slate-700 text-white font-bold py-1.5 px-3.5 rounded text-xs hover:bg-slate-800 dark:hover:bg-slate-600 transition cursor-pointer shadow-xs"
+                              >
+                                <FiPlus size={12} /> Append Tile Row
+                              </button>
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                                * Cross-calculates boxes, loose pieces & sq.m automatically with your tile box specifications
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    </FieldArray>
+                  </div>
+                )}
+
                 {/* ── PRODUCT ITEM CATALOG ENTRY TABLE ── */}
-                <div className="border border-stroke dark:border-strokedark rounded-sm relative z-20 overflow-x-auto pb-44">
+                <div className={`border border-stroke dark:border-strokedark bg-white dark:bg-boxdark rounded-sm mt-4 relative ${activeSkuIndex !== null || activeProdNameIndex !== null ? 'z-30' : 'z-20'} overflow-visible pb-4 shadow-xs`}>
                   <div className="w-full min-w-[980px]">
                     <table className="w-full table-auto border-collapse text-left">
                       <thead>
                         <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
                           <th className="p-3 w-10 text-center">S#</th>
-                          <th className="p-3 w-48">Code (Search)</th>
-                          <th className="p-3 min-w-[240px]">Product Description</th>
-                          <th className="p-3 w-44">Destination Warehouse</th>
+                          <th className="p-3 min-w-[280px]">Product Code / Description</th>
+                          <th className="p-3 w-52">Destination Warehouse</th>
                           <th className="p-3 min-w-[260px] text-center">Arrived Qty (Boxes / Pcs / Sq.m)</th>
                           <th className="p-3 w-36 text-right">Cost Price (PKR)</th>
                           {values.showDiscount && (
@@ -1593,7 +2232,6 @@ const AddPurchases = () => {
                               const looseUnitLabel = matchedProduct?.loose_uom || (isTile ? 'Pcs' : 'Units');
                               const uomString = matchedProduct ? matchedProduct.uom : 'NOS';
                               const lineTotals = calculatePurchaseLineTotals(item, values.applyTax);
-                              const isCurrentActive = activeSkuIndex === idx;
                               const isCurrentProdNameActive = activeProdNameIndex === idx;
 
                               const handleProductSelection = (p: any) => {
@@ -1610,7 +2248,8 @@ const AddPurchases = () => {
                                   skuCode: displaySku,
                                   itemName: p.product_name,
                                   rate: price,
-                                  discountAmt: dAmt
+                                  discountAmt: dAmt,
+                                  uom: p.uom || cur.uom || 'NOS'
                                 };
 
                                 setFieldValue('items', updatedItems);
@@ -1619,102 +2258,15 @@ const AddPurchases = () => {
                               };
 
                               return (
-                                <tr key={idx} className={`border-b border-stroke dark:border-strokedark text-xs transition ${isCurrentActive || isCurrentProdNameActive ? 'relative z-50 bg-slate-50/90 dark:bg-meta-4/20' : 'relative z-10 bg-white dark:bg-boxdark hover:bg-slate-50 dark:hover:bg-meta-4/10'}`}>
+                                <tr key={idx} className={`border-b border-stroke dark:border-strokedark text-xs transition ${isCurrentProdNameActive ? 'relative z-50 bg-slate-50/90 dark:bg-meta-4/20' : 'relative z-10 bg-white dark:bg-boxdark hover:bg-slate-50 dark:hover:bg-meta-4/10'}`}>
                                   <td className="p-3 text-center text-gray-400 font-sans">{idx + 1}</td>
 
-                                  {/* Searchable Code */}
-                                  <td className="p-3 relative sku-container">
-                                    {(() => {
-                                      const nonTileList = productList.filter(p => !isTileProduct(p));
-                                      const filteredProds = nonTileList.filter(p => {
-                                        if (!item.skuCode) return true;
-                                        const query = item.skuCode.toLowerCase().trim();
-                                        const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
-                                        const name = (p.product_name || '').toLowerCase();
-                                        return sku.includes(query) || name.includes(query);
-                                      }).sort((a, b) => {
-                                        if (!item.skuCode) return 0;
-                                        const query = item.skuCode.toLowerCase().trim();
-                                        const aSku = (a.item_sr_no || `SKU-${a.id}`).toLowerCase();
-                                        const bSku = (b.item_sr_no || `SKU-${b.id}`).toLowerCase();
-                                        const aMatch = aSku.startsWith(query) ? 2 : (aSku.includes(query) ? 1 : 0);
-                                        const bMatch = bSku.startsWith(query) ? 2 : (bSku.includes(query) ? 1 : 0);
-                                        return bMatch - aMatch;
-                                      });
-
-                                      return (
-                                        <>
-                                          <input
-                                            type="text"
-                                            autoComplete="off"
-                                            value={item.skuCode || ''}
-                                            onFocus={() => {
-                                              setActiveSkuIndex(idx);
-                                              setActiveProdNameIndex(null);
-                                              setHighlightedSkuIndex(0);
-                                            }}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'ArrowDown') {
-                                                e.preventDefault();
-                                                setHighlightedSkuIndex(prev => prev < filteredProds.length - 1 ? prev + 1 : 0);
-                                              } else if (e.key === 'ArrowUp') {
-                                                e.preventDefault();
-                                                setHighlightedSkuIndex(prev => prev > 0 ? prev - 1 : filteredProds.length - 1);
-                                              } else if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                if (filteredProds[highlightedSkuIndex]) {
-                                                  handleProductSelection(filteredProds[highlightedSkuIndex]);
-                                                }
-                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
-                                                setActiveSkuIndex(null);
-                                              }
-                                            }}
-                                            onChange={(e) => {
-                                              setFieldValue(`items.${idx}.skuCode`, e.target.value);
-                                              setActiveSkuIndex(idx);
-                                            }}
-                                            placeholder="TYPE SKU..."
-                                            className="w-full rounded border border-stroke dark:border-strokedark p-1.5 bg-transparent font-mono font-bold text-xs uppercase outline-none focus:border-primary"
-                                          />
-
-                                          {isCurrentActive && filteredProds.length > 0 && (
-                                            <div className="absolute left-0 top-full mt-1.5 z-[99999] w-72 max-h-60 overflow-y-auto bg-white dark:bg-[#1A222C] border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
-                                              {filteredProds.map((prod, pIdx) => (
-                                                <div
-                                                  key={prod.id}
-                                                  onMouseEnter={() => setHighlightedSkuIndex(pIdx)}
-                                                  onMouseDown={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    handleProductSelection(prod);
-                                                  }}
-                                                  onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    handleProductSelection(prod);
-                                                  }}
-                                                  className={`p-2.5 cursor-pointer text-xs flex justify-between items-center ${highlightedSkuIndex === pIdx ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}
-                                                >
-                                                  <div className="min-w-0 pr-2">
-                                                    <p className="font-mono font-bold text-black dark:text-white text-xs">{prod.item_sr_no || `SKU-${prod.id}`}</p>
-                                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[160px]">{prod.product_name}</p>
-                                                  </div>
-                                                  <span className="font-mono font-bold text-emerald-600">Rs. {Number(prod.purchase_price || 0).toLocaleString()}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </>
-                                      );
-                                    })()}
-                                  </td>
-
-                                  {/* Description & Description (Searchable Two-Way Input with Rich Dropdown matching Sales page) */}
-                                  <td className="p-3 relative prod-name-container min-w-[260px]">
+                                  {/* Merged Product Code / Description Searchable Combobox */}
+                                  <td className="p-3 relative prod-name-container min-w-[280px]">
                                     {(() => {
                                       const query = (item.itemName || '').toLowerCase().trim();
                                       const nonTileList = productList.filter(p => !isTileProduct(p));
-                                      const filteredByName = nonTileList.filter(p => {
+                                      const filteredProds = nonTileList.filter(p => {
                                         if (!query) return true;
                                         const name = (p.product_name || '').toLowerCase();
                                         const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
@@ -1735,14 +2287,14 @@ const AddPurchases = () => {
                                             onKeyDown={(e) => {
                                               if (e.key === 'ArrowDown') {
                                                 e.preventDefault();
-                                                setHighlightedProdNameIndex(prev => prev < filteredByName.length - 1 ? prev + 1 : 0);
+                                                setHighlightedProdNameIndex(prev => prev < filteredProds.length - 1 ? prev + 1 : 0);
                                               } else if (e.key === 'ArrowUp') {
                                                 e.preventDefault();
-                                                setHighlightedProdNameIndex(prev => prev > 0 ? prev - 1 : filteredByName.length - 1);
+                                                setHighlightedProdNameIndex(prev => prev > 0 ? prev - 1 : filteredProds.length - 1);
                                               } else if (e.key === 'Enter') {
                                                 e.preventDefault();
-                                                if (filteredByName[highlightedProdNameIndex]) {
-                                                  handleProductSelection(filteredByName[highlightedProdNameIndex]);
+                                                if (filteredProds[highlightedProdNameIndex]) {
+                                                  handleProductSelection(filteredProds[highlightedProdNameIndex]);
                                                 }
                                               } else if (e.key === 'Escape' || e.key === 'Tab') {
                                                 setActiveProdNameIndex(null);
@@ -1755,22 +2307,30 @@ const AddPurchases = () => {
                                               setHighlightedProdNameIndex(0);
 
                                               const matched = productList.find(
-                                                p => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
+                                                p => (p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()) ||
+                                                     (p.item_sr_no && p.item_sr_no.toLowerCase() === typed.trim().toLowerCase())
                                               );
                                               if (matched) {
                                                 handleProductSelection(matched);
                                               }
                                             }}
-                                            placeholder="Search Description..."
+                                            placeholder="Search by code or product description..."
                                             className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
                                           />
 
+                                          {item.skuCode && (
+                                            <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                                              Code: <span className="font-bold text-slate-600 dark:text-slate-300">{item.skuCode}</span>
+                                            </div>
+                                          )}
+
                                           {/* Rich Dropdown */}
-                                          {isCurrentProdNameActive && filteredByName.length > 0 && (
-                                            <div className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[420px] max-h-[290px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300">
-                                              {filteredByName.map((p, pIdx) => {
+                                          {isCurrentProdNameActive && filteredProds.length > 0 && (
+                                            <div className="absolute left-0 top-full mt-1.5 z-[999999] min-w-[380px] max-w-[460px] max-h-[290px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300">
+                                              {filteredProds.map((p, pIdx) => {
                                                 const displaySku = p.item_sr_no || `SKU-${p.id}`;
                                                 const isHighlighted = pIdx === highlightedProdNameIndex;
+                                                const stockStr = formatProductStock(p);
                                                 return (
                                                   <div
                                                     key={p.id}
@@ -1786,20 +2346,25 @@ const AddPurchases = () => {
                                                       handleProductSelection(p);
                                                     }}
                                                     className={`p-3 cursor-pointer transition flex items-center justify-between group ${isHighlighted
-                                                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500'
+                                                        ? 'bg-primary/10 border-l-4 border-primary'
                                                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
                                                       }`}
                                                   >
-                                                    <div className="flex flex-col gap-0.5 text-left pr-2">
-                                                      <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 leading-tight">
+                                                    <div className="flex flex-col gap-0.5 text-left pr-2 min-w-0">
+                                                      <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary leading-tight truncate max-w-[210px]">
                                                         {p.product_name}
                                                       </span>
                                                       <span className="font-mono text-[10px] text-slate-400">
-                                                        {displaySku}
+                                                        Code: {displaySku}
                                                       </span>
                                                     </div>
-                                                    <div className="text-right font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
-                                                      Rs. {Number(p.purchase_price || 0).toLocaleString()}
+                                                    <div className="text-right font-mono text-xs font-bold shrink-0 flex flex-col items-end">
+                                                      <span className="text-emerald-700 dark:text-emerald-400">
+                                                        Rs. {Number(p.purchase_price || 0).toLocaleString()}
+                                                      </span>
+                                                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-stroke dark:border-strokedark px-1.5 py-0.5 rounded mt-0.5">
+                                                        Stock: {stockStr}
+                                                      </span>
                                                     </div>
                                                   </div>
                                                 );
@@ -1811,21 +2376,17 @@ const AddPurchases = () => {
                                     })()}
                                   </td>
 
-                                  {/* ROW-LEVEL DESTINATION WAREHOUSE */}
-                                  <td className="p-3 w-48">
-                                    <select
+                                  {/* ROW-LEVEL DESTINATION WAREHOUSE (SEARCHABLE WITH PER-LOCATION STOCK) */}
+                                  <td className="p-3 w-52">
+                                    <WarehouseSearchableSelect
                                       value={item.warehouse || locations[0]?.name || ''}
-                                      onChange={(e) => {
-                                        setFieldValue(`items.${idx}.warehouse`, e.target.value);
+                                      onChange={(val) => {
+                                        setFieldValue(`items.${idx}.warehouse`, val);
                                       }}
-                                      className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-xs"
-                                    >
-                                      {locations.map((loc) => (
-                                        <option key={loc.id} value={loc.name}>
-                                          {loc.name}
-                                        </option>
-                                      ))}
-                                    </select>
+                                      locations={locations}
+                                      selectedProductName={item.itemName}
+                                      getWarehouseStock={getWarehouseStockInfo}
+                                    />
                                   </td>
 
                                   {/* Arrived Qty with Dedicated Boxes & Loose Pieces & Sq.Mtr for Tiles or Loose Products */}
@@ -1854,10 +2415,10 @@ const AddPurchases = () => {
                                           <div className="flex flex-col gap-1">
                                             {/* ── TOP BADGES: Per Box Sq.Mtr & Per Piece Sq.Mtr ── */}
                                             <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400 px-1 font-mono">
-                                              <span className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800/60 font-bold">
+                                              <span className="text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-stroke dark:border-strokedark font-bold">
                                                 Box: {perBoxSqm.toFixed(2)} sq.m
                                               </span>
-                                              <span className="text-emerald-700 dark:emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60 font-bold">
+                                              <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60 font-bold">
                                                 Pc: {perPieceSqm.toFixed(4)} sq.m
                                               </span>
                                             </div>
@@ -1932,7 +2493,7 @@ const AddPurchases = () => {
                                             </div>
 
                                             {/* ── BOTTOM TOTAL SQ.MTR CALCULATION ── */}
-                                            <div className="text-center font-mono text-[10px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50/70 dark:bg-teal-950/30 rounded py-0.5 border border-teal-200/60 dark:border-teal-800/40">
+                                            <div className="text-center font-mono text-[10px] font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded py-0.5 border border-stroke dark:border-strokedark">
                                               Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
                                               <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
                                             </div>
@@ -2101,18 +2662,15 @@ const AddPurchases = () => {
                                             min="0"
                                             step="any"
                                             onKeyDown={blockInvalidChar}
-                                            value={(() => {
-                                              const currentRate = Number(item.rate || 0);
-                                              const lPrice = Number((currentRate / pcsPerBox).toFixed(2));
-                                              return isNaN(lPrice) ? '' : lPrice;
-                                            })()}
+                                            value={item.pieceRate !== undefined && item.pieceRate !== '' ? item.pieceRate : (Number(matchedProduct?.loose_purchase_price) > 0 ? Number(matchedProduct.loose_purchase_price) : (pcsPerBox > 0 ? Number(((Number(item.rate) || 0) / pcsPerBox).toFixed(2)) : ''))}
                                             onChange={(e) => {
                                               const enteredLoosePrice = Math.max(0, Number(e.target.value) || 0);
-                                              const newBulkRate = Number((enteredLoosePrice * pcsPerBox).toFixed(2));
-                                              setFieldValue(`items.${idx}.rate`, newBulkRate);
-                                              const cost = (Number(item.qty) || 0) * newBulkRate;
+                                              setFieldValue(`items.${idx}.pieceRate`, enteredLoosePrice);
+                                              const bulkCount = Math.floor(Number(item.qty || 0));
+                                              const looseCount = Math.round((Number(item.qty || 0) - bulkCount) * pcsPerBox);
+                                              const gross = (bulkCount * Number(item.rate || 0)) + (looseCount * enteredLoosePrice);
                                               if (Number(item.discountPer) > 0) {
-                                                setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
+                                                setFieldValue(`items.${idx}.discountAmt`, Number(((gross * Number(item.discountPer)) / 100).toFixed(2)));
                                               }
                                             }}
                                             placeholder="0"
@@ -2275,371 +2833,7 @@ const AddPurchases = () => {
                   </div>
                 </div>
 
-                {/* ── DEDICATED TILE PURCHASES DYNAMIC CONTAINER ── */}
-                {values.showTileSection && (
-                  <div className={`border border-teal-400 dark:border-teal-800/80 bg-teal-50/20 dark:bg-teal-950/10 rounded-sm mt-6 relative ${activeTileSkuIndex !== null || activeTileProdIndex !== null ? 'z-30' : 'z-20'} overflow-x-auto pb-4`}>
-                    <FieldArray name="tileItems">
-                      {({ push, remove }) => {
-                        const tileTotalSum = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.totalAmount || 0)), 0);
-                        const totalBoxesCount = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.boxQty || 0)), 0);
-                        const totalLoosePcsCount = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.loosePcs || 0)), 0);
-                        const totalSqmCount = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.totalSqm || 0)), 0);
-                        const tileProducts = productList.filter(p => isTileProduct(p));
-
-                        return (
-                          <div className="w-full min-w-[980px]">
-                            {/* Header Bar */}
-                            <div className="p-3 bg-teal-100/70 dark:bg-teal-900/40 border-b border-teal-300 dark:border-teal-800 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded bg-teal-600 text-white font-mono text-[10px] font-black tracking-wider uppercase">
-                                  Tiles
-                                </span>
-                                <span className="font-bold text-xs text-teal-950 dark:text-teal-200">
-                                  Tile Purchases (Boxes, Loose Pieces & Sq. Mtr Inward)
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-4 text-xs font-mono font-bold text-teal-800 dark:text-teal-300">
-                                <span>Boxes: <strong className="font-black text-black dark:text-white">{totalBoxesCount}</strong></span>
-                                <span>Pcs: <strong className="font-black text-black dark:text-white">{totalLoosePcsCount}</strong></span>
-                                <span>Total Sq.M: <strong className="font-black text-teal-950 dark:text-teal-100 bg-teal-200/80 dark:bg-teal-800/80 px-2 py-0.5 rounded shadow-sm">{totalSqmCount.toFixed(2)} m²</strong></span>
-                                <span className="text-teal-950 dark:text-teal-100 font-black text-sm">
-                                  Total Tiles: Rs. {tileTotalSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Table */}
-                            <table className="w-full table-auto border-collapse text-left">
-                              <thead className="bg-teal-50/80 dark:bg-teal-950/60 text-[10px] font-black uppercase text-teal-950 dark:text-teal-300 border-b border-teal-200 dark:border-teal-800">
-                                <tr>
-                                  <th className="p-3 w-10 text-center">S#</th>
-                                  <th className="p-3 w-44">Code (Search)</th>
-                                  <th className="p-3 min-w-[240px]">Tile Product Description</th>
-                                  <th className="p-3 w-44">Destination Warehouse</th>
-                                  <th className="p-3 w-28 text-center">Arrived Boxes</th>
-                                  <th className="p-3 w-24 text-center">Loose Pcs</th>
-                                  <th className="p-3 w-32 text-right">Cost (Per Box)</th>
-                                  <th className="p-3 w-32 text-right">Cost (Per Sq.M)</th>
-                                  <th className="p-3 w-28 text-right">Cost (Per Pc)</th>
-                                  <th className="p-3 w-36 text-right pr-4 font-mono">Line Total</th>
-                                  <th className="p-3 w-10 text-center"></th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-teal-200 dark:divide-teal-800/40">
-                                {(values.tileItems || []).map((tItem: any, tIdx: number) => {
-                                  const isCurrentSkuActive = activeTileSkuIndex === tIdx;
-                                  const isCurrentProdActive = activeTileProdIndex === tIdx;
-
-                                  const filteredTileSkus = tileProducts.filter(p => {
-                                    if (!tItem.skuCode) return true;
-                                    const q = (tItem.skuCode || '').toLowerCase().trim();
-                                    const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
-                                    const name = (p.product_name || '').toLowerCase();
-                                    return sku.includes(q) || name.includes(q);
-                                  });
-
-                                  const filteredTileProds = tileProducts.filter(p => {
-                                    if (!tItem.itemName) return true;
-                                    const q = (tItem.itemName || '').toLowerCase().trim();
-                                    const name = (p.product_name || '').toLowerCase();
-                                    const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
-                                    return name.includes(q) || sku.includes(q);
-                                  });
-
-                                  return (
-                                    <tr
-                                      key={tItem.id || tIdx}
-                                      className={`text-xs transition ${
-                                        isCurrentSkuActive || isCurrentProdActive
-                                          ? 'relative z-50 bg-teal-100/50 dark:bg-teal-900/30'
-                                          : 'relative z-10 bg-white/70 dark:bg-boxdark/70 hover:bg-teal-50/50 dark:hover:bg-teal-900/10'
-                                      }`}
-                                    >
-                                      <td className="p-3 text-center text-teal-700 font-sans">{tIdx + 1}</td>
-
-                                      {/* Tile Code SKU Search */}
-                                      <td className="p-3 relative tile-sku-container">
-                                        <div className="relative">
-                                          <input
-                                            type="text"
-                                            autoComplete="off"
-                                            value={tItem.skuCode || ''}
-                                            onFocus={() => {
-                                              setActiveTileSkuIndex(tIdx);
-                                              setActiveTileProdIndex(null);
-                                              setHighlightedTileSkuIndex(0);
-                                            }}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'ArrowDown') {
-                                                e.preventDefault();
-                                                setHighlightedTileSkuIndex(prev => prev < filteredTileSkus.length - 1 ? prev + 1 : 0);
-                                              } else if (e.key === 'ArrowUp') {
-                                                e.preventDefault();
-                                                setHighlightedTileSkuIndex(prev => prev > 0 ? prev - 1 : filteredTileSkus.length - 1);
-                                              } else if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                if (filteredTileSkus[highlightedTileSkuIndex]) {
-                                                  handleTileProductSelection(filteredTileSkus[highlightedTileSkuIndex], tIdx, tItem, setFieldValue);
-                                                  setActiveTileSkuIndex(null);
-                                                }
-                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
-                                                setActiveTileSkuIndex(null);
-                                              }
-                                            }}
-                                            onChange={(e) => {
-                                              setFieldValue(`tileItems.${tIdx}.skuCode`, e.target.value);
-                                              setActiveTileSkuIndex(tIdx);
-                                              setActiveTileProdIndex(null);
-                                              setHighlightedTileSkuIndex(0);
-                                            }}
-                                            placeholder="TYPE SKU..."
-                                            className="w-full rounded border border-teal-300 dark:border-teal-700 p-2 text-xs bg-white dark:bg-boxdark font-mono font-bold outline-none text-black dark:text-white uppercase focus:border-teal-600"
-                                          />
-                                          {isCurrentSkuActive && (
-                                            <div className="absolute left-0 top-full mt-1 z-[999999] w-72 max-h-60 overflow-y-auto bg-white dark:bg-[#1A222C] border border-teal-300 dark:border-teal-700 rounded-lg shadow-2xl divide-y divide-teal-100 dark:divide-teal-900/40">
-                                              {filteredTileSkus.length > 0 ? (
-                                                filteredTileSkus.map((p: any, pIdx: number) => {
-                                                  const displaySku = p.item_sr_no || `SKU-${p.id}`;
-                                                  return (
-                                                    <div
-                                                      key={p.id}
-                                                      onMouseEnter={() => setHighlightedTileSkuIndex(pIdx)}
-                                                      onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        handleTileProductSelection(p, tIdx, tItem, setFieldValue);
-                                                        setActiveTileSkuIndex(null);
-                                                      }}
-                                                      className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                                                        highlightedTileSkuIndex === pIdx
-                                                          ? 'bg-teal-600 text-white font-bold'
-                                                          : 'hover:bg-teal-50 dark:hover:bg-teal-900/30 text-slate-800 dark:text-slate-100'
-                                                      }`}
-                                                    >
-                                                      <div>
-                                                        <span className="font-mono font-bold block">{displaySku}</span>
-                                                        <span className="text-[10px] opacity-80 block truncate max-w-[180px]">{p.product_name}</span>
-                                                      </div>
-                                                      <div className="text-right">
-                                                        <span className="font-mono font-bold block">Rs. {Number(p.purchase_price || 0).toLocaleString()}</span>
-                                                        <span className="text-[10px] opacity-75">{p.sub_sub_category || 'Tile'}</span>
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                })
-                                              ) : (
-                                                <div className="p-3 text-center text-xs text-slate-400 italic">No matching tile SKU found</div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </td>
-
-                                      {/* Tile Product Description Search */}
-                                      <td className="p-3 relative tile-prod-container min-w-[240px]">
-                                        <div className="relative">
-                                          <input
-                                            type="text"
-                                            autoComplete="off"
-                                            value={tItem.itemName || ''}
-                                            onFocus={() => {
-                                              setActiveTileProdIndex(tIdx);
-                                              setActiveTileSkuIndex(null);
-                                              setHighlightedTileProdIndex(0);
-                                            }}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'ArrowDown') {
-                                                e.preventDefault();
-                                                setHighlightedTileProdIndex(prev => prev < filteredTileProds.length - 1 ? prev + 1 : 0);
-                                              } else if (e.key === 'ArrowUp') {
-                                                e.preventDefault();
-                                                setHighlightedTileProdIndex(prev => prev > 0 ? prev - 1 : filteredTileProds.length - 1);
-                                              } else if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                if (filteredTileProds[highlightedTileProdIndex]) {
-                                                  handleTileProductSelection(filteredTileProds[highlightedTileProdIndex], tIdx, tItem, setFieldValue);
-                                                  setActiveTileProdIndex(null);
-                                                }
-                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
-                                                setActiveTileProdIndex(null);
-                                              }
-                                            }}
-                                            onChange={(e) => {
-                                              setFieldValue(`tileItems.${tIdx}.itemName`, e.target.value);
-                                              setActiveTileProdIndex(tIdx);
-                                              setActiveTileSkuIndex(null);
-                                              setHighlightedTileProdIndex(0);
-                                            }}
-                                            placeholder="Search Tile Name / Category..."
-                                            className="w-full rounded border border-teal-300 dark:border-teal-700 p-2 text-xs bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white focus:border-teal-600"
-                                          />
-                                          {isCurrentProdActive && (
-                                            <div className="absolute left-0 top-full mt-1 z-[999999] w-80 max-h-60 overflow-y-auto bg-white dark:bg-[#1A222C] border border-teal-300 dark:border-teal-700 rounded-lg shadow-2xl divide-y divide-teal-100 dark:divide-teal-900/40">
-                                              {filteredTileProds.length > 0 ? (
-                                                filteredTileProds.map((p: any, pIdx: number) => {
-                                                  return (
-                                                    <div
-                                                      key={p.id}
-                                                      onMouseEnter={() => setHighlightedTileProdIndex(pIdx)}
-                                                      onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        handleTileProductSelection(p, tIdx, tItem, setFieldValue);
-                                                        setActiveTileProdIndex(null);
-                                                      }}
-                                                      className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                                                        highlightedTileProdIndex === pIdx
-                                                          ? 'bg-teal-600 text-white font-bold'
-                                                          : 'hover:bg-teal-50 dark:hover:bg-teal-900/30 text-slate-800 dark:text-slate-100'
-                                                      }`}
-                                                    >
-                                                      <div>
-                                                        <span className="font-bold block">{p.product_name}</span>
-                                                        <span className="text-[10px] opacity-80 block">{p.item_sr_no || `SKU-${p.id}`} • {p.sub_sub_category || p.category || 'Tile'}</span>
-                                                      </div>
-                                                      <div className="text-right">
-                                                        <span className="font-mono font-bold block">Rs. {Number(p.purchase_price || 0).toLocaleString()}</span>
-                                                        <span className="text-[10px] opacity-75">{p.pieces_per_box || 4} pcs/box</span>
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                })
-                                              ) : (
-                                                <div className="p-3 text-center text-xs text-slate-400 italic">No matching tile products found</div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </td>
-
-                                      {/* Destination Warehouse */}
-                                      <td className="p-3 w-44">
-                                        <select
-                                          name={`tileItems.${tIdx}.warehouse`}
-                                          value={tItem.warehouse || locations[0]?.name || 'Main Warehouse'}
-                                          onChange={(e) => setFieldValue(`tileItems.${tIdx}.warehouse`, e.target.value)}
-                                          className="w-full rounded border border-teal-300 dark:border-teal-700 p-2 text-xs bg-white dark:bg-boxdark font-bold text-black dark:text-white outline-none focus:border-teal-600"
-                                        >
-                                          {locations.map((loc) => (
-                                            <option key={loc.id} value={loc.name}>{loc.name}</option>
-                                          ))}
-                                        </select>
-                                      </td>
-
-                                      {/* Arrived Boxes */}
-                                      <td className="p-3 w-28 text-center">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          onKeyDown={blockInvalidChar}
-                                          value={tItem.boxQty ?? 0}
-                                          onChange={(e) => updateTileRowCalcs('boxQty', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
-                                          className="w-full text-center font-black font-mono bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-700 rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-teal-600"
-                                        />
-                                      </td>
-
-                                      {/* Loose Pcs */}
-                                      <td className="p-3 w-24 text-center">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          onKeyDown={blockInvalidChar}
-                                          value={tItem.loosePcs ?? 0}
-                                          onChange={(e) => updateTileRowCalcs('loosePcs', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
-                                          className="w-full text-center font-black font-mono bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-700 rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-teal-600"
-                                        />
-                                      </td>
-
-                                      {/* Cost Price Per Box */}
-                                      <td className="p-3 w-32 text-right">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          onKeyDown={blockInvalidChar}
-                                          value={tItem.costPricePerBox ?? 0}
-                                          onChange={(e) => updateTileRowCalcs('costPricePerBox', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
-                                          className="w-full text-right font-black font-mono bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-700 rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-teal-600"
-                                        />
-                                      </td>
-
-                                      {/* Cost Price Per Sq.M */}
-                                      <td className="p-3 w-32 text-right">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          onKeyDown={blockInvalidChar}
-                                          value={tItem.costPricePerSqm ?? 0}
-                                          onChange={(e) => updateTileRowCalcs('costPricePerSqm', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
-                                          className="w-full text-right font-black font-mono bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-700 rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-teal-600"
-                                        />
-                                      </td>
-
-                                      {/* Cost Price Per Piece */}
-                                      <td className="p-3 w-28 text-right">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          onKeyDown={blockInvalidChar}
-                                          value={tItem.costPricePerPiece ?? 0}
-                                          onChange={(e) => updateTileRowCalcs('costPricePerPiece', Math.max(0, Number(e.target.value) || 0), tIdx, tItem, setFieldValue)}
-                                          className="w-full text-right font-black font-mono bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-700 rounded p-1.5 text-xs text-black dark:text-white outline-none focus:border-teal-600"
-                                        />
-                                      </td>
-
-                                      {/* Line Total */}
-                                      <td className="p-3 text-right pr-4 text-teal-700 dark:text-teal-400 font-black font-mono">
-                                        Rs. {Number(tItem.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                      </td>
-
-                                      {/* Delete */}
-                                      <td className="p-3 text-center">
-                                        <button
-                                          type="button"
-                                          onClick={() => remove(tIdx)}
-                                          className="text-gray-400 hover:text-danger transition cursor-pointer"
-                                        >
-                                          <FiTrash2 size={14} />
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-
-                            {/* Append Tile Row Button */}
-                            <div className="p-3 bg-teal-100/40 dark:bg-teal-900/20 border-t border-teal-200 dark:border-teal-800 flex items-center justify-between">
-                              <button
-                                type="button"
-                                onClick={() => push({
-                                  id: `tile-${Date.now()}`,
-                                  itemName: '',
-                                  skuCode: '',
-                                  warehouse: locations[0]?.name || 'Main Warehouse',
-                                  boxQty: 1,
-                                  loosePcs: 0,
-                                  totalSqm: 0,
-                                  costPricePerBox: 0,
-                                  costPricePerPiece: 0,
-                                  costPricePerSqm: 0,
-                                  totalAmount: 0,
-                                  piecesPerBox: 4,
-                                  sqmPerBox: 1.44
-                                })}
-                                className="inline-flex items-center gap-1 bg-teal-600 text-white font-bold py-1.5 px-3.5 rounded text-xs hover:bg-teal-700 transition cursor-pointer shadow-xs"
-                              >
-                                <FiPlus size={12} /> Append Tile Row
-                              </button>
-                              <span className="text-[11px] text-teal-700 dark:text-teal-400 italic">
-                                * Cross-calculates boxes, loose pieces & sq.m automatically with your tile box specifications
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      }}
-                    </FieldArray>
-                  </div>
-                )}
+                
 
                 {/* ── BOTTOM SETTLEMENT BAR: CASH / BANK / SPLIT SWITCHER ── */}
                 <div className="flex flex-col md:flex-row justify-between items-start gap-6 border border-stroke dark:border-strokedark p-5 rounded-sm bg-slate-50/40 dark:bg-meta-4/5 mt-6">
@@ -2752,7 +2946,7 @@ const AddPurchases = () => {
                       </div>
 
                       {values.showTileSection && tileTotalSum > 0 && (
-                        <div className="flex justify-between items-center text-xs text-teal-700 dark:text-teal-400">
+                        <div className="flex justify-between items-center text-xs text-slate-700 dark:text-slate-300">
                           <span className="font-sans font-bold">Tile Purchases Total:</span>
                           <strong className="font-mono font-bold">Rs. {tileTotalSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
                         </div>

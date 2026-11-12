@@ -1,15 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { useAuth } from '../../../Context/Auth';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
-import { useLanguage } from '../../../Context/LanguageContext';
 import { MdInventory } from 'react-icons/md';
 
 const OpeningStockList = () => {
-  const { isRTL } = useLanguage();
   const { userName, userEmail } = useAuth();
   const [stocks, setStocks] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -26,9 +24,10 @@ const OpeningStockList = () => {
   const fetchStocks = async () => {
     setLoading(true);
     try {
+      let prodPromise = fetchAllPages(supabase.from('products').select('id, product_name, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, category, uom, allow_loose_sales, loose_uom, loose_conversion_ratio'));
       const [stocksRes, prodRes] = await Promise.all([
         supabase.from('opening_stocks').select('*').order('created_at', { ascending: false }),
-        supabase.from('products').select('id, product_name, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, category'),
+        prodPromise.catch(() => fetchAllPages(supabase.from('products').select('id, product_name, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, category, uom')))
       ]);
 
       if (stocksRes.error) throw stocksRes.error;
@@ -53,8 +52,12 @@ const OpeningStockList = () => {
     });
 
     if (p) {
+      if (Boolean(p.allow_loose_sales) && Number(p.loose_conversion_ratio) > 0) {
+        return Number(p.loose_conversion_ratio);
+      }
       const raw = Number(p.pieces_per_box ?? p.pcs_per_box ?? p.pieces_per_packing ?? 0);
       if (raw >= 1) return raw;
+      if (Number(p.loose_conversion_ratio) > 0) return Number(p.loose_conversion_ratio);
       const match = String(p.product_description || '').match(/Box:\s*(\d+)\s*pcs/i);
       if (match && Number(match[1]) > 0) return Number(match[1]);
     }
@@ -222,13 +225,13 @@ const OpeningStockList = () => {
     <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
       <div className="flex justify-between items-center mb-6 border-b border-stroke dark:border-strokedark pb-4">
         <h4 className="text-xl font-semibold text-black dark:text-white flex items-center gap-2">
-          <MdInventory className="text-primary text-2xl" /> {isRTL ? "ابتدائی اسٹاک ڈائریکٹری" : "Opening Stocks Directory"}
+          <MdInventory className="text-primary text-2xl" /> Opening Stocks Directory
         </h4>
         <button
           onClick={() => navigate('/Inventory/OpeningStock/Add')}
           className="bg-primary hover:bg-opacity-90 text-white font-medium py-2 px-4 rounded text-sm transition-all shadow-sm cursor-pointer"
         >
-          {isRTL ? "+ ابتدائی اسٹاک درج کریں" : "+ Initialize Opening Stock"}
+          + Initialize Opening Stock
         </button>
       </div>
 
@@ -236,21 +239,20 @@ const OpeningStockList = () => {
         <table className="w-full table-auto text-sm">
           <thead>
             <tr className="bg-gray-2 text-left dark:bg-meta-4">
-              <th className="py-4 px-4 font-medium text-black dark:text-white">{isRTL ? "اسٹاک نمبر" : "Stock No"}</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">{isRTL ? "بیچ نمبر" : "Batch No"}</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">{isRTL ? "مقام / گودام" : "Location"}</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-center">{isRTL ? "ابتدائی تاریخ" : "Opening Date"}</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-center">{isRTL ? "میعاد ختم تاریخ" : "Expiry Date"}</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">{isRTL ? "اشیاء" : "Items"}</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-center">{isRTL ? "تعداد" : "Qty"}</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-center">{isRTL ? "کارروائی" : "Actions"}</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white">Stock No</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white">Batch No</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white">Location</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white text-center">Opening Date</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white text-center">Expiry Date</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white">Items</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="text-center py-10"><Spinner /></td></tr>
+              <tr><td colSpan={7} className="text-center py-10"><Spinner /></td></tr>
             ) : paginatedGroups.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-10 text-gray-500 italic">{isRTL ? "ابھی تک ابتدائی اسٹاک درج نہیں کیا گیا۔" : "No opening stock initialized yet."}</td></tr>
+              <tr><td colSpan={7} className="text-center py-10 text-gray-500 italic">No opening stock initialized yet.</td></tr>
             ) : (
               paginatedGroups.map((group) => {
                 const stockNoLabel = String(firstValue(group, ['stockNo', 'stock_no']) || 'N/A');
@@ -292,32 +294,6 @@ const OpeningStockList = () => {
                     </td>
 
                     <td className="py-5 px-4 text-center">
-                      {(() => {
-                        const { boxes, loose, hasLoose, rawTotal } = formatBatchQty(group);
-                        if (!hasLoose) {
-                          return (
-                            <span className="font-black text-black dark:text-white">
-                              {boxes.toLocaleString()}
-                            </span>
-                          );
-                        }
-                        return (
-                          <div
-                            className="flex flex-col items-center justify-center leading-tight"
-                            title={`${boxes} boxes + ${loose} pcs (${rawTotal.toLocaleString(undefined, { maximumFractionDigits: 3 })})`}
-                          >
-                            <span className="font-black text-black dark:text-white">
-                              {boxes.toLocaleString()}
-                            </span>
-                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                              ({loose} {loose === 1 ? 'pc' : 'pcs'})
-                            </span>
-                          </div>
-                        );
-                      })()}
-                    </td>
-
-                    <td className="py-5 px-4 text-center">
                       <TableActions
                         onEdit={() => handleEditBatch(group)}
                         onDelete={() => handleDeleteBatch(group)}
@@ -335,7 +311,7 @@ const OpeningStockList = () => {
 
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
         <div>
-          {isRTL ? `کل ${totalEntries} میں سے ${totalEntries > 0 ? startIndex + 1 : 0} تا ${Math.min(startIndex + entriesPerPage, totalEntries)} اسٹاک ریکارڈز` : `Showing ${totalEntries > 0 ? startIndex + 1 : 0} to ${Math.min(startIndex + entriesPerPage, totalEntries)} of ${totalEntries} stock entries`}
+          Showing {totalEntries > 0 ? startIndex + 1 : 0} to {Math.min(startIndex + entriesPerPage, totalEntries)} of {totalEntries} stock entries
           {stocks.length !== totalEntries && (
             <span className="text-slate-400"> ({stocks.length} product lines)</span>
           )}
@@ -346,17 +322,17 @@ const OpeningStockList = () => {
             disabled={currentPage === 1}
             className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
           >
-            {isRTL ? "پچھلا" : "Previous"}
+            Previous
           </button>
           <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-            {isRTL ? `صفحہ ${currentPage} از ${totalPages || 1}` : `Page ${currentPage} of ${totalPages || 1}`}
+            Page {currentPage} of {totalPages || 1}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages || totalEntries === 0}
             className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
           >
-            {isRTL ? "اگلا" : "Next"}
+            Next
           </button>
         </div>
       </div>
@@ -441,26 +417,10 @@ const OpeningStockList = () => {
 
               <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-200 dark:border-strokedark text-xs font-bold">
                 <span className="text-slate-500 dark:text-slate-400">
-                  Total {viewBatch.length} Item{viewBatch.length > 1 ? 's' : ''}
+                  Total <span className="text-black dark:text-white font-extrabold">{viewBatch.length}</span> Product Line{viewBatch.length > 1 ? 's' : ''}
                 </span>
                 <span className="text-slate-700 dark:text-slate-200">
-                  Total Qty:{' '}
-                  {(() => {
-                    const { boxes, loose, hasLoose, rawTotal } = formatBatchQty(viewBatch);
-                    if (!hasLoose) {
-                      return <span className="text-black dark:text-white font-black">{boxes.toLocaleString()}</span>;
-                    }
-                    return (
-                      <span className="font-bold text-black dark:text-white" title={`${rawTotal.toLocaleString(undefined, { maximumFractionDigits: 3 })} total`}>
-                        {boxes.toLocaleString()}{' '}
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
-                          ({loose} {loose === 1 ? 'pc' : 'pcs'})
-                        </span>
-                      </span>
-                    );
-                  })()}
-                  <span className="mx-2 text-slate-300 dark:text-strokedark">|</span>
-                  Total Valuation: <span className="text-emerald-600 dark:text-emerald-400 font-mono">Rs. {viewBatch.reduce((sum, r) => sum + (Number(r.amount ?? r.total_amount ?? 0) || (Number(r.qty ?? r.quantity) || 0) * (Number(r.purchase_price ?? r.rate ?? r.rp) || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  Total Valuation: <span className="text-emerald-600 dark:text-emerald-400 font-mono text-sm font-extrabold">Rs. {viewBatch.reduce((sum, r) => sum + (Number(r.amount ?? r.total_amount ?? 0) || (Number(r.qty ?? r.quantity) || 0) * (Number(r.purchase_price ?? r.rate ?? r.rp) || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </span>
               </div>
             </div>

@@ -9,6 +9,7 @@ import DefaultLayout from '../layout/DefaultLayout';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NotFound from '../pages/Error/NotFound';
 import SettingsPage from '../pages/Settings/SettingsPage';
+import MainReports from '../pages/Reports/MainReports';
 import POSTerminal from '../pages/POS/POSTerminal';
 import POSTerminalsManager from '../pages/POS/POSTerminalsManager';
 import POSLogin from '../pages/POS/POSLogin';
@@ -188,6 +189,21 @@ function Navigation() {
           </AppRouteGuard>
         }
       />
+
+      {/* 4.2. ACCOUNTS LEDGER HUB */}
+      <Route
+        path="/Accounts/Ledgers"
+        element={
+          <AppRouteGuard>
+            <DefaultLayout>
+              <MainReports mode="accounts" />
+            </DefaultLayout>
+          </AppRouteGuard>
+        }
+      />
+      <Route path="/accounts/ledgers" element={<Navigate to="/Accounts/Ledgers" replace />} />
+      <Route path="/Accounts/Ledger-Dashboard" element={<Navigate to="/Accounts/Ledgers" replace />} />
+      <Route path="/accounts/ledger-dashboard" element={<Navigate to="/Accounts/Ledgers" replace />} />
 
       {/* 4. ALL DYNAMIC ROLE-BASED ERP MODULE ROUTES */}
       {renderRoutes(roleRoutes)}

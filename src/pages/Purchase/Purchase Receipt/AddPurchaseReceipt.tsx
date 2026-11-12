@@ -22,63 +22,6 @@ import {
   MdKeyboardArrowDown
 } from 'react-icons/md';
 
-// Helper to resolve or auto-register Vendor Chart of Accounts (2010-XXXX)
-const resolveVendorCoaAccount = async (vendorName: string, vendorsList: any[] = []) => {
-  const cleanName = (vendorName || '').trim();
-  if (!cleanName) return { code: '2010-001', title: 'Demo Vendor' };
-
-  // 1. Match from vendorsList
-  const matched = vendorsList.find(v =>
-    (v.vendor_name || v.supplier_name || v.name || '').trim().toLowerCase() === cleanName.toLowerCase()
-  );
-  const existingCode = matched?.vendor_code || matched?.supplier_code || matched?.coa_code;
-  if (existingCode && String(existingCode).startsWith('2010-')) {
-    return { code: String(existingCode).trim(), title: matched.vendor_name || cleanName };
-  }
-
-  // 2. Query chart_of_accounts
-  try {
-    const { data: coaRows } = await supabase
-      .from('chart_of_accounts')
-      .select('account_code, account_title')
-      .ilike('account_title', cleanName)
-      .limit(1);
-
-    if (coaRows && coaRows.length > 0 && coaRows[0].account_code) {
-      return { code: coaRows[0].account_code, title: coaRows[0].account_title || cleanName };
-    }
-
-    const { data: allVendCoa } = await supabase
-      .from('chart_of_accounts')
-      .select('account_code')
-      .ilike('account_code', '2010-%');
-
-    let maxSeq = 0;
-    (allVendCoa || []).forEach(r => {
-      const match = String(r.account_code || '').match(/2010-(\d+)/);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (num > maxSeq) maxSeq = num;
-      }
-    });
-
-    const nextCode = `2010-${String(maxSeq + 1).padStart(3, '0')}`;
-    await supabase.from('chart_of_accounts').insert([{
-      account_code: nextCode,
-      account_title: cleanName,
-      category_code: '2. LIABILITIES',
-      sub_category_code: 'Current Liabilities',
-      control_code: 'Vendor',
-      notes: `Vendor account for ${cleanName} (Auto-registered from Purchase Payment)`
-    }]);
-
-    return { code: nextCode, title: cleanName };
-  } catch (err) {
-    console.warn('resolveVendorCoaAccount in purchase receipt error:', err);
-    return { code: '2010-001', title: cleanName };
-  }
-};
-
 function AddPurchaseReceipt() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,6 +53,9 @@ function AddPurchaseReceipt() {
 
   // Balances
   const [vendorTotalOutstanding, setVendorTotalOutstanding] = useState<number>(0);
+  const [vendorOpeningBalance, setVendorOpeningBalance] = useState<number>(0);
+  const [vendorOpeningBalanceVoucherNo, setVendorOpeningBalanceVoucherNo] = useState<string>('');
+  const [vendorPurchasesGrossTotal, setVendorPurchasesGrossTotal] = useState<number>(0);
   const [poGrossBill, setPoGrossBill] = useState<number>(0);
   const [poPaidUpfront, setPoPaidUpfront] = useState<number>(0);
   const [poPastReceiptsPaid, setPoPastReceiptsPaid] = useState<number>(0);
@@ -155,7 +101,9 @@ function AddPurchaseReceipt() {
         const { data: vData } = await supabase.from('vendors').select('*').order('vendor_name', { ascending: true });
         const normalizedVendors = (vData || []).map((v: any) => ({
           ...v,
-          vendor_name: v.vendor_name || v.name || 'Unnamed Vendor'
+          vendor_name: v.vendor_name || v.name || 'Unnamed Vendor',
+          opening_balance: Number(v.opening_balance ?? v.openingBalance ?? v.balance ?? 0) || 0,
+          balance_nature: v.balance_nature || 'Credit'
         }));
         setVendorOptions(normalizedVendors);
 
@@ -183,7 +131,10 @@ function AddPurchaseReceipt() {
           if (matchedVendor) setSelectedVendorObj(matchedVendor);
 
           const poRef = editData.original_invoice_no || editData.metadata?.linkedPurchaseNo || '';
-          if (poRef) {
+          if (poRef === 'Opening Balance' || poRef === 'OPENING_BALANCE' || editData.metadata?.isOpeningBalance) {
+            setSelectedPurchaseNo('OPENING_BALANCE');
+            setPoSearchQuery('Vendor Opening Balance');
+          } else if (poRef) {
             setSelectedPurchaseNo(poRef);
             setPoSearchQuery(poRef);
             const cleanId = String(poRef).replace(/\D/g, '');
@@ -195,23 +146,28 @@ function AddPurchaseReceipt() {
             setSelectedPurchaseObj(null);
           }
 
-          calculateVendorBalances(vName, poRef, purData || [], editData.id);
+          calculateVendorBalances(vName, poRef, purData || [], editData.id, matchedVendor);
         } else {
-          // Fetch highest VPV number
+          // Fetch existing VPV / VPR / PR vouchers to determine next gap-filled VPR-XXX number
           const { data: vpvRows } = await supabase
             .from('financial_vouchers')
             .select('voucher_no')
-            .ilike('voucher_no', 'VPV-%');
+            .or('voucher_no.ilike.VPR-%,voucher_no.ilike.VPV-%,voucher_no.ilike.PR-%');
 
-          let maxVpvSeq = 0;
-          (vpvRows || []).forEach(v => {
-            const match = String(v.voucher_no || '').match(/VPV-(\d+)/i);
+          const usedSeqs = new Set<number>();
+          (vpvRows || []).forEach((v: any) => {
+            const match = String(v.voucher_no || '').match(/(?:VPR|VPV|PR)-(\d+)/i);
             if (match && match[1]) {
               const num = parseInt(match[1], 10);
-              if (num > maxVpvSeq) maxVpvSeq = num;
+              if (!isNaN(num) && num > 0 && num < 100000) usedSeqs.add(num);
             }
           });
-          setGeneratedVoucherNo(`VPV-${String(maxVpvSeq + 1).padStart(3, '0')}`);
+          let nextSeq = 1;
+          while (usedSeqs.has(nextSeq)) {
+            nextSeq++;
+          }
+          const nextVoucherNo = `VPR-${String(nextSeq).padStart(3, '0')}`;
+          setGeneratedVoucherNo(nextVoucherNo);
         }
       } catch (err: any) {
         console.error(err.message);
@@ -229,9 +185,13 @@ function AddPurchaseReceipt() {
     vendorName: string, 
     poNumber: string, 
     allPurchases: any[], 
-    currentEditVoucherId: number | null = null
+    currentEditVoucherId: number | null = null,
+    vendorObjOverride: any = null
   ) => {
     if (!vendorName) {
+      setVendorOpeningBalance(0);
+      setVendorOpeningBalanceVoucherNo('');
+      setVendorPurchasesGrossTotal(0);
       setVendorTotalOutstanding(0);
       setPoGrossBill(0);
       setPoPaidUpfront(0);
@@ -242,6 +202,32 @@ function AddPurchaseReceipt() {
     }
 
     try {
+      // 0. Resolve Vendor Opening Balance & Nature
+      let vend = vendorObjOverride || selectedVendorObj;
+      if (!vend || (vend.vendor_name || '').toLowerCase() !== vendorName.toLowerCase()) {
+        vend = vendorOptions.find(v => (v.vendor_name || '').toLowerCase() === vendorName.toLowerCase());
+      }
+      if (!vend) {
+        const { data: vRecord } = await supabase.from('vendors').select('*').ilike('vendor_name', vendorName).maybeSingle();
+        if (vRecord) vend = vRecord;
+      }
+
+      const rawOb = Number(vend?.opening_balance ?? vend?.openingBalance ?? vend?.balance ?? 0) || 0;
+      const isCredit = String(vend?.balance_nature || 'Credit').toLowerCase() === 'credit';
+      const opBal = isCredit ? rawOb : -rawOb;
+      setVendorOpeningBalance(opBal);
+
+      // Check if there is an Opening Balance Voucher in financial_vouchers
+      const { data: obVoucher } = await supabase
+        .from('financial_vouchers')
+        .select('id, voucher_no')
+        .eq('customer_name', vendorName)
+        .or('metadata->>isOpeningBalance.eq.true,voucher_no.ilike.OB%')
+        .maybeSingle();
+
+      const obVoucherNo = obVoucher?.voucher_no || 'OBV-001';
+      setVendorOpeningBalanceVoucherNo(obVoucherNo);
+
       // 1. Fetch vendor's purchases sorted chronologically (oldest first for FIFO general clearing)
       const vendorPurchases = allPurchases.filter(p => 
         (p.supplier_name || p.vendor_name || '').toLowerCase() === vendorName.toLowerCase()
@@ -262,7 +248,7 @@ function AddPurchaseReceipt() {
       // 2. Fetch past payment vouchers for this vendor
       const { data: pastVouchers } = await supabase
         .from('financial_vouchers')
-        .select('id, total_amount, original_invoice_no, metadata')
+        .select('id, total_amount, original_invoice_no, metadata, voucher_no')
         .eq('customer_name', vendorName)
         .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher');
 
@@ -276,11 +262,22 @@ function AddPurchaseReceipt() {
         totalPurchasesGross += gross;
         totalPurchasesUpfrontPaid += paid;
       });
+      setVendorPurchasesGrossTotal(totalPurchasesGross);
 
       // Track PO allocations
       const allocations: Record<string, { gross: number; upfront: number; specificVouchers: number; generalAllocated: number; pastReceipts: number; due: number }> = {};
       let totalVouchersPaid = 0;
       let unallocatedGeneralVouchers = 0;
+
+      // Initialize Opening Balance allocation
+      allocations['OPENING_BALANCE'] = {
+        gross: Math.max(0, opBal),
+        upfront: 0,
+        specificVouchers: 0,
+        generalAllocated: 0,
+        pastReceipts: 0,
+        due: Math.max(0, opBal)
+      };
 
       // Initialize all POs
       sortedVendorPurchases.forEach(p => {
@@ -304,7 +301,11 @@ function AddPurchaseReceipt() {
         totalVouchersPaid += vAmt;
 
         const vPoRef = v.original_invoice_no || v.metadata?.linkedPurchaseNo || '';
-        if (vPoRef) {
+        const isOBPayment = vPoRef === 'Opening Balance' || vPoRef === 'OPENING_BALANCE' || vPoRef === obVoucherNo || v.metadata?.isOpeningBalance;
+
+        if (isOBPayment) {
+          allocations['OPENING_BALANCE'].specificVouchers += vAmt;
+        } else if (vPoRef) {
           const cleanVPoId = String(vPoRef).replace(/\D/g, '');
           const matchedPo = sortedVendorPurchases.find(p => p.purchase_no === vPoRef || String(p.id) === cleanVPoId);
           if (matchedPo && allocations[matchedPo.purchase_no]) {
@@ -373,13 +374,32 @@ function AddPurchaseReceipt() {
         }
       });
 
+      // If general vouchers remain after settling all open POs, allocate against Opening Balance
+      if (generalRemaining > 0 && allocations['OPENING_BALANCE']) {
+        const obDueBefore = Math.max(0, allocations['OPENING_BALANCE'].gross - allocations['OPENING_BALANCE'].specificVouchers);
+        if (obDueBefore > 0 && generalRemaining > 0) {
+          const toDist = Math.min(obDueBefore, generalRemaining);
+          allocations['OPENING_BALANCE'].generalAllocated += toDist;
+          generalRemaining -= toDist;
+        }
+      }
+      allocations['OPENING_BALANCE'].pastReceipts = allocations['OPENING_BALANCE'].specificVouchers + allocations['OPENING_BALANCE'].generalAllocated;
+      allocations['OPENING_BALANCE'].due = Math.max(0, allocations['OPENING_BALANCE'].gross - allocations['OPENING_BALANCE'].pastReceipts);
+
       setPoAllocationsMap(allocations);
 
-      const netVendorLiability = totalPurchasesGross - totalPurchasesUpfrontPaid - totalVouchersPaid;
+      const totalGrossLiability = opBal + totalPurchasesGross;
+      const netVendorLiability = totalGrossLiability - totalPurchasesUpfrontPaid - totalVouchersPaid;
       setVendorTotalOutstanding(netVendorLiability);
 
-      // If a specific PO is selected
-      if (poNumber && allocations[poNumber]) {
+      // If a specific PO or Opening Balance is selected
+      if (poNumber === 'OPENING_BALANCE' || poNumber === 'Opening Balance') {
+        const obAlloc = allocations['OPENING_BALANCE'];
+        setPoGrossBill(obAlloc.gross);
+        setPoPaidUpfront(0);
+        setPoPastReceiptsPaid(obAlloc.pastReceipts);
+        setEffectiveDueForThisReceipt(obAlloc.due);
+      } else if (poNumber && allocations[poNumber]) {
         const currentAlloc = allocations[poNumber];
         setPoGrossBill(currentAlloc.gross);
         setPoPaidUpfront(currentAlloc.upfront);
@@ -387,7 +407,7 @@ function AddPurchaseReceipt() {
         setEffectiveDueForThisReceipt(currentAlloc.due);
       } else {
         // No specific PO selected -> clearing from overall vendor balance
-        setPoGrossBill(totalPurchasesGross);
+        setPoGrossBill(totalGrossLiability);
         setPoPaidUpfront(totalPurchasesUpfrontPaid);
         setPoPastReceiptsPaid(totalVouchersPaid);
         setEffectiveDueForThisReceipt(netVendorLiability);
@@ -409,22 +429,26 @@ function AddPurchaseReceipt() {
     setPoSearchQuery('-- General Vendor Balance Clearing (All Orders) --');
     setSelectedPurchaseObj(null);
 
-    calculateVendorBalances(vName, '', purchaseOptions, editData?.id || null);
+    calculateVendorBalances(vName, '', purchaseOptions, editData?.id || null, vendor);
   };
 
   // PO selection handler
   const handleSelectPurchase = (poNo: string) => {
     setSelectedPurchaseNo(poNo);
-    setPoSearchQuery(poNo || '-- General Vendor Balance Clearing (All Orders) --');
-    setIsPoDropdownOpen(false);
-
-    if (poNo) {
+    if (poNo === 'OPENING_BALANCE') {
+      const obDue = poAllocationsMap['OPENING_BALANCE']?.due ?? vendorOpeningBalance;
+      setPoSearchQuery(`Vendor Opening Balance (Due: Rs. ${formatMoney(obDue)})`);
+      setSelectedPurchaseObj(null);
+    } else if (poNo) {
+      setPoSearchQuery(poNo);
       const cleanId = String(poNo).replace(/\D/g, '');
       const poObj = purchaseOptions.find(p => p.purchase_no === poNo || String(p.id) === cleanId);
       setSelectedPurchaseObj(poObj || null);
     } else {
+      setPoSearchQuery('-- General Vendor Balance Clearing (All Orders) --');
       setSelectedPurchaseObj(null);
     }
+    setIsPoDropdownOpen(false);
 
     calculateVendorBalances(selectedVendor, poNo, purchaseOptions, editData?.id || null);
   };
@@ -592,9 +616,10 @@ function AddPurchaseReceipt() {
             setLoading(true);
 
             // 1. Resolve Chart of Accounts
-            const vendorAcc = await resolveVendorCoaAccount(selectedVendor, vendorOptions);
-            const vendorAccountCode = vendorAcc.code;
-            const cashAccountCode = '1010-001';
+            const cashCoa = coaAccounts.find((c: any) =>
+              String(c.control_code || '').toLowerCase().includes('cash') ||
+              String(c.account_title || '').toLowerCase().includes('cash')
+            );
 
             const selectedBankObj = bankAccounts.find((b: any) => String(b.id) === String(values.selectedBankId) || String(b.bankName) === String(values.selectedBankId));
             const bankCoa = coaAccounts.find((c: any) =>
@@ -605,37 +630,50 @@ function AddPurchaseReceipt() {
               )) ||
               String(c.control_code || '').toLowerCase().includes('bank')
             );
-            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1020-001');
+
+            const payCoa = coaAccounts.find((c: any) =>
+              String(c.control_code || '').toLowerCase().includes('creditor') ||
+              String(c.control_code || '').toLowerCase().includes('payable') ||
+              String(c.account_title || '').toLowerCase().includes('payable') ||
+              String(c.account_title || '').toLowerCase().includes('creditor')
+            );
+
+            const vendorAccountCode = payCoa ? String(payCoa.account_code) : (cashCoa ? String(cashCoa.account_code) : '2010');
+            const cashAccountCode = cashCoa ? String(cashCoa.account_code) : '1010';
+            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1015');
 
             let balancedJournalItems: any[] = [];
-            let voucherTypeRecord = 'Vendor Payment Voucher';
+            let voucherTypeRecord = 'Cash Payment Voucher';
 
             if (values.voucherType === 'By Cash') {
-              voucherTypeRecord = 'Vendor Payment Voucher';
+              voucherTypeRecord = 'Cash Payment Voucher';
               balancedJournalItems = [
-                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor} (${vendorAcc.title})`, debit: finalAmount, credit: 0 },
-                { accountCode: cashAccountCode, description: `Cash disbursement via ${values.voucherNo}`, debit: 0, credit: finalAmount }
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
+                { accountCode: cashAccountCode, description: `Fund disbursed via ${values.voucherNo}`, debit: 0, credit: finalAmount }
               ];
             } else if (values.voucherType === 'By Bank') {
-              voucherTypeRecord = 'Vendor Payment Voucher';
+              voucherTypeRecord = 'Bank Payment Voucher';
               balancedJournalItems = [
-                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor} (${vendorAcc.title})`, debit: finalAmount, credit: 0 },
-                { accountCode: bankAccountCode, description: `Bank disbursement via ${values.voucherNo} (${selectedBankObj?.bankName || 'Bank'})`, debit: 0, credit: finalAmount }
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
+                { accountCode: bankAccountCode, description: `Fund disbursed via ${values.voucherNo}`, debit: 0, credit: finalAmount }
               ];
             } else {
-              voucherTypeRecord = 'Vendor Payment Voucher';
+              voucherTypeRecord = 'Cash & Bank Payment Voucher';
               balancedJournalItems = [
-                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor} (${vendorAcc.title})`, debit: finalAmount, credit: 0 },
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
                 ...(cashPortion > 0 ? [{ accountCode: cashAccountCode, description: `Cash disbursement via ${values.voucherNo}`, debit: 0, credit: cashPortion }] : []),
-                ...(bankPortion > 0 ? [{ accountCode: bankAccountCode, description: `Bank disbursement via ${values.voucherNo} (${selectedBankObj?.bankName || 'Bank'})`, debit: 0, credit: bankPortion }] : [])
+                ...(bankPortion > 0 ? [{ accountCode: bankAccountCode, description: `Bank disbursement via ${values.voucherNo}`, debit: 0, credit: bankPortion }] : [])
               ];
             }
 
+            const isOBSelected = selectedPurchaseNo === 'OPENING_BALANCE';
             const methodStr = values.voucherType === 'Split'
               ? ` | Split (Cash: Rs. ${formatMoney(cashPortion)} + Bank: Rs. ${formatMoney(bankPortion)} via ${selectedBankObj?.bankName || values.selectedBankId})`
               : (values.voucherType === 'By Bank' ? ` | Source Bank: ${selectedBankObj?.bankName || values.selectedBankId}` : ' | Mode: Cash Drawer');
 
-            const poInfoStr = selectedPurchaseNo ? ` | Linked PO: ${selectedPurchaseNo}` : ' | General Vendor Settlement';
+            const poInfoStr = isOBSelected 
+              ? ` | Linked: Vendor Opening Balance (Ref: ${vendorOpeningBalanceVoucherNo || 'OBV-001'})` 
+              : (selectedPurchaseNo ? ` | Linked PO: ${selectedPurchaseNo}` : ' | General Vendor Settlement');
             const compositeNarration = `Paid to Vendor: ${selectedVendor}${poInfoStr}${methodStr} | Remarks: ${values.notes.trim()}`.trim();
 
             const payload = {
@@ -644,17 +682,17 @@ function AddPurchaseReceipt() {
               voucher_date: values.paymentDate,
               customerName: selectedVendor,
               customer_name: selectedVendor,
-              original_invoice_no: selectedPurchaseNo || null,
+              original_invoice_no: isOBSelected ? (vendorOpeningBalanceVoucherNo || 'OBV-001') : (selectedPurchaseNo || null),
               narration: compositeNarration,
               notes: compositeNarration,
               total_amount: finalAmount,
               items: balancedJournalItems,
               metadata: { 
-                preset: 'VPV',
-                auto_generated: Boolean(selectedPurchaseNo),
                 selectedBankId: (values.voucherType === 'By Bank' || values.voucherType === 'Split') ? values.selectedBankId : null,
                 selectedBankTitle: selectedBankObj ? `${selectedBankObj.bankName} - ${selectedBankObj.accountTitle}` : null,
-                linkedPurchaseNo: selectedPurchaseNo || null,
+                linkedPurchaseNo: isOBSelected ? 'Opening Balance' : (selectedPurchaseNo || null),
+                isOpeningBalance: isOBSelected,
+                isOpeningBalanceSettlement: isOBSelected,
                 cashAmount: values.voucherType === 'Split' ? cashPortion : (values.voucherType === 'By Cash' ? finalAmount : 0),
                 bankAmount: values.voucherType === 'Split' ? bankPortion : (values.voucherType === 'By Bank' ? finalAmount : 0),
                 paymentTerm: values.voucherType,
@@ -677,7 +715,7 @@ function AddPurchaseReceipt() {
             }
 
             // 2. Sync with supplier_purchases if a specific PO was linked
-            if (selectedPurchaseNo) {
+            if (selectedPurchaseNo && !isOBSelected) {
               const cleanId = String(selectedPurchaseNo).replace(/\D/g, '');
               const targetPo = purchaseOptions.find(p => p.purchase_no === selectedPurchaseNo || String(p.id) === cleanId);
               
@@ -700,6 +738,20 @@ function AddPurchaseReceipt() {
                     remaining_balance: newRemaining
                   })
                   .eq('id', targetPo.id);
+              }
+            } else if (isOBSelected && selectedVendorObj?.id) {
+              try {
+                const currentVendBal = Number(selectedVendorObj?.balance ?? vendorOpeningBalance);
+                const newVendBal = Math.max(0, currentVendBal - finalAmount);
+                await supabase
+                  .from('vendors')
+                  .update({
+                    balance: newVendBal,
+                    currentBalance: newVendBal
+                  })
+                  .eq('id', selectedVendorObj.id);
+              } catch (vSyncErr) {
+                console.warn('Vendor balance update note:', vSyncErr);
               }
             }
 
@@ -892,9 +944,10 @@ function AddPurchaseReceipt() {
                         value={poSearchQuery}
                         onFocus={() => setIsPoDropdownOpen(true)}
                         onKeyDown={(e) => {
+                          const totalOptions = 1 + (vendorOpeningBalance > 0 ? 1 : 0) + filteredPurchases.length;
                           if (e.key === 'ArrowDown') {
                             e.preventDefault();
-                            setHighlightedPoIndex(prev => Math.min(prev + 1, filteredPurchases.length));
+                            setHighlightedPoIndex(prev => Math.min(prev + 1, totalOptions - 1));
                           } else if (e.key === 'ArrowUp') {
                             e.preventDefault();
                             setHighlightedPoIndex(prev => Math.max(prev - 1, 0));
@@ -902,8 +955,14 @@ function AddPurchaseReceipt() {
                             e.preventDefault();
                             if (highlightedPoIndex === 0) {
                               handleSelectPurchase('');
-                            } else if (filteredPurchases[highlightedPoIndex - 1]) {
-                              handleSelectPurchase(filteredPurchases[highlightedPoIndex - 1].purchase_no);
+                            } else if (vendorOpeningBalance > 0 && highlightedPoIndex === 1) {
+                              handleSelectPurchase('OPENING_BALANCE');
+                            } else {
+                              const pOffset = vendorOpeningBalance > 0 ? 2 : 1;
+                              const targetP = filteredPurchases[highlightedPoIndex - pOffset];
+                              if (targetP) {
+                                handleSelectPurchase(targetP.purchase_no);
+                              }
                             }
                           } else if (e.key === 'Escape') {
                             setIsPoDropdownOpen(false);
@@ -950,29 +1009,70 @@ function AddPurchaseReceipt() {
                         >
                           <div className="flex flex-col">
                             <span className="font-bold text-xs">-- General Vendor Balance Clearing (All Orders) --</span>
-                            <span className="text-[10px] text-slate-400">Automated FIFO allocation against oldest open bills</span>
+                            <span className="text-[10px] text-slate-400">Automated FIFO allocation against oldest open bills & overall ledger</span>
                           </div>
                           <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                             General
                           </span>
                         </div>
 
+                        {/* Option 2: Vendor Opening Balance (if exists) */}
+                        {vendorOpeningBalance > 0 && (
+                          <div
+                            onMouseEnter={() => setHighlightedPoIndex(1)}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectPurchase('OPENING_BALANCE');
+                            }}
+                            className={`p-3 cursor-pointer text-xs flex justify-between items-center transition border-b border-slate-100 dark:border-slate-700/60 ${
+                              highlightedPoIndex === 1 || selectedPurchaseNo === 'OPENING_BALANCE'
+                                ? 'bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 font-bold'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-black text-xs text-amber-700 dark:text-amber-400">
+                                  Vendor Opening Balance
+                                </span>
+                                {vendorOpeningBalanceVoucherNo && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 font-mono font-bold">
+                                    {vendorOpeningBalanceVoucherNo}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400">
+                                Initial registered ledger balance (Credit Liability)
+                              </span>
+                            </div>
+                            <div className="text-right font-mono">
+                              <span className="text-slate-500 text-[10px] block">
+                                Total: Rs. {formatMoney(vendorOpeningBalance)}
+                              </span>
+                              <span className="text-rose-600 dark:text-rose-400 font-black text-xs">
+                                Due: Rs. {formatMoney(poAllocationsMap['OPENING_BALANCE']?.due ?? vendorOpeningBalance)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
                         {/* PO List */}
                         {filteredPurchases.map((pur, pIdx) => {
                           const alloc = poAllocationsMap[pur.purchase_no];
                           const bill = alloc ? alloc.gross : (Number(pur.total_amount) || 0);
                           const due = alloc ? alloc.due : Math.max(0, bill - (Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0)));
+                          const myIdx = (vendorOpeningBalance > 0 ? 2 : 1) + pIdx;
 
                           return (
                             <div
                               key={pur.id}
-                              onMouseEnter={() => setHighlightedPoIndex(pIdx + 1)}
+                              onMouseEnter={() => setHighlightedPoIndex(myIdx)}
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 handleSelectPurchase(pur.purchase_no);
                               }}
                               className={`p-3 cursor-pointer text-xs flex justify-between items-center transition ${
-                                highlightedPoIndex === (pIdx + 1) || selectedPurchaseNo === pur.purchase_no
+                                highlightedPoIndex === myIdx || selectedPurchaseNo === pur.purchase_no
                                   ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold'
                                   : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
                               }`}
@@ -1241,7 +1341,11 @@ function AddPurchaseReceipt() {
                       <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">
                         <MdAccountBalance className="text-emerald-600" size={16} /> Settlement Breakdown
                       </div>
-                      {selectedPurchaseNo ? (
+                      {selectedPurchaseNo === 'OPENING_BALANCE' ? (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono">
+                          Opening Balance {vendorOpeningBalanceVoucherNo ? `(${vendorOpeningBalanceVoucherNo})` : ''}
+                        </span>
+                      ) : selectedPurchaseNo ? (
                         <span className="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
                           {selectedPurchaseNo}
                         </span>
@@ -1253,29 +1357,114 @@ function AddPurchaseReceipt() {
                     </div>
 
                     <div className="space-y-2.5 font-mono text-xs">
-                      <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
-                        <span className="font-sans">Gross Billed Total:</span>
-                        <strong className="text-slate-900 dark:text-white font-black text-sm">
-                          Rs. {formatMoney(poGrossBill)}
-                        </strong>
-                      </div>
+                      {selectedPurchaseNo === 'OPENING_BALANCE' ? (
+                        <>
+                          <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
+                            <span className="font-sans flex items-center gap-1">
+                              Opening Balance:
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 font-sans font-bold">Credit Liability</span>
+                            </span>
+                            <strong className="text-slate-900 dark:text-white font-black text-sm">
+                              Rs. {formatMoney(vendorOpeningBalance)}
+                            </strong>
+                          </div>
 
-                      <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
-                        <span className="font-sans">Paid Upfront:</span>
-                        <span>Rs. {formatMoney(poPaidUpfront)}</span>
-                      </div>
+                          {poPastReceiptsPaid > 0 && (
+                            <div className="flex justify-between items-center text-teal-700 dark:text-teal-400">
+                              <span className="font-sans">Past Voucher Disbursements:</span>
+                              <span>Rs. {formatMoney(poPastReceiptsPaid)}</span>
+                            </div>
+                          )}
 
-                      {poPastReceiptsPaid > 0 && (
-                        <div className="flex justify-between items-center text-teal-700 dark:text-teal-400">
-                          <span className="font-sans">Past Voucher Disbursements:</span>
-                          <span>Rs. {formatMoney(poPastReceiptsPaid)}</span>
-                        </div>
+                          <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400 font-black">
+                            <span className="font-sans">Current Outstanding Due:</span>
+                            <strong className="text-base">Rs. {formatMoney(effectiveDueForThisReceipt)}</strong>
+                          </div>
+
+                          <div className="text-[11px] font-sans text-slate-500 dark:text-slate-400 pt-1 flex justify-between border-t border-slate-100 dark:border-slate-800">
+                            <span>Vendor Overall Ledger Due:</span>
+                            <strong className="font-mono text-slate-800 dark:text-slate-200 font-bold">Rs. {formatMoney(vendorTotalOutstanding)}</strong>
+                          </div>
+                        </>
+                      ) : selectedPurchaseNo ? (
+                        <>
+                          <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
+                            <span className="font-sans">Gross Billed Total:</span>
+                            <strong className="text-slate-900 dark:text-white font-black text-sm">
+                              Rs. {formatMoney(poGrossBill)}
+                            </strong>
+                          </div>
+
+                          <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
+                            <span className="font-sans">Paid Upfront:</span>
+                            <span>Rs. {formatMoney(poPaidUpfront)}</span>
+                          </div>
+
+                          {poPastReceiptsPaid > 0 && (
+                            <div className="flex justify-between items-center text-teal-700 dark:text-teal-400">
+                              <span className="font-sans">Past Voucher Disbursements:</span>
+                              <span>Rs. {formatMoney(poPastReceiptsPaid)}</span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400 font-black">
+                            <span className="font-sans">Current Outstanding Due:</span>
+                            <strong className="text-base">Rs. {formatMoney(effectiveDueForThisReceipt)}</strong>
+                          </div>
+
+                          <div className="text-[11px] font-sans text-slate-500 dark:text-slate-400 pt-1 flex justify-between border-t border-slate-100 dark:border-slate-800">
+                            <span>Vendor Overall Ledger Due:</span>
+                            <strong className="font-mono text-slate-800 dark:text-slate-200 font-bold">Rs. {formatMoney(vendorTotalOutstanding)}</strong>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {vendorOpeningBalance > 0 && (
+                            <div className="flex justify-between items-center text-amber-700 dark:text-amber-400">
+                              <span className="font-sans flex items-center gap-1">
+                                Opening Balance:
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 font-sans font-bold">Credit</span>
+                              </span>
+                              <strong className="font-black text-xs">
+                                Rs. {formatMoney(vendorOpeningBalance)}
+                              </strong>
+                            </div>
+                          )}
+
+                          {vendorPurchasesGrossTotal > 0 && (
+                            <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
+                              <span className="font-sans">Purchase Orders Gross:</span>
+                              <span>Rs. {formatMoney(vendorPurchasesGrossTotal)}</span>
+                            </div>
+                          )}
+
+                          <div className={`flex justify-between items-center text-slate-600 dark:text-slate-400 ${vendorOpeningBalance > 0 ? 'pt-1 border-t border-slate-100 dark:border-slate-800' : ''}`}>
+                            <span className="font-sans font-bold">
+                              {vendorOpeningBalance > 0 ? 'Total Gross Liability:' : 'Gross Billed Total:'}
+                            </span>
+                            <strong className="text-slate-900 dark:text-white font-black text-sm">
+                              Rs. {formatMoney(poGrossBill)}
+                            </strong>
+                          </div>
+
+                          <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
+                            <span className="font-sans">Paid Upfront:</span>
+                            <span>Rs. {formatMoney(poPaidUpfront)}</span>
+                          </div>
+
+                          {poPastReceiptsPaid > 0 && (
+                            <div className="flex justify-between items-center text-teal-700 dark:text-teal-400">
+                              <span className="font-sans">Past Voucher Disbursements:</span>
+                              <span>Rs. {formatMoney(poPastReceiptsPaid)}</span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400 font-black">
+                            <span className="font-sans">Current Outstanding Due:</span>
+                            <strong className="text-base">Rs. {formatMoney(effectiveDueForThisReceipt)}</strong>
+                          </div>
+                        </>
                       )}
-
-                      <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400 font-black">
-                        <span className="font-sans">Current Outstanding Due:</span>
-                        <strong className="text-base">Rs. {formatMoney(effectiveDueForThisReceipt)}</strong>
-                      </div>
 
                       {/* Live Calculation */}
                       <div className="pt-3 border-t-2 border-dashed border-slate-200 dark:border-slate-700 space-y-2">

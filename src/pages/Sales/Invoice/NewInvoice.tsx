@@ -1070,15 +1070,15 @@ const NewInvoice = () => {
     ).nullable()
   });
 
-  const fetchStockForWarehouse = async (productName: string, chosenWarehouse: string) => {
+  const fetchStockForWarehouse = async (productName: string, chosenWarehouse: string, itemCode?: string) => {
     if (!productName) return 0;
     try {
       if (!chosenWarehouse) {
-        const t = await getTotalAvailableStock(productName, stockDataset);
+        const t = await getTotalAvailableStock(productName, stockDataset, itemCode);
         console.log(`[Invoice] No WH. Total stock for ${productName}:`, t);
         return t;
       }
-      const s = await getAvailableStock(productName, chosenWarehouse, stockDataset);
+      const s = await getAvailableStock(productName, chosenWarehouse, stockDataset, itemCode);
       console.log(`[Invoice] WH selected (${chosenWarehouse}). Stock for ${productName}:`, s);
       return s;
     } catch (err) {
@@ -1125,7 +1125,10 @@ const NewInvoice = () => {
     }
 
     const effectiveWarehouse = (currentItem && currentItem.warehouse) ? currentItem.warehouse : (chosenWarehouse || '');
-    const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse);
+    if (!currentItem?.warehouse && chosenWarehouse) {
+      setFieldValue(`items.${index}.warehouse`, chosenWarehouse);
+    }
+    const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse, selectedProduct.item_sr_no);
     setFieldValue(`items.${index}.availableQty`, availStock);
   };
 
@@ -1192,10 +1195,8 @@ const NewInvoice = () => {
     setFieldValue(`tileItems.${tIdx}.isTileItem`, true);
 
     const effectiveWarehouse = (currentTileItem && currentTileItem.warehouse) ? currentTileItem.warehouse : chosenWarehouse;
-    if (effectiveWarehouse) {
-      const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse);
-      setFieldValue(`tileItems.${tIdx}.availableQty`, availStock);
-    }
+    const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse || '', selectedProduct.item_sr_no);
+    setFieldValue(`tileItems.${tIdx}.availableQty`, availStock);
   };
 
   const handleTileItemChange = (
@@ -1255,8 +1256,6 @@ const NewInvoice = () => {
       lineSqm = Number(((bQty * sqmPerBox) + ((lPcs / pcsPerBox) * sqmPerBox)).toFixed(2));
     } else if (field === 'pricePerPiece') {
       pPiece = Math.max(0, Number(val) || 0);
-      pBox = Number((pPiece * pcsPerBox).toFixed(2));
-      pSqm = Number((pBox / sqmPerBox).toFixed(2));
       lineSqm = Number(((bQty * sqmPerBox) + ((lPcs / pcsPerBox) * sqmPerBox)).toFixed(2));
     }
 
@@ -1397,8 +1396,6 @@ const NewInvoice = () => {
       lineSqm = Number(((bQty * sqmPerBox) + ((lPcs / pcsPerBox) * sqmPerBox)).toFixed(2));
     } else if (field === 'pricePerPiece') {
       pPiece = Math.max(0, Number(val) || 0);
-      pBox = Number((pPiece * pcsPerBox).toFixed(2));
-      pSqm = Number((pBox / sqmPerBox).toFixed(2));
       lineSqm = Number(((bQty * sqmPerBox) + ((lPcs / pcsPerBox) * sqmPerBox)).toFixed(2));
     }
 
@@ -1422,7 +1419,21 @@ const NewInvoice = () => {
   const calculateLineTotals = (item: any, scenario: string, applyFbrTax: boolean = false) => {
     const qty = Math.max(0, Number(item.qty) || 0);
     const rp = Math.max(0, Number(item.rp) || 0);
-    const grossBase = rp * qty;
+    const pMatch = (productsList || []).find((p: any) => p.product_name === item.itemName || p.item_sr_no === item.itemCode || (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)));
+    const isTile = pMatch ? isTileProduct(pMatch) : false;
+    const allowLoose = Boolean(pMatch?.allow_loose_sales || isTile);
+    const rawPcs = Number(pMatch?.pieces_per_box ?? pMatch?.pcs_per_box ?? pMatch?.pieces_per_packing ?? 0);
+    const pcsPerBox = Number(pMatch?.loose_conversion_ratio) > 0 ? Number(pMatch.loose_conversion_ratio) : (rawPcs > 0 ? rawPcs : (isTile ? 4 : 1));
+
+    let grossBase = rp * qty;
+    if (allowLoose && pcsPerBox > 1) {
+      const bulkCount = Math.floor(qty);
+      const looseCount = Math.round((qty - bulkCount) * pcsPerBox);
+      const piecePrice = item.piecePrice !== undefined && item.piecePrice !== ''
+        ? Number(item.piecePrice)
+        : (Number(pMatch?.loose_sale_price) > 0 ? Number(pMatch.loose_sale_price) : (pcsPerBox > 0 ? rp / pcsPerBox : 0));
+      grossBase = Number(((bulkCount * rp) + (looseCount * piecePrice)).toFixed(2));
+    }
     const discountAmt = Math.max(0, Number(item.discountAmt) || 0);
     const remainingRetail = grossBase - discountAmt;
 
@@ -3307,6 +3318,80 @@ const NewInvoice = () => {
                     >
                       Return
                     </div>
+
+                    {/* Tile Products Toggle Pill */}
+                    <div
+                      onClick={() => {
+                        const isChecked = !values.showTileSection;
+                        setFieldValue('showTileSection', isChecked);
+                        const defaultWh = values.dispatchWarehouse || warehousesList[0] || '';
+                        if (!isChecked) {
+                          setFieldValue('tileItems', []);
+                        } else if ((values.tileItems || []).length === 0) {
+                          setFieldValue('tileItems', [{
+                            id: Date.now(),
+                            itemName: '',
+                            skuCode: '',
+                            warehouse: defaultWh,
+                            availableQty: 0,
+                            boxQty: 1,
+                            loosePcs: 0,
+                            piecesPerBox: 4,
+                            sqmPerBox: 1.44,
+                            pricePerBox: 0,
+                            pricePerSqm: 0,
+                            pricePerPiece: 0,
+                            totalAmount: 0,
+                            totalSqm: 1.44,
+                            isTileItem: true
+                          }]);
+                        }
+                      }}
+                      className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
+                        values.showTileSection
+                          ? 'bg-slate-900 text-white border-slate-900 dark:bg-primary dark:border-primary shadow-xs'
+                          : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+                      }`}
+                    >
+                      Tile
+                    </div>
+
+                    {/* Return Tile Products Toggle Pill */}
+                    <div
+                      onClick={() => {
+                        const isChecked = !values.showTileReturnSection;
+                        setFieldValue('showTileReturnSection', isChecked);
+                        const defaultReturnWh = values.dispatchWarehouse || warehousesList.find((w: string) => /fateh/i.test(w) || /a[-_ ]?39/i.test(w)) || warehousesList[0] || '';
+                        if (!isChecked) {
+                          setFieldValue('tileReturnItems', []);
+                        } else if ((values.tileReturnItems || []).length === 0) {
+                          setFieldValue('tileReturnItems', [{
+                            id: Date.now(),
+                            itemName: '',
+                            skuCode: '',
+                            warehouse: defaultReturnWh,
+                            availableQty: 0,
+                            boxQty: 1,
+                            loosePcs: 0,
+                            piecesPerBox: 4,
+                            sqmPerBox: 1.44,
+                            pricePerBox: 0,
+                            pricePerSqm: 0,
+                            pricePerPiece: 0,
+                            totalAmount: 0,
+                            totalSqm: 1.44,
+                            isTileItem: true
+                          }]);
+                        }
+                      }}
+                      className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
+                        values.showTileReturnSection
+                          ? 'bg-rose-600 text-white border-rose-600 dark:bg-rose-600 dark:border-rose-600 shadow-xs'
+                          : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+                      }`}
+                    >
+                      Return Tile
+                    </div>
                   </div>
 
                   {values.applyFbrTax && (
@@ -3334,12 +3419,13 @@ const NewInvoice = () => {
                     {({ push, remove }) => {
                       const showDiscount = values.showDiscount;
                       return (
-                        <div className="w-full min-w-[900px]">
+                        <div className="w-full min-w-[1050px]">
                           <table className="w-full table-auto border-collapse text-left">
                             <thead className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-black dark:text-white border-b">
                               <tr>
                                 <th className="p-2 w-8 text-center">S#</th>
-                                <th className="p-2 min-w-[260px]">Product (Name / Code)</th>
+                                <th className="p-2 min-w-[240px]">Product (Name / Code)</th>
+                                <th className="p-2 w-44">Warehouse Zone Source</th>
                                 <th className="p-2 w-32 text-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold">Available Stock</th>
                                 <th className="p-2 w-48 text-center">Qty (UOM)</th>
                                 <th className="p-2 w-28 text-right">Sale Price</th>
@@ -3367,6 +3453,17 @@ const NewInvoice = () => {
                                 const hasItemError = hasAttempted && errors.items && (errors.items as any)[idx]?.itemName;
                                 const isCurrentActive = activeSkuIndex === idx;
                                 const isCurrentProdNameActive = activeProdNameIndex === idx;
+                                const isCurrentWhActive = activeWhIndex === idx;
+
+                                const currentWh = item.warehouse !== undefined && item.warehouse !== '' ? item.warehouse : (values.dispatchWarehouse || '');
+                                const exactWhSelected = warehousesList.some(w => String(w || '').toLowerCase().trim() === String(currentWh || '').toLowerCase().trim());
+                                const whSearchTerm = exactWhSelected ? '' : (currentWh || '').toLowerCase().trim();
+                                let filteredWhs = whSearchTerm
+                                  ? warehousesList.filter(w => String(w || '').toLowerCase().includes(whSearchTerm))
+                                  : warehousesList;
+                                if (filteredWhs.length === 0 && warehousesList.length > 0) {
+                                  filteredWhs = warehousesList;
+                                }
 
                                 const selectedProd = productsList.find(p => p.product_name === item.itemName || (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)));
                                 const isTile = false;
@@ -3706,16 +3803,144 @@ const NewInvoice = () => {
                                       {hasItemError && <p className="text-red-500 text-[9px] font-bold mt-0.5">Required Field</p>}
                                     </td>
 
+                                    {/* WAREHOUSE ZONE SOURCE SELECTOR */}
+                                    <td className="p-2 w-44 relative wh-container">
+                                      <div className="relative">
+                                        <input
+                                          type="text"
+                                          autoComplete="off"
+                                          value={currentWh}
+                                          onFocus={() => {
+                                            setActiveWhIndex(idx);
+                                            setHighlightedWhIndex(0);
+                                          }}
+                                          onClick={() => {
+                                            setActiveWhIndex(idx);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'ArrowDown') {
+                                              e.preventDefault();
+                                              if (filteredWhs.length === 0) return;
+                                              setHighlightedWhIndex(prev => prev < filteredWhs.length - 1 ? prev + 1 : 0);
+                                            } else if (e.key === 'ArrowUp') {
+                                              e.preventDefault();
+                                              if (filteredWhs.length === 0) return;
+                                              setHighlightedWhIndex(prev => prev > 0 ? prev - 1 : filteredWhs.length - 1);
+                                            } else if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              if (filteredWhs[highlightedWhIndex]) {
+                                                const selWh = filteredWhs[highlightedWhIndex];
+                                                setFieldValue(`items.${idx}.warehouse`, selWh);
+                                                if (item.itemName) {
+                                                  fetchStockForWarehouse(item.itemName, selWh, item.skuCode).then(avail => {
+                                                    setFieldValue(`items.${idx}.availableQty`, avail);
+                                                  });
+                                                }
+                                                setActiveWhIndex(null);
+                                              }
+                                            } else if (e.key === 'Escape' || e.key === 'Tab') {
+                                              setActiveWhIndex(null);
+                                            }
+                                          }}
+                                          onChange={(e) => {
+                                            const newWh = e.target.value;
+                                            setFieldValue(`items.${idx}.warehouse`, newWh);
+                                            setActiveWhIndex(idx);
+                                            setHighlightedWhIndex(0);
+                                            const exact = warehousesList.find(w => w.toLowerCase().trim() === newWh.toLowerCase().trim());
+                                            if (exact && item.itemName) {
+                                              fetchStockForWarehouse(item.itemName, exact, item.skuCode).then(avail => {
+                                                setFieldValue(`items.${idx}.availableQty`, avail);
+                                              });
+                                            }
+                                          }}
+                                          placeholder={`Default (${values.dispatchWarehouse || 'None'})`}
+                                          className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 pr-6 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-sm"
+                                        />
+
+                                        {Boolean(currentWh) && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setFieldValue(`items.${idx}.warehouse`, '');
+                                              if (item.itemName) {
+                                                fetchStockForWarehouse(item.itemName, values.dispatchWarehouse || '', item.skuCode).then(avail => {
+                                                  setFieldValue(`items.${idx}.availableQty`, avail);
+                                                });
+                                              }
+                                              setActiveWhIndex(null);
+                                            }}
+                                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-meta-4 transition-colors z-10"
+                                            title="Deselect Warehouse"
+                                          >
+                                            <FiX className="w-3 h-3" />
+                                          </button>
+                                        )}
+
+                                        {isCurrentWhActive && filteredWhs.length > 0 && (
+                                          <div className="absolute left-0 min-w-[250px] max-w-[320px] top-full mt-1 z-[99999] max-h-[180px] overflow-y-auto rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin">
+                                            {filteredWhs.map((wh, wIdx) => {
+                                              const whStock = item.itemName ? getItemWarehouseStock(item.itemName, wh, item.skuCode) : null;
+                                              const hasStock = whStock !== null && whStock > 0;
+                                              return (
+                                                <div
+                                                  key={wh}
+                                                  onMouseEnter={() => setHighlightedWhIndex(wIdx)}
+                                                  onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setFieldValue(`items.${idx}.warehouse`, wh);
+                                                    if (item.itemName) {
+                                                      fetchStockForWarehouse(item.itemName, wh, item.skuCode).then(avail => {
+                                                        setFieldValue(`items.${idx}.availableQty`, avail);
+                                                      });
+                                                    }
+                                                    setActiveWhIndex(null);
+                                                  }}
+                                                  className={`p-2.5 cursor-pointer transition flex items-center justify-between ${wIdx === highlightedWhIndex ? 'bg-slate-100 dark:bg-slate-800 border-l-4 border-primary text-black dark:text-white' : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'}`}
+                                                >
+                                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{wh}</span>
+                                                  {whStock !== null && (
+                                                    <span className={`text-[11px] font-mono font-bold ${hasStock ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                      {whStock} {bulkUnitLabel || 'Nos'}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+
                                     {/* AVAILABLE STOCK */}
                                     <td className="p-2 text-center bg-success/5 text-xs w-[140px]">
-                                      <div className="flex flex-col items-center justify-center font-mono">
-                                        <span className="font-black text-success text-xs">
-                                          {totalAvailStock.toLocaleString()}
-                                        </span>
-                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
-                                          {item.uom || selectedProd?.uom || 'MTR'}
-                                        </span>
-                                      </div>
+                                      {allowLoose && pcsPerBox > 1 ? (
+                                        (() => {
+                                          const bulkAvail = Math.floor(totalAvailStock);
+                                          const looseAvail = Math.round((totalAvailStock - bulkAvail) * pcsPerBox);
+                                          return (
+                                            <div className="flex flex-col items-center justify-center font-mono">
+                                              <span className="font-black text-success text-xs">
+                                                {bulkAvail} {bulkUnitLabel}{looseAvail > 0 ? ` + ${looseAvail} ${looseUnitLabel}` : ''}
+                                              </span>
+                                              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
+                                                ({Math.round(totalAvailStock * pcsPerBox)} Total {looseUnitLabel})
+                                              </span>
+                                            </div>
+                                          );
+                                        })()
+                                      ) : (
+                                        <div className="flex flex-col items-center justify-center font-mono">
+                                          <span className="font-black text-success text-xs">
+                                            {totalAvailStock.toLocaleString()}
+                                          </span>
+                                          <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
+                                            {item.uom || selectedProd?.uom || 'MTR'}
+                                          </span>
+                                        </div>
+                                      )}
                                     </td>
 
                                     {/* QTY (UOM) */}
@@ -3852,6 +4077,7 @@ const NewInvoice = () => {
                                       <input
                                         type="number"
                                         min="0"
+                                        step="any"
                                         onKeyDown={blockInvalidChar}
                                         onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
                                         name={`items.${idx}.rp`}
@@ -3859,15 +4085,32 @@ const NewInvoice = () => {
                                         onChange={(e) => {
                                           const newRp = Math.max(0, Number(e.target.value) || 0);
                                           setFieldValue(`items.${idx}.rp`, newRp);
-                                          const currentQty = Math.max(0, Number(item.qty) || 0);
-                                          const gross = newRp * currentQty;
-                                          const disPer = Math.max(0, Number(item.discountPer) || 0);
-                                          if (disPer > 0) {
-                                            setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                          if (!Number(selectedProd?.loose_sale_price) && pcsPerBox > 1) {
+                                            setFieldValue(`items.${idx}.piecePrice`, Number((newRp / pcsPerBox).toFixed(2)));
                                           }
                                         }}
                                         className={`w-full bg-transparent text-right font-bold outline-none border rounded p-1 ${hasAttempted && (errors.items as any)?.[idx] && (!item.rp || item.rp < 0) ? 'border-red-500 bg-red-50/10' : 'border-transparent'}`}
                                       />
+                                      {((isTile || allowLoose) && pcsPerBox > 1) && (
+                                        <div className="flex items-center gap-1 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded px-1.5 py-0.5 mt-1">
+                                          <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                                            /{looseUnitLabel}:
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            onKeyDown={blockInvalidChar}
+                                            value={item.piecePrice !== undefined && item.piecePrice !== '' ? item.piecePrice : (Number(selectedProd?.loose_sale_price) > 0 ? Number(selectedProd.loose_sale_price) : (pcsPerBox > 0 ? Number(((Number(item.rp) || 0) / pcsPerBox).toFixed(2)) : ''))}
+                                            onChange={(e) => {
+                                              const enteredPrice = Math.max(0, Number(e.target.value) || 0);
+                                              setFieldValue(`items.${idx}.piecePrice`, enteredPrice);
+                                            }}
+                                            placeholder="0"
+                                            className="w-full bg-transparent font-mono font-bold text-[11px] text-right text-emerald-700 dark:text-emerald-400 outline-none"
+                                          />
+                                        </div>
+                                      )}
                                       {Number(item.itemServiceCharges) > 0 && (
                                         <div className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold text-right mt-0.5 whitespace-nowrap">
                                           Svc: Rs.{Number(item.itemServiceCharges).toFixed(0)}
@@ -3969,7 +4212,7 @@ const NewInvoice = () => {
                           <div className="p-2 bg-gray-50/10 dark:bg-meta-4/10 border-t border-stroke dark:border-strokedark text-left">
                             <button
                               type="button"
-                              onClick={() => push({ itemName: '', skuCode: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 0, fTaxPer: 0, amount: 0, availableQty: 0 })}
+                              onClick={() => push({ itemName: '', skuCode: '', warehouse: values.dispatchWarehouse || '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 0, fTaxPer: 0, amount: 0, availableQty: 0 })}
                               className="text-success font-bold hover:underline cursor-pointer"
                             >
                               + Append Item Row
@@ -3982,8 +4225,8 @@ const NewInvoice = () => {
                 </div>
 
                 {/* --- TILE INVENTORY PRODUCTS DYNAMIC FIELDARRAY --- */}
-                {false && (
-                  <div className={`border border-teal-400 dark:border-teal-800/80 bg-teal-50/20 dark:bg-teal-950/10 rounded-sm mt-6 relative ${activeTileProdIndex !== null || activeTileWhIndex !== null ? 'z-30' : 'z-20'} overflow-visible pb-4`}>
+                {values.showTileSection && (
+                  <div className={`border border-stroke dark:border-strokedark bg-white dark:bg-boxdark rounded-sm mt-6 relative ${activeTileProdIndex !== null || activeTileWhIndex !== null ? 'z-30' : 'z-20'} overflow-visible pb-4 shadow-xs`}>
                     <FieldArray name="tileItems">
                       {({ push, remove }) => {
                         const tileTotalSum = (values.tileItems || []).reduce((acc: number, t: any) => acc + (Number(t.totalAmount || 0)), 0);
@@ -3993,31 +4236,31 @@ const NewInvoice = () => {
 
                         return (
                           <div className="w-full min-w-[980px]">
-                            <div className="p-3 bg-teal-100/70 dark:bg-teal-900/40 border-b border-teal-300 dark:border-teal-800 flex items-center justify-between">
+                            <div className="p-3 bg-slate-50 dark:bg-meta-4/20 border-b border-stroke dark:border-strokedark flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded bg-teal-600 text-white font-mono text-[10px] font-black tracking-wider uppercase">
+                                <span className="px-2 py-0.5 rounded bg-slate-900 dark:bg-slate-700 text-white font-mono text-[10px] font-black tracking-wider uppercase">
                                   Tiles
                                 </span>
-                                <span className="font-bold text-xs text-teal-950 dark:text-teal-200">
+                                <span className="font-bold text-xs text-slate-800 dark:text-slate-100">
                                   Tile Items (Boxes, Loose Pieces & Sq. Mtr Sales)
                                 </span>
                               </div>
-                              <div className="flex items-center gap-4 text-xs font-mono font-bold text-teal-800 dark:text-teal-300">
+                              <div className="flex items-center gap-4 text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
                                 <span>Boxes: <strong className="font-black text-black dark:text-white">{totalBoxesCount}</strong></span>
                                 <span>Pcs: <strong className="font-black text-black dark:text-white">{totalLoosePcsCount}</strong></span>
-                                <span>Sq.M Given: <strong className="font-black text-teal-950 dark:text-teal-100 bg-teal-200/80 dark:bg-teal-800/80 px-2 py-0.5 rounded shadow-sm">{totalSqmCount.toFixed(2)} m²</strong></span>
-                                <span className="text-teal-950 dark:text-teal-100 font-black text-sm">
+                                <span>Sq.M Given: <strong className="font-black text-slate-900 dark:text-white bg-slate-200/80 dark:bg-slate-700 px-2 py-0.5 rounded shadow-xs">{totalSqmCount.toFixed(2)} m²</strong></span>
+                                <span className="text-slate-900 dark:text-white font-black text-sm">
                                   Total Tiles: Rs. {tileTotalSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </span>
                               </div>
                             </div>
                             <table className="w-full table-auto border-collapse text-left">
-                              <thead className="bg-teal-50/80 dark:bg-teal-950/60 text-[10px] font-black uppercase text-teal-950 dark:text-teal-300 border-b border-teal-200 dark:border-teal-800">
+                              <thead className="bg-gray-100 dark:bg-meta-4/40 text-[10px] font-black uppercase text-slate-700 dark:text-slate-200 border-b border-stroke dark:border-strokedark">
                                 <tr>
                                   <th className="p-2 w-8 text-center">S#</th>
                                   <th className="p-2 min-w-[240px]">Product (NAME / CODE)</th>
                                   <th className="p-2 w-44">Warehouse ZONE SOURCE</th>
-                                  <th className="p-2 w-32 text-center text-teal-800 dark:text-teal-400">Stock in Warehouse</th>
+                                  <th className="p-2 w-32 text-center text-slate-700 dark:text-slate-200">Stock in Warehouse</th>
                                   <th className="p-2 w-24 text-center">QTY (Box)</th>
                                   <th className="p-2 w-24 text-center">Pcs (Loose)</th>
                                   <th className="p-2 w-28 text-right">Sale Price (Per Box)</th>
@@ -4065,7 +4308,7 @@ const NewInvoice = () => {
                                   }
 
                                   return (
-                                    <tr key={tItem.id || tIdx} className={`border-b border-teal-100 dark:border-teal-900/40 hover:bg-teal-50/30 ${isCurrentProdActive || isCurrentWhActive ? 'relative z-30' : 'relative z-10'}`}>
+                                    <tr key={tItem.id || tIdx} className={`border-b border-stroke dark:border-strokedark hover:bg-slate-50/60 dark:hover:bg-slate-800/40 ${isCurrentProdActive || isCurrentWhActive ? 'relative z-30' : 'relative z-10'}`}>
                                       <td className="p-2 text-center text-gray-500 font-mono text-xs">{tIdx + 1}</td>
 
                                       {/* TILE PRODUCT SELECTOR */}
@@ -4111,7 +4354,7 @@ const NewInvoice = () => {
                                               }
                                             }}
                                             placeholder="Search tile product..."
-                                            className="w-full bg-white dark:bg-boxdark font-bold border border-teal-300 dark:border-teal-800 rounded p-2 pr-7 outline-none text-xs text-black dark:text-white focus:border-teal-500 shadow-sm"
+                                            className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-2 pr-7 outline-none text-xs text-black dark:text-white focus:border-primary shadow-sm"
                                           />
 
                                           {Boolean(tItem.itemName || tItem.skuCode) && (
@@ -4130,14 +4373,14 @@ const NewInvoice = () => {
                                           )}
 
                                           {tItem.skuCode && (
-                                            <div className="text-[10px] font-mono font-bold text-teal-700 dark:text-teal-400 mt-0.5 truncate">
+                                            <div className="text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 mt-0.5 truncate">
                                               Code: {tItem.skuCode} • Packing: {pcsPerBox} pcs/box {tItem.sqmPerBox ? `(${tItem.sqmPerBox} m²)` : ''}
                                             </div>
                                           )}
 
                                           {/* TILE PRODUCT DROPDOWN */}
                                           {isCurrentProdActive && (
-                                            <div className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[440px] max-h-[260px] overflow-y-auto rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin">
+                                            <div className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[440px] max-h-[260px] overflow-y-auto rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin">
                                               {filteredTileProds.map((p, pIdx) => {
                                                 const displaySku = p.item_sr_no || `SKU-${p.id}`;
                                                 const isHighlighted = pIdx === highlightedTileProdIndex;
@@ -4152,7 +4395,7 @@ const NewInvoice = () => {
                                                       handleTileProductSelection(p, tIdx, values.dispatchWarehouse, setFieldValue, tItem);
                                                       setActiveTileProdIndex(null);
                                                     }}
-                                                    className={`p-2.5 cursor-pointer transition flex items-center justify-between ${isHighlighted ? 'bg-teal-50 dark:bg-teal-950/40 border-l-4 border-teal-500' : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'}`}
+                                                    className={`p-2.5 cursor-pointer transition flex items-center justify-between ${isHighlighted ? 'bg-slate-100 dark:bg-slate-800 border-l-4 border-primary text-black dark:text-white' : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'}`}
                                                   >
                                                     <div className="flex flex-col text-left pr-2">
                                                       <span className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
@@ -4167,7 +4410,7 @@ const NewInvoice = () => {
                                                       const hasStock = boxes > 0 || loose > 0;
                                                       return (
                                                         <div className="text-right font-mono shrink-0 pl-2 flex flex-col items-end justify-center">
-                                                          <span className="text-xs font-bold text-teal-700 dark:text-teal-400">
+                                                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                                                             Rs. {Number(p.retail_price || 0).toLocaleString()} / Box
                                                           </span>
                                                           <span className={`text-[11px] font-bold ${hasStock ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
@@ -4236,7 +4479,7 @@ const NewInvoice = () => {
                                               setHighlightedTileWhIndex(0);
                                             }}
                                             placeholder={`Default (${values.dispatchWarehouse || 'None'})`}
-                                            className="w-full bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-800 rounded p-1.5 pr-6 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-teal-500 shadow-sm"
+                                            className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 pr-6 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-sm"
                                           />
 
                                           {Boolean(currentWh) && (
@@ -4260,7 +4503,7 @@ const NewInvoice = () => {
                                           )}
 
                                           {isCurrentWhActive && filteredWhs.length > 0 && (
-                                            <div className="absolute left-0 min-w-[250px] max-w-[320px] top-full mt-1 z-[99999] max-h-[180px] overflow-y-auto rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin">
+                                            <div className="absolute left-0 min-w-[250px] max-w-[320px] top-full mt-1 z-[99999] max-h-[180px] overflow-y-auto rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin">
                                               {filteredWhs.map((wh, wIdx) => {
                                                 const pcsPerBox = Math.max(1, Number(tItem.piecesPerBox) || 4);
                                                 const whStock = tItem.itemName ? getItemWarehouseStock(tItem.itemName, wh) : null;
@@ -4282,12 +4525,12 @@ const NewInvoice = () => {
                                                       }
                                                       setActiveTileWhIndex(null);
                                                     }}
-                                                    className={`p-2.5 cursor-pointer transition text-xs font-bold flex items-center justify-between gap-2 ${wIdx === highlightedTileWhIndex ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-l-4 border-teal-500' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80'}`}
+                                                    className={`p-2.5 cursor-pointer transition text-xs font-bold flex items-center justify-between gap-2 ${wIdx === highlightedTileWhIndex ? 'bg-slate-100 dark:bg-slate-800 text-black dark:text-white border-l-4 border-primary' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80'}`}
                                                   >
                                                     <span className="truncate">{wh}</span>
                                                     {tItem.itemName && (
                                                       <div className="text-right font-mono shrink-0 pl-2 flex flex-col items-end leading-none">
-                                                        <span className={`text-[11px] font-bold ${hasStock ? 'text-teal-700 dark:text-teal-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                        <span className={`text-[11px] font-bold ${hasStock ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'}`}>
                                                           {whBoxes} Box{whBoxes !== 1 ? 'es' : ''}
                                                         </span>
                                                         <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
@@ -4308,7 +4551,7 @@ const NewInvoice = () => {
                                         <div className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">
                                           {availBoxes} Boxes{availLoose > 0 ? ` + ${availLoose} Pcs` : ''}
                                         </div>
-                                        <div className="text-[10px] text-teal-700 dark:text-teal-300 font-mono font-bold">
+                                        <div className="text-[10px] text-slate-600 dark:text-slate-400 font-mono font-bold">
                                           {totalAvailSqm.toFixed(2)} m²
                                         </div>
                                         <div className="text-[10px] text-slate-400 font-mono">
@@ -4327,7 +4570,7 @@ const NewInvoice = () => {
                                           onChange={(e) => {
                                             handleTileItemChange(tIdx, 'boxQty', e.target.value, values.tileItems, setFieldValue);
                                           }}
-                                          className="w-full text-center bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-800 rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-teal-500"
+                                          className="w-full text-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-primary"
                                         />
                                       </td>
 
@@ -4342,7 +4585,7 @@ const NewInvoice = () => {
                                           onChange={(e) => {
                                             handleTileItemChange(tIdx, 'loosePcs', e.target.value, values.tileItems, setFieldValue);
                                           }}
-                                          className="w-full text-center bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-800 rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-teal-500"
+                                          className="w-full text-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-primary"
                                         />
                                       </td>
 
@@ -4357,7 +4600,7 @@ const NewInvoice = () => {
                                           onChange={(e) => {
                                             handleTileItemChange(tIdx, 'pricePerBox', e.target.value, values.tileItems, setFieldValue);
                                           }}
-                                          className="w-full text-right bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-800 rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-teal-500"
+                                          className="w-full text-right bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-primary"
                                         />
                                       </td>
 
@@ -4372,12 +4615,12 @@ const NewInvoice = () => {
                                           onChange={(e) => {
                                             handleTileItemChange(tIdx, 'pricePerSqm', e.target.value, values.tileItems, setFieldValue);
                                           }}
-                                          className="w-full text-right bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-800 rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-teal-500"
+                                          className="w-full text-right bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-primary"
                                         />
                                         <div className="mt-1 text-right font-mono">
-                                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/50 px-1.5 py-0.5 rounded border border-teal-200/80 dark:border-teal-800/60" title="Total Sq. Mtr being given for this item">
-                                            <span className="text-[9px] text-teal-600 dark:text-teal-400 font-medium">Sq.M:</span>
-                                            <strong className="text-teal-950 dark:text-teal-100 font-black">{itemLineSqm.toFixed(2)} m²</strong>
+                                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-stroke dark:border-strokedark" title="Total Sq. Mtr being given for this item">
+                                            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-medium">Sq.M:</span>
+                                            <strong className="text-black dark:text-white font-black">{itemLineSqm.toFixed(2)} m²</strong>
                                           </span>
                                         </div>
                                       </td>
@@ -4393,12 +4636,12 @@ const NewInvoice = () => {
                                           onChange={(e) => {
                                             handleTileItemChange(tIdx, 'pricePerPiece', e.target.value, values.tileItems, setFieldValue);
                                           }}
-                                          className="w-full text-right bg-white dark:bg-boxdark border border-teal-300 dark:border-teal-800 rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-teal-500"
+                                          className="w-full text-right bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-primary"
                                         />
                                       </td>
 
                                       {/* NET TOTAL */}
-                                      <td className="p-2 w-32 text-right pr-3 font-mono font-black text-xs text-teal-800 dark:text-teal-300">
+                                      <td className="p-2 w-32 text-right pr-3 font-mono font-black text-xs text-slate-800 dark:text-slate-200">
                                         Rs. {Number(tItem.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                       </td>
 
@@ -4418,7 +4661,7 @@ const NewInvoice = () => {
                                 })}
                               </tbody>
                             </table>
-                            <div className="p-2 bg-teal-50/50 dark:bg-teal-950/20 border-t border-teal-200 dark:border-teal-900/50 text-left">
+                            <div className="p-2 bg-slate-50 dark:bg-meta-4/20 border-t border-stroke dark:border-strokedark text-left">
                               <button
                                 type="button"
                                 onClick={() => push({
@@ -4438,7 +4681,7 @@ const NewInvoice = () => {
                                   totalSqm: 1.44,
                                   isTileItem: true
                                 })}
-                                className="text-teal-700 dark:text-teal-400 font-bold hover:underline cursor-pointer text-xs"
+                                className="text-slate-700 dark:text-slate-300 font-bold hover:underline cursor-pointer text-xs"
                               >
                                 + Append Tile Item Row
                               </button>
@@ -4735,7 +4978,7 @@ const NewInvoice = () => {
                 )}
 
                 {/* --- RETURN TILE PRODUCTS DYNAMIC FIELDARRAY --- */}
-                {false && (
+                {values.showTileReturnSection && (
                   <div className={`border border-amber-300 dark:border-amber-900/60 bg-amber-50/20 dark:bg-amber-950/10 rounded-sm mt-6 relative ${activeTileReturnProdIndex !== null || activeTileReturnWhIndex !== null ? 'z-30' : 'z-10'} overflow-visible pb-4`}>
                     <FieldArray name="tileReturnItems">
                       {({ push, remove }) => {

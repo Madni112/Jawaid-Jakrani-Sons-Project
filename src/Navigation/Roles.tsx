@@ -235,7 +235,28 @@ export const adminRoutes = [
   {
     label: 'Accounts',
     icon: MdAccountBalance,
+    path: '/Accounts/Ledgers?tab=customer-ledger',
     children: [
+      {
+        path: '/Accounts/Ledgers?tab=customer-ledger',
+        label: 'Customer Ledger',
+        icon: MdAccountBalance
+      },
+      {
+        path: '/Accounts/Ledgers?tab=vendor-ledger',
+        label: 'Vendor Ledger',
+        icon: MdAccountBalance
+      },
+      {
+        path: '/Accounts/Ledgers?tab=combined-ledger',
+        label: 'All Parties Ledger',
+        icon: MdAccountBalance
+      },
+      {
+        path: '/Accounts/Ledgers?tab=expense-report',
+        label: 'Expense Report',
+        icon: MdAccountBalance
+      },
       {
         path: '/Registration/Chart-of-Account/List',
         component: <ChartOfAccountList />,
@@ -788,6 +809,11 @@ export const adminRoutes = [
   },
   {
     path: '/Purchase/Purchases/Add',
+    component: <AddPurchases />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase/Purchases/Edit/:id',
     component: <AddPurchases />,
     hideFromSidebar: true
   },

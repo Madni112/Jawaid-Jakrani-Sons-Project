@@ -426,7 +426,7 @@ const SettingsPage: React.FC = () => {
 
   // Keyboard Shortcut: Shift + Left / Right Arrow to cycle between Settings Tabs
   useEffect(() => {
-    const tabOrder = ['profile', 'security_devices', 'theme', 'credit_limits', 'sound_effects', 'backup'];
+    const tabOrder = ['profile', 'security_devices', 'theme', 'stock_control', 'credit_limits', 'sound_effects', 'backup'];
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!e.shiftKey) return;
@@ -4916,8 +4916,8 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 7: WORKFLOW & GATE PASS LOGISTICS */}
-          {activeTab === 'workflow_logistics' && (
+          {/* TAB 7: WORKFLOW & GATE PASS LOGISTICS / INVENTORY & STOCK GOVERNANCE */}
+          {(activeTab === 'workflow_logistics' || activeTab === 'stock_control') && (
             <WorkflowSettingsTab isRTL={isRTL} />
           )}
       

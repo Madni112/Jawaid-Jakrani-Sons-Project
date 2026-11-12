@@ -11,14 +11,31 @@ export interface QuotationItem {
   id?: string | number;
   product_id?: string | number;
   product_name: string;
+  sku_code?: string;
   category?: string;
+  sub_category?: string;
   unit?: string;
+  uom?: string;
   qty: number;
+  bulk_qty?: number;
+  loose_qty?: number;
+  allow_loose_sales?: boolean;
+  loose_uom?: string;
+  loose_conversion_ratio?: number;
   rate: number;
   discount_percent?: number;
   discount_amount?: number;
   amount: number;
   notes?: string;
+  is_tile?: boolean;
+  box_qty?: number;
+  loose_pcs?: number;
+  total_sqm?: number;
+  sqm_per_box?: number;
+  pcs_per_box?: number;
+  rate_per_box?: number;
+  rate_per_sqm?: number;
+  rate_per_piece?: number;
 }
 
 export interface QuotationData {
@@ -303,8 +320,8 @@ const PrintQuotation: React.FC = () => {
               <tr className="bg-slate-900 text-white font-bold">
                 <th className="py-2.5 px-3 w-10 text-center">#</th>
                 <th className="py-2.5 px-3">Product Description / Specifications</th>
-                <th className="py-2.5 px-3 w-20 text-center">Unit</th>
-                <th className="py-2.5 px-3 w-20 text-right">Quantity</th>
+                <th className="py-2.5 px-3 w-20 text-center">UOM</th>
+                <th className="py-2.5 px-3 w-28 text-right">Quantity / Pcs</th>
                 <th className="py-2.5 px-3 w-28 text-right">Rate (PKR)</th>
                 <th className="py-2.5 px-3 w-24 text-right">Discount</th>
                 <th className="py-2.5 px-3 w-32 text-right">Total (PKR)</th>
@@ -317,17 +334,36 @@ const PrintQuotation: React.FC = () => {
                 const gross = qty * rate;
                 const discAmt = Number(item.discount_amount || (gross * Number(item.discount_percent || 0)) / 100 || 0);
                 const lineTotal = Number(item.amount || (gross - discAmt));
+                const isTile = Boolean(item.is_tile);
+                const isLoose = Boolean(item.allow_loose_sales && item.loose_conversion_ratio && item.loose_conversion_ratio > 1);
 
                 return (
                   <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                     <td className="py-2.5 px-3 text-center font-bold text-slate-500">{idx + 1}</td>
                     <td className="py-2.5 px-3">
                       <p className="font-bold text-slate-900">{item.product_name}</p>
+                      {isTile && (
+                        <p className="text-[10px] text-amber-800 font-semibold mt-0.5">
+                          {item.box_qty || 0} Boxes + {item.loose_pcs || 0} Pcs ({item.total_sqm || 0} m²)
+                          {item.rate_per_sqm ? ` • Rate/m²: PKR ${item.rate_per_sqm}` : ''}
+                        </p>
+                      )}
+                      {isLoose && !isTile && (
+                        <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">
+                          {item.bulk_qty || 0} {item.uom || 'Unit'} + {item.loose_qty || 0} {item.loose_uom || 'Pcs'}
+                        </p>
+                      )}
                       {item.notes && <p className="text-[10px] text-slate-500 italic mt-0.5">{item.notes}</p>}
                     </td>
-                    <td className="py-2.5 px-3 text-center font-medium text-slate-600">{item.unit || 'Sqft'}</td>
-                    <td className="py-2.5 px-3 text-right font-black text-slate-900">{qty.toLocaleString()}</td>
-                    <td className="py-2.5 px-3 text-right font-semibold text-slate-700">{rate.toLocaleString()}</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-slate-700">
+                      {isTile ? 'BOX' : (item.uom || item.unit || 'PCS')}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-black text-slate-900">
+                      {isTile ? `${item.box_qty || 0} Bx` : qty.toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
+                      {isTile ? `${(item.rate_per_box || rate).toLocaleString()} /bx` : rate.toLocaleString()}
+                    </td>
                     <td className="py-2.5 px-3 text-right text-slate-600">
                       {discAmt > 0 ? `PKR ${discAmt.toLocaleString()}` : '-'}
                     </td>

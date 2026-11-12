@@ -76,7 +76,8 @@ const PrintPurchaseReceipt: React.FC = () => {
 
   if (!receipt) return null;
 
-  const voucherNo = receipt.voucher_no || `PRC-${receipt.id}`;
+  const rawVoucherNo = receipt.voucher_no || `VPR-${String(receipt.id).padStart(3, '0')}`;
+  const voucherNo = String(rawVoucherNo).replace(/^VPV-/i, 'VPR-');
   const receiptDate = receipt.voucher_date || receipt.created_at?.split('T')[0] || new Date().toISOString().split('T')[0];
   const vendorName = receipt.customer_name || receipt.customerName || 'General Vendor';
   const amountPaid = Number(receipt.total_amount || 0);
@@ -210,7 +211,7 @@ const PrintPurchaseReceipt: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-lg bg-emerald-700 text-white font-black flex items-center justify-center text-base shadow-sm">Z</span>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950 uppercase">AL MUHAMMADI</h2>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950 uppercase">ZOAIB ALI & COMPANY</h2>
             </div>
             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">Wholesale Tile & Sanitary Procurement Hub</p>
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 mt-2 font-medium">
@@ -361,7 +362,7 @@ const PrintPurchaseReceipt: React.FC = () => {
         </div>
 
         <div className="text-center text-[10px] text-slate-400 font-mono mt-8 pt-3 border-t border-slate-200">
-          This is an official computer-generated Vendor Payment Voucher issued by AL MUHAMMADI ERP.
+          This is an official computer-generated Vendor Payment Voucher issued by Zoaib Ali & Company ERP.
         </div>
 
       </div>

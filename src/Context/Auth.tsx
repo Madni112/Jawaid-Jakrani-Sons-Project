@@ -609,7 +609,12 @@ export const usePermission = (path: string) => {
   const perms = getPermissions(path);
   return {
     ...perms,
+    hasAccess: isSuperAdmin ? true : perms.hasAccess,
+    canView: isSuperAdmin ? true : perms.canView,
+    canAdd: isSuperAdmin ? true : perms.canAdd,
+    canEdit: isSuperAdmin ? true : perms.canEdit,
+    canDelete: isSuperAdmin ? true : perms.canDelete,
     isSuperAdmin,
-    can: (action: 'view' | 'add' | 'edit' | 'delete') => can(path, action),
+    can: (action: 'view' | 'add' | 'edit' | 'delete') => isSuperAdmin ? true : can(path, action),
   };
 };

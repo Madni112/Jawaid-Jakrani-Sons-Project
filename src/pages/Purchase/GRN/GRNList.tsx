@@ -9,6 +9,7 @@ import VerifyInward from '../Inward Challan/VerifyInward';
 import ReceiveGrnModal from './ReceiveGrnModal';
 import { MdShoppingCart, MdAddCircle } from 'react-icons/md';
 import toast from 'react-hot-toast';
+import ConfirmDeleteModal from '../../../components/Modals/ConfirmDeleteModal';
 
 const GRNList = () => {
     const navigate = useNavigate();
@@ -20,14 +21,15 @@ const GRNList = () => {
     const [entriesPerPage, setEntriesPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deleteTargetGrn, setDeleteTargetGrn] = useState<any | null>(null);
 
-    const handleDelete = async (id: string, status: string, items: any[]) => {
-        if (status === 'Billed') {
+    const handleDeleteClick = (grn: any) => {
+        if (grn.status === 'Billed') {
             toast.error('Cannot delete this GRN! It has already been converted into a Purchase Bill.');
             return;
         }
 
-        const anyReceived = (items || []).some(
+        const anyReceived = (grn.grn_items || []).some(
             (i: any) => Number(i.accepted_qty || 0) > 0 || Number(i.rejected_qty || 0) > 0
         );
 
@@ -36,7 +38,12 @@ const GRNList = () => {
             return;
         }
 
-        if (!window.confirm('Are you sure you want to delete this pending GRN? No items have been received yet, so it will be safely removed.')) return;
+        setDeleteTargetGrn(grn);
+    };
+
+    const executeDeleteGrn = async () => {
+        if (!deleteTargetGrn) return;
+        const id = deleteTargetGrn.id;
         
         try {
             setDeletingId(id);
@@ -48,6 +55,7 @@ const GRNList = () => {
             
             toast.success('Pending GRN deleted successfully.');
             setGrns(prev => prev.filter(g => g.id !== id));
+            setDeleteTargetGrn(null);
         } catch (err: any) {
             toast.error('Failed to delete GRN: ' + err.message);
         } finally {
@@ -216,11 +224,10 @@ const GRNList = () => {
                                                 </button>
                                                 {grn.status !== 'Billed' && (
                                                     <button 
-                                                        onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Add`, { 
+                                                        onClick={() => navigate('/Purchase/Purchases/Add', { 
                                                             state: { 
                                                                 importGrnId: grn.id,
-                                                                importGrn: grn,
-                                                                isTilePurchase: true 
+                                                                importGrn: grn
                                                             } 
                                                         })}
                                                         className="p-1.5 bg-purple-50 text-purple-600 rounded hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 transition"
@@ -230,7 +237,7 @@ const GRNList = () => {
                                                     </button>
                                                 )}
                                                 <button 
-                                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/GRN/Edit/${grn.id}`)}
+                                                    onClick={() => navigate(`/Purchase/GRN/Edit/${grn.id}`)}
                                                     className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 transition"
                                                     title="Edit"
                                                 >
@@ -244,7 +251,7 @@ const GRNList = () => {
                                                     const isLocked = isBilled || hasReceived;
                                                     return (
                                                         <button 
-                                                            onClick={() => handleDelete(grn.id, grn.status, grn.grn_items)}
+                                                            onClick={() => handleDeleteClick(grn)}
                                                             disabled={deletingId === grn.id}
                                                             className={`p-1.5 rounded transition ${
                                                                 isLocked
@@ -294,6 +301,25 @@ const GRNList = () => {
                     </div>
                 </div>
             </div>
+
+            <ConfirmDeleteModal
+                isOpen={!!deleteTargetGrn}
+                title="Delete Goods Receipt Note?"
+                itemType="GRN"
+                itemName={deleteTargetGrn?.grn_no}
+                subtitle="Are you sure you want to remove this receiving consignment?"
+                details={[
+                    { label: "Vendor", value: deleteTargetGrn?.vendor_name || 'N/A' },
+                    { label: "Receipt Date", value: deleteTargetGrn?.receipt_date || 'N/A' },
+                    { label: "Items Count", value: String(deleteTargetGrn?.grn_items?.length || 0) },
+                    { label: "Current Status", value: deleteTargetGrn?.status || 'N/A' },
+                ]}
+                warning="This will safely delete this unreceived GRN and its inward items registry."
+                confirmButtonText="Confirm Delete"
+                isDeleting={deletingId === deleteTargetGrn?.id}
+                onConfirm={executeDeleteGrn}
+                onCancel={() => setDeleteTargetGrn(null)}
+            />
         </div>
     );
 };

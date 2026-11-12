@@ -351,6 +351,10 @@ const AddProduct = () => {
             itemSrNo: editData.item_sr_no || '',
             sroScheduleNo: editData.sro_schedule_no || '',
                         // Tile specific fields dynamically parsed from existing record
+            color: editData.color || (() => {
+              const match = String(editData?.product_description || '').match(/Color:\s*([^|]+)/i);
+              return match ? match[1].trim() : '';
+            })() || '',
             tileDimensionUnit: parseTileUnit(editData),
             tileHeight: parseTileDimensions(editData).h,
             tileWidth: parseTileDimensions(editData).w,
@@ -388,6 +392,7 @@ const AddProduct = () => {
             hsCode: '',
             itemSrNo: '',
             sroScheduleNo: '',
+            color: '',
             // Tile specific defaults
             tileDimensionUnit: 'cm',
             tileHeight: 60,
@@ -446,6 +451,10 @@ const AddProduct = () => {
               finalUom = values.uom || 'BOX';
               finalHsCode = values.hsCode?.trim() || '6907.2100';
               finalItemSrNo = values.itemSrNo?.trim() || tileSizeFormatted;
+            } else {
+              if (values.color && String(values.color).trim()) {
+                finalDescription = `Color: ${String(values.color).trim()}`;
+              }
             }
 
             const databasePayload = {
@@ -948,6 +957,28 @@ const AddProduct = () => {
                             </div>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* 1.25 Color Input (Optional - Shown for Non-Tile Products) */}
+                    {!isTileCategory && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                            <MdFormatColorFill className="text-emerald-600 text-sm" />
+                            <span>Color / Shade</span>
+                          </label>
+                          <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                        </div>
+                        <input
+                          type="text"
+                          name="color"
+                          autoComplete="off"
+                          onChange={handleChange}
+                          value={values.color}
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs font-semibold text-slate-900 dark:text-white"
+                          placeholder="e.g. White, Chrome, Gold, Matte Black, Beige"
+                        />
                       </div>
                     )}
 

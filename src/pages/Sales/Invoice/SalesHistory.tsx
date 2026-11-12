@@ -151,7 +151,7 @@ const SalesHistory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [returnedInvoiceNos, setReturnedInvoiceNos] = useState<string[]>([]);
   const [deliveryChallansMap, setDeliveryChallansMap] = useState<Record<string, any[]>>({});
-  const [invoiceBalances, setInvoiceBalances] = useState<Record<string, { received: number; remaining: number }>>({});
+  const [invoiceBalances, setInvoiceBalances] = useState<Record<string, { upfront: number; receipts: number; returns: number; received: number; remaining: number }>>({});
 
   // 🌟 Realtime Delivery Challan & Freight Approval Modal State
   const [selectedDcForModal, setSelectedDcForModal] = useState<any | null>(null);
@@ -368,6 +368,9 @@ const SalesHistory = () => {
           const totalReceived = alloc.upfront + alloc.specificVouchers + alloc.generalAllocated;
           const remaining = Math.max(0, alloc.gross - totalReceived - alloc.specificReturns);
           balanceMap[invId] = {
+            upfront: alloc.upfront,
+            receipts: alloc.specificVouchers + alloc.generalAllocated,
+            returns: alloc.specificReturns,
             received: totalReceived,
             remaining: remaining
           };
@@ -1241,9 +1244,13 @@ const SalesHistory = () => {
                   const customInvKey = String(inv.invoice_no || '').trim().toLowerCase();
                   const linkedDCs = deliveryChallansMap[customInvKey] || deliveryChallansMap[invoiceKey] || deliveryChallansMap[`inv-${inv.id}`] || [];
 
+                  const upfrontAmt = Number(inv.cash_amount_paid || 0) + Number(inv.bank_amount || 0);
                   const balanceInfo = invoiceBalances[String(inv.id)] || {
-                    received: Number(inv.cash_amount_paid || 0) + Number(inv.bank_amount || 0),
-                    remaining: Math.max(0, Number(inv.total_amount || 0) - (Number(inv.cash_amount_paid || 0) + Number(inv.bank_amount || 0)))
+                    upfront: upfrontAmt,
+                    receipts: 0,
+                    returns: 0,
+                    received: upfrontAmt,
+                    remaining: Math.max(0, Number(inv.total_amount || 0) - upfrontAmt)
                   };
                   const liveReceived = balanceInfo.received;
                   const liveRemaining = balanceInfo.remaining;
@@ -1330,15 +1337,50 @@ const SalesHistory = () => {
                       <td className="py-3 px-4 text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">{inv.salesman || 'General'}</td>
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white whitespace-nowrap">{inv.customer_name}</td>
 
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-4 text-center font-mono text-xs min-w-[150px]">
                         {isReturned ? (
                           <span className="text-[10px] font-black uppercase tracking-wide bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
                             Returned
                           </span>
+                        ) : isFullyPaid ? (
+                          <div className="flex flex-col items-center justify-center space-y-0.5">
+                            {balanceInfo.upfront >= Number(inv.total_amount || 0) && balanceInfo.receipts <= 0 ? (
+                              <span className="inline-block px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase tracking-wider whitespace-nowrap shadow-xs">
+                                Paid Upfront
+                              </span>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center space-y-0.5">
+                                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                  {balanceInfo.upfront > 0 ? `Upfront: Rs. ${balanceInfo.upfront.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'No Upfront amount'}
+                                </span>
+                                <span className="inline-block px-2.5 py-0.5 my-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase tracking-wide whitespace-nowrap shadow-xs">
+                                  Paid (By Receipt)
+                                </span>
+                                {balanceInfo.receipts > 0 && (
+                                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                    Receipt: Rs. {balanceInfo.receipts.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ) : (
-                          <span className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${isFullyPaid ? 'bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30' : liveReceived > 0 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'}`}>
-                            {isFullyPaid ? 'Paid' : liveReceived > 0 ? 'Partial' : (inv.receipt_status || 'On Credit')}
-                          </span>
+                          <div className="flex flex-col items-center justify-center space-y-0.5">
+                            {/* Top center text */}
+                            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                              {balanceInfo.upfront > 0 ? `Upfront: Rs. ${balanceInfo.upfront.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'No Upfront amount'}
+                            </span>
+
+                            {/* Center main badge */}
+                            <span className="inline-block px-2.5 py-0.5 my-0.5 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[10px] font-black uppercase tracking-wide whitespace-nowrap">
+                              Credit (Due: Rs. {liveRemaining.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                            </span>
+
+                            {/* Bottom center text */}
+                            <span className={`text-[10px] font-medium whitespace-nowrap ${balanceInfo.receipts > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400 dark:text-slate-500'}`}>
+                              {balanceInfo.receipts > 0 ? `Receipt: Rs. ${balanceInfo.receipts.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'No receipt'}
+                            </span>
+                          </div>
                         )}
                       </td>
 

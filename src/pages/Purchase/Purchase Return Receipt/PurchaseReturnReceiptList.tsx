@@ -5,6 +5,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
+import ConfirmDeleteModal from '../../../components/Modals/ConfirmDeleteModal';
 import { useAuth } from '../../../Context/Auth';
 import { MdPerson, MdEvent, MdReceipt, MdAssignmentReturn } from 'react-icons/md';
 
@@ -13,6 +14,8 @@ const PurchaseReturnReceiptList: React.FC = () => {
   const { tenantId } = useAuth();
   const [receipts, setReceipts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTargetRcpt, setDeleteTargetRcpt] = useState<any | null>(null);
+  const [isDeletingRcpt, setIsDeletingRcpt] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [pageSize, setPageSize] = useState(10);
@@ -50,25 +53,19 @@ const PurchaseReturnReceiptList: React.FC = () => {
     fetchReceiptLogs();
   }, []);
 
-  const handleDeleteReceipt = async (id: string | number) => {
-    if (!window.confirm('Are you certain you want to permanently erase this refund collection record?')) return;
+  const executeDeleteRcpt = async () => {
+    if (!deleteTargetRcpt) return;
     try {
-      const { data: targetRecord } = await supabase.from('purchase_return_receipts').select('receipt_no').eq('id', id).single();
-      
-      // Cascade delete linked VRV voucher in financial_vouchers
-      if (targetRecord?.receipt_no) {
-        await supabase
-          .from('financial_vouchers')
-          .delete()
-          .eq('voucher_no', targetRecord.receipt_no);
-      }
-
-      const { error } = await supabase.from('purchase_return_receipts').delete().eq('id', id);
+      setIsDeletingRcpt(true);
+      const { error } = await supabase.from('purchase_return_receipts').delete().eq('id', deleteTargetRcpt.id);
       if (error) throw error;
-      toast.success('Collection receipt and linked VRV voucher deleted successfully!');
+      toast.success('Collection receipt deleted successfully!');
+      setDeleteTargetRcpt(null);
       fetchReceiptLogs();
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      setIsDeletingRcpt(false);
     }
   };
 
@@ -188,7 +185,7 @@ const PurchaseReturnReceiptList: React.FC = () => {
                         <TableActions
                           onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return-Receipt/Print/${rcpt.id}`)}
                           onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return-Receipt/Add`, { state: { receiptRecord: rcpt } })}
-                          onDelete={() => handleDeleteReceipt(rcpt.id)}
+                          onDelete={() => setDeleteTargetRcpt(rcpt)}
                           printTitle="Print Refund Receipt"
                           editTitle="Edit Receipt"
                           deleteTitle="Delete Receipt"
@@ -214,6 +211,25 @@ const PurchaseReturnReceiptList: React.FC = () => {
         />
 
       </div>
+
+      <ConfirmDeleteModal
+        isOpen={!!deleteTargetRcpt}
+        title="Delete Return Refund Receipt?"
+        itemType="Receipt"
+        itemName={deleteTargetRcpt?.receipt_no || `Receipt #${deleteTargetRcpt?.id}`}
+        subtitle="This will permanently delete this vendor refund collection record."
+        details={[
+          { label: "Vendor", value: deleteTargetRcpt?.vendor_name || 'N/A' },
+          { label: "Return Note #", value: deleteTargetRcpt?.return_no || 'N/A' },
+          { label: "Payment Mode", value: deleteTargetRcpt?.payment_mode || 'Cash' },
+          { label: "Amount Received", value: `Rs. ${Number(deleteTargetRcpt?.amount_received || 0).toLocaleString()}` },
+        ]}
+        warning="This removes the refund collection voucher from the ledger registry."
+        confirmButtonText="Confirm Delete"
+        isDeleting={isDeletingRcpt}
+        onConfirm={executeDeleteRcpt}
+        onCancel={() => setDeleteTargetRcpt(null)}
+      />
     </div>
   );
 };

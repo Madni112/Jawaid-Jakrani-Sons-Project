@@ -67,14 +67,14 @@ const ReceiveGrnModal: React.FC<ReceiveGrnModalProps> = ({ onClose, defaultLocat
   }, [step]);
 
   const handleCreateNew = () => {
-    onClose();
     const locParam = defaultLocation && defaultLocation !== 'ALL' ? `?prefLoc=${defaultLocation}` : '';
-    navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/GRN/Add${locParam}`);
+    navigate(`/Purchase/GRN/Add${locParam}`);
+    onClose();
   };
 
   const handleSelectExisting = (grnId: string) => {
+    navigate(`/Purchase/GRN/Edit/${grnId}`);
     onClose();
-    navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/GRN/Edit/${grnId}`);
   };
 
   const filteredGrns = grns.filter(g => {

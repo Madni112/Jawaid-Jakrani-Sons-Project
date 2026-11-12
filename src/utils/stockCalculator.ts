@@ -95,7 +95,7 @@ async function fetchAllStockData() {
     { data: stockTransfers },
     { data: deliveryChallans },
   ] = await Promise.all([
-    supabase.from('opening_stocks').select('product_name, "itemName", quantity, qty, location, item_code, "skuCode"'),
+    supabase.from('opening_stocks').select('product_name, itemname, quantity, qty, location, item_code, skucode'),
     supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse'),
     supabase.from('grn_receipts').select('*'),
     supabase.from('grn_items').select('*'),
@@ -154,12 +154,10 @@ function buildBreakdown(
     const osCode = String(os.item_code || os.item_sr_no || os.skucode || os.sku || os.code || '').trim().toLowerCase();
     const osName = String(os.product_name || os.itemname || os.itemName || '').trim().toLowerCase();
     let matches = false;
-    if (pCode && osCode) {
-      matches = (pCode === osCode);
-    } else if (pCode) {
-      matches = false;
-    } else {
-      matches = (osName === name || osName.includes(name) || name.includes(osName));
+    if (pCode && osCode && pCode === osCode) {
+      matches = true;
+    } else if (name && osName && (osName === name || osName.includes(name) || name.includes(osName))) {
+      matches = true;
     }
     if (matches) {
       const qty = Number(os.quantity || os.qty || 0);

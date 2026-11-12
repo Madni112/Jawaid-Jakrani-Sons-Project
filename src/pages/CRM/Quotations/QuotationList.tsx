@@ -22,7 +22,6 @@ import {
   MdHourglassEmpty,
   MdClose
 } from 'react-icons/md';
-import { FaWhatsapp } from 'react-icons/fa';
 import TableActions from '../../../ui/TableActions';
 
 export interface QuotationRow {
@@ -154,7 +153,7 @@ const QuotationList: React.FC = () => {
 
       // 1. Create Sales Invoice
       const invoicePayload = {
-        tenant_id: tenantId || 'bashir',
+        tenant_id: tenantId || null,
         invoice_no: nextInvNo,
         customer_name: quote.customer_name || quote.customer || 'Customer',
         total_amount: Number(quote.total_amount || quote.amount || 0),
@@ -200,7 +199,12 @@ const QuotationList: React.FC = () => {
     const phone = (quote.customer_phone || '').replace(/[^0-9]/g, '');
 
     const items = Array.isArray(quote.items) ? quote.items : (typeof quote.items === 'string' ? JSON.parse(quote.items || '[]') : []);
-    const itemsText = items.map((it: any, idx: number) => `${idx + 1}. ${it.product_name} (${it.qty} ${it.unit || 'units'} @ PKR ${Number(it.rate || 0).toLocaleString()})`).join('\n');
+    const itemsText = items.map((it: any, idx: number) => {
+      if (it.is_tile) {
+        return `${idx + 1}. ${it.product_name} - ${it.box_qty || 0} Bxs + ${it.loose_pcs || 0} Pcs (${it.total_sqm || 0} m²) @ PKR ${Number(it.rate_per_box || it.rate || 0).toLocaleString()}/bx = PKR ${Number(it.amount || 0).toLocaleString()}`;
+      }
+      return `${idx + 1}. ${it.product_name} (${it.qty} ${it.uom || it.unit || 'units'} @ PKR ${Number(it.rate || 0).toLocaleString()}) = PKR ${Number(it.amount || 0).toLocaleString()}`;
+    }).join('\n');
 
     const msg = `Hello *${custName}*,\n\nHere is your official Price Quotation from *${businessName || getBrandConfig().name}*:\n\n` +
       `📄 *Quotation No:* ${quoteNo}\n` +
@@ -270,7 +274,17 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, se
 
   return (
     <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4 space-y-6">
-      <Breadcrumb pageName="Customer Price Quotations" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <Breadcrumb pageName="Customer Price Quotations" />
+        <button
+          type="button"
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/crm/quotations/add`)}
+          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0 self-start sm:self-auto"
+        >
+          <MdAdd size={18} />
+          <span>New Quotation</span>
+        </button>
+      </div>
 
       {/* Cloud DB Notice if table not created yet */}
       {!isCloudTableAvailable && (
@@ -382,17 +396,6 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, se
             </button>
           ))}
         </div>
-
-        {/* Create Button (Guarded with granular permission) */}
-        {perm.canAdd && (
-          <button
-            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/crm/quotations/add`)}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0 w-full md:w-auto justify-center"
-          >
-            <MdAdd size={18} />
-            <span>New Quotation</span>
-          </button>
-        )}
       </div>
 
       {/* ── Quotations Table ────────────────────────────────────────────────── */}
@@ -404,10 +407,19 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, se
         ) : filteredQuotations.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <MdReceipt className="text-4xl mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-            <p className="text-sm font-bold">No quotations found</p>
-            <p className="text-xs text-gray-400 mt-1">
-              {searchTerm ? 'Try adjusting your search criteria' : 'Create your first price quotation using the button above'}
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">No quotations found</p>
+            <p className="text-xs text-gray-400 mt-1 mb-4">
+              {searchTerm ? 'Try adjusting your search criteria' : 'Create your first price quotation to share with prospective clients.'}
             </p>
+            {!searchTerm && (
+              <button
+                type="button"
+                onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/crm/quotations/add`)}
+                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <MdAdd size={16} /> Create First Quotation
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -506,17 +518,7 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, se
                             <MdPrint size={15} />
                           </button>
 
-                          {/* 2. WhatsApp Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleSendWhatsApp(quote)}
-                            title="Send on WhatsApp"
-                            className="p-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 transition cursor-pointer"
-                          >
-                            <FaWhatsapp size={15} />
-                          </button>
-
-                          {/* 3. Convert to Invoice Button */}
+                          {/* 2. Convert to Invoice Button */}
                           {quote.status !== 'Converted to Invoice' && (
                             <button
                               type="button"

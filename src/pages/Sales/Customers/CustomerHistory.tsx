@@ -703,7 +703,7 @@ const CustomerHistory = () => {
                           onClick={() => {
                             const cName = getCustomerDisplayName(c);
                             const cCode = c.customer_code || c.customerCode || c.coa_code;
-                            navigate('/Reports/Reports-Dashboard', {
+                            navigate('/Accounts/Ledgers?tab=customer-ledger', {
                               state: {
                                 tab: 'customer-ledger',
                                 accountCode: cCode,

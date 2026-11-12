@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import SidebarLinkGroup from './SidebarLinkGroup';
 import { AiOutlineUp, AiOutlineDown, AiOutlineRight, AiOutlineArrowLeft } from 'react-icons/ai';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
@@ -217,29 +217,48 @@ const getTheme2Icon = (item: any): React.ElementType | null => {
 };
 
 // Reusable Multi-Level Recursive Sidebar Item Component
+const NHT2_ACCOUNTS_CHILDREN = [
+  { path: '/Accounts/Ledgers?tab=customer-ledger', label: 'Customer Ledger' },
+  { path: '/Accounts/Ledgers?tab=vendor-ledger', label: 'Vendor Ledger' },
+  { path: '/Accounts/Ledgers?tab=combined-ledger', label: 'All Parties Ledger' },
+  { path: '/Accounts/Ledgers?tab=expense-report', label: 'Expense Report' },
+  { path: '/Registration/Chart-of-Account/List', label: 'Chart Of Account' },
+  { path: '/Registration/Vouchers/List', label: 'Vouchers' },
+  { path: '/Registration/Bank-Account/BankAccountList', label: 'Bank Account' },
+  { path: '/Inventory/OpeningStock/List', label: 'Opening Stock' },
+];
+
 const NHT2_REPORTS_CHILDREN = [
   {
-    path: '/Reports/Reports-Dashboard?tab=combined-ledger',
+    path: '/Reports/Reports-Dashboard?tab=profit-loss',
     label: 'Main Reports',
     children: [
-      { path: '/Reports/Reports-Dashboard?tab=combined-ledger', label: 'All Parties' },
       { path: '/Reports/Reports-Dashboard?tab=profit-loss', label: 'Profit & Loss' },
-      { path: '/Reports/Reports-Dashboard?tab=expense-report', label: 'Expense Report' },
       { path: '/Reports/Reports-Dashboard?tab=daily-book', label: 'DailyBook' },
     ],
   },
   {
-    path: '/Reports/Reports-Dashboard?tab=customer-ledger',
-    label: 'Sale Reports',
+    path: '/Accounts/Ledgers?tab=customer-ledger',
+    label: 'Accounts',
     children: [
-      { path: '/Reports/Reports-Dashboard?tab=customer-ledger', label: 'Customer Ledger' },
+      { path: '/Accounts/Ledgers?tab=customer-ledger', label: 'Customer Ledger' },
+      { path: '/Accounts/Ledgers?tab=vendor-ledger', label: 'Vendor Ledger' },
+      { path: '/Accounts/Ledgers?tab=combined-ledger', label: 'All Parties Ledger' },
+      { path: '/Accounts/Ledgers?tab=expense-report', label: 'Expense Report' },
     ],
   },
   {
-    path: '/Reports/Reports-Dashboard?tab=vendor-ledger',
+    path: '/Reports/Sales-Report',
+    label: 'Sale Reports',
+    children: [
+      { path: '/Reports/Sales-Report', label: 'Sales Report' },
+    ],
+  },
+  {
+    path: '/Reports/Purchase-Report',
     label: 'Purchase Reports',
     children: [
-      { path: '/Reports/Reports-Dashboard?tab=vendor-ledger', label: 'Vendor Ledger' },
+      { path: '/Reports/Purchase-Report', label: 'Purchase Report' },
     ],
   },
 ];
@@ -283,12 +302,20 @@ const Theme2FlyoutItem = ({
           setOpenMenuId(null);
           handleLinkClick();
         }}
-        className={`flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150 ${isHovered
-          ? 'bg-[#800020] text-white shadow-xs font-semibold'
-          : isSubActive
-            ? 'bg-[#800020]/40 dark:text-[#E0A899] font-semibold'
+        className={`flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150 ${
+          isHovered
+            ? 'text-white shadow-xs font-semibold'
+            : isSubActive
+            ? 'text-white font-semibold'
             : 'text-neutral-300 hover:bg-white/10 hover:text-white'
-          }`}
+        }`}
+        style={{
+          backgroundColor: isHovered
+            ? 'var(--color-primary, #800020)'
+            : isSubActive
+            ? 'rgba(var(--color-primary-rgb, 128, 0, 32), 0.35)'
+            : undefined,
+        }}
       >
         <span className="truncate">{child.label}</span>
         {hasSubChildren && (
@@ -317,10 +344,14 @@ const Theme2FlyoutItem = ({
                         setOpenMenuId(null);
                         handleLinkClick();
                       }}
-                      className={`flex items-center rounded-lg px-3 py-1.5 text-[12.5px] font-normal transition-all duration-150 ${isGActive
-                        ? 'bg-[#800020] text-white font-semibold shadow-xs'
-                        : 'text-neutral-300 hover:bg-white/10 hover:text-white'
-                        }`}
+                      className={`flex items-center rounded-lg px-3 py-1.5 text-[12.5px] font-normal transition-all duration-150 ${
+                        isGActive
+                          ? 'text-white font-semibold shadow-xs'
+                          : 'text-neutral-300 hover:bg-white/10 hover:text-white'
+                      }`}
+                      style={{
+                        backgroundColor: isGActive ? 'var(--color-primary, #800020)' : undefined,
+                      }}
                     >
                       <span className="truncate">{grandChild.label}</span>
                     </NavLink>
@@ -355,13 +386,21 @@ const SidebarItem = ({
 }: any) => {
   const isTheme2 = masterPreset === 'nht-2' || (masterPreset !== 'nht-1' && isNHTTheme2Active());
   const reportMode = getReportLayoutMode();
+  const navigate = useNavigate();
+  const isAccountsItem = (rawItem?.label || '').toLowerCase().trim() === 'accounts';
   const isReportsItem = (rawItem?.label || '').toLowerCase().trim() === 'reports';
-  const effectiveChildren = isReportsItem
-    ? (reportMode === 'classic' ? NHT2_REPORTS_CHILDREN : undefined)
-    : rawItem?.children;
+  const effectiveChildren = isAccountsItem
+    ? NHT2_ACCOUNTS_CHILDREN
+    : isReportsItem
+      ? (reportMode === 'classic' ? NHT2_REPORTS_CHILDREN : undefined)
+      : rawItem?.children;
   const item = {
     ...rawItem,
-    path: isReportsItem ? '/Reports/Reports-Dashboard' : rawItem?.path,
+    path: isAccountsItem
+      ? '/Accounts/Ledgers?tab=customer-ledger'
+      : isReportsItem
+        ? '/Reports/Reports-Dashboard?tab=profit-loss'
+        : rawItem?.path,
     children: effectiveChildren,
   };
   const EffectiveIcon = isTheme2 ? (getTheme2Icon(item) || item.icon) : item.icon;
@@ -412,6 +451,8 @@ const SidebarItem = ({
 
   // Helper check: Recursively verifies if any nested children match the active route URL
   const checkChildActive = (node: any): boolean => {
+    if (isAccountsItem && (pathname.toLowerCase().includes('/accounts') || pathname.toLowerCase().includes('/registration/chart-of-account') || pathname.toLowerCase().includes('/registration/vouchers') || pathname.toLowerCase().includes('/registration/bank-account') || pathname.toLowerCase().includes('/inventory/openingstock'))) return true;
+    if (isReportsItem && pathname.toLowerCase().includes('/reports')) return true;
     if (node.path) {
       const destination = getTenantPath ? getTenantPath(node.path) : node.path;
       if (pathname === destination || pathname === node.path) return true;
@@ -463,6 +504,7 @@ const SidebarItem = ({
 
   const handleMouseEnter = () => {
     clearHideTimeout();
+    // Only show flyout on hover when the sidebar is collapsed (!sidebarOpen)
     if (!sidebarOpen && !isMobile && itemRef.current) {
       const rect = itemRef.current.getBoundingClientRect();
       const asideEl = itemRef.current.closest('aside');
@@ -506,7 +548,7 @@ const SidebarItem = ({
                 }}
                 onClick={(e) => {
                   e.preventDefault();
-                  // In NHT Theme 2 when opened on desktop: Clicking opens the side flyout container!
+                  // In NHT Theme 2 when opened on desktop: Clicking opens/toggles the side flyout container!
                   if (isTheme2 && sidebarOpen && !isMobile) {
                     const isCurrentlyOpen = openMenuId === menuUniqueKey;
                     if (isCurrentlyOpen) {
@@ -613,10 +655,12 @@ const SidebarItem = ({
           )}
         </SidebarLinkGroup>
 
-        {/* NHT Theme 2: Opened Side Flyout Container on Click (Amal-style pure text menu) */}
+        {/* NHT Theme 2: Opened Side Flyout Container on Click / Hover (Amal-style pure text menu) */}
         {isTheme2 && sidebarOpen && openMenuId === menuUniqueKey && !isMobile && typeof document !== 'undefined' && createPortal(
           <div
             ref={flyoutPanelRef}
+            onMouseEnter={clearHideTimeout}
+            onMouseLeave={scheduleHide}
             className={`fixed z-99999 min-w-[210px] max-w-[260px] rounded-xl border ${sidebarThemeMode === 'light'
               ? 'border-slate-200 bg-white text-slate-800 shadow-2xl'
               : 'border-[#2D2D2D] bg-[#1A1A1A] text-slate-100 shadow-2xl ring-1 ring-white/5'
@@ -627,6 +671,8 @@ const SidebarItem = ({
               overflow: 'visible',
             }}
           >
+            {/* Safe bridge covering gap between sidebar and flyout */}
+            <div className={`absolute top-0 ${isRTL ? '-right-3' : '-left-3'} w-3 h-full bg-transparent pointer-events-auto`} />
             <ul className="flex flex-col gap-0.5">
               {item.children.filter((child: any) => child && !child.hideFromSidebar).map((child: any, idx: number) => (
                 <Theme2FlyoutItem

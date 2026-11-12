@@ -468,7 +468,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
       // Add unpaid purchases
       purchases.forEach((pur: any) => {
         const tot = Number(pur.total_amount || 0);
-        const initialPaid = Number(pur.amount_paid_now || pur.paid_amount || 0);
+        const initialPaid = Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0) || Number(pur.amount_paid || 0);
         const outstanding = Math.max(0, tot - initialPaid);
         if (outstanding > 0.5) {
           extractedPayables.push({
@@ -731,16 +731,22 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
       vouchers.forEach((v: any) => {
         const mode = String(v.mode_of_payment || v.voucher_type || '').toLowerCase();
         if (!mode.includes('bank')) {
-          const isReceipt = String(v.voucher_type || '').toLowerCase().includes('receipt');
-          cashTxns.push({
-            id: `v-${v.id}`,
-            date: v.voucher_date || String(v.created_at || '').split('T')[0],
-            type: isReceipt ? 'Inflow' : 'Outflow',
-            source: v.voucher_type || 'Cash Voucher',
-            party: v.party_name || v.account_title || 'General Account',
-            amount: Number(v.total_amount || v.amount || 0),
-            description: v.narration || v.remarks || 'Cash settlement'
-          });
+          const text = `${v.voucher_no || ''} ${v.account_title || ''} ${v.narration || ''} ${v.voucher_type || ''} ${v.party_name || ''}`.toLowerCase();
+          const isOB = Boolean(v.metadata?.isOpeningBalance || String(v.voucher_no || '').startsWith('OB'));
+          const isReceipt = String(v.voucher_type || '').toLowerCase().includes('receipt') || (isOB && text.includes('cash'));
+          const isPayment = String(v.voucher_type || '').toLowerCase().includes('payment');
+
+          if (isReceipt || isPayment || (isOB && text.includes('cash'))) {
+            cashTxns.push({
+              id: `v-${v.id}`,
+              date: v.voucher_date || String(v.created_at || '').split('T')[0],
+              type: isReceipt ? 'Inflow' : 'Outflow',
+              source: isOB ? 'Opening Cash Balance' : (v.voucher_type || 'Cash Voucher'),
+              party: v.party_name || v.account_title || 'Cash in Hand',
+              amount: Number(v.total_amount || v.amount || 0),
+              description: v.narration || v.remarks || 'Cash settlement'
+            });
+          }
         }
       });
 
@@ -1040,8 +1046,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                 $
               </div>
               <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
-                  Rs.{metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className={`text-xl font-extrabold ${metrics.cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                  {metrics.cashBalance < 0
+                    ? `-Rs.${Math.abs(metrics.cashBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : `Rs.${metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </div>
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
                   CASH
@@ -1168,7 +1176,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                   </div>
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Owed to you vs owed by you</h3>
-                    <p className="text-[11px] text-slate-400">Receivable against payable</p>
+                    <p className="text-[11px] text-slate-400">Settlement clearance & pending balances</p>
                   </div>
                 </div>
                 <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full ${
@@ -1179,42 +1187,103 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                   Net: Rs. {(metrics.totalReceivables - metrics.totalPayables).toLocaleString()}
                 </span>
               </div>
-              {metrics.totalReceivables > 0 || metrics.totalPayables > 0 ? (
-                <div className="flex-1 flex flex-col justify-center py-2 space-y-3">
-                  <div>
-                    <div className="flex justify-between text-xs font-bold mb-1">
-                      <span className="text-amber-600 dark:text-amber-400">Receivable from Customers</span>
-                      <span className="font-mono text-slate-800 dark:text-slate-100">Rs. {metrics.totalReceivables.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              {(() => {
+                const totalGrossCust = Number(metrics.totalGrossReceivables || metrics.totalReceivables || 0);
+                const custDue = Number(metrics.totalReceivables || 0);
+                const custRecovered = Number(metrics.totalCustomerRecovered !== undefined ? metrics.totalCustomerRecovered : Math.max(0, totalGrossCust - custDue));
+                const custRecoveredPct = totalGrossCust > 0 ? Math.round((custRecovered / totalGrossCust) * 100) : (custDue === 0 ? 100 : 0);
+                const custPendingPct = Math.max(0, 100 - custRecoveredPct);
+
+                const totalGrossVend = Number(metrics.totalGrossPayables || metrics.totalPayables || 0);
+                const vendDue = Number(metrics.totalPayables || 0);
+                const vendPaid = Number(metrics.totalVendorDisbursed !== undefined ? metrics.totalVendorDisbursed : Math.max(0, totalGrossVend - vendDue));
+                const vendPaidPct = totalGrossVend > 0 ? Math.round((vendPaid / totalGrossVend) * 100) : (vendDue === 0 ? 100 : 0);
+                const vendPendingPct = Math.max(0, 100 - vendPaidPct);
+
+                const hasData = totalGrossCust > 0 || totalGrossVend > 0 || custDue > 0 || vendDue > 0;
+
+                return hasData ? (
+                  <div className="flex-1 flex flex-col justify-center py-2 space-y-3.5">
+                    {/* 1. Customer Receivables */}
+                    <div>
+                      <div className="flex justify-between items-baseline text-xs mb-1">
+                        <span className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          Receivable from Customers
+                        </span>
+                        <div className="text-right">
+                          <span className="font-mono font-black text-slate-900 dark:text-white text-xs">
+                            Rs. {custDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] font-semibold text-rose-500 dark:text-rose-400 ml-1">Due</span>
+                        </div>
+                      </div>
+
+                      {/* Dual-Tone Bar (Green = Recovered, Amber = Pending Due) */}
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
+                        {custRecoveredPct > 0 && (
+                          <div
+                            className="bg-emerald-500 h-2 transition-all duration-500"
+                            style={{ width: `${custRecoveredPct}%` }}
+                            title={`Recovered: Rs. ${custRecovered.toLocaleString()} (${custRecoveredPct}%)`}
+                          />
+                        )}
+                        <div
+                          className="bg-amber-400 h-2 transition-all duration-500"
+                          style={{ width: `${custPendingPct}%` }}
+                          title={`Pending Due: Rs. ${custDue.toLocaleString()} (${custPendingPct}%)`}
+                        />
+                      </div>
+
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 mt-0.5">
+                        <span>Total Billed: <strong className="text-slate-600 dark:text-slate-300 font-mono">Rs. {totalGrossCust.toLocaleString()}</strong></span>
+                        <span>Recovered: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{custRecoveredPct}%</strong> (Rs. {custRecovered.toLocaleString()})</span>
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-amber-400 h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, Math.round((metrics.totalReceivables / Math.max(1, metrics.totalReceivables + metrics.totalPayables)) * 100))}%`
-                        }}
-                      />
+
+                    {/* 2. Vendor Payables */}
+                    <div>
+                      <div className="flex justify-between items-baseline text-xs mb-1">
+                        <span className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                          Payable to Vendors & Mills
+                        </span>
+                        <div className="text-right">
+                          <span className="font-mono font-black text-slate-900 dark:text-white text-xs">
+                            Rs. {vendDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] font-semibold text-rose-500 dark:text-rose-400 ml-1">Due</span>
+                        </div>
+                      </div>
+
+                      {/* Dual-Tone Bar (Green = Cleared, Rose = Pending Due) */}
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
+                        {vendPaidPct > 0 && (
+                          <div
+                            className="bg-emerald-500 h-2 transition-all duration-500"
+                            style={{ width: `${vendPaidPct}%` }}
+                            title={`Paid / Cleared: Rs. ${vendPaid.toLocaleString()} (${vendPaidPct}%)`}
+                          />
+                        )}
+                        <div
+                          className="bg-rose-500 h-2 transition-all duration-500"
+                          style={{ width: `${vendPendingPct}%` }}
+                          title={`Pending Due: Rs. ${vendDue.toLocaleString()} (${vendPendingPct}%)`}
+                        />
+                      </div>
+
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 mt-0.5">
+                        <span>Total Liability: <strong className="text-slate-600 dark:text-slate-300 font-mono">Rs. {totalGrossVend.toLocaleString()}</strong></span>
+                        <span>Cleared: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{vendPaidPct}%</strong> (Rs. {vendPaid.toLocaleString()})</span>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-xs font-bold mb-1">
-                      <span className="text-rose-600 dark:text-rose-400">Payable to Vendors & Mills</span>
-                      <span className="font-mono text-slate-800 dark:text-slate-100">Rs. {metrics.totalPayables.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-rose-500 h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, Math.round((metrics.totalPayables / Math.max(1, metrics.totalReceivables + metrics.totalPayables)) * 100))}%`
-                        }}
-                      />
-                    </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-slate-400 text-xs text-center py-6">
+                    Nothing outstanding either way.
                   </div>
-                </div>
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-slate-400 text-xs text-center py-6">
-                  Nothing outstanding either way.
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Sales vs Recovery */}
@@ -1529,7 +1598,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex justify-between items-center text-[11px] text-slate-400 pl-2.5 mt-2">
             <span>Scroll table to see full last 10 entries</span>
             <button
-              onClick={() => navigate('/Reports/Reports-Dashboard?tab=customer-ledger')}
+              onClick={() => navigate('/Accounts/Ledgers?tab=customer-ledger')}
               className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
             >
               <span>Open Receivables Ledger</span>
@@ -2049,7 +2118,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
               {liquidityTab === 'bank' ? 'Real-time verified bank reconciliation' : `Current Cash In Hand: Rs. ${metrics.cashBalance.toLocaleString()}`}
             </span>
             <button
-              onClick={() => navigate('/Reports/Reports-Dashboard?tab=combined-ledger')}
+              onClick={() => navigate('/Accounts/Ledgers?tab=combined-ledger')}
               className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline text-xs flex items-center gap-1 cursor-pointer"
             >
               <span>View Full General Ledger</span>
@@ -2384,8 +2453,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                           Reconciled Treasury
                         </span>
                       </div>
-                      <div className="text-3xl sm:text-4xl font-black mt-1.5 font-mono tracking-tight text-slate-900 dark:text-white">
-                        Rs. {metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <div className={`text-3xl sm:text-4xl font-black mt-1.5 font-mono tracking-tight ${metrics.cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                        {metrics.cashBalance < 0
+                          ? `-Rs. ${Math.abs(metrics.cashBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                          : `Rs. ${metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                       </div>
                     </div>
                   </div>
@@ -2417,8 +2488,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
                     </div>
                     <div className="flex justify-between items-center pt-2 font-bold text-sm bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-700/70">
                       <span className="text-slate-900 dark:text-white">Net Cash Balance:</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-mono text-lg font-black">
-                        Rs. {metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <span className={`${metrics.cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} font-mono text-lg font-black`}>
+                        {metrics.cashBalance < 0
+                          ? `-Rs. ${Math.abs(metrics.cashBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                          : `Rs. ${metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                       </span>
                     </div>
                   </div>

@@ -1,4 +1,4 @@
-import { supabase } from '../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../Context/supabaseClient';
 
 export interface BankBalanceItem {
   id: string | number;
@@ -41,8 +41,12 @@ export interface FinancialSummary {
   thisMonthPurchases: number;
   totalReceivables: number;
   thisMonthReceivables: number;
+  totalGrossReceivables: number;
+  totalCustomerRecovered: number;
   totalPayables: number;
   thisMonthPayables: number;
+  totalGrossPayables: number;
+  totalVendorDisbursed: number;
   inventoryAssetValue: number;
   monthOpeningStockValue: number;
   thisMonthStockInflowVal: number;
@@ -85,24 +89,22 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       productsRes,
       customerReceiptsRes,
       openStocksRes,
-      dynamicStockRes,
       customersRes,
-      vendorsRes
+      dynamicStockRes
     ] = await Promise.allSettled([
-      supabase.from('sales_invoices').select('*'),
-      supabase.from('supplier_purchases').select('*'),
-      supabase.from('sales_returns').select('*'),
-      supabase.from('sales_return_receipts').select('*'),
-      supabase.from('purchase_returns').select('*'),
-      supabase.from('purchase_return_receipts').select('*'),
-      supabase.from('financial_vouchers').select('*'),
-      supabase.from('banks').select('*'),
-      supabase.from('products').select('*'),
-      supabase.from('customer_recoveries').select('*'),
-      supabase.from('opening_stocks').select('*'),
-      supabase.rpc('calculate_dynamic_stock_by_location', { p_location: 'All', p_start_date: startOfCurrentMonthStr, p_end_date: null }),
-      supabase.from('customers').select('*'),
-      supabase.from('vendors').select('*')
+      fetchAllPages(supabase.from('sales_invoices').select('*')),
+      fetchAllPages(supabase.from('supplier_purchases').select('*')),
+      fetchAllPages(supabase.from('sales_returns').select('*')),
+      fetchAllPages(supabase.from('sales_return_receipts').select('*')),
+      fetchAllPages(supabase.from('purchase_returns').select('*')),
+      fetchAllPages(supabase.from('purchase_return_receipts').select('*')),
+      fetchAllPages(supabase.from('financial_vouchers').select('*')),
+      fetchAllPages(supabase.from('banks').select('*')),
+      fetchAllPages(supabase.from('products').select('*')),
+      fetchAllPages(supabase.from('customer_recoveries').select('*')),
+      fetchAllPages(supabase.from('opening_stocks').select('*')),
+      fetchAllPages(supabase.from('customers').select('*')),
+      supabase.rpc('calculate_dynamic_stock_by_location', { p_location: 'All', p_start_date: startOfCurrentMonthStr, p_end_date: null })
     ]);
 
     const invoicesList = (salesInvoicesRes.status === 'fulfilled' && Array.isArray(salesInvoicesRes.value.data)) ? salesInvoicesRes.value.data : [];
@@ -117,9 +119,8 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     const productsList = (productsRes.status === 'fulfilled' && Array.isArray(productsRes.value.data)) ? productsRes.value.data : [];
     const customerRecList = (customerReceiptsRes.status === 'fulfilled' && Array.isArray(customerReceiptsRes.value.data)) ? customerReceiptsRes.value.data : [];
     const openStocksList = (openStocksRes.status === 'fulfilled' && Array.isArray(openStocksRes.value.data)) ? openStocksRes.value.data : [];
+    const customersList = (customersRes.status === 'fulfilled' && Array.isArray(customersRes.value.data)) ? customersRes.value.data : [];
     const dynamicStockList = (dynamicStockRes.status === 'fulfilled' && Array.isArray(dynamicStockRes.value.data)) ? dynamicStockRes.value.data : [];
-    const customersList = (customersRes && customersRes.status === 'fulfilled' && Array.isArray(customersRes.value.data)) ? customersRes.value.data : [];
-    const vendorsList = (vendorsRes && vendorsRes.status === 'fulfilled' && Array.isArray(vendorsRes.value.data)) ? vendorsRes.value.data : [];
 
     // --- 2. Calculate Today's & Monthly Net Sales & Purchases ---
     let todaysSales = 0;
@@ -295,7 +296,21 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       }
     });
 
-    const netCashBalance = Math.max(0, cashInflow - cashOutflow);
+    // Check opening cash balances in vouchers or accounts
+    (vouchersList || []).forEach((v: any) => {
+      const amt = Number(v.total_amount || v.amount || 0);
+      const isOB = Boolean(v.metadata?.isOpeningBalance || String(v.voucher_no || '').startsWith('OB-') || String(v.voucher_no || '').startsWith('OBV-') || String(v.voucher_no || '').startsWith('OBC-'));
+      const text = `${v.voucher_no || ''} ${v.account_title || ''} ${v.customer_name || ''} ${v.party_name || ''} ${v.narration || ''} ${v.voucher_type || ''}`.toLowerCase();
+      if (isOB && text.includes('cash')) {
+        cashInflow += amt;
+        const vDate = v.voucher_date || v.created_at || v.date;
+        if (isThisMonth(vDate)) {
+          thisMonthCashInflow += amt;
+        }
+      }
+    });
+
+    const netCashBalance = cashInflow - cashOutflow;
 
     // --- 4. Calculate Bank Balances per Corporate Bank Ledger ---
     const bankLedgerMap: Record<string, BankBalanceItem> = {};
@@ -395,28 +410,37 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     let totalReceivables = 0;
     let thisMonthReceivables = 0;
 
-    // 5a. Customer Ledger Balances & Opening Balances (Debit = Receivable)
-    customersList.forEach((c: any) => {
-      const rawBal = Number(c.currentBalance !== undefined && c.currentBalance !== null && c.currentBalance !== ''
-        ? c.currentBalance
-        : (c.balance !== undefined && c.balance !== null && c.balance !== '' ? c.balance : c.opening_balance || 0));
-      const nature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
-      let effectiveBal = rawBal;
-      if (nature.includes('cr') || nature.includes('credit')) {
-        effectiveBal = -Math.abs(rawBal);
-      } else if (rawBal > 0) {
-        effectiveBal = Math.abs(rawBal);
-      }
-
-      if (effectiveBal > 0) {
-        totalReceivables += effectiveBal;
-        if (isThisMonth(c.created_at)) {
-          thisMonthReceivables += effectiveBal;
+    // 1. Customer opening balances from vouchers & customers table
+    const customerOpeningMap: Record<string, number> = {};
+    (vouchersList || []).forEach((v: any) => {
+      const vNo = String(v.voucher_no || '');
+      const isOB = Boolean(v.metadata?.isOpeningBalance || vNo.startsWith('OB-'));
+      const isCustomerOB = isOB && (v.metadata?.preset === 'SAV' || (vNo.startsWith('OB-') && !vNo.startsWith('OBV-') && !vNo.startsWith('OBC-')));
+      if (isCustomerOB && !v.metadata?.isCash) {
+        const cName = (v.customer_name || v.customerName || v.party_name || '').trim().toLowerCase();
+        if (cName && !cName.includes('cash')) {
+          customerOpeningMap[cName] = (customerOpeningMap[cName] || 0) + Number(v.total_amount || v.debit || 0);
         }
       }
     });
 
-    // 5b. Unpaid Sales Invoices
+    (customersList || []).forEach((c: any) => {
+      const cName = (c.customerName || c.name || '').trim().toLowerCase();
+      const rawBal = Number(c.currentBalance !== undefined && c.currentBalance !== null && c.currentBalance !== ''
+        ? c.currentBalance
+        : (c.balance !== undefined && c.balance !== null && c.balance !== '' ? c.balance : c.opening_balance || 0));
+      const nature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
+      const isCredit = nature.includes('cr') || nature.includes('credit');
+      if (!isCredit && rawBal > 0 && !customerOpeningMap[cName]) {
+        customerOpeningMap[cName] = rawBal;
+      }
+    });
+
+    Object.values(customerOpeningMap).forEach(ob => {
+      totalReceivables += ob;
+    });
+
+    // 2. Add unpaid invoices deducting upfront and invoice-specific vouchers
     invoicesList.forEach((inv: any) => {
       const invIdStr = String(inv.id).trim().toLowerCase();
       const tot = Number(inv.total_amount || 0);
@@ -445,50 +469,104 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       }
     });
 
-    let totalPayables = 0;
-    let thisMonthPayables = 0;
-
-    // 5c. Vendor Ledger Balances & Opening Balances (Credit = Payable)
-    vendorsList.forEach((v: any) => {
-      const rawBal = Number(v.current_balance !== undefined && v.current_balance !== null
-        ? v.current_balance
-        : (v.balance !== undefined && v.balance !== null ? v.balance : v.opening_balance || 0));
-      const nature = String(v.balance_nature || v.balanceNature || '').toLowerCase();
-      let effectiveBal = rawBal;
-      if (nature.includes('dr') || nature.includes('debit')) {
-        effectiveBal = -Math.abs(rawBal);
-      } else if (rawBal > 0) {
-        effectiveBal = Math.abs(rawBal);
-      }
-
-      if (effectiveBal > 0) {
-        totalPayables += effectiveBal;
-        if (isThisMonth(v.created_at)) {
-          thisMonthPayables += effectiveBal;
+    // 3. Deduct standalone/general customer receipt vouchers (funds received on general customer ledger)
+    (vouchersList || []).forEach((v: any) => {
+      const isReceipt = String(v.voucher_type || '').toLowerCase().includes('receipt') || String(v.voucher_no || '').startsWith('CRV-');
+      const isUpfront = Boolean(v.metadata?.auto_generated || v.metadata?.moduleSource === 'sales_invoice');
+      if (isReceipt && !isUpfront && !v.original_invoice_no) {
+        const amt = Number(v.total_amount || 0);
+        totalReceivables = Math.max(0, totalReceivables - amt);
+        if (isThisMonth(v.created_at || v.voucher_date || v.date)) {
+          thisMonthReceivables = Math.max(0, thisMonthReceivables - amt);
         }
       }
     });
 
-    // 5d. Unpaid Supplier Purchases
+    let totalPayables = 0;
+    let thisMonthPayables = 0;
+
+    // 1. Vendor opening balances from vouchers
+    const vendorOpeningMap: Record<string, number> = {};
+    (vouchersList || []).forEach((v: any) => {
+      const isOB = Boolean(v.metadata?.isOpeningBalance || String(v.voucher_no || '').startsWith('OBV-'));
+      if (isOB && String(v.voucher_type || '').toLowerCase().includes('journal') && v.metadata?.preset === 'PAV') {
+        const vName = (v.customer_name || v.customerName || v.party_name || '').trim().toLowerCase();
+        if (vName) {
+          vendorOpeningMap[vName] = (vendorOpeningMap[vName] || 0) + Number(v.total_amount || 0);
+        }
+      }
+    });
+
+    Object.values(vendorOpeningMap).forEach(ob => {
+      totalPayables += ob;
+    });
+
+    // 2. Add unpaid purchases deducting upfront paid amounts
     purchasesList.forEach((pur: any) => {
       const purIdStr = String(pur.id).trim().toLowerCase();
+      const purNoStr = String(pur.purchase_no || '').trim().toLowerCase();
       const tot = Number(pur.total_amount || 0);
-      const initialPaid = Number(pur.amount_paid_now || pur.paid_amount || 0);
+      const upfrontPaid = Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0) || Number(pur.amount_paid || 0);
       const purInThisMonth = isThisMonth(pur.created_at || pur.purchase_date);
 
       // Sum purchase returns for this specific purchase
       const matchedPReturns = purchaseReturnsList.filter((pr: any) => {
         const cleanRef = String(pr.purchase_no || pr.original_purchase_no || '').replace('PUR-', '').trim().toLowerCase();
-        return cleanRef === purIdStr;
+        return cleanRef === purIdStr || cleanRef === purNoStr;
       });
       const pReturnsSum = matchedPReturns.reduce((sum: number, pr: any) => sum + Number(pr.total_amount || 0), 0);
 
-      const netPayableDue = Math.max(0, tot - initialPaid - pReturnsSum);
+      const netPayableDue = Math.max(0, tot - upfrontPaid - pReturnsSum);
       totalPayables += netPayableDue;
       if (purInThisMonth) {
         thisMonthPayables += netPayableDue;
       }
     });
+
+    // 3. Deduct standalone/general payment vouchers (disbursements made from receipt page)
+    (vouchersList || []).forEach((v: any) => {
+      const isPayment = String(v.voucher_type || '').toLowerCase().includes('payment');
+      const isUpfront = Boolean(v.metadata?.auto_generated || v.metadata?.moduleSource === 'purchase_bill');
+      if (isPayment && !isUpfront) {
+        const amt = Number(v.total_amount || 0);
+        totalPayables = Math.max(0, totalPayables - amt);
+        thisMonthPayables = Math.max(0, thisMonthPayables - amt);
+      }
+    });
+
+    // Calculate Total Gross Billed vs Settled for Customers (Receivables)
+    let totalCustomerOpening = 0;
+    Object.values(customerOpeningMap).forEach(ob => {
+      totalCustomerOpening += ob;
+    });
+
+    let totalInvoicesBilled = 0;
+    invoicesList.forEach((inv: any) => {
+      totalInvoicesBilled += Number(inv.total_amount || 0);
+    });
+    salesReturnsList.forEach((ret: any) => {
+      totalInvoicesBilled = Math.max(0, totalInvoicesBilled - Number(ret.total_amount || ret.total_net_amount || 0));
+    });
+
+    const totalGrossReceivables = Math.max(totalReceivables, totalCustomerOpening + totalInvoicesBilled);
+    const totalCustomerRecovered = Math.max(0, totalGrossReceivables - totalReceivables);
+
+    // Calculate Total Gross Billed vs Settled for Vendors (Payables)
+    let totalVendorOpening = 0;
+    Object.values(vendorOpeningMap).forEach(ob => {
+      totalVendorOpening += ob;
+    });
+
+    let totalPurchasesBilled = 0;
+    purchasesList.forEach((pur: any) => {
+      totalPurchasesBilled += Number(pur.total_amount || 0);
+    });
+    purchaseReturnsList.forEach((pret: any) => {
+      totalPurchasesBilled = Math.max(0, totalPurchasesBilled - Number(pret.total_amount || pret.total_net_amount || 0));
+    });
+
+    const totalGrossPayables = Math.max(totalPayables, totalVendorOpening + totalPurchasesBilled);
+    const totalVendorDisbursed = Math.max(0, totalGrossPayables - totalPayables);
 
     // Precise Real-Time Inventory Asset Valuation (Matched 100% with Stock Balances & Valuation Registry)
     let inventoryAssetValue = 0;
@@ -723,8 +801,12 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       thisMonthPurchases,
       totalReceivables,
       thisMonthReceivables,
+      totalGrossReceivables,
+      totalCustomerRecovered,
       totalPayables,
       thisMonthPayables,
+      totalGrossPayables,
+      totalVendorDisbursed,
       inventoryAssetValue,
       monthOpeningStockValue,
       thisMonthStockInflowVal,
@@ -761,8 +843,12 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       thisMonthPurchases: 0,
       totalReceivables: 0,
       thisMonthReceivables: 0,
+      totalGrossReceivables: 0,
+      totalCustomerRecovered: 0,
       totalPayables: 0,
       thisMonthPayables: 0,
+      totalGrossPayables: 0,
+      totalVendorDisbursed: 0,
       inventoryAssetValue: 0,
       monthOpeningStockValue: 0,
       thisMonthStockInflowVal: 0,

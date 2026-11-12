@@ -5,7 +5,9 @@ import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { FiPlus, FiX } from 'react-icons/fi';
+import { FiX } from 'react-icons/fi';
+import COASearchableSelect from './components/COASearchableSelect';
+import ConfirmDeleteModal from '../../../components/Modals/ConfirmDeleteModal';
 
 const DEFAULT_CATEGORIES = [
     '1. ASSETS', '2. LIABILITIES', '3. EQUITY', '4. REVENUE', '5. EXPENSES'
@@ -44,7 +46,22 @@ const AddChartOfAccount = () => {
   const navigate = useNavigate();
 
   const editData = location.state?.account;
+  const fromHierarchy = location.state?.fromHierarchy;
   const isEditMode = !!editData;
+
+  const navigateBackToList = (targetAccount?: any) => {
+    const target = targetAccount || fromHierarchy || (isEditMode ? {
+      id: editData?.id,
+      category: editData?.category_code,
+      subCategory: editData?.sub_category_code,
+      control: editData?.control_code,
+      accountCode: editData?.account_code
+    } : null);
+
+    navigate('/Registration/Chart-of-Account/List', {
+      state: target ? { lastEditedAccount: target } : undefined
+    });
+  };
 
   const fetchLiveCOAMetadata = async () => {
     try {
@@ -177,63 +194,157 @@ const AddChartOfAccount = () => {
     }
   };
 
-  const handleDeleteCategoryRow = async (name: string, setFieldValue: any) => {
-    if (!name) return;
-    if (DEFAULT_CATEGORIES.includes(name)) {
-      toast.error('System default categories cannot be deleted.');
-      return;
-    }
-    if (!window.confirm(`Are you certain you want to permanently delete "${name}" category? All linked control parameters will drop.`)) return;
+  // Delete Modal State
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'Category' | 'Sub-Category' | 'Control';
+    name: string;
+    setFieldValue?: any;
+  } | null>(null);
+  const [isDeletingTarget, setIsDeletingTarget] = useState(false);
 
+  const confirmDeleteAction = async () => {
+    if (!deleteTarget) return;
+    const { type, name, setFieldValue } = deleteTarget;
     try {
-      const { error } = await supabase.from('coa_categories').delete().eq('name', name);
-      if (error) throw error;
-      toast.success('Category option dropped successfully!');
-      setFieldValue('categoryCode', '');
-      setFieldValue('subCategoryCode', '');
-      setFieldValue('controlCode', '');
+      setIsDeletingTarget(true);
+      if (type === 'Category') {
+        if (DEFAULT_CATEGORIES.includes(name)) {
+          toast.error('System default categories cannot be deleted.');
+          return;
+        }
+        await supabase.from('coa_categories').delete().eq('name', name);
+        if (setFieldValue) {
+          setFieldValue('categoryCode', '');
+          setFieldValue('subCategoryCode', '');
+          setFieldValue('controlCode', '');
+        }
+        toast.success(`Category "${name}" deleted.`);
+      } else if (type === 'Sub-Category') {
+        if (DEFAULT_SUB_CATEGORIES.includes(name)) {
+          toast.error('System default sub-categories cannot be deleted.');
+          return;
+        }
+        await supabase.from('coa_sub_categories').delete().eq('sub_category_name', name);
+        if (setFieldValue) {
+          setFieldValue('subCategoryCode', '');
+          setFieldValue('controlCode', '');
+        }
+        toast.success(`Sub-Category "${name}" deleted.`);
+      } else if (type === 'Control') {
+        if (DEFAULT_CONTROLS.includes(name)) {
+          toast.error('System default controls cannot be deleted.');
+          return;
+        }
+        await supabase.from('coa_controls').delete().eq('control_name', name);
+        if (setFieldValue) {
+          setFieldValue('controlCode', '');
+        }
+        toast.success(`Control "${name}" deleted.`);
+      }
       await fetchLiveCOAMetadata();
+      setDeleteTarget(null);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to delete');
+    } finally {
+      setIsDeletingTarget(false);
     }
   };
 
-  const handleDeleteSubCategoryRow = async (name: string, setFieldValue: any) => {
-    if (!name) return;
-    if (DEFAULT_SUB_CATEGORIES.includes(name)) {
-      toast.error('System default sub-categories cannot be deleted.');
+  // Edit Handlers (Inside Dropdown)
+  const handleEditCategory = async (oldName: string, newName: string) => {
+    if (DEFAULT_CATEGORIES.includes(oldName)) {
+      toast.error('System default categories cannot be renamed.');
       return;
     }
-    if (!window.confirm(`Are you certain you want to permanently delete "${name}" sub-category? All linked control parameters will drop.`)) return;
-
     try {
-      const { error } = await supabase.from('coa_sub_categories').delete().eq('sub_category_name', name);
+      const { error } = await supabase.from('coa_categories').update({ name: newName }).eq('name', oldName);
       if (error) throw error;
-      toast.success('Sub-Category option dropped successfully!');
-      setFieldValue('subCategoryCode', '');
-      setFieldValue('controlCode', '');
+      await supabase.from('coa_sub_categories').update({ category_name: newName }).eq('category_name', oldName);
+      await supabase.from('coa_controls').update({ category_name: newName }).eq('category_name', oldName);
+      await supabase.from('chart_of_accounts').update({ category_code: newName }).eq('category_code', oldName);
+      toast.success(`Category renamed to "${newName}"!`);
       await fetchLiveCOAMetadata();
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error('Failed to rename category: ' + err.message);
     }
   };
 
-  const handleDeleteControlRow = async (controlName: string, setFieldValue: any) => {
-    if (!controlName) return;
-    if (DEFAULT_CONTROLS.includes(controlName)) {
-      toast.error('System default controls cannot be deleted.');
+  const handleEditSubCategory = async (oldName: string, newName: string) => {
+    if (DEFAULT_SUB_CATEGORIES.includes(oldName)) {
+      toast.error('System default sub-categories cannot be renamed.');
       return;
     }
-    if (!window.confirm(`Are you certain you want to permanently drop "${controlName}" control header row?`)) return;
-
     try {
-      const { error } = await supabase.from('coa_controls').delete().eq('control_name', controlName);
+      const { error } = await supabase.from('coa_sub_categories').update({ sub_category_name: newName }).eq('sub_category_name', oldName);
       if (error) throw error;
-      toast.success('Control parameter deleted successfully!');
-      setFieldValue('controlCode', '');
+      await supabase.from('coa_controls').update({ sub_category_name: newName }).eq('sub_category_name', oldName);
+      await supabase.from('chart_of_accounts').update({ sub_category_code: newName }).eq('sub_category_code', oldName);
+      toast.success(`Sub-Category renamed to "${newName}"!`);
       await fetchLiveCOAMetadata();
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error('Failed to rename sub-category: ' + err.message);
+    }
+  };
+
+  const handleEditControl = async (oldName: string, newName: string) => {
+    if (DEFAULT_CONTROLS.includes(oldName)) {
+      toast.error('System default controls cannot be renamed.');
+      return;
+    }
+    try {
+      const { error } = await supabase.from('coa_controls').update({ control_name: newName }).eq('control_name', oldName);
+      if (error) throw error;
+      await supabase.from('chart_of_accounts').update({ control_code: newName }).eq('control_code', oldName);
+      toast.success(`Control renamed to "${newName}"!`);
+      await fetchLiveCOAMetadata();
+    } catch (err: any) {
+      toast.error('Failed to rename control: ' + err.message);
+    }
+  };
+
+  // Add Handlers (Inside Dropdown)
+  const handleAddCategory = async (newName: string) => {
+    try {
+      const { error } = await supabase.from('coa_categories').insert([{ name: newName }]);
+      if (error) throw error;
+      toast.success(`Category "${newName}" added!`);
+      await fetchLiveCOAMetadata();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add category');
+    }
+  };
+
+  const handleAddSubCategory = async (newName: string, categoryCode: string) => {
+    if (!categoryCode) {
+      toast.error('Please select Category Code first!');
+      return;
+    }
+    try {
+      const { error } = await supabase.from('coa_sub_categories').insert([{ category_name: categoryCode, sub_category_name: newName }]);
+      if (error) throw error;
+      toast.success(`Sub-Category "${newName}" added!`);
+      await fetchLiveCOAMetadata();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add sub-category');
+    }
+  };
+
+  const handleAddControl = async (newName: string, categoryCode: string, subCategoryCode: string) => {
+    if (!subCategoryCode) {
+      toast.error('Please select Sub-Category Code first!');
+      return;
+    }
+    try {
+      const { error } = await supabase.from('coa_controls').insert([{
+        category_name: categoryCode || null,
+        sub_category_name: subCategoryCode,
+        control_name: newName
+      }]);
+      if (error) throw error;
+      toast.success(`Control "${newName}" added!`);
+      await fetchLiveCOAMetadata();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add control');
     }
   };
 
@@ -261,8 +372,8 @@ const AddChartOfAccount = () => {
           </h3>
           <button
             type="button"
-            onClick={() => navigate('/Registration/Chart-of-Account/List')}
-            className="text-sm font-medium text-primary hover:underline"
+            onClick={() => navigateBackToList()}
+            className="text-sm font-medium text-primary hover:underline cursor-pointer"
           >
             Back to Directory
           </button>
@@ -321,9 +432,9 @@ const AddChartOfAccount = () => {
                 linked_bank_id: values.controlCode === 'Banks' ? values.linkedBankId : null
               };
 
-              const { error } = isEditMode
-                ? await supabase.from('chart_of_accounts').update(databasePayload).eq('id', editData.id)
-                : await supabase.from('chart_of_accounts').insert([databasePayload]);
+              const { data: savedRecord, error } = isEditMode
+                ? await supabase.from('chart_of_accounts').update(databasePayload).eq('id', editData.id).select()
+                : await supabase.from('chart_of_accounts').insert([databasePayload]).select();
 
               if (error) throw error;
 
@@ -346,8 +457,14 @@ const AddChartOfAccount = () => {
                 }
               }
 
-              toast.success('Account registered successfully!');
-              navigate('/Registration/Chart-of-Account/List');
+              toast.success(isEditMode ? 'Account updated successfully!' : 'Account registered successfully!');
+              navigateBackToList({
+                id: editData?.id || savedRecord?.[0]?.id,
+                category: values.categoryCode,
+                subCategory: values.subCategoryCode,
+                control: values.controlCode,
+                accountCode: cleanCode
+              });
             } catch (err: any) {
               if (err.code === '23505' || err.message?.includes('duplicate key') || err.message?.includes('unique constraint')) {
                 toast.error(`Duplicate Code: Account Code "${cleanCode}" is already taken. Please enter another code.`);
@@ -365,13 +482,15 @@ const AddChartOfAccount = () => {
 
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                   <label className="w-full md:w-48 block font-bold text-black dark:text-white text-xs uppercase tracking-wide">Category Code: *</label>
-                  <div className="w-full md:w-150 flex items-center gap-2">
-                    <select
-                      name="categoryCode"
+                  <div className="w-full md:w-150">
+                    <COASearchableSelect
+                      typeName="Category"
+                      placeholder="-- Select Category Code --"
                       value={values.categoryCode}
-                      onChange={(e) => {
-                        const newCat = e.target.value;
-                        handleChange(e);
+                      options={categoriesList.map(c => c.name)}
+                      error={Boolean(touched.categoryCode && errors.categoryCode)}
+                      onChange={(newCat) => {
+                        setFieldValue('categoryCode', newCat);
                         setFieldValue('subCategoryCode', '');
                         setFieldValue('controlCode', '');
                         setFieldValue('linkedBankId', '');
@@ -381,69 +500,54 @@ const AddChartOfAccount = () => {
                           setFieldValue('balanceNature', 'Debit');
                         }
                       }}
-                      className={`flex-1 rounded border px-3 h-10 bg-transparent text-xs font-semibold text-black dark:text-white outline-none focus:border-primary dark:bg-boxdark ${touched.categoryCode && errors.categoryCode ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
-                    >
-                      <option value="" className="dark:bg-boxdark text-gray-400">-- Select Category Code --</option>
-                      {categoriesList.map(c => <option key={c.name} value={c.name} className="dark:bg-boxdark">{c.name}</option>)}
-                    </select>
-                    {values.categoryCode && !DEFAULT_CATEGORIES.includes(values.categoryCode) && (
-                      <button type="button" onClick={() => handleDeleteCategoryRow(values.categoryCode, setFieldValue)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-red-500/30 bg-red-50 dark:bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white transition" title="Delete selected category"><FiX size={16} /></button>
-                    )}
-                    <button type="button" onClick={() => setShowCategoryModal(true)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-stroke dark:border-strokedark bg-slate-50 dark:bg-meta-4/20 hover:bg-slate-100 text-gray-500 hover:text-black dark:hover:text-white font-bold transition"><FiPlus size={16} /></button>
+                      onAdd={(name) => handleAddCategory(name)}
+                      onEdit={(oldName, newName) => handleEditCategory(oldName, newName)}
+                      onDelete={(name) => setDeleteTarget({ type: 'Category', name, setFieldValue })}
+                    />
                   </div>
                 </div>
 
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                   <label className="w-full md:w-48 block font-bold text-black dark:text-white text-xs uppercase tracking-wide">Sub-Category Code: *</label>
-                  <div className="w-full md:w-150 flex items-center gap-2">
-                    <select
-                      name="subCategoryCode"
+                  <div className="w-full md:w-150">
+                    <COASearchableSelect
+                      typeName="Sub-Category"
+                      placeholder="-- Select Sub-Category Code --"
                       value={values.subCategoryCode}
-                      onChange={(e) => {
-                        handleChange(e);
+                      disabled={!values.categoryCode}
+                      options={subCategoriesList.filter(s => s.category_name === values.categoryCode).map(s => s.sub_category_name)}
+                      error={Boolean(touched.subCategoryCode && errors.subCategoryCode)}
+                      onChange={(newSub) => {
+                        setFieldValue('subCategoryCode', newSub);
                         setFieldValue('controlCode', '');
                         setFieldValue('linkedBankId', '');
                       }}
-                      disabled={!values.categoryCode}
-                      className={`flex-1 rounded border px-3 h-10 bg-transparent text-xs font-semibold text-black dark:text-white outline-none focus:border-primary disabled:opacity-50 dark:bg-boxdark ${touched.subCategoryCode && errors.subCategoryCode ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
-                    >
-                      <option value="" className="dark:bg-boxdark text-gray-400">-- Select Sub-Category Code --</option>
-                      {subCategoriesList.filter(s => s.category_name === values.categoryCode).map(s => <option key={s.sub_category_name} value={s.sub_category_name} className="dark:bg-boxdark">{s.sub_category_name}</option>)}
-                    </select>
-                    {values.subCategoryCode && !DEFAULT_SUB_CATEGORIES.includes(values.subCategoryCode) && (
-                      <button type="button" onClick={() => handleDeleteSubCategoryRow(values.subCategoryCode, setFieldValue)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-red-500/30 bg-red-50 dark:bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white transition" title="Delete selected sub-category"><FiX size={16} /></button>
-                    )}
-                    <button type="button" onClick={() => {
-                      if (values.categoryCode) setModalSelectedCategoryForSub(values.categoryCode);
-                      setShowSubCategoryModal(true);
-                    }} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-stroke dark:border-strokedark bg-slate-50 dark:bg-meta-4/20 hover:bg-slate-100 text-gray-500 hover:text-black dark:hover:text-white font-bold transition"><FiPlus size={16} /></button>
+                      onAdd={(name) => handleAddSubCategory(name, values.categoryCode)}
+                      onEdit={(oldName, newName) => handleEditSubCategory(oldName, newName)}
+                      onDelete={(name) => setDeleteTarget({ type: 'Sub-Category', name, setFieldValue })}
+                    />
                   </div>
                 </div>
 
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                   <label className="w-full md:w-48 block font-bold text-black dark:text-white text-xs uppercase tracking-wide">Control Code: *</label>
-                  <div className="w-full md:w-150 flex items-center gap-2">
-                    <select
-                      name="controlCode"
+                  <div className="w-full md:w-150">
+                    <COASearchableSelect
+                      typeName="Control"
+                      placeholder="-- Select Control Code --"
                       value={values.controlCode}
-                      onChange={(e) => {
-                        handleChange(e);
-                        setFieldValue('linkedBankId', '');
-                        if (!e.target.value.toLowerCase().includes('bank')) setFieldValue('accountTitle', '');
-                      }}
                       disabled={!values.subCategoryCode}
-                      className={`flex-1 rounded border px-3 h-10 bg-transparent text-xs font-semibold text-black dark:text-white outline-none focus:border-primary disabled:opacity-50 dark:bg-boxdark ${touched.controlCode && errors.controlCode ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
-                    >
-                      <option value="" className="dark:bg-boxdark text-gray-400">-- Select Control Code --</option>
-                      {controlsList.filter(c => (!c.category_name || c.category_name === values.categoryCode) && c.sub_category_name === values.subCategoryCode).map(c => <option key={c.control_name} value={c.control_name} className="dark:bg-boxdark">{c.control_name}</option>)}
-                    </select>
-                    {values.controlCode && !DEFAULT_CONTROLS.includes(values.controlCode) && (
-                      <button type="button" onClick={() => handleDeleteControlRow(values.controlCode, setFieldValue)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-red-500/30 bg-red-50 dark:bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white transition" title="Delete selected control subgroup"><FiX size={16} /></button>
-                    )}
-                    <button type="button" onClick={() => {
-                      if (values.subCategoryCode) setModalSelectedCategory(values.subCategoryCode);
-                      setShowControlModal(true);
-                    }} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-stroke dark:border-strokedark bg-slate-50 dark:bg-meta-4/20 hover:bg-slate-100 text-gray-500 hover:text-black dark:hover:text-white font-bold transition"><FiPlus size={16} /></button>
+                      options={controlsList.filter(c => (!c.category_name || c.category_name === values.categoryCode) && c.sub_category_name === values.subCategoryCode).map(c => c.control_name)}
+                      error={Boolean(touched.controlCode && errors.controlCode)}
+                      onChange={(newCtrl) => {
+                        setFieldValue('controlCode', newCtrl);
+                        setFieldValue('linkedBankId', '');
+                        if (!newCtrl.toLowerCase().includes('bank')) setFieldValue('accountTitle', '');
+                      }}
+                      onAdd={(name) => handleAddControl(name, values.categoryCode, values.subCategoryCode)}
+                      onEdit={(oldName, newName) => handleEditControl(oldName, newName)}
+                      onDelete={(name) => setDeleteTarget({ type: 'Control', name, setFieldValue })}
+                    />
                   </div>
                 </div>
                 {values.controlCode?.toLowerCase().includes('bank') && (
@@ -521,7 +625,7 @@ const AddChartOfAccount = () => {
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-stroke dark:border-strokedark">
                   <button
                     type="button"
-                    onClick={() => navigate('/Registration/Chart-of-Account/List')}
+                    onClick={() => navigateBackToList()}
                     className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                   >
                     Cancel
@@ -614,6 +718,20 @@ const AddChartOfAccount = () => {
               </form>
             </div>
           </div>
+        )}
+
+        {deleteTarget && (
+          <ConfirmDeleteModal
+            isOpen={!!deleteTarget}
+            title={`Delete ${deleteTarget.type}?`}
+            itemType={deleteTarget.type}
+            itemName={deleteTarget.name}
+            subtitle={`Are you sure you want to permanently delete "${deleteTarget.name}"?`}
+            warning={`Dropping this ${deleteTarget.type.toLowerCase()} will remove it from all dropdowns and records.`}
+            isDeleting={isDeletingTarget}
+            onConfirm={confirmDeleteAction}
+            onCancel={() => setDeleteTarget(null)}
+          />
         )}
 
       </div>

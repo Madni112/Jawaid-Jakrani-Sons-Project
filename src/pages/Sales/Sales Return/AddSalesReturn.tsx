@@ -607,7 +607,22 @@ const AddSalesReturn = () => {
 
             let grossReturnSum = 0;
             values.items.forEach((item: any) => {
-              grossReturnSum += (Number(item.qty || 0) * Number(item.rate || 0));
+              const matchedProd = productList.find((p: any) => (p.product_name || '').toLowerCase() === (item.itemName || '').toLowerCase());
+              const isTile = Boolean(matchedProd && (String(matchedProd.category || '').toLowerCase().includes('tile') || String(matchedProd.scenario_name || '').toLowerCase().includes('tile')));
+              const allowLoose = Boolean(matchedProd?.allow_loose_sales || isTile);
+              const rawPcs = Number(matchedProd?.pieces_per_box ?? matchedProd?.pcs_per_box ?? matchedProd?.pieces_per_packing ?? 0);
+              const pcsPerBox = Number(matchedProd?.loose_conversion_ratio) > 0 ? Number(matchedProd.loose_conversion_ratio) : (rawPcs > 0 ? rawPcs : (isTile ? 4 : 1));
+
+              let gross = (Number(item.qty || 0) * Number(item.rate || 0));
+              if (allowLoose && pcsPerBox > 1) {
+                const bulkCount = Math.floor(Number(item.qty || 0));
+                const looseCount = Math.round((Number(item.qty || 0) - bulkCount) * pcsPerBox);
+                const piecePrice = item.pieceRate !== undefined && item.pieceRate !== ''
+                  ? Number(item.pieceRate)
+                  : (Number(matchedProd?.loose_sale_price) > 0 ? Number(matchedProd.loose_sale_price) : (pcsPerBox > 0 ? Number(item.rate || 0) / pcsPerBox : 0));
+                gross = (bulkCount * Number(item.rate || 0)) + (looseCount * piecePrice);
+              }
+              grossReturnSum += gross;
             });
 
             if (grossReturnSum <= 0) {
@@ -1551,7 +1566,6 @@ const AddSalesReturn = () => {
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                               {values.items.map((item: any, idx: number) => {
-                                const rowAmount = (Number(item.qty) || 0) * (Number(item.rate) || 0);
                                 const isRowActive = activeSkuIndex === idx || activeProdNameIndex === idx;
 
                                 const matchedProduct = productList.find(p => 
@@ -1571,6 +1585,16 @@ const AddSalesReturn = () => {
                                 const pcsPerBox = looseRatio > 1 ? looseRatio : (isTile ? 4 : 1);
                                 const bulkUnitLabel = matchedProduct?.uom || (isTile ? 'Box' : 'Unit');
                                 const looseUnitLabel = matchedProduct?.loose_uom || (isTile ? 'Pcs' : 'Units');
+
+                                let rowAmount = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                if (allowLoose && pcsPerBox > 1) {
+                                  const bulkCount = Math.floor(Number(item.qty || 0));
+                                  const looseCount = Math.round((Number(item.qty || 0) - bulkCount) * pcsPerBox);
+                                  const piecePrice = item.pieceRate !== undefined && item.pieceRate !== ''
+                                    ? Number(item.pieceRate)
+                                    : (Number(matchedProduct?.loose_sale_price) > 0 ? Number(matchedProduct.loose_sale_price) : (pcsPerBox > 0 ? Number(item.rate || 0) / pcsPerBox : 0));
+                                  rowAmount = Number(((bulkCount * Number(item.rate || 0)) + (looseCount * piecePrice)).toFixed(2));
+                                }
 
                                 let tileWidthCm = 60;
                                 let tileHeightCm = 60;
@@ -1884,8 +1908,23 @@ const AddSalesReturn = () => {
                                         className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-mono font-bold text-right bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600"
                                       />
                                       {((isTile || allowLoose) && pcsPerBox > 1) && (
-                                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-mono text-right mt-1">
-                                          ≈ Rs. {(Number(matchedProduct?.loose_sale_price) > 0 ? Number(matchedProduct.loose_sale_price) : (Number(item.rate || 0) / pcsPerBox)).toFixed(2)} / {looseUnitLabel}
+                                        <div className="flex items-center gap-1 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded px-1.5 py-0.5 mt-1">
+                                          <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                                            /{looseUnitLabel}:
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            onKeyDown={blockInvalidChar}
+                                            value={item.pieceRate !== undefined && item.pieceRate !== '' ? item.pieceRate : (Number(matchedProduct?.loose_sale_price) > 0 ? Number(matchedProduct.loose_sale_price) : (pcsPerBox > 0 ? Number(((Number(item.rate) || 0) / pcsPerBox).toFixed(2)) : ''))}
+                                            onChange={(e) => {
+                                              const enteredPrice = Math.max(0, Number(e.target.value) || 0);
+                                              setFieldValue(`items.${idx}.pieceRate`, enteredPrice);
+                                            }}
+                                            placeholder="0"
+                                            className="w-full bg-transparent font-mono font-bold text-[11px] text-right text-emerald-700 dark:text-emerald-400 outline-none"
+                                          />
                                         </div>
                                       )}
                                     </td>
