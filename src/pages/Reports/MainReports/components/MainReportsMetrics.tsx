@@ -218,6 +218,45 @@ export const MainReportsMetrics: React.FC<MainReportsMetricsProps> = ({
         </>
       )}
 
+      {activeTab === 'daily-activity' && (
+        <>
+          <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Activities</span>
+            <div className="text-base font-black text-slate-800 dark:text-white font-mono mt-1">
+              {Number(summary.opening).toLocaleString()} <span className="text-xs font-normal text-slate-400">events</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
+            <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Invoiced Sales</span>
+            <div className="text-base font-black text-emerald-600 font-mono mt-1">
+              Rs. {Number(summary.debit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
+            <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Inflows (Receipts)</span>
+            <div className="text-base font-black text-blue-600 font-mono mt-1">
+              Rs. {Number(summary.credit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
+            <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider">Outflows & Purchases</span>
+            <div className="text-base font-black text-purple-600 font-mono mt-1">
+              Rs. {Number(summary.closing).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/20 dark:bg-rose-950/10 shadow-2xs">
+            <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wider">Returns / Credits</span>
+            <div className="text-base font-black text-rose-600 font-mono mt-1">
+              Rs. {Number(summary.returnAmt).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        </>
+      )}
+
       {activeTab === 'profit-loss' && pnlData && (
         <>
           {pnlCalculationMode === 'cash' ? (

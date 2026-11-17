@@ -10,6 +10,8 @@ interface ExportParams {
   filteredCombinedRows: any[];
   filteredExpenseRows: any[];
   dailyBookRows: any[];
+  dailyActivityRows?: any[];
+  dailyActivityDateMode?: 'single' | 'range';
   pnlData: any;
   pnlBasis: string;
   pnlIncludeOB: boolean;
@@ -24,6 +26,8 @@ export const exportMainReportToExcel = ({
   filteredCombinedRows,
   filteredExpenseRows,
   dailyBookRows,
+  dailyActivityRows = [],
+  dailyActivityDateMode = 'single',
   pnlData,
   pnlBasis,
   pnlIncludeOB
@@ -145,6 +149,35 @@ export const exportMainReportToExcel = ({
       'Cash / Bank Out (Cr)': r.cashOut,
       'Net Drawer Cash': r.netDrawerCash
     }));
+  } else if (activeTab === 'daily-activity') {
+    const groupTitles: Record<string, string> = {
+      sales: '1. Sales & Customer Returns',
+      purchases: '2. Purchases & Vendor Returns',
+      customer_receipts: '3. Customer Receipts',
+      vendor_payments: '4. Vendor Payments',
+      stock_movements: '5. Stock Movements (In/Out)',
+      expenses: '6. Operational Expenses'
+    };
+
+    exportData = dailyActivityRows.map((r, idx) => {
+      const rowData: Record<string, any> = {
+        'S#': idx + 1,
+        'Business Group': groupTitles[r.hierarchyGroup] || 'Other'
+      };
+      if (dailyActivityDateMode === 'range') {
+        rowData['Date'] = r.date;
+      }
+      rowData['Time'] = r.time;
+      rowData['Event Type'] = r.type;
+      rowData['Ref / Doc #'] = r.refNo;
+      rowData['Party / Account'] = r.partyName;
+      rowData['Party Type'] = r.partyType;
+      rowData['Activity Details'] = r.details;
+      rowData['Warehouse'] = r.warehouse || '—';
+      rowData['Value (PKR)'] = r.amount;
+      rowData['Status'] = r.status;
+      return rowData;
+    });
   }
 
   const ws = XLSX.utils.json_to_sheet(exportData);

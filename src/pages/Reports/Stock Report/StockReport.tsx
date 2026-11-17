@@ -289,35 +289,6 @@ const StockReport = () => {
             <MdPauseCircleFilled size={16} className="text-amber-500" />
             <span>Holding Stock Queue ↗</span>
           </button>
-          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Sales-Report')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Sales Reports ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Purchase-Report')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Purchase Reports ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Accounts/Ledgers?tab=customer-ledger')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Party Ledgers ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Balance-Sheet')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Balance Sheet ↗</span>
-          </button>
         </div>
       </div>
 

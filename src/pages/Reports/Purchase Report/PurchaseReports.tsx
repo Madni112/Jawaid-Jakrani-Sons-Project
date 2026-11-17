@@ -62,6 +62,12 @@ const PurchaseReport = () => {
   const [locations, setLocations] = useState<any[]>([]);
   const [availableInvoices, setAvailableInvoices] = useState<any[]>([]);
 
+  const getPastWeekDateString = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  };
+
   const getFirstDayOfMonthString = () => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
@@ -86,7 +92,6 @@ const PurchaseReport = () => {
       location: parseCriteriaArray(base.location), 
       purchaseType: base.purchaseType || 'All', 
       invoiceNo: base.invoiceNo || 'All',
-      dateFrom: location.state?.dateFrom || base.dateFrom || getPastWeekDateString(),
       dateFrom: location.state?.dateFrom || base.dateFrom || getFirstDayOfMonthString(),
       dateTo: location.state?.dateTo || base.dateTo || getTodayDateString()
     };
@@ -293,35 +298,6 @@ const PurchaseReport = () => {
               </button>
             );
           })}
-          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Sales-Report')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Sales Reports ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Stock-Report')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Stock Reports ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Accounts/Ledgers?tab=vendor-ledger')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Vendor Ledgers ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Balance-Sheet')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Balance Sheet ↗</span>
-          </button>
         </div>
       </div>
 

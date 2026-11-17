@@ -86,7 +86,6 @@ const SalesReport = () => {
             showZeroSales: location.state?.showZeroSales === true || base.showZeroSales === true,
             sortBy: base.sortBy || 'date_desc',
             withLedgerSummary: base.withLedgerSummary || false,
-            dateFrom: location.state?.dateFrom || base.dateFrom || new Date().toISOString().split('T')[0],
             dateFrom: location.state?.dateFrom || base.dateFrom || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
             dateTo: location.state?.dateTo || base.dateTo || new Date().toISOString().split('T')[0]
         };
@@ -295,35 +294,6 @@ const SalesReport = () => {
                             </button>
                         );
                     })}
-                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                    <button
-                        type="button"
-                        onClick={() => navigate('/Reports/Purchase-Report')}
-                        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-                    >
-                        <span>Purchase Reports ↗</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => navigate('/Reports/Stock-Report')}
-                        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-                    >
-                        <span>Stock Reports ↗</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => navigate('/Accounts/Ledgers?tab=customer-ledger')}
-                        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-                    >
-                        <span>Party Ledgers ↗</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => navigate('/Reports/Balance-Sheet')}
-                        className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-                    >
-                        <span>Balance Sheet ↗</span>
-                    </button>
                 </div>
             </div>
 

@@ -18,12 +18,14 @@ import {
   MdTrendingUp,
   MdReceiptLong,
   MdMenuBook,
+  MdHistory,
   MdFileDownload,
   MdPrint,
   MdPictureAsPdf,
   MdSearch,
   MdLocationOn,
   MdCalendarToday,
+  MdDateRange,
   MdArrowUpward,
   MdArrowDownward,
   MdSwapVert,
@@ -36,11 +38,12 @@ import { CombinedLedgerTab } from './MainReports/tabs/CombinedLedgerTab';
 import { ProfitLossTab } from './MainReports/tabs/ProfitLossTab';
 import { ExpenseReportTab } from './MainReports/tabs/ExpenseReportTab';
 import { DailyBookTab } from './MainReports/tabs/DailyBookTab';
+import { DailyActivityLogTab, DailyActivityRow } from './MainReports/tabs/DailyActivityLogTab';
 import { MainReportsMetrics } from './MainReports/components/MainReportsMetrics';
 import { exportMainReportToExcel } from './MainReports/services/mainReportsExport';
 
 
-type TabKey = 'customer-ledger' | 'vendor-ledger' | 'combined-ledger' | 'profit-loss' | 'expense-report' | 'daily-book';
+type TabKey = 'customer-ledger' | 'vendor-ledger' | 'combined-ledger' | 'profit-loss' | 'expense-report' | 'daily-book' | 'daily-activity';
 
 interface TabConfig {
   key: TabKey;
@@ -55,7 +58,8 @@ const TABS: TabConfig[] = [
   { key: 'combined-ledger', label: 'All Parties Ledger', icon: MdCompareArrows, description: 'Combined market balances & net receivables / payables' },
   { key: 'profit-loss', label: 'Profit & Loss', icon: MdTrendingUp, description: 'Gross revenue, COGS, operational expenses & net profit' },
   { key: 'expense-report', label: 'Expense Report', icon: MdReceiptLong, description: 'Itemized operational expenses categorized by Chart of Accounts' },
-  { key: 'daily-book', label: 'DailyBook', icon: MdMenuBook, description: 'Roznamcha: chronological cash drawer & bank daily inflow/outflow' }
+  { key: 'daily-book', label: 'DailyBook', icon: MdMenuBook, description: 'Roznamcha: chronological cash drawer & bank daily inflow/outflow' },
+  { key: 'daily-activity', label: 'Daily Activity Log', icon: MdHistory, description: 'Real-time audit log of all system activities, sales, purchases, payments & returns' }
 ];
 
 const FINANCIAL_YEARS = [
@@ -70,7 +74,8 @@ const REPORT_TITLES: Record<TabKey, string> = {
   'combined-ledger': 'All Parties Ledger Report',
   'profit-loss': 'Profit & Loss Statement',
   'expense-report': 'Operational Expense Report',
-  'daily-book': 'Daily Cash & Bank Daybook (Roznamcha)'
+  'daily-book': 'Daily Cash & Bank Daybook (Roznamcha)',
+  'daily-activity': 'Daily Activity Audit Trail Log'
 };
 
 const formatPrintDate = (dStr: string) => {
@@ -103,7 +108,8 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
     }
     return [
       { key: 'profit-loss', label: 'Profit & Loss', icon: MdTrendingUp, description: 'Gross revenue, COGS, operational expenses & net profit' },
-      { key: 'daily-book', label: 'DailyBook', icon: MdMenuBook, description: 'Roznamcha: chronological cash drawer & bank daily inflow/outflow' }
+      { key: 'daily-book', label: 'DailyBook', icon: MdMenuBook, description: 'Roznamcha: chronological cash drawer & bank daily inflow/outflow' },
+      { key: 'daily-activity', label: 'Daily Activity Log', icon: MdHistory, description: 'Real-time audit log of all system activities, sales, purchases, payments & returns' }
     ] as TabConfig[];
   }, [effectiveMode]);
 
@@ -125,7 +131,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       return;
     }
     // If user hit /Accounts with a Reports tab, forward to /Reports/Main-Reports
-    if (effectiveMode === 'accounts' && ['profit-loss', 'daily-book'].includes(p)) {
+    if (effectiveMode === 'accounts' && ['profit-loss', 'daily-book', 'daily-activity'].includes(p)) {
       navigate(`/Reports/Main-Reports?tab=${p}`, { replace: true, state: location.state });
       return;
     }
@@ -168,6 +174,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   const [quickPartyTypeFilter, setQuickPartyTypeFilter] = useState<'ALL' | 'CUSTOMER' | 'VENDOR'>('ALL');
   const [expensePaidViaFilter, setExpensePaidViaFilter] = useState<string>('ALL');
   const [dailyDateMode, setDailyDateMode] = useState<'single' | 'range'>('single');
+  const [dailyActivityDateMode, setDailyActivityDateMode] = useState<'single' | 'range'>('single');
   const [dailyEntryTypeFilter, setDailyEntryTypeFilter] = useState<string>('ALL');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
   const reportPdfRef = useRef<HTMLDivElement>(null);
@@ -187,6 +194,14 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   };
   const [expenseRows, setExpenseRows] = useState<any[]>([]);
   const [dailyBookRows, setDailyBookRows] = useState<any[]>([]);
+  const [dailyActivityRows, setDailyActivityRows] = useState<DailyActivityRow[]>([]);
+  const [activitySummary, setActivitySummary] = useState<{
+    totalEvents: number;
+    totalSales: number;
+    totalInflow: number;
+    totalOutflow: number;
+    totalReturns: number;
+  }>({ totalEvents: 0, totalSales: 0, totalInflow: 0, totalOutflow: 0, totalReturns: 0 });
 
   // Summary KPIs for active report
   const [summary, setSummary] = useState<{
@@ -412,6 +427,64 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
     }
   };
 
+  // Quick date presets for Daily Activity Log
+  const handleActivityQuickDate = (preset: 'today' | 'yesterday' | 'last3d' | 'thisWeek' | 'thisMonth' | 'lastMonth') => {
+    const now = new Date();
+    const formatYMD = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    let f = '';
+    let t = '';
+
+    if (preset === 'today') {
+      const todayStr = formatYMD(now);
+      f = todayStr;
+      t = todayStr;
+      setDailyActivityDateMode('single');
+    } else if (preset === 'yesterday') {
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      const yStr = formatYMD(y);
+      f = yStr;
+      t = yStr;
+      setDailyActivityDateMode('single');
+    } else if (preset === 'last3d') {
+      const d3 = new Date(now);
+      d3.setDate(d3.getDate() - 2);
+      f = formatYMD(d3);
+      t = formatYMD(now);
+      setDailyActivityDateMode('range');
+    } else if (preset === 'thisWeek') {
+      const d = new Date(now);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now);
+      monday.setDate(diff);
+      f = formatYMD(monday);
+      t = formatYMD(now);
+      setDailyActivityDateMode('range');
+    } else if (preset === 'thisMonth') {
+      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      f = formatYMD(startMonth);
+      t = formatYMD(now);
+      setDailyActivityDateMode('range');
+    } else if (preset === 'lastMonth') {
+      const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      f = formatYMD(startLastMonth);
+      t = formatYMD(endLastMonth);
+      setDailyActivityDateMode('range');
+    }
+
+    setFromDate(f);
+    setToDate(t);
+    handleGenerateReport('daily-activity', undefined, f, t);
+  };
+
   // Switch tab resets the generated view so user chooses filters and clicks Generate
   const handleTabSwitch = (key: TabKey) => {
     setActiveTab(key);
@@ -438,6 +511,11 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       setFromDate(today);
       setToDate(today);
       setDailyDateMode('single');
+    } else if (key === 'daily-activity') {
+      const today = new Date().toISOString().split('T')[0];
+      setFromDate(today);
+      setToDate(today);
+      setDailyActivityDateMode('single');
     } else {
       const found = FINANCIAL_YEARS.find(f => f.id === selectedFY);
       setFromDate(found ? found.from : '2026-06-22');
@@ -447,7 +525,12 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   };
 
   // 2. Report Generation Engine
-  const handleGenerateReport = async (overrideTab?: any, overrideParties?: string[]) => {
+  const handleGenerateReport = async (
+    overrideTab?: any,
+    overrideParties?: string[],
+    overrideFrom?: string,
+    overrideTo?: string
+  ) => {
     try {
       setGenerating(true);
       setQuickPartyTypeFilter('ALL');
@@ -457,8 +540,11 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       const currentCustAccounts = (targetTab === 'customer-ledger' && targetParties) ? targetParties : selectedCustomerAccounts;
       const currentVendAccounts = (targetTab === 'vendor-ledger' && targetParties) ? targetParties : selectedVendorAccounts;
 
-      const startMs = fromDate ? new Date(fromDate + 'T00:00:00').getTime() : 0;
-      const endMs = toDate ? new Date(toDate + 'T23:59:59').getTime() : Infinity;
+      const effFrom = overrideFrom !== undefined ? overrideFrom : fromDate;
+      const effTo = overrideTo !== undefined ? overrideTo : toDate;
+
+      const startMs = effFrom ? new Date(effFrom + 'T00:00:00').getTime() : 0;
+      const endMs = effTo ? new Date(effTo + 'T23:59:59').getTime() : Infinity;
 
       // ── TAB 1: CUSTOMER LEDGER ──
       if (targetTab === 'customer-ledger') {
@@ -1780,6 +1866,372 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
         });
       }
 
+      // ── TAB 7: DAILY ACTIVITY AUDIT TRAIL LOG ──
+      else if (targetTab === 'daily-activity') {
+        const [salesRes, dcRes, purchRes, vchRes, sRetRes, pRetRes] = await Promise.all([
+          supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }),
+          supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
+          supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false }),
+          supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false }),
+          supabase.from('sales_returns').select('*').order('created_at', { ascending: false }),
+          supabase.from('purchase_returns').select('*').order('created_at', { ascending: false }),
+        ]);
+
+        const rows: DailyActivityRow[] = [];
+        let totalSales = 0;
+        let totalInflow = 0;
+        let totalOutflow = 0;
+        let totalReturns = 0;
+
+        const parseRowTime = (dateVal?: string, createdVal?: string) => {
+          let time = '12:00 PM';
+          let dateStr = '';
+          let ts = 0;
+
+          if (createdVal) {
+            try {
+              const cd = new Date(createdVal);
+              if (!isNaN(cd.getTime())) {
+                ts = cd.getTime();
+                time = cd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                dateStr = cd.toISOString().split('T')[0];
+              }
+            } catch {}
+          }
+
+          if (dateVal) {
+            const raw = String(dateVal).split('T')[0];
+            if (raw.length === 10) {
+              dateStr = raw;
+              if (!ts) {
+                ts = new Date(`${raw}T12:00:00`).getTime();
+              }
+            }
+          }
+
+          return { dateStr, time, ts };
+        };
+
+        // 1. Process Sales Invoices
+        (salesRes.data || []).forEach((inv: any) => {
+          const { dateStr, time, ts } = parseRowTime(inv.sale_date, inv.created_at);
+          if (ts < startMs || ts > endMs) return;
+
+          const amt = Number(inv.total_amount || 0);
+          totalSales += amt;
+
+          const rawItems = [
+            ...(Array.isArray(inv.items) ? inv.items : []),
+            ...(Array.isArray(inv.tileItems) ? inv.tileItems : [])
+          ];
+          const itemsArr: Array<{ name: string; qty?: number; rate?: number; amount?: number; uom?: string }> = [];
+          rawItems.forEach((it: any) => {
+            const pName = it.itemName || it.item_name || it.product_name || it.productName || it.title || it.pDescription || it.product_description || it.name || 'Tile / Item';
+            const qty = Number(it.quantity || it.qty || it.boxQty || (Number(it.loosePcs || 0) > 0 ? it.loosePcs : 0) || 0);
+            const rate = Number(it.unit_price || it.rate || it.rp || 0);
+            const amount = Number(it.total || it.amount || it.totalAmount || 0);
+            const uom = it.uom || (it.boxQty ? 'Box' : 'units');
+            itemsArr.push({ name: pName, qty, rate, amount, uom });
+          });
+
+          rows.push({
+            id: `sale-${inv.id}`,
+            index: 0,
+            date: dateStr,
+            time,
+            timestamp: ts,
+            category: 'sales',
+            hierarchyGroup: 'sales',
+            type: 'Sales Invoice',
+            typeBadgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+            refNo: inv.invoice_no || `INV-${inv.id}`,
+            partyName: inv.customer_name || 'Walk-in Customer',
+            partyType: 'Customer',
+            details: itemsArr.length > 0 ? `${itemsArr.length} item(s) sold` : (inv.remarks || 'Sales Invoice posted'),
+            itemsList: itemsArr,
+            warehouse: inv.dispatch_warehouse || inv.warehouse || '',
+            amount: amt,
+            status: inv.payment_term || inv.status || 'Posted',
+            statusColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200',
+            operator: inv.salesman_name || inv.created_by || ''
+          });
+        });
+
+        // 2. Process Delivery Challans / Dispatches
+        (dcRes.data || []).forEach((dc: any) => {
+          const { dateStr, time, ts } = parseRowTime(dc.challan_date, dc.created_at);
+          if (ts < startMs || ts > endMs) return;
+
+          const itemsArr: Array<{ name: string; qty?: number; rate?: number; amount?: number; uom?: string }> = [];
+          if (dc.items && Array.isArray(dc.items)) {
+            dc.items.forEach((it: any) => {
+              const pName = String(
+                it.pDescription ||
+                it.description ||
+                it.pName ||
+                it.itemName ||
+                it.item_name ||
+                it.product_name ||
+                it.productName ||
+                it.title ||
+                it.name ||
+                'Dispatched Item'
+              ).trim();
+              const qty = Number(
+                it.dispatchedQty !== undefined && it.dispatchedQty !== null && Number(it.dispatchedQty) > 0
+                  ? it.dispatchedQty
+                  : (it.orderQty > 0 ? it.orderQty : (it.quantity || it.qty || it.dispatch_qty || it.boxQty || 0))
+              );
+              itemsArr.push({
+                name: pName,
+                qty,
+                uom: it.uom || (it.boxQty ? 'Box' : 'units')
+              });
+            });
+          }
+
+          rows.push({
+            id: `dc-${dc.id}`,
+            index: 0,
+            date: dateStr,
+            time,
+            timestamp: ts,
+            category: 'challan',
+            hierarchyGroup: 'stock_movements',
+            type: 'Delivery Challan (DC)',
+            typeBadgeColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
+            refNo: dc.challan_no || `DC-${dc.id}`,
+            partyName: dc.customer_name || 'Customer Dispatch',
+            partyType: 'Customer',
+            details: dc.invoice_no ? `Dispatched against ${dc.invoice_no}` : (itemsArr.length > 0 ? `${itemsArr.length} item(s) dispatched` : (dc.remarks || 'Dispatched to customer')),
+            itemsList: itemsArr,
+            warehouse: dc.dispatch_warehouse || '',
+            amount: 0,
+            status: dc.status || 'Dispatched',
+            statusColor: 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200',
+            operator: dc.created_by || ''
+          });
+        });
+
+        // 3. Process Supplier Purchases
+        (purchRes.data || []).forEach((pur: any) => {
+          const { dateStr, time, ts } = parseRowTime(pur.purchase_date, pur.created_at);
+          if (ts < startMs || ts > endMs) return;
+
+          const amt = Number(pur.total_amount || 0);
+          totalOutflow += amt;
+
+          const itemsArr: Array<{ name: string; qty?: number; rate?: number; amount?: number; uom?: string }> = [];
+          if (pur.items && Array.isArray(pur.items)) {
+            pur.items.forEach((it: any) => {
+              const pName = it.itemName || it.item_name || it.product_name || it.productName || it.title || it.name || 'Purchased Item';
+              itemsArr.push({
+                name: pName,
+                qty: Number(it.quantity || it.qty || 0),
+                rate: Number(it.unit_price || it.rate || 0),
+                amount: Number(it.total || it.amount || 0),
+                uom: it.uom || 'units'
+              });
+            });
+          }
+
+          rows.push({
+            id: `pur-${pur.id}`,
+            index: 0,
+            date: dateStr,
+            time,
+            timestamp: ts,
+            category: 'purchase',
+            hierarchyGroup: 'purchases',
+            type: 'Purchase Bill',
+            typeBadgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800',
+            refNo: pur.purchase_no || `PUR-${pur.id}`,
+            partyName: pur.supplier_name || 'Vendor',
+            partyType: 'Supplier',
+            details: itemsArr.length > 0 ? `${itemsArr.length} item(s) procured` : (pur.remarks || 'Stock procurement'),
+            itemsList: itemsArr,
+            warehouse: pur.warehouse || '',
+            amount: amt,
+            status: pur.status || 'Received',
+            statusColor: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200',
+            operator: pur.created_by || ''
+          });
+        });
+
+        // 4. Process Financial Vouchers
+        (vchRes.data || []).forEach((v: any) => {
+          const vNo = String(v.voucher_no || '').toUpperCase();
+          // Ignore opening balances and auto-generated accrual vouchers for sales, purchases, and returns
+          if (
+            vNo.startsWith('OB-') ||
+            vNo.startsWith('OBV-') ||
+            vNo.startsWith('OBC-') ||
+            vNo.startsWith('SAV-') ||
+            vNo.startsWith('PAV-') ||
+            vNo.startsWith('SRV-') ||
+            vNo.startsWith('PRV-')
+          ) {
+            return;
+          }
+
+          const { dateStr, time, ts } = parseRowTime(v.voucher_date, v.created_at);
+          if (ts < startMs || ts > endMs) return;
+
+          const amt = Number(v.total_amount || v.debit || v.credit || 0);
+
+          let vType = v.voucher_type || 'Voucher';
+          let badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
+          let stColor = 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200';
+          let partyType: 'Customer' | 'Supplier' | 'Account' | 'Internal' = 'Account';
+          let hierarchyGroup: HierarchyGroupKey = 'expenses';
+
+          if (vNo.startsWith('CRV-') || vType.toLowerCase().includes('receipt')) {
+            vType = 'Cash Receipt (CRV)';
+            badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
+            stColor = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200';
+            totalInflow += amt;
+            partyType = 'Customer';
+            hierarchyGroup = 'customer_receipts';
+          } else if (vNo.startsWith('BRV-')) {
+            vType = 'Bank Receipt (BRV)';
+            badgeColor = 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800';
+            stColor = 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200';
+            totalInflow += amt;
+            partyType = 'Customer';
+            hierarchyGroup = 'customer_receipts';
+          } else if (vNo.startsWith('CPV-')) {
+            vType = 'Cash Payment (CPV)';
+            badgeColor = 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800';
+            stColor = 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200';
+            totalOutflow += amt;
+            partyType = 'Account';
+            hierarchyGroup = 'vendor_payments';
+          } else if (vNo.startsWith('BPV-')) {
+            vType = 'Bank Payment (BPV)';
+            badgeColor = 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800';
+            stColor = 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200';
+            totalOutflow += amt;
+            partyType = 'Account';
+            hierarchyGroup = 'vendor_payments';
+          } else if (vNo.startsWith('VPV-') || vType.toLowerCase().includes('vendor')) {
+            vType = 'Vendor Payment (VPV)';
+            badgeColor = 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800';
+            stColor = 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200';
+            totalOutflow += amt;
+            partyType = 'Supplier';
+            hierarchyGroup = 'vendor_payments';
+          } else if (vNo.startsWith('EXP-') || String(v.account_code || '').startsWith('5') || vType.toLowerCase().includes('expense')) {
+            vType = 'Expense Voucher';
+            badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
+            stColor = 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200';
+            totalOutflow += amt;
+            partyType = 'Account';
+            hierarchyGroup = 'expenses';
+          }
+
+          rows.push({
+            id: `vch-${v.id}`,
+            index: 0,
+            date: dateStr,
+            time,
+            timestamp: ts,
+            category: 'voucher',
+            hierarchyGroup,
+            type: vType,
+            typeBadgeColor: badgeColor,
+            refNo: v.voucher_no || `VCH-${v.id}`,
+            partyName: v.account_title || v.account_name || 'General Account',
+            partyType,
+            details: v.narration || v.description || (v.account_code ? `Account: ${v.account_code}` : 'Voucher posted'),
+            amount: amt,
+            status: 'Posted',
+            statusColor: stColor,
+            operator: v.created_by || ''
+          });
+        });
+
+        // 5. Process Sales Returns
+        (sRetRes.data || []).forEach((sr: any) => {
+          const { dateStr, time, ts } = parseRowTime(sr.return_date, sr.created_at);
+          if (ts < startMs || ts > endMs) return;
+
+          const amt = Number(sr.return_amount || sr.total_amount || 0);
+          totalReturns += amt;
+
+          rows.push({
+            id: `sret-${sr.id}`,
+            index: 0,
+            date: dateStr,
+            time,
+            timestamp: ts,
+            category: 'return',
+            hierarchyGroup: 'sales',
+            type: 'Sales Return (Credit Note)',
+            typeBadgeColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
+            refNo: sr.return_no || `SR-${sr.id}`,
+            partyName: sr.customer_name || 'Customer Return',
+            partyType: 'Customer',
+            details: sr.remarks || 'Customer returned goods',
+            amount: amt,
+            status: sr.status || 'Approved',
+            statusColor: 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200',
+            operator: sr.created_by || ''
+          });
+        });
+
+        // 6. Process Purchase Returns
+        (pRetRes.data || []).forEach((pr: any) => {
+          const { dateStr, time, ts } = parseRowTime(pr.return_date, pr.created_at);
+          if (ts < startMs || ts > endMs) return;
+
+          const amt = Number(pr.return_amount || pr.total_amount || 0);
+          totalReturns += amt;
+
+          rows.push({
+            id: `pret-${pr.id}`,
+            index: 0,
+            date: dateStr,
+            time,
+            timestamp: ts,
+            category: 'return',
+            hierarchyGroup: 'purchases',
+            type: 'Purchase Return (Debit Note)',
+            typeBadgeColor: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800',
+            refNo: pr.return_no || `PR-${pr.id}`,
+            partyName: pr.vendor_name || pr.supplier_name || pr.vendorName || pr.supplierName || 'Vendor Return',
+            partyType: 'Supplier',
+            details: pr.remarks || 'Returned goods to vendor',
+            amount: amt,
+            status: pr.status || 'Approved',
+            statusColor: 'bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-200',
+            operator: pr.created_by || ''
+          });
+        });
+
+        // Sort chronologically (newest first)
+        rows.sort((a, b) => b.timestamp - a.timestamp);
+        rows.forEach((r, idx) => {
+          r.index = idx + 1;
+        });
+
+        setDailyActivityRows(rows);
+        setActivitySummary({
+          totalEvents: rows.length,
+          totalSales,
+          totalInflow,
+          totalOutflow,
+          totalReturns
+        });
+        setSummary({
+          opening: rows.length,
+          debit: totalSales,
+          credit: totalInflow,
+          closing: totalOutflow,
+          returnAmt: totalReturns,
+          count: rows.length
+        });
+      }
+
       setHasGenerated(true);
       toast.success('Report generated successfully!');
     } catch (err: any) {
@@ -1805,11 +2257,15 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       filteredCombinedRows,
       filteredExpenseRows,
       dailyBookRows,
+      dailyActivityRows,
+      dailyActivityDateMode,
       pnlData,
       pnlBasis,
       pnlIncludeOB
     });
   };
+
+  const isLandscape = activeTab === 'customer-ledger' || activeTab === 'vendor-ledger' || activeTab === 'daily-book' || activeTab === 'combined-ledger' || activeTab === 'daily-activity';
 
   const handlePrint = () => {
     if (!hasGenerated) {
@@ -1841,10 +2297,8 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       const cleanTitle = (REPORT_TITLES[activeTab] || 'Report').replace(/\s+/g, '_');
       const filename = `${cleanTitle}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
-      const isLandscape = activeTab === 'customer-ledger' || activeTab === 'vendor-ledger' || activeTab === 'daily-book' || activeTab === 'combined-ledger';
-
       const opt = {
-        margin: [8, 8, 8, 8],
+        margin: [6, 6, 6, 6],
         filename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: {
@@ -1853,14 +2307,15 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           logging: false,
           backgroundColor: '#ffffff',
           scrollX: 0,
-          scrollY: 0
+          scrollY: 0,
+          windowWidth: 1400
         },
         jsPDF: {
           unit: 'mm',
           format: 'a4',
           orientation: isLandscape ? 'landscape' : 'portrait'
         },
-        pagebreak: { mode: ['css', 'legacy'] }
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['.break-inside-avoid', '.page-break-inside-avoid'] }
       };
 
       await html2pdf().set(opt).from(element).save();
@@ -2278,6 +2733,32 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
     };
   }, [filteredDailyRows, summary.opening]);
 
+  const sortedDailyActivityRows = useMemo(() => {
+    let list = [...dailyActivityRows];
+    if (sortKey && sortOrder !== 'none') {
+      const mul = sortOrder === 'asc' ? 1 : -1;
+      list.sort((a, b) => {
+        if (sortKey === 'date' || sortKey === 'time') {
+          return (a.timestamp - b.timestamp) * mul;
+        }
+        if (sortKey === 'amount') {
+          return (Number(a.amount || 0) - Number(b.amount || 0)) * mul;
+        }
+        if (sortKey === 'refNo') {
+          return String(a.refNo || '').localeCompare(String(b.refNo || '')) * mul;
+        }
+        if (sortKey === 'partyName') {
+          return String(a.partyName || '').localeCompare(String(b.partyName || '')) * mul;
+        }
+        if (sortKey === 'type') {
+          return String(a.type || '').localeCompare(String(b.type || '')) * mul;
+        }
+        return 0;
+      });
+    }
+    return list;
+  }, [dailyActivityRows, sortKey, sortOrder]);
+
   return (
     <div className="mx-auto max-w-7xl text-xs space-y-5 pb-16 print:max-w-none print:p-0 print:m-0 print:space-y-0 print:pb-0">
       {/* ── TOP HEADER & BREADCRUMBS ── */}
@@ -2321,42 +2802,46 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
               </button>
             );
           })}
-          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Sales-Report')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Sales Reports ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Purchase-Report')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Purchase Reports ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Stock-Report')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Stock Reports ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Account-Report')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Account Auditing ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Balance-Sheet')}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
-          >
-            <span>Balance Sheet ↗</span>
-          </button>
+          {effectiveMode === 'reports' && (
+            <>
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+              <button
+                type="button"
+                onClick={() => navigate('/Reports/Sales-Report')}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+              >
+                <span>Sales Reports ↗</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/Reports/Purchase-Report')}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+              >
+                <span>Purchase Reports ↗</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/Reports/Stock-Report')}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+              >
+                <span>Stock Reports ↗</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/Accounts/Ledgers?tab=customer-ledger')}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+              >
+                <span>Party Ledgers ↗</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/Reports/Balance-Sheet')}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+              >
+                <span>Balance Sheet ↗</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -2506,8 +2991,8 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             </div>
           )}
 
-          {/* 4. Financial Year (Searchable, Hidden for DailyBook) */}
-          {activeTab !== 'daily-book' && (
+          {/* 4. Financial Year (Searchable, Hidden for DailyBook & Daily Activity) */}
+          {activeTab !== 'daily-book' && activeTab !== 'daily-activity' && (
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1.5 uppercase tracking-wider">
                 Financial Year *
@@ -2522,8 +3007,134 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             </div>
           )}
 
-          {/* 5. Date Selection: Single Date or Date Range for DailyBook, Range for others */}
-          {activeTab === 'daily-book' ? (
+          {/* 5. Date Selection: Single Date or Date Range for Daily Activity or DailyBook */}
+          {activeTab === 'daily-activity' ? (
+            <>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1.5 uppercase tracking-wider">
+                  Date Mode
+                </label>
+                <div className="flex items-center h-[38px] p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-stroke dark:border-strokedark">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDailyActivityDateMode('single');
+                      setToDate(fromDate || new Date().toISOString().split('T')[0]);
+                    }}
+                    className={`flex-1 h-full flex items-center justify-center rounded-lg text-xs font-bold transition cursor-pointer ${
+                      dailyActivityDateMode === 'single'
+                        ? 'bg-white dark:bg-boxdark text-primary shadow-2xs font-extrabold'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    Single Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDailyActivityDateMode('range')}
+                    className={`flex-1 h-full flex items-center justify-center rounded-lg text-xs font-bold transition cursor-pointer ${
+                      dailyActivityDateMode === 'range'
+                        ? 'bg-white dark:bg-boxdark text-primary shadow-2xs font-extrabold'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    Date Range
+                  </button>
+                </div>
+              </div>
+
+              {dailyActivityDateMode === 'single' ? (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1.5 uppercase tracking-wider">
+                    Activity Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={fromDate || toDate}
+                    onChange={(e) => {
+                      setFromDate(e.target.value);
+                      setToDate(e.target.value);
+                    }}
+                    className="w-full h-[38px] rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-3 py-2 text-xs font-semibold font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1.5 uppercase tracking-wider">
+                      From Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="w-full h-[38px] rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-3 py-2 text-xs font-semibold font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1.5 uppercase tracking-wider">
+                      To Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="w-full h-[38px] rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-3 py-2 text-xs font-semibold font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Quick Date Shortcuts for Daily Activity Log */}
+              <div className="col-span-full flex flex-wrap items-center gap-1.5 pt-1 -mt-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1 flex items-center gap-1">
+                  <MdDateRange className="text-xs text-primary" /> Quick Dates:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleActivityQuickDate('today')}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-primary/10 hover:text-primary dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary/20 dark:hover:text-primary transition border border-stroke/60 dark:border-strokedark/60 cursor-pointer shadow-2xs"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleActivityQuickDate('yesterday')}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-primary/10 hover:text-primary dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary/20 dark:hover:text-primary transition border border-stroke/60 dark:border-strokedark/60 cursor-pointer shadow-2xs"
+                >
+                  Yesterday
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleActivityQuickDate('last3d')}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-primary/10 hover:text-primary dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary/20 dark:hover:text-primary transition border border-stroke/60 dark:border-strokedark/60 cursor-pointer shadow-2xs"
+                >
+                  Last 3d
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleActivityQuickDate('thisWeek')}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-primary/10 hover:text-primary dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary/20 dark:hover:text-primary transition border border-stroke/60 dark:border-strokedark/60 cursor-pointer shadow-2xs"
+                >
+                  This Week
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleActivityQuickDate('thisMonth')}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-primary/10 hover:text-primary dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary/20 dark:hover:text-primary transition border border-stroke/60 dark:border-strokedark/60 cursor-pointer shadow-2xs"
+                >
+                  This Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleActivityQuickDate('lastMonth')}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-primary/10 hover:text-primary dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary/20 dark:hover:text-primary transition border border-stroke/60 dark:border-strokedark/60 cursor-pointer shadow-2xs"
+                >
+                  Last Month
+                </button>
+              </div>
+            </>
+          ) : activeTab === 'daily-book' ? (
             <>
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1.5 uppercase tracking-wider">
@@ -2696,14 +3307,22 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           </div>
           <div>
             <h3 className="text-sm font-bold text-slate-800 dark:text-white">
-              {activeTab === 'daily-book'
+              {activeTab === 'daily-activity'
+                ? (dailyActivityDateMode === 'single'
+                    ? 'Select an activity date and click Generate Report'
+                    : 'Select a date range and click Generate Report')
+                : activeTab === 'daily-book'
                 ? (dailyDateMode === 'single'
                     ? 'Select a date and click Generate Report'
                     : 'Select a date range and click Generate Report')
                 : 'Select a financial year and date range, then click Generate Report'}
             </h3>
             <p className="text-xs text-slate-400 max-w-md mt-1">
-              {activeTab === 'daily-book'
+              {activeTab === 'daily-activity'
+                ? (dailyActivityDateMode === 'single'
+                    ? 'Choose the date to audit all sales invoices, dispatches, purchases, vouchers, and returns.'
+                    : 'Choose the date range to audit all activities and transactions across the selected period.')
+                : activeTab === 'daily-book'
                 ? (dailyDateMode === 'single'
                     ? 'Choose the date for Roznamcha and click Generate Report to inspect daily cash drawer movement.'
                     : 'Choose the date range for Roznamcha and click Generate Report to inspect cash drawer movements across the period.')
@@ -2723,7 +3342,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           />
 
           {/* Search Table Toolbar with Quick Filters */}
-          {activeTab !== 'profit-loss' && (
+          {activeTab !== 'profit-loss' && activeTab !== 'daily-activity' && (
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-boxdark p-3 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs print:hidden">
             <div className="flex flex-wrap items-center gap-2.5 flex-1">
               {/* Search input */}
@@ -2935,7 +3554,11 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
                     {REPORT_TITLES[activeTab]}
                   </h2>
                   <div className="text-[10px] text-slate-600 font-mono mt-0.5">
-                    {activeTab === 'daily-book'
+                    {activeTab === 'daily-activity'
+                      ? (dailyActivityDateMode === 'single' || fromDate === toDate
+                          ? `Activity Date: ${formatPrintDate(toDate || fromDate)}`
+                          : `Activity Period: ${formatPrintDate(fromDate) || 'Start'} — ${formatPrintDate(toDate) || 'Current'}`)
+                      : activeTab === 'daily-book'
                       ? (dailyDateMode === 'single' || fromDate === toDate
                           ? `Date: ${formatPrintDate(toDate || fromDate)}`
                           : `Period: ${formatPrintDate(fromDate) || 'Start'} — ${formatPrintDate(toDate) || 'Current'}`)
@@ -3017,6 +3640,18 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
               handleSort={handleSort}
               renderSortIcon={renderSortIcon}
               isGeneratingPdf={isGeneratingPdf}
+            />
+          )}
+
+          {/* ── TABLE: DAILY ACTIVITY LOG (ALL SYSTEM EVENTS) ── */}
+          {activeTab === 'daily-activity' && (
+            <DailyActivityLogTab
+              isGeneratingPdf={isGeneratingPdf}
+              dateMode={dailyActivityDateMode}
+              activityRows={sortedDailyActivityRows}
+              summary={activitySummary}
+              handleSort={handleSort}
+              renderSortIcon={renderSortIcon}
             />
           )}
           </div>
