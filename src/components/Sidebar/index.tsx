@@ -154,6 +154,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               sidebarThemeMode={sidebarThemeMode}
               sidebarBehaviorMode={sidebarBehaviorMode}
               masterPreset={masterPreset}
+              isTheme2={isTheme2}
             />
           ))}
 

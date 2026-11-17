@@ -5,7 +5,7 @@ import { AiOutlineUp, AiOutlineDown } from 'react-icons/ai';
 import { FiChevronRight } from 'react-icons/fi';
 import SidebarLinkGroup from '../SidebarLinkGroup';
 import { useLanguage } from '../../../Context/LanguageContext';
-import { getReportLayoutMode } from '../../../constant/themeConfig';
+import { getReportLayoutMode, getEffectiveSidebarDesign } from '../../../constant/themeConfig';
 import {
   getSidebarLabel,
   getTheme2Icon,
@@ -32,6 +32,7 @@ interface SidebarItemProps {
   sidebarThemeMode: string;
   sidebarBehaviorMode: string;
   masterPreset: string;
+  isTheme2?: boolean;
 }
 
 export const SidebarItem: React.FC<SidebarItemProps> = ({
@@ -51,15 +52,24 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   sidebarThemeMode,
   sidebarBehaviorMode,
   masterPreset,
+  isTheme2: propIsTheme2,
 }) => {
-  const isTheme2 = masterPreset === 'nht-2';
+  const isTheme2 = propIsTheme2 !== undefined ? propIsTheme2 : (getEffectiveSidebarDesign() === 'theme-2' || masterPreset === 'nht-2');
   const reportMode = getReportLayoutMode();
-  const isAccountsItem = (rawItem?.label || '').toLowerCase().trim() === 'accounts';
-  const isReportsItem = (rawItem?.label || '').toLowerCase().trim() === 'reports';
+  const isAccountsItem = depth === 0 && (rawItem?.label || '').toLowerCase().trim() === 'accounts';
+  const isReportsItem = depth === 0 && (rawItem?.label || '').toLowerCase().trim() === 'reports';
   const effectiveChildren = isAccountsItem
     ? NHT2_ACCOUNTS_CHILDREN
     : isReportsItem
-      ? (reportMode === 'classic' ? NHT2_REPORTS_CHILDREN : undefined)
+      ? (reportMode === 'classic'
+          ? (isTheme2
+              ? NHT2_REPORTS_CHILDREN
+              : NHT2_REPORTS_CHILDREN.map((c: any) => ({
+                  path: c.path,
+                  label: c.label,
+                  children: undefined
+                })))
+          : undefined)
       : rawItem?.children;
   const item = {
     ...rawItem,
@@ -319,6 +329,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
                         sidebarThemeMode={sidebarThemeMode}
                         sidebarBehaviorMode={sidebarBehaviorMode}
                         masterPreset={masterPreset}
+                        isTheme2={isTheme2}
                       />
                     ))}
                   </ul>
@@ -416,7 +427,13 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   }
 
   const singleDestination = (item.path && getTenantPath ? getTenantPath(item.path) : item.path) || '#';
-  const isDirectActive = item.path && (pathname === singleDestination || pathname === item.path);
+  const itemBasePath = (item.path || '').split('?')[0].toLowerCase();
+  const currentBasePath = pathname.toLowerCase();
+  const isDirectActive = Boolean(item.path && (
+    pathname === singleDestination ||
+    pathname === item.path ||
+    (itemBasePath && itemBasePath !== '/' && currentBasePath === itemBasePath)
+  ));
 
   const handleSingleMouseEnter = () => {
     clearHideTimeout();
