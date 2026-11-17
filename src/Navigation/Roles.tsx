@@ -12,6 +12,8 @@ import {
 import { Navigate } from 'react-router-dom';
 import BOMList from '../pages/Manufacturing/BOM/BOMList';
 import AddBOM from '../pages/Manufacturing/BOM/AddBOM';
+import ProductionOrderList from '../pages/Manufacturing/ProductionOrders/ProductionOrderList';
+import AddProductionOrder from '../pages/Manufacturing/ProductionOrders/AddProductionOrder';
 import HoldingReport from '../pages/Reports/Holding Report/HoldingReport';
 import HoldingReportPrint from '../pages/Reports/Holding Report/HoldingReportPrint';
 import Brands from '../pages/Administration/Brands';
@@ -211,6 +213,24 @@ export const adminRoutes = [
         component: <BOMList />,
       },
       {
+        label: 'Production Orders (Work Orders)',
+        icon: MdPrecisionManufacturing,
+        path: '/Manufacturing/production-orders',
+        component: <ProductionOrderList />,
+      },
+      {
+        path: '/Manufacturing/production-orders/add',
+        component: <AddProductionOrder />,
+        label: 'Create Work Order',
+        hideFromSidebar: true,
+      },
+      {
+        path: '/Manufacturing/production-orders/edit/:id',
+        component: <AddProductionOrder />,
+        label: 'Edit Work Order',
+        hideFromSidebar: true,
+      },
+      {
         path: '/Manufacturing/add',
         component: <AddBOM />,
         label: 'Create BOM',
@@ -235,28 +255,8 @@ export const adminRoutes = [
   {
     label: 'Accounts',
     icon: MdAccountBalance,
-    path: '/Accounts/Ledgers?tab=customer-ledger',
+    path: '/Registration/Chart-of-Account/List',
     children: [
-      {
-        path: '/Accounts/Ledgers?tab=customer-ledger',
-        label: 'Customer Ledger',
-        icon: MdAccountBalance
-      },
-      {
-        path: '/Accounts/Ledgers?tab=vendor-ledger',
-        label: 'Vendor Ledger',
-        icon: MdAccountBalance
-      },
-      {
-        path: '/Accounts/Ledgers?tab=combined-ledger',
-        label: 'All Parties Ledger',
-        icon: MdAccountBalance
-      },
-      {
-        path: '/Accounts/Ledgers?tab=expense-report',
-        label: 'Expense Report',
-        icon: MdAccountBalance
-      },
       {
         path: '/Registration/Chart-of-Account/List',
         component: <ChartOfAccountList />,

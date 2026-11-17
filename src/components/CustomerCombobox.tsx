@@ -53,7 +53,11 @@ export const CustomerCombobox: React.FC<CustomerComboboxProps> = ({
 
   // Filter out any invalid / empty customer records from DB
   const validCustomers = useMemo(() => {
-    return customers.filter(c => c && typeof c.name === 'string' && c.name.trim().length > 0);
+    return (customers || []).filter(c => {
+      if (!c) return false;
+      const cleanName = String(c.name || '').trim();
+      return cleanName.length > 0 && cleanName !== '-';
+    });
   }, [customers]);
 
   const filteredCustomers = useMemo(() => {
@@ -91,6 +95,16 @@ export const CustomerCombobox: React.FC<CustomerComboboxProps> = ({
   useEffect(() => {
     setHighlightedIndex(0);
   }, [options.length, query]);
+
+  // Scroll highlighted element into view for smooth keyboard interaction
+  useEffect(() => {
+    if (isOpen && listRef.current) {
+      const el = listRef.current.children[highlightedIndex] as HTMLElement;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [highlightedIndex, isOpen]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -147,9 +161,9 @@ export const CustomerCombobox: React.FC<CustomerComboboxProps> = ({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlightedIndex(prev => (prev > 0 ? prev - 1 : Math.max(0, options.length - 1)));
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
       if (isOpen && options.length > 0 && options[highlightedIndex]) {
-        e.preventDefault();
+        if (e.key === 'Enter') e.preventDefault();
         const selected = options[highlightedIndex];
         if (selected.type === 'add_new') {
           handleAddNew(selected.name);
@@ -248,7 +262,7 @@ export const CustomerCombobox: React.FC<CustomerComboboxProps> = ({
                     </p>
                   )}
                 </div>
-                {customer.phone && (
+                {customer.phone && customer.phone.replace(/[-+\s]/g, '').length > 0 && (
                   <span className="text-[10px] text-[var(--color-primary,#800020)] dark:text-rose-300 font-mono flex items-center gap-1 shrink-0 bg-[var(--color-primary,#800020)]/10 px-2 py-0.5 rounded-full font-bold">
                     <MdPhone size={10} />
                     <span>{customer.phone}</span>

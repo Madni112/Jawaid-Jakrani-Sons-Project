@@ -1,14 +1,13 @@
 import React from 'react';
 
-export const formatQtyToBoxPc = (qty: number | string) => {
+export const formatQtyToBoxPc = (qty: number | string, pcsPerBox: number = 4) => {
   if (qty === undefined || qty === null || qty === '') return { box: 0, pc: 0 };
-  const str = String(qty).trim();
-  const parts = str.split('.');
-  
-  const box = parseInt(parts[0], 10) || 0;
-  const pcStr = parts.length > 1 ? parts[1] : '0';
-  const pc = parseInt(pcStr, 10) || 0;
-  
+  const num = Number(qty);
+  if (isNaN(num)) return { box: 0, pc: 0 };
+  const ppb = pcsPerBox > 0 ? pcsPerBox : 4;
+  const totalPieces = Math.round(num * ppb);
+  const box = Math.floor(totalPieces / ppb);
+  const pc = totalPieces % ppb;
   return { box, pc };
 };
 

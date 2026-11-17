@@ -7,6 +7,7 @@ import { getSidebarBehaviorMode, getMasterThemePreset, MasterThemePreset } from 
 
 const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const isPrintRoute = location.pathname.toLowerCase().includes('/print');
   const isSettings = location.pathname.toLowerCase().startsWith('/settings');
   const [masterPreset, setMasterPreset] = useState<MasterThemePreset>(() => getMasterThemePreset());
 
@@ -80,6 +81,10 @@ const DefaultLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  if (isPrintRoute) {
+    return <div className="bg-white min-h-screen w-full text-slate-900">{children}</div>;
+  }
 
   return (
     <div className="bg-[#F8FAFC] dark:bg-[#0B0F17] text-slate-700 dark:text-slate-200 min-h-screen font-sans selection:bg-emerald-600 selection:text-white">

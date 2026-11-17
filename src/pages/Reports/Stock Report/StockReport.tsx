@@ -5,6 +5,32 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import SearchableMultiSelect from '../../../components/SearchableMultiSelect';
+import StockReportPrint from './StockReportPrint';
+import {
+  MdTimeline,
+  MdInventory,
+  MdAccessTime,
+  MdCompareArrows,
+  MdBarChart,
+  MdCategory,
+  MdStorefront,
+  MdPauseCircleFilled,
+  MdMenuBook,
+  MdSearch,
+  MdFileDownload,
+  MdPictureAsPdf,
+  MdPrint
+} from 'react-icons/md';
+
+const stockTabs = [
+  { key: 1, label: 'Stock Activity', icon: MdTimeline },
+  { key: 2, label: 'Stock Balance', icon: MdInventory },
+  { key: 3, label: 'Stock Status', icon: MdAccessTime },
+  { key: 4, label: 'Stock Transfer', icon: MdCompareArrows },
+  { key: 5, label: 'Price Detail Ledger', icon: MdBarChart },
+  { key: 7, label: 'Category Valuation', icon: MdCategory },
+  { key: 8, label: 'Location Stock', icon: MdStorefront },
+] as const;
 
 const StockReport = () => {
   const navigate = useNavigate();
@@ -12,8 +38,23 @@ const StockReport = () => {
   const { tenantId } = useAuth();
   const [loading, setLoading] = useState(true);
 
-  const initialTab = Number(location.state?.activeTab || location.state?.tab || 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  const [hasGenerated, setHasGenerated] = useState(false);
+  const [generatedPayload, setGeneratedPayload] = useState<{ tab: number; filters: any } | null>(null);
+
+  const searchParams = new URLSearchParams(location.search);
+  const queryTab = searchParams.get('tab');
+  const initialTab = Number(queryTab || location.state?.activeTab || location.state?.tab || 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   const [activeTab, setActiveTab] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8>(initialTab);
+
+  useEffect(() => {
+    const tabParam = new URLSearchParams(location.search).get('tab');
+    if (tabParam) {
+      const num = Number(tabParam) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+      if (num && num !== activeTab) {
+        handleTabChange(num);
+      }
+    }
+  }, [location.search]);
 
   const [categories, setCategories] = useState<any[]>([]);
   const [uoms, setUoms] = useState<any[]>([]);
@@ -38,6 +79,7 @@ const StockReport = () => {
       subSubCategory: location.state?.subSubCategory ? [location.state.subSubCategory] : parseCriteriaArray(base.subSubCategory),
       stockValueTier: base.stockValueTier || 'All',
       dateFrom: location.state?.dateFrom || base.dateFrom || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
+      dateFrom: location.state?.dateFrom || base.dateFrom || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
       dateTo: location.state?.dateTo || base.dateTo || new Date().toISOString().split('T')[0],
       asOfDate: location.state?.asOfDate || base.asOfDate || new Date().toISOString().split('T')[0],
       showSalePrice: base.showSalePrice !== undefined ? base.showSalePrice : true,
@@ -163,30 +205,123 @@ const StockReport = () => {
         }
       }
     }
-    navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock-Report/Print`, {
-      state: { tab: activeTab, filters: criteria }
-    });
+    setGeneratedPayload({ tab: activeTab, filters: { ...criteria } });
+    setHasGenerated(true);
+    setTimeout(() => {
+      document.getElementById('generated-stock-report')?.scrollIntoView({ behavior: 'smooth' });
+    }, 150);
+  };
+
+  const handlePrintWindow = () => {
+    if (!hasGenerated) {
+      handleDispatchReportView();
+      setTimeout(() => window.print(), 500);
+    } else {
+      window.print();
+    }
+  };
+
+  const handleExportCsv = () => {
+    if (!hasGenerated) {
+      toast.error("Please click Generate Report first to load the data.");
+      return;
+    }
+    const exportBtn = document.getElementById('stock-report-export-excel-btn');
+    if (exportBtn) {
+      exportBtn.click();
+    } else {
+      window.print();
+    }
   };
 
   if (loading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
 
+  const currentTabObj = stockTabs.find(t => t.key === activeTab) || stockTabs[0];
+
   return (
-    <div className="mx-auto max-w-7xl flex flex-col gap-6 text-black dark:text-bodydark text-xs antialiased font-sans relative">
-      <div>
-        <h2 className="text-xl font-bold text-black dark:text-white uppercase tracking-wider">Enterprise Stock Auditing Center</h2>
-        <p className="text-xs text-gray-400">Track structural inventory asset flows, location metrics, and ledger balances valuation</p>
+    <div className="mx-auto max-w-7xl flex flex-col gap-5 text-black dark:text-bodydark text-xs antialiased font-sans relative pb-16 print:max-w-none print:p-0 print:m-0 print:space-y-0 print:pb-0">
+      {/* ── TOP HEADER & BREADCRUMBS ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-boxdark p-5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs print:hidden">
+        <div>
+          <div className="flex items-center gap-2 text-slate-400 text-[11px] font-semibold tracking-wide uppercase">
+            <span>Inventory & Logistics</span>
+            <span>/</span>
+            <span>Auditing Reports</span>
+            <span>/</span>
+            <span className="text-primary font-bold">{currentTabObj.label}</span>
+          </div>
+          <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1 tracking-tight flex items-center gap-2">
+            <span>Enterprise Stock Auditing Center</span>
+            <span className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-mono px-2 py-0.5 rounded-full font-bold">
+              Live Audited
+            </span>
+          </h2>
+        </div>
       </div>
 
-      <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[10px] uppercase text-gray-500">
-        <button type="button" onClick={() => handleTabChange(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Activity</button>
-        <button type="button" onClick={() => handleTabChange(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Balance</button>
-        <button type="button" onClick={() => handleTabChange(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Status</button>
-        <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Transfer</button>
-        <button type="button" onClick={() => handleTabChange(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Category Valuation</button>
-        <button type="button" onClick={() => handleTabChange(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Location Stock</button>
+      {/* ── 1. HORIZONTAL TABS BAR ── */}
+      <div className="bg-white dark:bg-boxdark p-1.5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs overflow-x-auto print:hidden">
+        <div className="flex items-center gap-1.5 min-w-max">
+          {stockTabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => handleTabChange(tab.key as any)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Icon size={16} className={isActive ? 'text-white' : 'text-slate-400'} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Holding-Report')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+          >
+            <MdPauseCircleFilled size={16} className="text-amber-500" />
+            <span>Holding Stock Queue ↗</span>
+          </button>
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Sales-Report')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Sales Reports ↗</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Purchase-Report')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Purchase Reports ↗</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/Accounts/Ledgers?tab=customer-ledger')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Party Ledgers ↗</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Balance-Sheet')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Balance Sheet ↗</span>
+          </button>
+        </div>
       </div>
 
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+      <div className="rounded-2xl border border-stroke bg-white shadow-2xs dark:border-strokedark dark:bg-boxdark p-6">
         <h3 className="font-bold text-sm text-black dark:text-white mb-4 uppercase tracking-wider text-primary">Report Criteria Specification</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
 
@@ -221,6 +356,16 @@ const StockReport = () => {
                 <button type="button" onClick={() => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', new Date().toISOString().split('T')[0]); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">This Month</button>
                 <button type="button" onClick={() => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().split('T')[0]; const e = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', e); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Last Month</button>
               </div>
+            </>
+          )}
+
+          {activeTab === 5 && (
+            <>
+              <SearchableMultiSelect label="Select Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
+              <SearchableMultiSelect label="Brand:" placeholder="Brand" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
+              <SearchableMultiSelect label="Parent Category:" placeholder="Parent Category" options={parentCategoryOptions} value={criteria.parentCategory} onChange={(val) => handleInputChange('parentCategory', val)} />
+              <SearchableMultiSelect label="Sub Category:" placeholder="Sub Category" options={subCategoryOptions} value={criteria.subCategory} onChange={(val) => handleInputChange('subCategory', val)} />
+              <SearchableMultiSelect label="Category:" placeholder="Category" options={subSubCategoryOptions} value={criteria.subSubCategory} onChange={(val) => handleInputChange('subSubCategory', val)} />
             </>
           )}
 
@@ -269,16 +414,90 @@ const StockReport = () => {
           )}
         </div>
 
-        <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex justify-end">
+        <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex flex-wrap items-center justify-end gap-2.5">
+          <button
+            type="button"
+            disabled={!hasGenerated}
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition border border-stroke dark:border-strokedark disabled:opacity-50 cursor-pointer shadow-2xs"
+          >
+            <MdFileDownload size={15} />
+            <span>Export CSV</span>
+          </button>
+          <button
+            type="button"
+            disabled={!hasGenerated}
+            onClick={handlePrintWindow}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition border border-stroke dark:border-strokedark disabled:opacity-50 cursor-pointer shadow-2xs"
+          >
+            <MdPictureAsPdf size={15} />
+            <span>Download PDF (A4)</span>
+          </button>
+          <button
+            type="button"
+            disabled={!hasGenerated}
+            onClick={handlePrintWindow}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition border border-stroke dark:border-strokedark disabled:opacity-50 cursor-pointer shadow-2xs"
+          >
+            <MdPrint size={15} />
+            <span>Print</span>
+          </button>
           <button
             type="button"
             onClick={handleDispatchReportView}
-            className="rounded bg-primary py-2.5 px-12 font-black text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 cursor-pointer uppercase tracking-wider"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
           >
-            Show Report
+            <MdSearch size={16} />
+            <span>Generate Report</span>
           </button>
         </div>
       </div>
+
+      {/* Below Report Output (Rendered after clicking Generate Report or Placeholder when not generated) */}
+      {!hasGenerated ? (
+        <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-16 shadow-2xs flex flex-col items-center justify-center text-center space-y-4 print:hidden">
+          <div className="w-16 h-16 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400">
+            <MdMenuBook size={34} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">
+              Select a financial year and date range, then click Generate Report
+            </h3>
+            <p className="text-xs text-slate-400 max-w-md mt-1">
+              Choose your inventory parameters in the filter bar above and click the Generate Report button to fetch live asset valuation and ledger balances.
+            </p>
+          </div>
+        </div>
+      ) : generatedPayload ? (
+        <div id="generated-stock-report" className="mt-8 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-6 shadow-md transition-all">
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-stroke dark:border-strokedark">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <h3 className="text-sm font-black text-black dark:text-white uppercase tracking-wider">
+                Generated Live Report Result
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock-Report/Print`, {
+                  state: { tab: generatedPayload.tab, filters: generatedPayload.filters }
+                });
+              }}
+              className="text-xs font-bold text-primary hover:underline cursor-pointer"
+            >
+              Open in Fullscreen Print View →
+            </button>
+          </div>
+
+          <StockReportPrint
+            key={`${generatedPayload.tab}_${JSON.stringify(generatedPayload.filters)}`}
+            embedded={true}
+            tabOverride={generatedPayload.tab}
+            filtersOverride={generatedPayload.filters}
+          />
+        </div>
+      ) : null}
     </div>
   );
 };

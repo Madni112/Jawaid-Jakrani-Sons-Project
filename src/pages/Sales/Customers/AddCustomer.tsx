@@ -6,131 +6,24 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
-import { useLanguage, getUrduText } from '../../../Context/LanguageContext';
+import { useLanguage } from '../../../Context/LanguageContext';
 import Breadcrumb from '../../../components/Breadcrumbs/Breadcrumb';
+
 import {
-  MdArrowBack,
-  MdSave,
-  MdPerson,
-  MdPhone,
-  MdEmail,
-  MdLocationOn,
-  MdBusiness,
-  MdAccountBalance,
-  MdCalendarToday,
-  MdPeople,
-  MdCheckCircle,
-  MdInfoOutline,
-  MdCreditCard,
-  MdReceipt,
-  MdNotes,
-  MdLanguage,
-  MdTag,
-  MdArrowForward
-} from 'react-icons/md';
-import { SearchableDropdown } from '../../../components/SearchableDropdown';
-import SubAreaAreaInput from '../../../components/SubAreaAreaInput';
-import SearchableAddableDropdown from '../../../components/SearchableAddableDropdown';
-
-const TIER_OPTIONS = [
-  'Retail / General',
-  'Wholesaler / Dealer',
-  'Semi-Wholesaler',
-  'Distributor',
-  'Boutique / Tailor',
-  'Fabric Manufacturer',
-  'Contractor / Builder',
-  'Registered Corporate',
-];
-
-const DEFAULT_SUB_AREAS = [
-  'Hyderabad',
-  'Karachi',
-  'Sukkur',
-  'Lahore',
-  'Faisalabad',
-  'Rawalpindi',
-  'Islamabad',
-  'Multan',
-  'Peshawar',
-  'Quetta',
-  'Nawabshah',
-  'Mirpurkhas',
-  'Larkana',
-  'Gujranwala',
-  'Sialkot',
-  'Bahawalpur',
-  'Sargodha',
-  'Rahim Yar Khan',
-  'Jacobabad',
-  'Shikarpur',
-  'Dadu',
-  'Thatta',
-  'Badin',
-  'Tando Adam',
-  'Tando Allahyar',
-  'Kotri',
-];
-
-const DEFAULT_AREAS = [
-  'Cloth Market',
-  'Resham Gali',
-  'Shahi Bazaar',
-  'Saddar',
-  'Latifabad',
-  'Qasimabad',
-  'Auto Bhan',
-  'Boulton Market',
-  'Jama Cloth Market',
-  'Tariq Road',
-  'Hyderi',
-  'PECHS',
-  'North Nazimabad',
-  'Clifton',
-  'Azam Cloth Market',
-  'Anarkali Bazaar',
-  'Liberty Market',
-  'Rail Bazaar',
-];
-
-const DEFAULT_SUBAREA_AREAS_MAP: Record<string, string[]> = {
-  // Cities mapping to their local areas
-  'Hyderabad': ['Cloth Market', 'Resham Gali', 'Shahi Bazaar', 'Saddar', 'Latifabad', 'Qasimabad', 'Auto Bhan', 'Tilak Incline', 'Tower'],
-  'Karachi': ['Boulton Market', 'Jama Cloth Market', 'Tariq Road', 'Saddar', 'Hyderi', 'Liaquat Market', 'Clifton', 'PECHS', 'SITE', 'Gulshan-e-Iqbal', 'Korangi'],
-  'Sukkur': ['Station Road', 'Main Sarafa Bazaar', 'Cloth Market', 'Clock Tower', 'Barrage Colony', 'Military Road'],
-  'Lahore': ['Azam Cloth Market', 'Anarkali Bazaar', 'Ichhra Bazaar', 'Liberty Market', 'Shah Alam Market', 'Gulberg', 'Mall Road'],
-  'Faisalabad': ['Rail Bazaar', 'Clock Tower', 'Karkhana Bazaar', 'Jhang Bazaar', 'Montgomery Bazaar', 'D Ground'],
-  'Rawalpindi': ['Rabi Center', 'Raja Bazaar', 'Moti Bazaar', 'Saddar', 'Commercial Market'],
-  'Multan': ['Hussain Agahi Bazaar', 'Gulgast Colony', 'Cantonment', 'Cloth Market'],
-  'Peshawar': ['Karkhano Market', 'Shaheen Bazaar', 'Qissa Khwani', 'University Road'],
-  'Quetta': ['Liaquat Bazaar', 'Suraj Ganj Bazaar', 'Kandahari Bazaar'],
-  'Nawabshah': ['Cloth Market', 'Chakra Bazaar', 'Masjid Road'],
-  'Mirpurkhas': ['Shahi Bazaar', 'Station Road', 'Cloth Market'],
-  'Larkana': ['Shahi Bazaar', 'Station Road', 'Bank Square'],
-
-  // Specific Bazaars mapping to their parent areas / cities
-  'Resham Gali': ['Cloth Market', 'Hyderabad', 'Sindh'],
-  'Main Sarafa Bazaar': ['Cloth Market', 'Hyderabad', 'Sukkur'],
-  'Cloth Market': ['Hyderabad', 'Karachi', 'Sukkur'],
-  'Shahi Bazaar': ['Hyderabad', 'Mirpurkhas', 'Sindh'],
-  'Station Road': ['Sukkur', 'Mirpurkhas', 'Sindh'],
-  'Boulton Market': ['Saddar', 'Karachi'],
-  'Jama Cloth Market': ['M.A. Jinnah Road', 'Saddar', 'Karachi'],
-  'Tariq Road': ['PECHS', 'Karachi'],
-  'Hyderi Market': ['North Nazimabad', 'Karachi'],
-  'Shershah Market': ['SITE', 'Karachi'],
-  'Liaquat Market': ['Malir', 'Karachi'],
-  'Cliff Shopping Mall': ['Clifton', 'Karachi'],
-  'Ashiana Center': ['Clifton', 'Karachi'],
-  'Anarkali Bazaar': ['Lahore', 'Punjab'],
-  'Azam Cloth Market': ['Lahore', 'Punjab'],
-  'Liberty Market': ['Gulberg', 'Lahore'],
-  'Ichhra Bazaar': ['Lahore', 'Punjab'],
-  'Rail Bazaar': ['Faisalabad', 'Punjab'],
-  'Clock Tower': ['Faisalabad', 'Sukkur'],
-  'Karkhano Market': ['Peshawar', 'KPK'],
-  'Rabi Center': ['Rawalpindi', 'Islamabad'],
-};
+  TIER_OPTIONS,
+  DEFAULT_SUB_AREAS,
+  DEFAULT_AREAS,
+  DEFAULT_SUBAREA_AREAS_MAP
+} from './constants/customerConstants';
+import { getInitialLocation } from './utils/customerLocationHelpers';
+import { CustomerHeaderBanner } from './components/CustomerHeaderBanner';
+import { CustomerStepTabs } from './components/CustomerStepTabs';
+import { CustomerIdentityTab } from './components/CustomerIdentityTab';
+import { CustomerContactTab } from './components/CustomerContactTab';
+import { CustomerAccountTab } from './components/CustomerAccountTab';
+import { CustomerTaxTab } from './components/CustomerTaxTab';
+import { CustomerNotesTab } from './components/CustomerNotesTab';
+import { CustomerStepperActions } from './components/CustomerStepperActions';
 
 const AddCustomer: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -166,6 +59,7 @@ const AddCustomer: React.FC = () => {
     });
     toast.success(`Added "${clean}" to Customer Tiers`);
   };
+
   const [subAreaOptions, setSubAreaOptions] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('uj_custom_sub_areas');
@@ -228,8 +122,9 @@ const AddCustomer: React.FC = () => {
 
     toast.success(`Saved Area "${cleanArea}" under "${cleanSub}"`);
   };
+
   const { tenantId } = useAuth();
-  const { isRTL, t } = useLanguage();
+  const { isRTL } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
@@ -311,7 +206,10 @@ const AddCustomer: React.FC = () => {
 
         // Merge any existing customer tiers from DB
         try {
-          const { data: dbCustTiers } = await supabase.from('customers').select('registrationType, registrationtype').limit(100);
+          const { data: dbCustTiers } = await supabase
+            .from('customers')
+            .select('registrationType, registrationtype')
+            .limit(100);
           if (dbCustTiers && dbCustTiers.length > 0) {
             const tiersFromDb = dbCustTiers
               .map((c: any) => c.registrationType || c.registrationtype)
@@ -326,7 +224,10 @@ const AddCustomer: React.FC = () => {
 
         // Also merge any existing areas and sub areas from customers table
         try {
-          const { data: custAreaData } = await supabase.from('customers').select('city, address, sub_area, area').limit(500);
+          const { data: custAreaData } = await supabase
+            .from('customers')
+            .select('city, address, sub_area, area')
+            .limit(500);
           if (custAreaData && custAreaData.length > 0) {
             const dbSubAreas = custAreaData
               .map((c: any) => (c.city || c.sub_area || '').trim())
@@ -393,63 +294,6 @@ const AddCustomer: React.FC = () => {
     fetchInitialMetadata();
   }, [isEditMode]);
 
-  // Safe city & area extractor for edit mode
-  const getInitialLocation = (data?: any) => {
-    if (!data) return { subArea: '', area: '' };
-
-    let subArea = data.sub_area || data.subArea || '';
-    let area = data.area || '';
-
-    // If subArea is not set, check data.city
-    if (!subArea && data.city) {
-      subArea = data.city;
-    }
-
-    // Check if Location was recorded in notes e.g. "Location: Hyderabad | Cloth Market"
-    if (data.notes && data.notes.includes('Location:')) {
-      const match = data.notes.match(/Location:\s*([^|\n]+)(?:\s*\|\s*([^\n]+))?/);
-      if (match) {
-        const noteCity = match[1]?.trim();
-        const noteArea = match[2]?.trim();
-        if (!subArea) subArea = noteCity;
-        // If subArea was defaulted to Hyderabad but note specifically says another city (e.g. ماتلی), restore it
-        if (subArea && subArea.toLowerCase() === 'hyderabad' && noteCity && noteCity.toLowerCase() !== 'hyderabad') {
-          subArea = noteCity;
-        }
-        if (!area && noteArea) area = noteArea;
-      }
-    }
-
-    // Fallback: If city still empty, scan address for known cities
-    if (!subArea && data.address) {
-      const addr = String(data.address).toLowerCase();
-      for (const dCity of DEFAULT_SUB_AREAS) {
-        if (addr.includes(dCity.toLowerCase())) {
-          subArea = dCity;
-          break;
-        }
-      }
-    }
-
-    // Fallback: If area still empty, scan address for known areas
-    if (!area && data.address) {
-      const addr = String(data.address).toLowerCase();
-      for (const dArea of DEFAULT_AREAS) {
-        if (addr.includes(dArea.toLowerCase())) {
-          area = dArea;
-          break;
-        }
-      }
-    }
-
-    // In case area was erroneously set equal to city, clear it
-    if (area && subArea && area.toLowerCase() === subArea.toLowerCase()) {
-      area = '';
-    }
-
-    return { subArea, area };
-  };
-
   const initialLoc = getInitialLocation(editData);
 
   // Sync edit location into options and mapping so dropdown immediately shows them
@@ -474,7 +318,7 @@ const AddCustomer: React.FC = () => {
   const validationSchema = Yup.object().shape({
     customerName: Yup.string().trim().required('Customer / Business Name is required'),
     subArea: Yup.string().trim().required('City is required'),
-    primaryPhone: Yup.string().trim().required('Primary Contact Phone is required'),
+    primaryPhone: Yup.string().trim().required('Primary Contact Phone is required')
   });
 
   const handleSubmit = async (values: any) => {
@@ -506,7 +350,8 @@ const AddCustomer: React.FC = () => {
 
       const cleanCode = (values.customer_code || suggestedCode || '').trim();
       const parsedOpeningBal = Number(values.openingBalance || 0);
-      const computedBalance = values.balanceNature === 'Credit' ? -Math.abs(parsedOpeningBal) : Math.abs(parsedOpeningBal);
+      const computedBalance =
+        values.balanceNature === 'Credit' ? -Math.abs(parsedOpeningBal) : Math.abs(parsedOpeningBal);
 
       const regTypeVal = values.registrationType ? values.registrationType.trim() : '';
       const secPhoneVal = values.secondaryPhone ? values.secondaryPhone.trim() : '';
@@ -514,20 +359,58 @@ const AddCustomer: React.FC = () => {
       const cityVal = (() => {
         const s = (values.subArea || '').trim();
         const a = (values.area || '').trim();
-        const PAK_CITIES = ['hyderabad', 'karachi', 'sukkur', 'lahore', 'faisalabad', 'rawalpindi', 'multan', 'peshawar', 'quetta', 'nawabshah', 'mirpurkhas', 'larkana', 'islamabad'];
+        const PAK_CITIES = [
+          'hyderabad',
+          'karachi',
+          'sukkur',
+          'lahore',
+          'faisalabad',
+          'rawalpindi',
+          'multan',
+          'peshawar',
+          'quetta',
+          'nawabshah',
+          'mirpurkhas',
+          'larkana',
+          'islamabad'
+        ];
         if (PAK_CITIES.includes(s.toLowerCase())) return s;
         if (PAK_CITIES.includes(a.toLowerCase())) return a;
         return s || a || values.city || 'Hyderabad';
       })();
 
       // --- SMART SCHEMA-ADAPTIVE COLUMN MAPPER ---
-      // Known columns in customers table
       const KNOWN_CUSTOMER_COLUMNS = new Set([
-        'customerName', 'customer_code', 'customerCode', 'account_code', 'coa_code',
-        'page_no', 'pageNo', 'registrationType', 'primaryPhone', 'phone', 'secondaryPhone',
-        'secondaryphone', 'email', 'website', 'address', 'city', 'province', 'company',
-        'cnicNo', 'ntnNo', 'ntn_strn', 'stRegNo', 'notes', 'followUpDate', 'currentBalance',
-        'balance', 'opening_balance', 'customer_name', 'sub_area', 'area'
+        'customerName',
+        'customer_code',
+        'customerCode',
+        'account_code',
+        'coa_code',
+        'page_no',
+        'pageNo',
+        'registrationType',
+        'primaryPhone',
+        'phone',
+        'secondaryPhone',
+        'secondaryphone',
+        'email',
+        'website',
+        'address',
+        'city',
+        'province',
+        'company',
+        'cnicNo',
+        'ntnNo',
+        'ntn_strn',
+        'stRegNo',
+        'notes',
+        'followUpDate',
+        'currentBalance',
+        'balance',
+        'opening_balance',
+        'customer_name',
+        'sub_area',
+        'area'
       ]);
 
       const dbColumns: string[] = [];
@@ -541,12 +424,12 @@ const AddCustomer: React.FC = () => {
       }
 
       const hasCol = (colName: string) => {
-        if (dbColumns.length > 0) return dbColumns.some(c => c.toLowerCase() === colName.toLowerCase());
+        if (dbColumns.length > 0) return dbColumns.some((c) => c.toLowerCase() === colName.toLowerCase());
         return KNOWN_CUSTOMER_COLUMNS.has(colName);
       };
 
       const getExactCols = (colName: string) => {
-        if (dbColumns.length > 0) return dbColumns.filter(c => c.toLowerCase() === colName.toLowerCase());
+        if (dbColumns.length > 0) return dbColumns.filter((c) => c.toLowerCase() === colName.toLowerCase());
         return KNOWN_CUSTOMER_COLUMNS.has(colName) ? [colName] : [];
       };
 
@@ -554,11 +437,13 @@ const AddCustomer: React.FC = () => {
       const setCol = (fieldKey: string, val: any) => {
         const matchingCols = getExactCols(fieldKey);
         if (matchingCols.length > 0) {
-          matchingCols.forEach(col => { sanitizedPayload[col] = val; });
+          matchingCols.forEach((col) => {
+            sanitizedPayload[col] = val;
+          });
         }
       };
 
-      // Set customer name across all existing database name columns (customerName, customername, customer_name, name)
+      // Set customer name across all existing database name columns
       setCol('customerName', trimmedName);
       setCol('customername', trimmedName);
       setCol('customer_name', trimmedName);
@@ -644,23 +529,19 @@ const AddCustomer: React.FC = () => {
       const executeSave = async (dataPayload: any) => {
         const customerId = editData?.id || id;
         if (isEditMode && customerId) {
-          return await supabase
-            .from('customers')
-            .update(dataPayload)
-            .eq('id', customerId);
+          return await supabase.from('customers').update(dataPayload).eq('id', customerId);
         } else {
-          return await supabase
-            .from('customers')
-            .insert([dataPayload])
-            .select('id');
+          return await supabase.from('customers').insert([dataPayload]).select('id');
         }
       };
 
-      let customerRecordId: any = editData?.id || id || null;
       let saveResponse = await executeSave(sanitizedPayload);
 
       // Auto-fallback: if PostgREST still reports any missing column in schema cache, strip it and retry
-      if (saveResponse.error && (saveResponse.error.code === 'PGRST204' || saveResponse.error.message?.includes('schema cache'))) {
+      if (
+        saveResponse.error &&
+        (saveResponse.error.code === 'PGRST204' || saveResponse.error.message?.includes('schema cache'))
+      ) {
         const fallbackPayload = { ...sanitizedPayload };
         for (let attempt = 0; attempt < 6 && saveResponse.error; attempt++) {
           const errMsg = saveResponse.error.message || '';
@@ -685,9 +566,6 @@ const AddCustomer: React.FC = () => {
       if (isEditMode) {
         toast.success(`Customer "${trimmedName}" updated successfully!`);
       } else {
-        if (saveResponse.data && saveResponse.data[0]) {
-          customerRecordId = saveResponse.data[0].id;
-        }
         toast.success(`Customer "${trimmedName}" registered successfully!`);
       }
 
@@ -713,14 +591,9 @@ const AddCustomer: React.FC = () => {
             .maybeSingle();
 
           if (existingCOA?.id) {
-            await supabase
-              .from('chart_of_accounts')
-              .update(coaPayload)
-              .eq('id', existingCOA.id);
+            await supabase.from('chart_of_accounts').update(coaPayload).eq('id', existingCOA.id);
           } else {
-            const { error: insErr } = await supabase
-              .from('chart_of_accounts')
-              .insert([coaPayload]);
+            const { error: insErr } = await supabase.from('chart_of_accounts').insert([coaPayload]);
             if (insErr) {
               console.error('COA auto-sync insert error:', insErr);
             }
@@ -786,20 +659,19 @@ const AddCustomer: React.FC = () => {
 
             if (existingVoucher) {
               if (bal > 0) {
-                await supabase
-                  .from('financial_vouchers')
-                  .update(voucherPayload)
-                  .eq('id', existingVoucher.id);
+                await supabase.from('financial_vouchers').update(voucherPayload).eq('id', existingVoucher.id);
               } else {
                 await supabase.from('financial_vouchers').delete().eq('id', existingVoucher.id);
               }
             } else if (bal > 0) {
               const vNum = cleanCode.replace('2020-', '');
-              await supabase.from('financial_vouchers').insert([{
-                voucher_no: `OB-${vNum}`,
-                voucher_type: 'Journal Voucher',
-                ...voucherPayload
-              }]);
+              await supabase.from('financial_vouchers').insert([
+                {
+                  voucher_no: `OB-${vNum}`,
+                  voucher_type: 'Journal Voucher',
+                  ...voucherPayload
+                }
+              ]);
             }
           } catch (vErr) {
             console.warn('Voucher auto-sync note:', vErr);
@@ -851,97 +723,88 @@ const AddCustomer: React.FC = () => {
       <Breadcrumb pageName={isEditMode ? 'Edit Customer Profile' : 'New Customer Registration'} />
 
       {/* 2. Header Action Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-boxdark p-5 rounded-2xl border border-stroke dark:border-strokedark shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={handleNavigateToList}
-            className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition shadow-xs cursor-pointer"
-            title="Back to Customer List"
-          >
-            <MdArrowBack size={20} />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-lg text-slate-900 dark:text-white">
-                {isEditMode ? `Edit Profile: ${editData?.customerName || editData?.customername || editData?.customer_name || editData?.name || 'Customer'}` : 'Add New Customer'}
-              </h3>
-              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                isEditMode 
-                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' 
-                  : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
-              }`}>
-                {isEditMode ? 'EDIT MODE' : 'NEW REGISTRATION'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Enter customer commercial profile, contact information, and accounting ledger credentials
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          <button
-            type="button"
-            onClick={handleNavigateToList}
-            className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <MdPeople size={16} />
-            <span>Customer Directory</span>
-          </button>
-        </div>
-      </div>
+      <CustomerHeaderBanner
+        isEditMode={isEditMode}
+        customerName={
+          editData?.customerName || editData?.customername || editData?.customer_name || editData?.name
+        }
+        onNavigateToList={handleNavigateToList}
+      />
 
       {/* 3. Main Form Canvas */}
       <Formik
-        initialValues={editData ? {
-          ...editData,
-          customerName: editData.customerName || editData.customername || editData.customer_name || editData.name || '',
-          customer_code: editData.customer_code || editData.customerCode || editData.coa_code || '',
-          page_no: editData.page_no || editData.pageNo || editData.page_number || '',
-          registrationType: editData.registrationType || editData.registrationtype || '',
-          subArea: initialLoc.subArea,
-          city: initialLoc.subArea,
-          area: initialLoc.area,
-          primaryPhone: editData.primaryPhone || editData.phone || '',
-          secondaryPhone: editData.secondaryPhone || '',
-          email: editData.email || '',
-          address: editData.address || '',
-          province: editData.province || 'Sindh',
-          company: editData.company || '',
-          website: editData.website || '',
-          notes: editData.notes || '',
-          followUpDate: editData.followUpDate || '',
-          openingBalance: editData.opening_balance !== undefined && editData.opening_balance !== null && editData.opening_balance !== ''
-            ? Math.abs(Number(editData.opening_balance))
-            : (editData.currentBalance !== undefined && editData.currentBalance !== null && editData.currentBalance !== ''
-                ? Math.abs(Number(editData.currentBalance))
-                : (editData.balance !== undefined && editData.balance !== null && editData.balance !== '' ? Math.abs(Number(editData.balance)) : '')),
-          balanceNature: editData.balance_nature || editData.balanceNature || ((editData.currentBalance && Number(editData.currentBalance) < 0) || (editData.balance && Number(editData.balance) < 0) ? 'Credit' : 'Debit'),
-          openingBalanceDate: existingOBDate || editData.opening_balance_date || editData.openingBalanceDate || (editData.created_at ? editData.created_at.split('T')[0] : new Date().toISOString().split('T')[0])
-        } : {
-          customerName: '',
-          subArea: '',
-          area: '',
-          customer_code: suggestedCode || '',
-          page_no: '',
-          registrationType: '',
-          primaryPhone: '',
-          secondaryPhone: '',
-          email: '',
-          address: '',
-          province: 'Sindh',
-          company: '',
-          website: '',
-          ntnNo: '',
-          cnicNo: '',
-          stRegNo: '',
-          notes: '',
-          followUpDate: '',
-          openingBalance: '',
-          balanceNature: 'Debit',
-          openingBalanceDate: new Date().toISOString().split('T')[0]
-        }}
+        initialValues={
+          editData
+            ? {
+                ...editData,
+                customerName:
+                  editData.customerName || editData.customername || editData.customer_name || editData.name || '',
+                customer_code: editData.customer_code || editData.customerCode || editData.coa_code || '',
+                page_no: editData.page_no || editData.pageNo || editData.page_number || '',
+                registrationType: editData.registrationType || editData.registrationtype || '',
+                subArea: initialLoc.subArea,
+                city: initialLoc.subArea,
+                area: initialLoc.area,
+                primaryPhone: editData.primaryPhone || editData.phone || '',
+                secondaryPhone: editData.secondaryPhone || '',
+                email: editData.email || '',
+                address: editData.address || '',
+                province: editData.province || 'Sindh',
+                company: editData.company || '',
+                website: editData.website || '',
+                notes: editData.notes || '',
+                followUpDate: editData.followUpDate || '',
+                openingBalance:
+                  editData.opening_balance !== undefined &&
+                  editData.opening_balance !== null &&
+                  editData.opening_balance !== ''
+                    ? Math.abs(Number(editData.opening_balance))
+                    : editData.currentBalance !== undefined &&
+                      editData.currentBalance !== null &&
+                      editData.currentBalance !== ''
+                    ? Math.abs(Number(editData.currentBalance))
+                    : editData.balance !== undefined && editData.balance !== null && editData.balance !== ''
+                    ? Math.abs(Number(editData.balance))
+                    : '',
+                balanceNature:
+                  editData.balance_nature ||
+                  editData.balanceNature ||
+                  ((editData.currentBalance && Number(editData.currentBalance) < 0) ||
+                  (editData.balance && Number(editData.balance) < 0)
+                    ? 'Credit'
+                    : 'Debit'),
+                openingBalanceDate:
+                  existingOBDate ||
+                  editData.opening_balance_date ||
+                  editData.openingBalanceDate ||
+                  (editData.created_at
+                    ? editData.created_at.split('T')[0]
+                    : new Date().toISOString().split('T')[0])
+              }
+            : {
+                customerName: '',
+                subArea: '',
+                area: '',
+                customer_code: suggestedCode || '',
+                page_no: '',
+                registrationType: '',
+                primaryPhone: '',
+                secondaryPhone: '',
+                email: '',
+                address: '',
+                province: 'Sindh',
+                company: '',
+                website: '',
+                ntnNo: '',
+                cnicNo: '',
+                stRegNo: '',
+                notes: '',
+                followUpDate: '',
+                openingBalance: '',
+                balanceNature: 'Debit',
+                openingBalanceDate: new Date().toISOString().split('T')[0]
+              }
+        }
         enableReinitialize={true}
         validationSchema={validationSchema}
         onSubmit={handleSubmit}
@@ -956,593 +819,86 @@ const AddCustomer: React.FC = () => {
               }
             }}
           >
-
             {/* Step Wizard Tabs Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded-2xl border border-stroke dark:border-strokedark">
-              <button
-                type="button"
-                onClick={() => setActiveTab(1)}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeTab === 1
-                    ? 'bg-white dark:bg-boxdark text-primary shadow-xs border border-stroke dark:border-strokedark'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  activeTab === 1 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                }`}>1</span>
-                <span className="truncate">{isRTL ? 'شناخت' : 'Identity'}</span>
-              </button>
+            <CustomerStepTabs activeTab={activeTab} setActiveTab={setActiveTab} isRTL={isRTL} />
 
-              <button
-                type="button"
-                onClick={() => setActiveTab(2)}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeTab === 2
-                    ? 'bg-white dark:bg-boxdark text-primary shadow-xs border border-stroke dark:border-strokedark'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  activeTab === 2 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                }`}>2</span>
-                <span className="truncate">{isRTL ? 'پتہ اور رابطہ' : 'Contact & Address'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab(3)}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeTab === 3
-                    ? 'bg-white dark:bg-boxdark text-primary shadow-xs border border-stroke dark:border-strokedark'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  activeTab === 3 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                }`}>3</span>
-                <span className="truncate">{isRTL ? 'کھاتہ اور لیجر' : 'Account & Ledger'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab(4)}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeTab === 4
-                    ? 'bg-white dark:bg-boxdark text-primary shadow-xs border border-stroke dark:border-strokedark'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  activeTab === 4 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                }`}>4</span>
-                <span className="truncate">{isRTL ? 'ٹیکس اور قانونی' : 'Tax & Legal'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab(5)}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  activeTab === 5
-                    ? 'bg-white dark:bg-boxdark text-primary shadow-xs border border-stroke dark:border-strokedark'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  activeTab === 5 ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                }`}>5</span>
-                <span className="truncate">{isRTL ? 'فالو اپ نوٹس' : 'Follow-up Notes'}</span>
-              </button>
-            </div>
-            
-            {/* Card 1: Core Business Profile & Classification */}
+            {/* Step 1: Customer Identity & Classification */}
             {activeTab === 1 && (
-              <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-6 space-y-5 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between border-b border-stroke dark:border-strokedark pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="p-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 rounded-lg">
-                      <MdPerson size={18} />
-                    </span>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                        1. Customer Identity & Classification
-                      </h4>
-                      <p className="text-[11px] text-slate-500">Official business name and classification tier</p>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-semibold text-slate-400">* Required Fields</span>
-                </div>
-
-                <div className="space-y-5">
-                  {/* Customer Name */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Customer / Business Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="customerName"
-                      onChange={handleChange}
-                      value={values.customerName}
-                      placeholder="e.g. Haji Muhammad / Al-Madina Cloth House"
-                      className={`w-full rounded-xl border bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-3 text-xs font-semibold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:ring-2 focus:ring-primary/20 ${
-                        touched.customerName && errors.customerName 
-                          ? 'border-red-500 focus:border-red-500' 
-                          : 'border-stroke dark:border-strokedark focus:border-primary'
-                      }`}
-                    />
-                    {touched.customerName && errors.customerName ? (
-                      <p className="text-red-500 text-[11px] mt-1 flex items-center gap-1">
-                        <MdInfoOutline size={12} /> {errors.customerName as string}
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        Must be unique per business entity to prevent duplicate ledger postings
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Customer Category / Tier (Searchable + Addable) */}
-                  <div>
-                    <SearchableAddableDropdown
-                      label="Customer Tier / Category"
-                      placeholder="Customer Tier / Category"
-                      icon={<MdTag className="text-primary text-sm" />}
-                      value={values.registrationType || ''}
-                      onChange={(val) => setFieldValue('registrationType', val || '')}
-                      onAddNew={(newTier) => {
-                        handleAddCustomTier(newTier);
-                        setFieldValue('registrationType', newTier);
-                      }}
-                      options={tierOptions}
-                      helperText="Select or type a new Customer Tier / Category (navigate with ↑ ↓ and Enter ↵)"
-                    />
-                  </div>
-                </div>
-              </div>
+              <CustomerIdentityTab
+                values={values}
+                errors={errors}
+                touched={touched}
+                handleChange={handleChange}
+                setFieldValue={setFieldValue}
+                tierOptions={tierOptions}
+                onAddCustomTier={handleAddCustomTier}
+              />
             )}
 
-            {/* Card 2: Contact Information & Location */}
+            {/* Step 2: Contact Information & Location */}
             {activeTab === 2 && (
-              <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-6 space-y-5 animate-in fade-in duration-150">
-                <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark pb-3">
-                  <span className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-lg">
-                    <MdPhone size={18} />
-                  </span>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                      2. Contact Information & Delivery Location
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Phone numbers, WhatsApp communication, and physical shipping address</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* Primary Phone */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Primary Contact Phone <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="primaryPhone"
-                      onChange={handleChange}
-                      value={values.primaryPhone}
-                      placeholder="0300-1234567"
-                      className={`w-full rounded-xl border bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono font-medium outline-none transition focus:bg-white dark:focus:bg-boxdark focus:ring-2 focus:ring-primary/20 ${
-                        touched.primaryPhone && errors.primaryPhone 
-                          ? 'border-red-500 focus:border-red-500' 
-                          : 'border-stroke dark:border-strokedark focus:border-primary'
-                      }`}
-                    />
-                    {touched.primaryPhone && errors.primaryPhone && (
-                      <p className="text-red-500 text-[11px] mt-1 flex items-center gap-1">
-                        <MdInfoOutline size={12} /> {errors.primaryPhone as string}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Secondary Phone */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Secondary Phone / WhatsApp (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      name="secondaryPhone"
-                      onChange={handleChange}
-                      value={values.secondaryPhone || ''}
-                      placeholder="0312-7654321"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-
-                  {/* Email Address */}
-                  <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Email Address (Optional)
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      onChange={handleChange}
-                      value={values.email || ''}
-                      placeholder="customer@example.com"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-
-                  {/* City | Area Dual Dropdown in Single Unified Input */}
-                  <div className="md:col-span-2">
-                    <SubAreaAreaInput
-                      label="City | Area"
-                      subAreaValue={values.subArea || values.city || ''}
-                      areaValue={values.area || ''}
-                      onSubAreaChange={(val) => {
-                        setFieldValue('subArea', val);
-                        setFieldValue('city', val);
-                      }}
-                      onAreaChange={(val) => setFieldValue('area', val)}
-                      onSubAreaAdd={handleAddCustomSubArea}
-                      onAreaAdd={handleAddCustomArea}
-                      subAreaOptions={subAreaOptions}
-                      areaOptions={
-                        (values.subArea || values.city) && subAreaToAreasMap[values.subArea || values.city]
-                          ? subAreaToAreasMap[values.subArea || values.city]
-                          : DEFAULT_AREAS
-                      }
-                      helperText="City is required. Area is optional."
-                    />
-                  </div>
-
-                  {/* Delivery / Site Address */}
-                  <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Delivery Address / Warehouse Site
-                    </label>
-                    <textarea
-                      name="address"
-                      rows={2}
-                      onChange={handleChange}
-                      value={values.address || ''}
-                      placeholder="Shop #, Street, Plot / Area, City (e.g. Shop # 14, Ceramic Market, Saddar, Hyderabad)"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white p-3 text-xs outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                </div>
-              </div>
+              <CustomerContactTab
+                values={values}
+                errors={errors}
+                touched={touched}
+                handleChange={handleChange}
+                setFieldValue={setFieldValue}
+                subAreaOptions={subAreaOptions}
+                subAreaToAreasMap={subAreaToAreasMap}
+                onAddCustomSubArea={handleAddCustomSubArea}
+                onAddCustomArea={handleAddCustomArea}
+              />
             )}
 
-            {/* Card 3: Account & Ledger Configuration */}
+            {/* Step 3: Account & Ledger Configuration */}
             {activeTab === 3 && (
-              <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-6 space-y-5 animate-in fade-in duration-150">
-                <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark pb-3">
-                  <span className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 rounded-lg">
-                    <MdAccountBalance size={18} />
-                  </span>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                      3. Account & Ledger Configuration
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Auto-linked Chart of Accounts code, physical page number, and opening balance</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* Customer / Account Code */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                        <MdTag size={14} className="text-primary" />
-                        <span>Customer / Account Code</span>
-                      </label>
-                      {suggestedCode && (values.customer_code || suggestedCode) !== suggestedCode && (
-                        <button
-                          type="button"
-                          onClick={() => setFieldValue('customer_code', suggestedCode)}
-                          className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
-                        >
-                          Use Auto ({suggestedCode})
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      name="customer_code"
-                      onChange={handleChange}
-                      value={values.customer_code !== undefined && values.customer_code !== '' ? values.customer_code : (suggestedCode || '')}
-                      placeholder={suggestedCode || 'e.g. 2020-001'}
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono font-bold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Auto-assigned sequentially starting from 2020-001 under Chart of Accounts Customers
-                    </p>
-                  </div>
-
-                  {/* Ledger Page # (Optional) */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Ledger Page # (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      name="page_no"
-                      onChange={handleChange}
-                      value={values.page_no || ''}
-                      placeholder="e.g. 142 or Pg-25"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Physical ledger book reference number for traditional paper accounting cross-checks
-                    </p>
-                  </div>
-
-                  {/* Opening Balance (PKR) */}
-                  <div>
-                    <label className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
-                      <span className="flex items-center gap-1.5">
-                        <MdAccountBalance className="text-primary text-sm" />
-                        <span>Opening Balance (PKR)</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-normal">Optional</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="openingBalance"
-                      onChange={handleChange}
-                      value={values.openingBalance || ''}
-                      placeholder="0.00"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono font-bold outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Initial balance owed by customer or advance held
-                    </p>
-                  </div>
-
-                  {/* Opening Balance Date */}
-                  <div>
-                    <label className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
-                      <span className="flex items-center gap-1.5">
-                        <MdCalendarToday className="text-primary text-sm" />
-                        <span>Opening Balance Date</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-normal">Effective Date</span>
-                    </label>
-                    <input
-                      type="date"
-                      name="openingBalanceDate"
-                      onChange={handleChange}
-                      value={values.openingBalanceDate || ''}
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Date assigned to Opening Balance journal voucher in ledger statements
-                    </p>
-                  </div>
-
-                  {/* Balance Nature */}
-                  <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Balance Nature:
-                    </label>
-                    <div className="flex items-center gap-3 pt-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setFieldValue('balanceNature', 'Debit')}
-                        className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
-                          (values.balanceNature || 'Debit') === 'Debit'
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                            : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-stroke dark:border-strokedark hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        {(values.balanceNature || 'Debit') === 'Debit' && <MdCheckCircle size={14} />}
-                        <span>Debit (Dr - Receivable)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setFieldValue('balanceNature', 'Credit')}
-                        className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
-                          values.balanceNature === 'Credit'
-                            ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
-                            : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-stroke dark:border-strokedark hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        {values.balanceNature === 'Credit' && <MdCheckCircle size={14} />}
-                        <span>Credit (Cr - Advance)</span>
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1.5">
-                      {(values.balanceNature || 'Debit') === 'Debit'
-                        ? 'Customer owes this amount (Receivable)'
-                        : 'Customer paid advance / excess credit (Payable)'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <CustomerAccountTab
+                values={values}
+                handleChange={handleChange}
+                setFieldValue={setFieldValue}
+                suggestedCode={suggestedCode}
+              />
             )}
 
-            {/* Card 4: Taxation & Legal Identifiers */}
-            {activeTab === 4 && (
-              <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-6 space-y-5 animate-in fade-in duration-150">
-                <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark pb-3">
-                  <span className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-lg">
-                    <MdReceipt size={18} />
-                  </span>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                      4. Taxation & Legal Identifiers
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Corporate tax filings, NTN, CNIC, and STRN credentials</p>
-                  </div>
-                </div>
+            {/* Step 4: Taxation & Legal Identifiers */}
+            {activeTab === 4 && <CustomerTaxTab values={values} handleChange={handleChange} />}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* CNIC No */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      CNIC No. (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      name="cnicNo"
-                      onChange={handleChange}
-                      value={values.cnicNo || ''}
-                      placeholder="41303-1234567-1"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
+            {/* Step 5: CRM Follow-Up & Remarks */}
+            {activeTab === 5 && <CustomerNotesTab values={values} handleChange={handleChange} />}
 
-                  {/* NTN No */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      NTN No. (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      name="ntnNo"
-                      onChange={handleChange}
-                      value={values.ntnNo || ''}
-                      placeholder="1234567-8"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-
-                  {/* STRN No */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Sales Tax STRN (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      name="stRegNo"
-                      onChange={handleChange}
-                      value={values.stRegNo || ''}
-                      placeholder="17-00-1234-567-89"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs font-mono outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Card 5: CRM Follow-Up & Remarks */}
-            {activeTab === 5 && (
-              <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-6 space-y-5 animate-in fade-in duration-150">
-                <div className="flex items-center gap-2 border-b border-stroke dark:border-strokedark pb-3">
-                  <span className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 rounded-lg">
-                    <MdNotes size={18} />
-                  </span>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                      5. Follow-up & Relationship Notes
-                    </h4>
-                    <p className="text-[11px] text-slate-500">Scheduled reminders and customer-specific preferences</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                      <MdCalendarToday size={14} className="text-amber-600" />
-                      <span>Next Follow-up Date</span>
-                    </label>
-                    <input
-                      type="date"
-                      name="followUpDate"
-                      onChange={handleChange}
-                      value={values.followUpDate || ''}
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Internal CRM Notes & Payment Terms
-                    </label>
-                    <input
-                      type="text"
-                      name="notes"
-                      onChange={handleChange}
-                      value={values.notes || ''}
-                      placeholder="e.g. Standard credit limit 15 days, preferred delivery by truck"
-                      className="w-full rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-boxdark text-slate-900 dark:text-white px-4 py-2.5 text-xs outline-none transition focus:bg-white dark:focus:bg-boxdark focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Bottom Actions Bar */}
-            <div className="flex items-center justify-between pt-4 border-t border-stroke dark:border-strokedark">
-              <div>
-                {activeTab > 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab(prev => Math.max(1, prev - 1))}
-                    className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition shadow-xs cursor-pointer flex items-center gap-1.5"
-                  >
-                    <MdArrowBack size={16} />
-                    <span>Previous Step</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleNavigateToList}
-                    className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition shadow-xs cursor-pointer"
-                  >
-                    {isRTL ? 'منسوخ' : 'Cancel'}
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                {activeTab < 5 ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeTab === 1 && !values.customerName?.trim()) {
-                        toast.error(isRTL ? 'کسٹمر کا نام درج کرنا ضروری ہے (مرحلہ 1)' : 'Customer / Business Name is required (Step 1)');
-                        return;
-                      }
-                      if (activeTab === 2 && !values.primaryPhone?.trim()) {
-                        toast.error(isRTL ? 'فون نمبر درج کرنا ضروری ہے (مرحلہ 2)' : 'Primary Contact Phone is required (Step 2)');
-                        return;
-                      }
-                      setActiveTab(prev => Math.min(5, prev + 1));
-                    }}
-                    className="px-6 py-2.5 rounded-xl bg-primary hover:opacity-90 text-white font-bold text-xs transition shadow-md cursor-pointer flex items-center gap-1.5"
-                  >
-                    <span>{isRTL ? 'اگلا مرحلہ' : 'Next Step'}</span>
-                    <MdArrowForward size={16} className={isRTL ? 'rotate-180' : ''} />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => {
-                      if (validateRequiredFields(values)) {
-                        handleSubmit(values);
-                      }
-                    }}
-                    className="px-8 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs transition shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <Spinner color="border-white" size="w-4 h-4" />
-                        <span>{isRTL ? 'محفوظ ہو رہا ہے...' : 'Saving Profile...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <MdSave size={16} />
-                        <span>{isRTL ? (isEditMode ? 'کسٹمر میں ترمیم محفوظ کریں' : 'کسٹمر محفوظ کریں') : (isEditMode ? 'Update Customer Profile' : 'Save Customer Profile')}</span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
-
+            {/* Bottom Stepper Actions Bar */}
+            <CustomerStepperActions
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              isEditMode={isEditMode}
+              loading={loading}
+              isRTL={isRTL}
+              onCancel={handleNavigateToList}
+              onNext={() => {
+                if (activeTab === 1 && !values.customerName?.trim()) {
+                  toast.error(
+                    isRTL
+                      ? 'کسٹمر کا نام درج کرنا ضروری ہے (مرحلہ 1)'
+                      : 'Customer / Business Name is required (Step 1)'
+                  );
+                  return;
+                }
+                if (activeTab === 2 && !values.primaryPhone?.trim()) {
+                  toast.error(
+                    isRTL
+                      ? 'فون نمبر درج کرنا ضروری ہے (مرحلہ 2)'
+                      : 'Primary Contact Phone is required (Step 2)'
+                  );
+                  return;
+                }
+                setActiveTab((prev) => Math.min(5, prev + 1));
+              }}
+              onSubmit={() => {
+                if (validateRequiredFields(values)) {
+                  handleSubmit(values);
+                }
+              }}
+            />
           </Form>
         )}
       </Formik>

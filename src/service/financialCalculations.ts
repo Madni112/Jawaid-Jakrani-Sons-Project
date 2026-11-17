@@ -1,64 +1,16 @@
 import { supabase, fetchAllPages } from '../Context/supabaseClient';
+import { BankBalanceItem, TopStockProduct, FinancialSummary } from './financial/types';
+import { recalculateInvoiceSettlementStatus } from './financial/invoiceSettlement';
+import { calculateCashAndBankFlows } from './financial/cashAndBankCalculations';
+import { calculateReceivablesAndPayables } from './financial/receivablesAndPayables';
+import {
+  calculateInventoryValuationAndTrends,
+  calculateFinancialTrends
+} from './financial/inventoryValuation';
 
-export interface BankBalanceItem {
-  id: string | number;
-  bankName: string;
-  accountTitle: string;
-  accountNumber?: string;
-  openingBalance: number;
-  totalInflow: number;
-  totalOutflow: number;
-  netBalance: number;
-}
-
-export interface TopStockProduct {
-  id: string | number;
-  name: string;
-  qty: number;
-  unitPrice: number;
-  totalValuation: number;
-}
-
-export interface FinancialSummary {
-  baseOpeningStockValue: number;
-  totalPurchasesStockVal: number;
-  totalSalesStockVal: number;
-  totalSalesReturnsStockVal: number;
-  totalPurchaseReturnsStockVal: number;
-  totalStockUnits: number;
-  topStockProducts: TopStockProduct[];
-  cashBalance: number;
-  totalCashInflow: number;
-  totalCashOutflow: number;
-  thisMonthCashInflow: number;
-  thisMonthCashOutflow: number;
-  totalBankBalance: number;
-  thisMonthBankInflow: number;
-  thisMonthBankOutflow: number;
-  bankAccounts: BankBalanceItem[];
-  todaysSales: number;
-  thisMonthSales: number;
-  thisMonthPurchases: number;
-  totalReceivables: number;
-  thisMonthReceivables: number;
-  totalGrossReceivables: number;
-  totalCustomerRecovered: number;
-  totalPayables: number;
-  thisMonthPayables: number;
-  totalGrossPayables: number;
-  totalVendorDisbursed: number;
-  inventoryAssetValue: number;
-  monthOpeningStockValue: number;
-  thisMonthStockInflowVal: number;
-  thisMonthStockOutflowVal: number;
-  thisMonthStockMovement: number;
-  totalAssets: number;
-  thisMonthAssets: number;
-  totalLiabilities: number;
-  totalEquity: number;
-  monthlySalesTrend: { month: string; sales: number; purchases: number }[];
-  cashFlowTrend: { month: string; inflow: number; outflow: number }[];
-}
+// Re-export types and standalone helper functions
+export type { BankBalanceItem, TopStockProduct, FinancialSummary };
+export { recalculateInvoiceSettlementStatus };
 
 export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
   try {
@@ -89,8 +41,7 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       productsRes,
       customerReceiptsRes,
       openStocksRes,
-      customersRes,
-      dynamicStockRes
+      customersRes
     ] = await Promise.allSettled([
       fetchAllPages(supabase.from('sales_invoices').select('*')),
       fetchAllPages(supabase.from('supplier_purchases').select('*')),
@@ -103,24 +54,56 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       fetchAllPages(supabase.from('products').select('*')),
       fetchAllPages(supabase.from('customer_recoveries').select('*')),
       fetchAllPages(supabase.from('opening_stocks').select('*')),
-      fetchAllPages(supabase.from('customers').select('*')),
-      supabase.rpc('calculate_dynamic_stock_by_location', { p_location: 'All', p_start_date: startOfCurrentMonthStr, p_end_date: null })
+      fetchAllPages(supabase.from('customers').select('*'))
     ]);
 
-    const invoicesList = (salesInvoicesRes.status === 'fulfilled' && Array.isArray(salesInvoicesRes.value.data)) ? salesInvoicesRes.value.data : [];
-    const purchasesList = (supplierPurchasesRes.status === 'fulfilled' && Array.isArray(supplierPurchasesRes.value.data)) ? supplierPurchasesRes.value.data : [];
-    const salesReturnsList = (salesReturnsRes.status === 'fulfilled' && Array.isArray(salesReturnsRes.value.data)) ? salesReturnsRes.value.data : [];
-    const salesReturnRecList = (salesReturnReceiptsRes.status === 'fulfilled' && Array.isArray(salesReturnReceiptsRes.value.data)) ? salesReturnReceiptsRes.value.data : [];
-    const purchaseReturnsList = (purchaseReturnsRes.status === 'fulfilled' && Array.isArray(purchaseReturnsRes.value.data)) ? purchaseReturnsRes.value.data : [];
-    const purchaseReturnRecList = (purchaseReturnReceiptsRes.status === 'fulfilled' && Array.isArray(purchaseReturnReceiptsRes.value.data)) ? purchaseReturnReceiptsRes.value.data : [];
-    const vouchersList = (vouchersRes.status === 'fulfilled' && Array.isArray(vouchersRes.value.data)) ? vouchersRes.value.data : [];
-    const banksList = (banksRes.status === 'fulfilled' && Array.isArray(banksRes.value.data)) ? banksRes.value.data : [];
-
-    const productsList = (productsRes.status === 'fulfilled' && Array.isArray(productsRes.value.data)) ? productsRes.value.data : [];
-    const customerRecList = (customerReceiptsRes.status === 'fulfilled' && Array.isArray(customerReceiptsRes.value.data)) ? customerReceiptsRes.value.data : [];
-    const openStocksList = (openStocksRes.status === 'fulfilled' && Array.isArray(openStocksRes.value.data)) ? openStocksRes.value.data : [];
-    const customersList = (customersRes.status === 'fulfilled' && Array.isArray(customersRes.value.data)) ? customersRes.value.data : [];
-    const dynamicStockList = (dynamicStockRes.status === 'fulfilled' && Array.isArray(dynamicStockRes.value.data)) ? dynamicStockRes.value.data : [];
+    const invoicesList =
+      salesInvoicesRes.status === 'fulfilled' && Array.isArray(salesInvoicesRes.value.data)
+        ? salesInvoicesRes.value.data
+        : [];
+    const purchasesList =
+      supplierPurchasesRes.status === 'fulfilled' && Array.isArray(supplierPurchasesRes.value.data)
+        ? supplierPurchasesRes.value.data
+        : [];
+    const salesReturnsList =
+      salesReturnsRes.status === 'fulfilled' && Array.isArray(salesReturnsRes.value.data)
+        ? salesReturnsRes.value.data
+        : [];
+    const salesReturnRecList =
+      salesReturnReceiptsRes.status === 'fulfilled' && Array.isArray(salesReturnReceiptsRes.value.data)
+        ? salesReturnReceiptsRes.value.data
+        : [];
+    const purchaseReturnsList =
+      purchaseReturnsRes.status === 'fulfilled' && Array.isArray(purchaseReturnsRes.value.data)
+        ? purchaseReturnsRes.value.data
+        : [];
+    const purchaseReturnRecList =
+      purchaseReturnReceiptsRes.status === 'fulfilled' &&
+      Array.isArray(purchaseReturnReceiptsRes.value.data)
+        ? purchaseReturnReceiptsRes.value.data
+        : [];
+    const vouchersList =
+      vouchersRes.status === 'fulfilled' && Array.isArray(vouchersRes.value.data)
+        ? vouchersRes.value.data
+        : [];
+    const banksList =
+      banksRes.status === 'fulfilled' && Array.isArray(banksRes.value.data) ? banksRes.value.data : [];
+    const productsList =
+      productsRes.status === 'fulfilled' && Array.isArray(productsRes.value.data)
+        ? productsRes.value.data
+        : [];
+    const customerRecList =
+      customerReceiptsRes.status === 'fulfilled' && Array.isArray(customerReceiptsRes.value.data)
+        ? customerReceiptsRes.value.data
+        : [];
+    const openStocksList =
+      openStocksRes.status === 'fulfilled' && Array.isArray(openStocksRes.value.data)
+        ? openStocksRes.value.data
+        : [];
+    const customersList =
+      customersRes.status === 'fulfilled' && Array.isArray(customersRes.value.data)
+        ? customersRes.value.data
+        : [];
 
     // --- 2. Calculate Today's & Monthly Net Sales & Purchases ---
     let todaysSales = 0;
@@ -142,7 +125,6 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       }
     });
 
-    // Deduct Sales Returns from Net Sales Metrics
     salesReturnsList.forEach((ret: any) => {
       const retAmt = Number(ret.total_amount || ret.total_net_amount || 0);
       const retDateStr = String(ret.created_at || ret.return_date || '').split('T')[0];
@@ -174,7 +156,6 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       }
     });
 
-    // Deduct Purchase Returns from Net Monthly Purchases
     purchaseReturnsList.forEach((pret: any) => {
       const pretAmt = Number(pret.total_amount || pret.total_net_amount || 0);
       const pretDateStr = String(pret.created_at || pret.return_date || '').split('T')[0];
@@ -187,638 +168,95 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     });
     thisMonthPurchases = Math.max(0, thisMonthPurchases);
 
-    // --- 3. Calculate Cash Balance (App Cash Drawer Liquidity) ---
-    let cashInflow = 0;
-    let cashOutflow = 0;
-    let thisMonthCashInflow = 0;
-    let thisMonthCashOutflow = 0;
-
-    // 1. Upfront Cash Received on Sales Invoices
-    const paidInvoicesMap = new Map<string, { total: number; cashPaid: number; isThisMonth: boolean }>();
-    invoicesList.forEach((inv: any) => {
-      const paid = Number(inv.cash_amount_paid || inv.amount_paid || 0);
-      const tot = Number(inv.total_amount || 0);
-      const invId = String(inv.id).trim().toLowerCase();
-      const invDate = inv.created_at || inv.invoice_date;
-      const invInThisMonth = isThisMonth(invDate);
-
-      paidInvoicesMap.set(invId, { total: tot, cashPaid: paid, isThisMonth: invInThisMonth });
-      paidInvoicesMap.set(`inv-${invId}`, { total: tot, cashPaid: paid, isThisMonth: invInThisMonth });
-
-      if (inv.settlement_mode === 'Cash' || inv.payment_mode === 'Cash') {
-        const receivedAmt = paid || tot;
-        cashInflow += receivedAmt;
-        if (invInThisMonth) thisMonthCashInflow += receivedAmt;
-      } else if (paid > 0) {
-        cashInflow += paid;
-        if (invInThisMonth) thisMonthCashInflow += paid;
-      }
+    // --- 3. Cash and Bank Balances ---
+    const cashBankResult = calculateCashAndBankFlows({
+      invoicesList,
+      purchasesList,
+      salesReturnsList,
+      salesReturnRecList,
+      purchaseReturnsList,
+      purchaseReturnRecList,
+      vouchersList,
+      banksList,
+      customerRecList,
+      isThisMonth
     });
 
-    // 2. Financial Vouchers (Subsequent Customer Receipts / General Cash Inflows)
-    vouchersList.forEach((v: any) => {
-      const amt = Number(v.total_amount || v.amount || 0);
-      const mode = String(v.mode_of_payment || v.payment_mode || v.voucher_type || '');
-      const isReceipt = String(v.voucher_type || '').toLowerCase().includes('receipt');
-      const isPayment = String(v.voucher_type || '').toLowerCase().includes('payment');
-      const vDate = v.created_at || v.voucher_date || v.date;
-      const vInThisMonth = isThisMonth(vDate);
-
-      if (!mode.toLowerCase().includes('bank')) {
-        if (isReceipt) {
-          const cleanRef = String(v.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
-          const targetInv = cleanRef ? paidInvoicesMap.get(cleanRef) : null;
-          // If voucher is linked to an invoice that was ALREADY 100% paid upfront in cash, do not double-add
-          if (targetInv && targetInv.cashPaid >= targetInv.total) {
-            return;
-          }
-          cashInflow += amt;
-          if (vInThisMonth) thisMonthCashInflow += amt;
-        }
-        if (isPayment) {
-          cashOutflow += amt;
-          if (vInThisMonth) thisMonthCashOutflow += amt;
-        }
-      }
+    // --- 4. Receivables and Payables ---
+    const recPayResult = calculateReceivablesAndPayables({
+      invoicesList,
+      purchasesList,
+      salesReturnsList,
+      purchaseReturnsList,
+      vouchersList,
+      customersList,
+      isThisMonth
     });
 
-    // 3. Customer Cash Recoveries (Unlinked)
-    customerRecList.forEach((rec: any) => {
-      if (rec.deposit_mode === 'Cash' || rec.payment_mode === 'Cash' || !rec.deposit_mode) {
-        const invRef = String(rec.invoice_id || rec.invoice_no || '').replace('INV-', '').trim().toLowerCase();
-        const targetInv = invRef ? paidInvoicesMap.get(invRef) : null;
-        if (targetInv && targetInv.cashPaid >= targetInv.total) {
-          return;
-        }
-        const recAmt = Number(rec.net_collected_amount || rec.amount_paid || rec.amount || 0);
-        cashInflow += recAmt;
-        if (isThisMonth(rec.created_at || rec.recovery_date || rec.date)) {
-          thisMonthCashInflow += recAmt;
-        }
-      }
+    // --- 5. Inventory Asset Valuation ---
+    const inventoryResult = calculateInventoryValuationAndTrends({
+      productsList,
+      openStocksList,
+      purchasesList,
+      invoicesList,
+      salesReturnsList,
+      purchaseReturnsList,
+      startOfCurrentMonthStr
     });
-
-    // Cash Purchases Outflow
-    purchasesList.forEach((pur: any) => {
-      const paid = Number(pur.amount_paid_now || pur.paid_amount || 0);
-      const purDate = pur.created_at || pur.purchase_date;
-      const purInThisMonth = isThisMonth(purDate);
-
-      if (pur.payment_mode === 'Cash' || pur.settlement_mode === 'Cash') {
-        const outAmt = paid || Number(pur.total_amount || 0);
-        cashOutflow += outAmt;
-        if (purInThisMonth) thisMonthCashOutflow += outAmt;
-      } else if (paid > 0 && pur.payment_mode !== 'Bank') {
-        cashOutflow += paid;
-        if (purInThisMonth) thisMonthCashOutflow += paid;
-      }
-    });
-
-    // Sales Return Receipts Cash Outflow
-    salesReturnRecList.forEach((srec: any) => {
-      if (srec.settlement_mode === 'Cash') {
-        const sAmt = Number(srec.amount_paid || 0);
-        cashOutflow += sAmt;
-        if (isThisMonth(srec.created_at || srec.receipt_date || srec.date)) {
-          thisMonthCashOutflow += sAmt;
-        }
-      }
-    });
-
-    // Purchase Return Receipts Cash Inflow
-    purchaseReturnRecList.forEach((prec: any) => {
-      if (prec.settlement_mode === 'Cash') {
-        const pAmt = Number(prec.amount_received || prec.amount_paid || 0);
-        cashInflow += pAmt;
-        if (isThisMonth(prec.created_at || prec.receipt_date || prec.date)) {
-          thisMonthCashInflow += pAmt;
-        }
-      }
-    });
-
-    // Check opening cash balances in vouchers or accounts
-    (vouchersList || []).forEach((v: any) => {
-      const amt = Number(v.total_amount || v.amount || 0);
-      const isOB = Boolean(v.metadata?.isOpeningBalance || String(v.voucher_no || '').startsWith('OB-') || String(v.voucher_no || '').startsWith('OBV-') || String(v.voucher_no || '').startsWith('OBC-'));
-      const text = `${v.voucher_no || ''} ${v.account_title || ''} ${v.customer_name || ''} ${v.party_name || ''} ${v.narration || ''} ${v.voucher_type || ''}`.toLowerCase();
-      if (isOB && text.includes('cash')) {
-        cashInflow += amt;
-        const vDate = v.voucher_date || v.created_at || v.date;
-        if (isThisMonth(vDate)) {
-          thisMonthCashInflow += amt;
-        }
-      }
-    });
-
-    const netCashBalance = cashInflow - cashOutflow;
-
-    // --- 4. Calculate Bank Balances per Corporate Bank Ledger ---
-    const bankLedgerMap: Record<string, BankBalanceItem> = {};
-    let thisMonthBankInflow = 0;
-    let thisMonthBankOutflow = 0;
-
-    banksList.forEach((b: any) => {
-      const key = String(b.accountTitle || b.bankName || b.id).trim();
-      bankLedgerMap[key] = {
-        id: b.id,
-        bankName: b.bankName || 'Bank',
-        accountTitle: b.accountTitle || key,
-        accountNumber: b.accountNumber || '',
-        openingBalance: Number(b.openingBalance || 0),
-        totalInflow: 0,
-        totalOutflow: 0,
-        netBalance: Number(b.openingBalance || 0)
-      };
-    });
-
-    // Bank Invoices
-    invoicesList.forEach((inv: any) => {
-      if (inv.settlement_mode === 'Bank' && inv.selectedBankTitle) {
-        const title = String(inv.selectedBankTitle).trim();
-        const amt = Number(inv.cash_amount_paid || inv.total_amount || 0);
-        if (!bankLedgerMap[title]) {
-          bankLedgerMap[title] = { id: title, bankName: 'Bank', accountTitle: title, openingBalance: 0, totalInflow: 0, totalOutflow: 0, netBalance: 0 };
-        }
-        bankLedgerMap[title].totalInflow += amt;
-        if (isThisMonth(inv.created_at || inv.invoice_date)) {
-          thisMonthBankInflow += amt;
-        }
-      }
-    });
-
-    // Bank Supplier Purchases
-    purchasesList.forEach((pur: any) => {
-      if ((pur.payment_mode === 'Bank' || pur.settlement_mode === 'Bank') && pur.selected_bank_title) {
-        const title = String(pur.selected_bank_title).trim();
-        const amt = Number(pur.amount_paid_now || pur.total_amount || 0);
-        if (!bankLedgerMap[title]) {
-          bankLedgerMap[title] = { id: title, bankName: 'Bank', accountTitle: title, openingBalance: 0, totalInflow: 0, totalOutflow: 0, netBalance: 0 };
-        }
-        bankLedgerMap[title].totalOutflow += amt;
-        if (isThisMonth(pur.created_at || pur.purchase_date)) {
-          thisMonthBankOutflow += amt;
-        }
-      }
-    });
-
-    // Bank Vouchers
-    vouchersList.forEach((v: any) => {
-      const bankTitle = String(v.bank_account || v.bank_title || '').trim();
-      const amt = Number(v.total_amount || 0);
-      const isReceipt = String(v.voucher_type || '').toLowerCase().includes('receipt');
-      const isPayment = String(v.voucher_type || '').toLowerCase().includes('payment');
-      const vInThisMonth = isThisMonth(v.created_at || v.voucher_date || v.date);
-
-      if (bankTitle) {
-        if (!bankLedgerMap[bankTitle]) {
-          bankLedgerMap[bankTitle] = { id: bankTitle, bankName: 'Bank', accountTitle: bankTitle, openingBalance: 0, totalInflow: 0, totalOutflow: 0, netBalance: 0 };
-        }
-        if (isReceipt) {
-          bankLedgerMap[bankTitle].totalInflow += amt;
-          if (vInThisMonth) thisMonthBankInflow += amt;
-        }
-        if (isPayment) {
-          bankLedgerMap[bankTitle].totalOutflow += amt;
-          if (vInThisMonth) thisMonthBankOutflow += amt;
-        }
-      }
-    });
-
-    // Bank Sales Return Receipts Outflow
-    salesReturnRecList.forEach((srec: any) => {
-      if (srec.settlement_mode === 'Bank' && srec.bank_account_title) {
-        const title = String(srec.bank_account_title).trim();
-        const amt = Number(srec.amount_paid || 0);
-        if (!bankLedgerMap[title]) {
-          bankLedgerMap[title] = { id: title, bankName: 'Bank', accountTitle: title, openingBalance: 0, totalInflow: 0, totalOutflow: 0, netBalance: 0 };
-        }
-        bankLedgerMap[title].totalOutflow += amt;
-        if (isThisMonth(srec.created_at || srec.receipt_date || srec.date)) {
-          thisMonthBankOutflow += amt;
-        }
-      }
-    });
-
-    const bankAccountsList = Object.values(bankLedgerMap).map(b => {
-      b.netBalance = b.openingBalance + b.totalInflow - b.totalOutflow;
-      return b;
-    });
-
-    const totalBankBalance = bankAccountsList.reduce((acc, b) => acc + b.netBalance, 0);
-
-    // --- 5. True Net Receivables, Payables, Inventory Asset Value ---
-    let totalReceivables = 0;
-    let thisMonthReceivables = 0;
-
-    // 1. Customer opening balances from vouchers & customers table
-    const customerOpeningMap: Record<string, number> = {};
-    (vouchersList || []).forEach((v: any) => {
-      const vNo = String(v.voucher_no || '');
-      const isOB = Boolean(v.metadata?.isOpeningBalance || vNo.startsWith('OB-'));
-      const isCustomerOB = isOB && (v.metadata?.preset === 'SAV' || (vNo.startsWith('OB-') && !vNo.startsWith('OBV-') && !vNo.startsWith('OBC-')));
-      if (isCustomerOB && !v.metadata?.isCash) {
-        const cName = (v.customer_name || v.customerName || v.party_name || '').trim().toLowerCase();
-        if (cName && !cName.includes('cash')) {
-          customerOpeningMap[cName] = (customerOpeningMap[cName] || 0) + Number(v.total_amount || v.debit || 0);
-        }
-      }
-    });
-
-    (customersList || []).forEach((c: any) => {
-      const cName = (c.customerName || c.name || '').trim().toLowerCase();
-      const rawBal = Number(c.currentBalance !== undefined && c.currentBalance !== null && c.currentBalance !== ''
-        ? c.currentBalance
-        : (c.balance !== undefined && c.balance !== null && c.balance !== '' ? c.balance : c.opening_balance || 0));
-      const nature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
-      const isCredit = nature.includes('cr') || nature.includes('credit');
-      if (!isCredit && rawBal > 0 && !customerOpeningMap[cName]) {
-        customerOpeningMap[cName] = rawBal;
-      }
-    });
-
-    Object.values(customerOpeningMap).forEach(ob => {
-      totalReceivables += ob;
-    });
-
-    // 2. Add unpaid invoices deducting upfront and invoice-specific vouchers
-    invoicesList.forEach((inv: any) => {
-      const invIdStr = String(inv.id).trim().toLowerCase();
-      const tot = Number(inv.total_amount || 0);
-      const initialPaid = Number(inv.cash_amount_paid || inv.amount_paid || 0);
-      const invInThisMonth = isThisMonth(inv.created_at || inv.invoice_date);
-
-      // Sum returns for this specific invoice
-      const matchedReturns = salesReturnsList.filter((r: any) => {
-        const cleanRef = String(r.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
-        return cleanRef === invIdStr;
-      });
-      const returnsSum = matchedReturns.reduce((sum: number, r: any) => sum + Number(r.total_amount || r.total_net_amount || 0), 0);
-
-      // Sum vouchers for this specific invoice
-      const matchedVouchers = vouchersList.filter((v: any) => {
-        const cleanRef = String(v.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
-        const isReceipt = String(v.voucher_type || '').toLowerCase().includes('receipt');
-        return isReceipt && cleanRef === invIdStr;
-      });
-      const vouchersSum = matchedVouchers.reduce((sum: number, v: any) => sum + Number(v.total_amount || 0), 0);
-
-      const netDue = Math.max(0, tot - initialPaid - vouchersSum - returnsSum);
-      totalReceivables += netDue;
-      if (invInThisMonth) {
-        thisMonthReceivables += netDue;
-      }
-    });
-
-    // 3. Deduct standalone/general customer receipt vouchers (funds received on general customer ledger)
-    (vouchersList || []).forEach((v: any) => {
-      const isReceipt = String(v.voucher_type || '').toLowerCase().includes('receipt') || String(v.voucher_no || '').startsWith('CRV-');
-      const isUpfront = Boolean(v.metadata?.auto_generated || v.metadata?.moduleSource === 'sales_invoice');
-      if (isReceipt && !isUpfront && !v.original_invoice_no) {
-        const amt = Number(v.total_amount || 0);
-        totalReceivables = Math.max(0, totalReceivables - amt);
-        if (isThisMonth(v.created_at || v.voucher_date || v.date)) {
-          thisMonthReceivables = Math.max(0, thisMonthReceivables - amt);
-        }
-      }
-    });
-
-    let totalPayables = 0;
-    let thisMonthPayables = 0;
-
-    // 1. Vendor opening balances from vouchers
-    const vendorOpeningMap: Record<string, number> = {};
-    (vouchersList || []).forEach((v: any) => {
-      const isOB = Boolean(v.metadata?.isOpeningBalance || String(v.voucher_no || '').startsWith('OBV-'));
-      if (isOB && String(v.voucher_type || '').toLowerCase().includes('journal') && v.metadata?.preset === 'PAV') {
-        const vName = (v.customer_name || v.customerName || v.party_name || '').trim().toLowerCase();
-        if (vName) {
-          vendorOpeningMap[vName] = (vendorOpeningMap[vName] || 0) + Number(v.total_amount || 0);
-        }
-      }
-    });
-
-    Object.values(vendorOpeningMap).forEach(ob => {
-      totalPayables += ob;
-    });
-
-    // 2. Add unpaid purchases deducting upfront paid amounts
-    purchasesList.forEach((pur: any) => {
-      const purIdStr = String(pur.id).trim().toLowerCase();
-      const purNoStr = String(pur.purchase_no || '').trim().toLowerCase();
-      const tot = Number(pur.total_amount || 0);
-      const upfrontPaid = Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0) || Number(pur.amount_paid || 0);
-      const purInThisMonth = isThisMonth(pur.created_at || pur.purchase_date);
-
-      // Sum purchase returns for this specific purchase
-      const matchedPReturns = purchaseReturnsList.filter((pr: any) => {
-        const cleanRef = String(pr.purchase_no || pr.original_purchase_no || '').replace('PUR-', '').trim().toLowerCase();
-        return cleanRef === purIdStr || cleanRef === purNoStr;
-      });
-      const pReturnsSum = matchedPReturns.reduce((sum: number, pr: any) => sum + Number(pr.total_amount || 0), 0);
-
-      const netPayableDue = Math.max(0, tot - upfrontPaid - pReturnsSum);
-      totalPayables += netPayableDue;
-      if (purInThisMonth) {
-        thisMonthPayables += netPayableDue;
-      }
-    });
-
-    // 3. Deduct standalone/general payment vouchers (disbursements made from receipt page)
-    (vouchersList || []).forEach((v: any) => {
-      const isPayment = String(v.voucher_type || '').toLowerCase().includes('payment');
-      const isUpfront = Boolean(v.metadata?.auto_generated || v.metadata?.moduleSource === 'purchase_bill');
-      if (isPayment && !isUpfront) {
-        const amt = Number(v.total_amount || 0);
-        totalPayables = Math.max(0, totalPayables - amt);
-        thisMonthPayables = Math.max(0, thisMonthPayables - amt);
-      }
-    });
-
-    // Calculate Total Gross Billed vs Settled for Customers (Receivables)
-    let totalCustomerOpening = 0;
-    Object.values(customerOpeningMap).forEach(ob => {
-      totalCustomerOpening += ob;
-    });
-
-    let totalInvoicesBilled = 0;
-    invoicesList.forEach((inv: any) => {
-      totalInvoicesBilled += Number(inv.total_amount || 0);
-    });
-    salesReturnsList.forEach((ret: any) => {
-      totalInvoicesBilled = Math.max(0, totalInvoicesBilled - Number(ret.total_amount || ret.total_net_amount || 0));
-    });
-
-    const totalGrossReceivables = Math.max(totalReceivables, totalCustomerOpening + totalInvoicesBilled);
-    const totalCustomerRecovered = Math.max(0, totalGrossReceivables - totalReceivables);
-
-    // Calculate Total Gross Billed vs Settled for Vendors (Payables)
-    let totalVendorOpening = 0;
-    Object.values(vendorOpeningMap).forEach(ob => {
-      totalVendorOpening += ob;
-    });
-
-    let totalPurchasesBilled = 0;
-    purchasesList.forEach((pur: any) => {
-      totalPurchasesBilled += Number(pur.total_amount || 0);
-    });
-    purchaseReturnsList.forEach((pret: any) => {
-      totalPurchasesBilled = Math.max(0, totalPurchasesBilled - Number(pret.total_amount || pret.total_net_amount || 0));
-    });
-
-    const totalGrossPayables = Math.max(totalPayables, totalVendorOpening + totalPurchasesBilled);
-    const totalVendorDisbursed = Math.max(0, totalGrossPayables - totalPayables);
-
-    // Precise Real-Time Inventory Asset Valuation (Matched 100% with Stock Balances & Valuation Registry)
-    let inventoryAssetValue = 0;
-    let monthOpeningStockValue = 0;
-    let thisMonthStockInflowVal = 0;
-    let thisMonthStockOutflowVal = 0;
-    let thisMonthStockMovement = 0;
-
-    let baseOpeningStockValue = 0;
-    let totalPurchasesStockVal = 0;
-    let totalSalesStockVal = 0;
-    let totalSalesReturnsStockVal = 0;
-    let totalPurchaseReturnsStockVal = 0;
-    let totalStockUnits = 0;
-    const productValuationList: TopStockProduct[] = [];
-
-    const priceMap: Record<string, number> = {};
-    productsList.forEach((p: any) => {
-      const nameKey = String(p.product_name || p.name || '').trim().toLowerCase();
-      priceMap[nameKey] = Number(p.retail_price || p.sale_price || 0);
-    });
-
-    // Compute comprehensive stock valuation across all products
-    (productsList || []).forEach((p: any) => {
-      const pName = String(p.product_name || p.name || '').trim().toLowerCase();
-      const unitPrice = priceMap[pName] || Number(p.retail_price || p.sale_price || 0);
-
-      // 1. Initial Opening Stock from opening_stocks table
-      const prodOs = (openStocksList || []).filter((o: any) => String(o.product_name || o.item_name || o.itemName || '').trim().toLowerCase() === pName);
-      const osQty = prodOs.reduce((acc: number, o: any) => acc + Number(o.quantity || o.qty || 0), 0);
-
-      // 2. Purchases Prior vs This Month
-      let priorPurchases = 0;
-      let thisMonthPurchases = 0;
-      (purchasesList || []).forEach((pur: any) => {
-        const pDate = String(pur.created_at || pur.purchase_date || '').split('T')[0];
-        const items = Array.isArray(pur.items) ? pur.items : (typeof pur.items === 'string' ? JSON.parse(pur.items || '[]') : []);
-        items.forEach((it: any) => {
-          const itName = String(it.product_name || it.itemName || it.itemDetails || '').trim().toLowerCase();
-          if (itName === pName) {
-            const q = Number(it.quantity || it.qty || 0);
-            if (pDate && pDate < startOfCurrentMonthStr) {
-              priorPurchases += q;
-            } else {
-              thisMonthPurchases += q;
-            }
-          }
-        });
-      });
-
-      // 3. Sales Prior vs This Month
-      let priorSales = 0;
-      let thisMonthSales = 0;
-      (invoicesList || []).forEach((inv: any) => {
-        const iDate = String(inv.created_at || inv.sale_date || inv.invoice_date || '').split('T')[0];
-        const items = Array.isArray(inv.items) ? inv.items : (typeof inv.items === 'string' ? JSON.parse(inv.items || '[]') : []);
-        items.forEach((it: any) => {
-          const itName = String(it.product_name || it.itemName || it.pDescription || '').trim().toLowerCase();
-          if (itName === pName) {
-            const q = Number(it.qty || it.quantity || 0);
-            if (iDate && iDate < startOfCurrentMonthStr) {
-              priorSales += q;
-            } else {
-              thisMonthSales += q;
-            }
-          }
-        });
-      });
-
-      // 4. Sales Returns Prior vs This Month
-      let priorSalesReturns = 0;
-      let thisMonthSalesReturns = 0;
-      (salesReturnsList || []).forEach((sr: any) => {
-        const rDate = String(sr.created_at || sr.return_date || '').split('T')[0];
-        const items = Array.isArray(sr.items) ? sr.items : (typeof sr.items === 'string' ? JSON.parse(sr.items || '[]') : []);
-        items.forEach((it: any) => {
-          const itName = String(it.product_name || it.item_name || it.itemName || '').trim().toLowerCase();
-          if (itName === pName) {
-            const q = Number(it.quantity || it.qty || 0);
-            if (rDate && rDate < startOfCurrentMonthStr) {
-              priorSalesReturns += q;
-            } else {
-              thisMonthSalesReturns += q;
-            }
-          }
-        });
-      });
-
-      // 5. Purchase Returns Prior vs This Month
-      let priorPurchaseReturns = 0;
-      let thisMonthPurchaseReturns = 0;
-      (purchaseReturnsList || []).forEach((pr: any) => {
-        const prDate = String(pr.created_at || pr.return_date || '').split('T')[0];
-        const items = Array.isArray(pr.items) ? pr.items : (typeof pr.items === 'string' ? JSON.parse(pr.items || '[]') : []);
-        items.forEach((it: any) => {
-          const itName = String(it.product_name || it.item_name || it.itemName || '').trim().toLowerCase();
-          if (itName === pName) {
-            const q = Number(it.quantity || it.qty || 0);
-            if (prDate && prDate < startOfCurrentMonthStr) {
-              priorPurchaseReturns += q;
-            } else {
-              thisMonthPurchaseReturns += q;
-            }
-          }
-        });
-      });
-
-      // Formula: Opening Stock at month start = Initial OS + Prior In - Prior Out
-      const monthOpeningQty = osQty + priorPurchases - priorSales + priorSalesReturns - priorPurchaseReturns;
-      const netThisMonthIn = thisMonthPurchases + thisMonthSalesReturns;
-      const netThisMonthOut = thisMonthSales + thisMonthPurchaseReturns;
-      const currentPhysicalQty = monthOpeningQty + netThisMonthIn - netThisMonthOut;
-
-      // Monthly Accumulations
-      monthOpeningStockValue += (monthOpeningQty * unitPrice);
-      thisMonthStockInflowVal += (netThisMonthIn * unitPrice);
-      thisMonthStockOutflowVal += (netThisMonthOut * unitPrice);
-      inventoryAssetValue += (currentPhysicalQty * unitPrice);
-
-      // All-Time / Lifecycle Accumulations
-      baseOpeningStockValue += (osQty * unitPrice);
-      totalPurchasesStockVal += ((priorPurchases + thisMonthPurchases) * unitPrice);
-      totalSalesStockVal += ((priorSales + thisMonthSales) * unitPrice);
-      totalSalesReturnsStockVal += ((priorSalesReturns + thisMonthSalesReturns) * unitPrice);
-      totalPurchaseReturnsStockVal += ((priorPurchaseReturns + thisMonthPurchaseReturns) * unitPrice);
-      totalStockUnits += currentPhysicalQty;
-
-      if (currentPhysicalQty > 0) {
-        productValuationList.push({
-          id: p.id || pName,
-          name: p.product_name || pName,
-          qty: currentPhysicalQty,
-          unitPrice,
-          totalValuation: currentPhysicalQty * unitPrice
-        });
-      }
-    });
-
-    thisMonthStockMovement = thisMonthStockInflowVal - thisMonthStockOutflowVal;
-    const topStockProducts = productValuationList.sort((a, b) => b.totalValuation - a.totalValuation).slice(0, 4);
 
     // --- 6. Balance Sheet Equation Totals ---
-    const totalAssets = netCashBalance + totalBankBalance + totalReceivables + inventoryAssetValue;
-    const thisMonthAssets = thisMonthStockMovement;
-    const totalLiabilities = totalPayables;
+    const totalAssets =
+      cashBankResult.netCashBalance +
+      cashBankResult.totalBankBalance +
+      recPayResult.totalReceivables +
+      inventoryResult.inventoryAssetValue;
+    const thisMonthAssets = inventoryResult.thisMonthStockMovement;
+    const totalLiabilities = recPayResult.totalPayables;
     const totalEquity = totalAssets - totalLiabilities;
 
-    // --- 7. Monthly Trends (Last 6 Months) ---
-    const monthsName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthlySalesTrendMap: Record<string, { sales: number; purchases: number }> = {};
-    const cashFlowTrendMap: Record<string, { inflow: number; outflow: number }> = {};
-
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(currentYear, currentMonth - i, 1);
-      const key = `${monthsName[d.getMonth()]} ${d.getFullYear()}`;
-      monthlySalesTrendMap[key] = { sales: 0, purchases: 0 };
-      cashFlowTrendMap[key] = { inflow: 0, outflow: 0 };
-    }
-
-    invoicesList.forEach((inv: any) => {
-      const d = new Date(inv.created_at || inv.invoice_date);
-      if (!isNaN(d.getTime())) {
-        const key = `${monthsName[d.getMonth()]} ${d.getFullYear()}`;
-        if (monthlySalesTrendMap[key]) {
-          monthlySalesTrendMap[key].sales += Number(inv.total_amount || 0);
-        }
-        if (cashFlowTrendMap[key]) {
-          cashFlowTrendMap[key].inflow += Number(inv.cash_amount_paid || inv.total_amount || 0);
-        }
-      }
+    // --- 7. Trends ---
+    const { monthlySalesTrend, cashFlowTrend } = calculateFinancialTrends({
+      invoicesList,
+      salesReturnsList,
+      purchasesList,
+      purchaseReturnsList,
+      currentYear,
+      currentMonth
     });
-
-    // Deduct Sales Returns from Monthly Trend
-    salesReturnsList.forEach((ret: any) => {
-      const d = new Date(ret.created_at || ret.return_date);
-      if (!isNaN(d.getTime())) {
-        const key = `${monthsName[d.getMonth()]} ${d.getFullYear()}`;
-        if (monthlySalesTrendMap[key]) {
-          monthlySalesTrendMap[key].sales = Math.max(0, monthlySalesTrendMap[key].sales - Number(ret.total_amount || ret.total_net_amount || 0));
-        }
-      }
-    });
-
-    purchasesList.forEach((pur: any) => {
-      const d = new Date(pur.created_at || pur.purchase_date);
-      if (!isNaN(d.getTime())) {
-        const key = `${monthsName[d.getMonth()]} ${d.getFullYear()}`;
-        if (monthlySalesTrendMap[key]) {
-          monthlySalesTrendMap[key].purchases += Number(pur.total_amount || 0);
-        }
-        if (cashFlowTrendMap[key]) {
-          cashFlowTrendMap[key].outflow += Number(pur.amount_paid_now || pur.total_amount || 0);
-        }
-      }
-    });
-
-    // Deduct Purchase Returns from Monthly Trend
-    purchaseReturnsList.forEach((pret: any) => {
-      const d = new Date(pret.created_at || pret.return_date);
-      if (!isNaN(d.getTime())) {
-        const key = `${monthsName[d.getMonth()]} ${d.getFullYear()}`;
-        if (monthlySalesTrendMap[key]) {
-          monthlySalesTrendMap[key].purchases = Math.max(0, monthlySalesTrendMap[key].purchases - Number(pret.total_amount || pret.total_net_amount || 0));
-        }
-      }
-    });
-
-    const monthlySalesTrend = Object.keys(monthlySalesTrendMap).map(k => ({
-      month: k,
-      sales: monthlySalesTrendMap[k].sales,
-      purchases: monthlySalesTrendMap[k].purchases
-    }));
-
-    const cashFlowTrend = Object.keys(cashFlowTrendMap).map(k => ({
-      month: k,
-      inflow: cashFlowTrendMap[k].inflow,
-      outflow: cashFlowTrendMap[k].outflow
-    }));
 
     return {
-      cashBalance: netCashBalance,
-      totalCashInflow: cashInflow,
-      totalCashOutflow: cashOutflow,
-      thisMonthCashInflow,
-      thisMonthCashOutflow,
-      totalBankBalance,
-      thisMonthBankInflow,
-      thisMonthBankOutflow,
-      bankAccounts: bankAccountsList,
+      cashBalance: cashBankResult.netCashBalance,
+      totalCashInflow: cashBankResult.cashInflow,
+      totalCashOutflow: cashBankResult.cashOutflow,
+      thisMonthCashInflow: cashBankResult.thisMonthCashInflow,
+      thisMonthCashOutflow: cashBankResult.thisMonthCashOutflow,
+      totalBankBalance: cashBankResult.totalBankBalance,
+      thisMonthBankInflow: cashBankResult.thisMonthBankInflow,
+      thisMonthBankOutflow: cashBankResult.thisMonthBankOutflow,
+      bankAccounts: cashBankResult.bankAccountsList,
       todaysSales,
       thisMonthSales,
       thisMonthPurchases,
-      totalReceivables,
-      thisMonthReceivables,
-      totalGrossReceivables,
-      totalCustomerRecovered,
-      totalPayables,
-      thisMonthPayables,
-      totalGrossPayables,
-      totalVendorDisbursed,
-      inventoryAssetValue,
-      monthOpeningStockValue,
-      thisMonthStockInflowVal,
-      thisMonthStockOutflowVal,
-      thisMonthStockMovement,
-      baseOpeningStockValue,
-      totalPurchasesStockVal,
-      totalSalesStockVal,
-      totalSalesReturnsStockVal,
-      totalPurchaseReturnsStockVal,
-      totalStockUnits,
-      topStockProducts,
+      totalReceivables: recPayResult.totalReceivables,
+      thisMonthReceivables: recPayResult.thisMonthReceivables,
+      totalGrossReceivables: recPayResult.totalGrossReceivables,
+      totalCustomerRecovered: recPayResult.totalCustomerRecovered,
+      totalPayables: recPayResult.totalPayables,
+      thisMonthPayables: recPayResult.thisMonthPayables,
+      totalGrossPayables: recPayResult.totalGrossPayables,
+      totalVendorDisbursed: recPayResult.totalVendorDisbursed,
+      inventoryAssetValue: inventoryResult.inventoryAssetValue,
+      monthOpeningStockValue: inventoryResult.monthOpeningStockValue,
+      thisMonthStockInflowVal: inventoryResult.thisMonthStockInflowVal,
+      thisMonthStockOutflowVal: inventoryResult.thisMonthStockOutflowVal,
+      thisMonthStockMovement: inventoryResult.thisMonthStockMovement,
+      baseOpeningStockValue: inventoryResult.baseOpeningStockValue,
+      totalPurchasesStockVal: inventoryResult.totalPurchasesStockVal,
+      totalSalesStockVal: inventoryResult.totalSalesStockVal,
+      totalSalesReturnsStockVal: inventoryResult.totalSalesReturnsStockVal,
+      totalPurchaseReturnsStockVal: inventoryResult.totalPurchaseReturnsStockVal,
+      totalStockUnits: inventoryResult.totalStockUnits,
+      topStockProducts: inventoryResult.topStockProducts,
       totalAssets,
       thisMonthAssets,
       totalLiabilities,
@@ -854,6 +292,13 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       thisMonthStockInflowVal: 0,
       thisMonthStockOutflowVal: 0,
       thisMonthStockMovement: 0,
+      baseOpeningStockValue: 0,
+      totalPurchasesStockVal: 0,
+      totalSalesStockVal: 0,
+      totalSalesReturnsStockVal: 0,
+      totalPurchaseReturnsStockVal: 0,
+      totalStockUnits: 0,
+      topStockProducts: [],
       totalAssets: 0,
       thisMonthAssets: 0,
       totalLiabilities: 0,
@@ -863,70 +308,3 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     };
   }
 };
-
-/**
- * Automatically recalculates and synchronizes the receipt_status of an invoice
- * by comparing total bill amount with upfront payments, vouchers, and debit notes.
- */
-export const recalculateInvoiceSettlementStatus = async (invoiceId: string | number) => {
-  try {
-    const rawInvId = String(invoiceId || '').replace(/\D/g, '');
-    if (!rawInvId) return;
-
-    const { data: inv } = await supabase
-      .from('sales_invoices')
-      .select('id, total_amount, cash_amount_paid, bank_amount')
-      .eq('id', Number(rawInvId))
-      .maybeSingle();
-
-    if (!inv) return;
-
-    // 1. Fetch all subsequent receipt vouchers for this invoice
-    const { data: remVouchers } = await supabase
-      .from('financial_vouchers')
-      .select('total_amount')
-      .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher,voucher_type.eq.Cash & Bank Receipt Voucher')
-      .or(`original_invoice_no.eq.${rawInvId},original_invoice_no.eq.INV-${rawInvId}`);
-
-    const subsequentVoucherPaid = (remVouchers || []).reduce(
-      (sum: number, v: any) => sum + (Number(v.total_amount) || 0),
-      0
-    );
-
-    // 2. Fetch sales returns / debit notes against this invoice
-    const { data: returns } = await supabase
-      .from('sales_returns')
-      .select('total_amount')
-      .or(`original_invoice_no.eq.${rawInvId},original_invoice_no.eq.INV-${rawInvId}`);
-
-    const totalReturned = (returns || []).reduce(
-      (sum: number, r: any) => sum + (Number(r.total_amount) || 0),
-      0
-    );
-
-    // 3. Upfront payments made at the time of sale
-    const initialBankPaid = Number(inv.bank_amount || 0);
-    const initialCashPaid = Number(inv.cash_amount_paid || 0);
-
-    const totalPaidSoFar = initialCashPaid + initialBankPaid + subsequentVoucherPaid + totalReturned;
-    const netTotal = Number(inv.total_amount || 0);
-    const netOutstanding = netTotal - totalPaidSoFar;
-
-    let targetStatus = 'Unpaid';
-    if (netOutstanding <= 1) {
-      targetStatus = 'Paid';
-    } else if (totalPaidSoFar > 0) {
-      targetStatus = 'Partial';
-    }
-
-    await supabase
-      .from('sales_invoices')
-      .update({ receipt_status: targetStatus })
-      .eq('id', Number(rawInvId));
-
-    return targetStatus;
-  } catch (err) {
-    console.error('Failed to recalculate invoice settlement status:', err);
-  }
-};
-

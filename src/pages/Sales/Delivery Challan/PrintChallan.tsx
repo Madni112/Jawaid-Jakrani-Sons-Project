@@ -5,12 +5,19 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import { getBrandConfig } from '../../../utils/brand';
-
-
+import { FiPrinter, FiArrowLeft } from 'react-icons/fi';
 
 interface ChallanItem {
-  pDescription: string;
-  qty: number;
+  pDescription?: string;
+  itemName?: string;
+  product_name?: string;
+  qty?: number;
+  orderQty?: number;
+  dispatchedQty?: number;
+  holdQty?: number;
+  skuCode?: string;
+  pCode?: string;
+  item_code?: string;
   location?: string;
   [key: string]: any;
 }
@@ -18,6 +25,7 @@ interface ChallanItem {
 interface ChallanData {
   id: number;
   challan_no?: string;
+  gate_pass_no?: string;
   invoice_no?: string;
   customer_name: string;
   transport_name?: string;
@@ -25,21 +33,102 @@ interface ChallanData {
   po_no?: string;
   po_date?: string;
   dc_date?: string;
+  challan_date?: string;
   vehicle_no?: string;
   driver_name?: string;
   dispatch_warehouse?: string;
+  shipping_address?: string;
   remarks?: string;
   status?: string;
   items: ChallanItem[];
   created_at: string;
+  is_printed?: boolean;
 }
 
-const PrintChallan = () => {
-  const { id } = useParams();
+const resolvePcsPerBox = (prod: any, sampleQty?: number): number => {
+  if (prod) {
+    const looseRatio = Number(prod.loose_conversion_ratio || 0);
+    const boxPcs = Number(prod.pieces_per_box || prod.pcs_per_box || prod.pieces_per_packing || 0);
+    if (looseRatio > 1) return looseRatio;
+    if (boxPcs > 1) return boxPcs;
+    const isTile = Boolean(
+      String(prod.category || '').toLowerCase().includes('tile') ||
+      String(prod.scenario_name || '').toLowerCase().includes('tile')
+    );
+    if (isTile) return 4;
+  }
+  if (typeof sampleQty === 'number' && Math.abs(sampleQty - Math.round(sampleQty)) > 0.0001) {
+    const fraction = Math.abs(sampleQty - Math.floor(sampleQty));
+    for (const cand of [12, 6, 4, 8, 10, 16, 24, 20, 25, 50, 100]) {
+      const pcs = fraction * cand;
+      if (Math.abs(pcs - Math.round(pcs)) < 0.02) {
+        return cand;
+      }
+    }
+  }
+  return 1;
+};
+
+const formatQtyWithPcs = (prod: any, qty: number): string => {
+  if (qty <= 0) return '0';
+  const pcsPerBox = resolvePcsPerBox(prod, qty);
+  if (pcsPerBox > 1) {
+    const totPcs = Math.round(qty * pcsPerBox);
+    const b = Math.floor(totPcs / pcsPerBox);
+    const p = totPcs % pcsPerBox;
+    if (b > 0 && p > 0) return `${b} Boxes + ${p} Pcs`;
+    if (b > 0) return `${b} Boxes`;
+    if (p > 0) return `${p} Pcs`;
+    return '0 Pcs';
+  }
+  if (Math.abs(qty - Math.round(qty)) > 0.0001) {
+    const fraction = Math.abs(qty - Math.floor(qty));
+    for (const cand of [12, 6, 4, 8, 10, 16, 24]) {
+      const pcs = fraction * cand;
+      if (Math.abs(pcs - Math.round(pcs)) < 0.02) {
+        const tot = Math.round(qty * cand);
+        const b = Math.floor(tot / cand);
+        const p = tot % cand;
+        if (b > 0 && p > 0) return `${b} Boxes + ${p} Pcs`;
+        if (b > 0) return `${b} Boxes`;
+        if (p > 0) return `${p} Pcs`;
+      }
+    }
+    return `${Math.round(qty * 100) / 100} ${prod?.uom || 'Units'}`;
+  }
+  return `${Math.round(qty)} ${prod?.uom || 'Boxes'}`;
+};
+
+const formatRemarksText = (rem?: string) => {
+  if (!rem) return '';
+  return rem.replace(/(\d+\.\d{3,})\s*(?:pcs|units)?/gi, (_match, numStr) => {
+    const num = parseFloat(numStr);
+    if (isNaN(num)) return _match;
+    for (const cand of [12, 6, 4, 8, 10, 16, 24]) {
+      const pcs = (num - Math.floor(num)) * cand;
+      if (Math.abs(pcs - Math.round(pcs)) < 0.02) {
+        const tot = Math.round(num * cand);
+        const b = Math.floor(tot / cand);
+        const p = tot % cand;
+        if (b > 0 && p > 0) return `${b} Boxes + ${p} Pcs`;
+        if (b > 0) return `${b} Boxes`;
+        if (p > 0) return `${p} Pcs`;
+      }
+    }
+    return `${Math.round(num * 100) / 100} pcs`;
+  });
+};
+
+const cleanShortNumber = (str?: string) => {
+  if (!str) return '';
+  return str.replace(/^AL-?MUHAMMADI[A-Z\s]*-/i, '');
+};
+
+const PrintChallan: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { businessName, tenantId } = useAuth();
   const [challan, setChallan] = useState<ChallanData | null>(null);
-
   const [productsMaster, setProductsMaster] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -58,18 +147,25 @@ const PrintChallan = () => {
 
         const { data: prodData } = await supabase
           .from('products')
-          .select('product_name, category, scenario_name, pieces_per_box, pcs_per_box, pieces_per_packing');
+          .select('product_name, product_code, category, scenario_name, pieces_per_box, pcs_per_box, pieces_per_packing, loose_conversion_ratio, uom');
         if (prodData) setProductsMaster(prodData);
+
+        if (data && !data.is_printed) {
+          await supabase.from('delivery_challans').update({ is_printed: true }).eq('id', id);
+        }
+        setTimeout(() => {
+          window.print();
+        }, 500);
       } catch (err: any) {
         toast.error('Error loading print data: ' + err.message);
-        navigate('/Delivery-Challan/List');
+        navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/Delivery-Challan/List`);
       } finally {
         setLoading(false);
       }
     };
 
     fetchChallanDetails();
-  }, [id, navigate]);
+  }, [id, navigate, tenantId]);
 
   if (loading) {
     return (
@@ -90,228 +186,276 @@ const PrintChallan = () => {
     });
   };
 
-  const challanTitle = challan.challan_no || `DC-${String(challan.id).padStart(4, '0')}`;
+  const rawChallanTitle = challan.challan_no || `DC-${String(challan.id).padStart(4, '0')}`;
+  const gatePassDisplay = cleanShortNumber(challan.gate_pass_no || rawChallanTitle);
+  const rawItems = Array.isArray(challan.items) ? challan.items : [];
 
-  let totalBoxes = 0;
-  let totalPcs = 0;
+  let totalOrderedBoxes = 0;
+  let totalDispatchedBoxes = 0;
+  let totalHoldBoxes = 0;
+
+  const processedItems = rawItems.map((item, idx) => {
+    const prodName = String(item.pDescription || item.itemName || item.product_name || '').trim();
+    const prod = productsMaster.find(p => 
+      String(p?.product_name || '').trim().toLowerCase() === prodName.toLowerCase() ||
+      (p?.product_code && (p.product_code === item.skuCode || p.product_code === item.pCode || p.product_code === item.item_code))
+    );
+
+    const orderedQty = Number(item.orderQty > 0 ? item.orderQty : (item.qty || 0));
+    const dispatchedQty = Number(
+      item.dispatchedQty !== undefined && item.dispatchedQty !== null
+        ? item.dispatchedQty
+        : (challan.status === 'Dispatched' ? orderedQty : 0)
+    );
+    const holdQty = Number(
+      item.holdQty !== undefined && item.holdQty !== null
+        ? item.holdQty
+        : Math.max(0, orderedQty - dispatchedQty)
+    );
+
+    totalOrderedBoxes += orderedQty;
+    totalDispatchedBoxes += dispatchedQty;
+    totalHoldBoxes += holdQty;
+
+    const dispOrdered = formatQtyWithPcs(prod, orderedQty);
+    const dispDispatched = dispatchedQty > 0 ? formatQtyWithPcs(prod, dispatchedQty) : '0';
+    const dispHold = holdQty > 0 ? formatQtyWithPcs(prod, holdQty) : '0';
+
+    return {
+      idx: idx + 1,
+      sku: item.skuCode || item.pCode || item.item_code || '-',
+      name: prodName || 'Item',
+      orderedQty,
+      dispatchedQty,
+      holdQty,
+      dispOrdered,
+      dispDispatched,
+      dispHold
+    };
+  });
+
+  const hasHold = processedItems.some(i => i.holdQty > 0);
+  const allDispatched = processedItems.length > 0 && processedItems.every(i => i.holdQty === 0 && i.dispatchedQty > 0);
+  const statusText = allDispatched || challan.status === 'Dispatched'
+    ? 'Dispatched (Approved)'
+    : (hasHold ? 'Partial Dispatch (Hold Remaining)' : (challan.status || 'Pending Dispatch'));
+  const statusColor = allDispatched || challan.status === 'Dispatched' ? '#047857' : '#b45309';
 
   return (
-    <div className="mx-auto max-w-4xl p-4 md:p-8 bg-white text-black font-sans min-h-screen relative">
-      
+    <div className="mx-auto max-w-4xl p-4 md:p-8 bg-white text-slate-900 font-sans min-h-screen relative print:p-0 print:m-0 print:max-w-none print:w-full">
       <style>{`
         @media print {
           @page {
             size: A4 portrait;
-            margin: 15mm 15mm 15mm 15mm;
+            margin: 10mm 12mm;
           }
-          aside, nav, header, .no-print, button {
-            display: none !important;
-            opacity: 0 !important;
-            visibility: hidden !important;
-          }
-          html, body, #root, .flex, main, div {
+          html, body, #root, main, div {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
-            min-width: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            position: static !important;
             overflow: visible !important;
-            background: white !important;
-            color: black !important;
-            transform: none !important;
-            box-shadow: none !important;
           }
-          .print-voucher {
-            display: flex !important;
-            flex-direction: column !important;
-            width: 100% !important;
-            min-height: 250mm !important;
-            justify-content: space-between !important;
+          aside, nav, header, footer, .no-print, button {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+            color: #1e293b !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print-slip-container {
             border: none !important;
             box-shadow: none !important;
             padding: 0 !important;
             margin: 0 !important;
+            width: 100% !important;
           }
           table {
             width: 100% !important;
-            table-layout: auto !important;
             border-collapse: collapse !important;
-            margin-top: 15px !important;
           }
-          th, td {
-            padding: 10px 8px !important;
-            border: 1px solid #000000 !important;
-            font-size: 13px !important;
-            text-align: center !important;
+          th {
+            background-color: #f1f5f9 !important;
+            color: #334155 !important;
+            border: 1px solid #cbd5e1 !important;
+            font-weight: 800 !important;
+          }
+          td {
+            border: 1px solid #e2e8f0 !important;
           }
         }
       `}</style>
 
-      <div className="no-print flex justify-between items-center mb-6 bg-slate-50 p-4 rounded border border-stroke">
+      {/* Top Action Bar (Hidden on Print) */}
+      <div className="no-print max-w-4xl mx-auto mb-4 flex items-center justify-between gap-4 p-3 rounded-lg bg-slate-900 text-white shadow-md">
         <button
-          onClick={() => navigate('/Delivery-Challan/List')}
-          className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-black transition"
+          type="button"
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/Delivery-Challan/List`);
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white rounded transition cursor-pointer"
         >
-          ← Return to History
+          <FiArrowLeft size={14} /> Back
         </button>
+        <span className="text-xs font-mono text-slate-300">Gate Pass: <strong className="text-white">{gatePassDisplay || rawChallanTitle}</strong></span>
         <button
+          type="button"
           onClick={async () => {
             if (challan?.id && !challan.is_printed) {
               await supabase.from('delivery_challans').update({ is_printed: true }).eq('id', challan.id);
             }
             window.print();
           }}
-          className="flex items-center gap-2 rounded bg-emerald-600 py-2 px-5 text-sm font-bold text-white hover:bg-emerald-700 transition shadow-sm cursor-pointer"
+          className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded shadow transition cursor-pointer"
         >
-          🖨️ Print Gate Pass Document
+          <FiPrinter size={15} /> Print Gate Pass
         </button>
       </div>
 
-      <div className="print-voucher bg-white border border-gray-300 p-8 rounded shadow-sm">
-        <div>
-          {/* Official Document Banner */}
-          <div className="border-b-2 border-black pb-4 mb-6 flex justify-between items-end">
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-black">{businessName || getBrandConfig().fullName}</h1>
-              <p className="text-xs text-gray-600 font-semibold uppercase tracking-wider">Goods Transit & Warehouse Gate Pass Voucher</p>
-            </div>
-            <div className="text-right">
-              <span className="inline-block bg-black text-white text-xs font-mono font-black uppercase px-3 py-1 rounded">
-                Official Gate Pass
-              </span>
-              <p className="text-sm font-mono font-bold mt-1 text-black">{challanTitle}</p>
-            </div>
+      {/* Slip Document Body matching Inward Challan design */}
+      <div className="print-slip-container max-w-4xl mx-auto bg-white p-8 border border-[#e2e8f0] rounded-xl shadow-xs print:p-0 print:border-none print:shadow-none">
+        {/* Header matching Inward Challan */}
+        <div className="border-b-2 border-[#800020] pb-4 mb-5 flex justify-between items-start">
+          <div>
+            <div className="text-[22px] font-black text-[#800020] tracking-tight">AL-MUHAMMADI TILES EMPORIUM</div>
+            <div className="text-[14px] font-extrabold uppercase tracking-wider text-[#0f172a] mt-1">OUTWARD DELIVERY CHALLAN / GATE PASS</div>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 border-b border-gray-300 pb-4 mb-6 text-xs uppercase tracking-wider font-semibold">
-            <div className="min-w-0 pr-2">
-              <span className="text-gray-500 block mb-0.5 text-[11px]">System DC #:</span>
-              <strong className="text-xs font-black text-black font-mono break-all block leading-tight">
-                {challanTitle}
-              </strong>
-            </div>
-            <div className="min-w-0 pr-2">
-              <span className="text-gray-500 block mb-0.5 text-[11px]">Gate Pass #:</span>
-              <strong className="text-xs font-black text-emerald-800 font-mono break-all block leading-tight">
-                {challan.gate_pass_no || challanTitle}
-              </strong>
-            </div>
-            <div className="min-w-0 pr-2">
-              <span className="text-gray-500 block mb-0.5 text-[11px]">Linked Invoice:</span>
-              <span className="text-red-600 text-xs font-mono font-black break-all block leading-tight">{challan.invoice_no || 'N/A'}</span>
-            </div>
-            <div className="min-w-0 pr-2">
-              <span className="text-gray-500 block mb-0.5 text-[11px]">Dispatch Date:</span>
-              <span className="text-black text-xs font-bold block leading-tight">{formatPrintDate(challan.dc_date || challan.created_at)}</span>
-            </div>
-            <div className="min-w-0">
-              <span className="text-gray-500 block mb-0.5 text-[11px]">Vehicle Plate:</span>
-              <strong className="text-black text-xs font-bold break-words block leading-tight">{challan.vehicle_no || 'Direct Handover'}</strong>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-b border-gray-300 pb-6 mb-6 text-xs">
-            <div>
-              <h4 className="font-bold text-gray-500 mb-2 uppercase tracking-wide text-[11px]">Dispatch Warehouse Source:</h4>
-              <div className="space-y-1 text-black font-medium">
-                <p className="text-sm font-extrabold text-emerald-800">{challan.dispatch_warehouse || 'Main Warehouse'}</p>
-                <p className="text-gray-600">Carrier / Driver: <span className="font-bold text-black">{challan.driver_name || 'Counter Delivery'}</span></p>
-                <p className="italic text-gray-600">Transit Method: {challan.transport_name || challan.transportation || 'By Road Delivery'}</p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-bold text-gray-500 mb-2 uppercase tracking-wide text-[11px]">Consignee / Customer:</h4>
-              <div className="space-y-1 text-black font-medium">
-                <p className="text-sm font-extrabold text-black">{challan.customer_name}</p>
-                {challan.shipping_address && <p className="text-xs text-gray-800 break-words mt-1 whitespace-pre-wrap">{challan.shipping_address}</p>}
-                {challan.remarks && <p className="mt-2 text-gray-700 bg-gray-100 p-2 rounded text-[11px] font-sans">Remarks: {challan.remarks}</p>}
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <table className="w-full border-collapse border border-gray-300 text-xs text-left">
-              <thead>
-                <tr className="bg-gray-100 text-black font-bold uppercase tracking-wider border-b border-gray-300 text-center">
-                  <th className="border border-gray-300 p-2.5 w-12">S#</th>
-                  <th className="border border-gray-300 p-2.5 w-32">Code</th>
-                  <th className="border border-gray-300 p-2.5 text-left">Description</th>
-                  <th className="border border-gray-300 p-2.5 w-32">Qty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const printedItems = challan.items ? challan.items.filter((item: any) => {
-                    const q = Number(item.dispatchedQty > 0 ? item.dispatchedQty : (item.qty || item.orderQty || 0));
-                    return q > 0;
-                  }) : [];
-                  return (
-                    <>
-                      {printedItems.map((item: any, idx: number) => {
-                        const effectiveQty = Number(item.dispatchedQty > 0 ? item.dispatchedQty : (item.qty || item.orderQty || 0));
-                        
-                        let pcsPerBox = 1;
-                        const prodName = String(item.pDescription || item.itemName || item.product_name || '').trim().toLowerCase();
-                        const prod = productsMaster.find(p => String(p?.product_name || '').trim().toLowerCase() === prodName);
-                        if (prod) {
-                           const rawPcs = Number(prod.pieces_per_box || prod.pcs_per_box || prod.pieces_per_packing || 0);
-                           const isTile = Boolean(String(prod.category || '').toLowerCase().includes('tile') || String(prod.scenario_name || '').toLowerCase().includes('tile'));
-                           if (isTile) {
-                             pcsPerBox = rawPcs > 1 ? rawPcs : 4;
-                           }
-                        }
-
-                        let displayQty = String(effectiveQty);
-                        if (pcsPerBox > 1) {
-                          const totPcs = Math.round(effectiveQty * pcsPerBox);
-                          const b = Math.floor(totPcs / pcsPerBox);
-                          const p = totPcs % pcsPerBox;
-                          totalBoxes += b;
-                          totalPcs += p;
-                          if (p === 0) displayQty = `${b} Boxes`;
-                          else if (b === 0) displayQty = `${p} Pcs`;
-                          else displayQty = `${b} Boxes + ${p} Pcs`;
-                        } else {
-                          totalBoxes += effectiveQty;
-                          displayQty = String(effectiveQty);
-                        }
-
-                        return (
-                          <tr key={idx} className="font-medium text-center">
-                            <td className="border border-gray-300 p-2 text-center bg-gray-50/50">{idx + 1}</td>
-                            <td className="border border-gray-300 p-2 text-center font-mono">{item.skuCode || item.pCode || item.item_code || '-'}</td>
-                            <td className="border border-gray-300 p-2 text-black font-semibold text-left">{item.pDescription || item.itemName || item.product_name}</td>
-                            <td className="border border-gray-300 p-2 text-center font-black text-sm text-black bg-gray-100 font-mono">
-                              {displayQty}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="bg-gray-50 font-bold border-t-2 border-gray-400 text-center">
-                        <td colSpan={3} className="border border-gray-300 p-2.5 text-right uppercase tracking-wider text-gray-600">
-                          Total Qty:
-                        </td>
-                        <td className="border border-gray-300 p-2.5 text-center text-sm font-black text-black bg-gray-200 whitespace-nowrap">
-                          {totalPcs > 0 ? `${totalBoxes} Boxes + ${totalPcs} Pcs` : `${totalBoxes}`}
-                        </td>
-                      </tr>
-                    </>
-                  );
-                })()}
-              </tbody>
-            </table>
+          <div className="text-right">
+            <div className="text-[12px] font-bold text-[#64748b]">ORIGINAL COPY</div>
+            <div className="text-[14px] font-mono font-black text-[#800020]">{gatePassDisplay || rawChallanTitle}</div>
           </div>
         </div>
 
-        {/* COMPLIANT SPACED OUT SIGNATURE LINES GRID BLOCK */}
-        <div className="grid grid-cols-3 gap-8 pt-24 text-center text-[11px] font-bold uppercase tracking-wider text-gray-600 mt-auto">
-          <div><div className="border-t border-black pt-2">Prepared By</div></div>
-          <div><div className="border-t border-black pt-2">Checked By</div></div>
-          <div><div className="border-t border-black pt-2">Receiver's Signature</div></div>
+        {/* Metadata Grid matching Inward Challan */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#f8fafc] border border-[#e2e8f0] p-4 rounded-lg mb-5 text-xs">
+          <div className="min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-[#64748b]">Invoice Ref #</div>
+            <div className="text-[13px] font-extrabold text-[#be123c] mt-0.5 font-mono break-words">
+              {challan.invoice_no || 'Direct Challan'}
+            </div>
+          </div>
+          <div className="min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-[#64748b]">Gate Pass / Slip #</div>
+            <div className="text-[13px] font-extrabold text-[#0f172a] mt-0.5 font-mono break-words">
+              {gatePassDisplay || rawChallanTitle}
+            </div>
+          </div>
+          <div className="min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-[#64748b]">Customer / Consignee</div>
+            <div className="text-[13px] font-extrabold text-[#0f172a] mt-0.5 break-words">{challan.customer_name}</div>
+          </div>
+          <div className="min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-[#64748b]">Dispatch Date</div>
+            <div className="text-[13px] font-extrabold text-[#0f172a] mt-0.5">{formatPrintDate(challan.dc_date || challan.challan_date || challan.created_at)}</div>
+          </div>
+          <div className="col-span-2 min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-[#64748b]">Dispatch Warehouse</div>
+            <div className="text-[13px] font-extrabold text-[#0f172a] mt-0.5 break-words">{challan.dispatch_warehouse || 'Main Warehouse'}</div>
+          </div>
+          <div className="col-span-2 min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-[#64748b]">Dispatch Status</div>
+            <div className="text-[13px] font-extrabold mt-0.5" style={{ color: statusColor }}>{statusText}</div>
+          </div>
+          {/* Vehicle / Carrier details */}
+          <div className="col-span-2 sm:col-span-4 border-t border-[#e2e8f0] pt-2 mt-1 min-w-0 overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-[#64748b]">Carrier / Vehicle / Driver Details</div>
+            <div className="text-[12px] font-bold text-[#0f172a] mt-0.5 break-words">
+              {[
+                challan.driver_name ? `Driver: ${challan.driver_name}` : null,
+                challan.vehicle_no ? `Vehicle: ${challan.vehicle_no}` : null,
+                (challan.transport_name || challan.transportation) ? `Transit: ${challan.transport_name || challan.transportation}` : null
+              ].filter(Boolean).join(' • ') || 'Direct Handover / Counter Delivery'}
+            </div>
+          </div>
         </div>
 
+        {/* Items Table matching Inward Challan */}
+        <table className="w-full border-collapse mt-2.5 text-xs">
+          <thead>
+            <tr>
+              <th className="w-10 p-2 border border-[#cbd5e1] text-center uppercase text-[11px] font-extrabold text-[#334155] bg-[#f1f5f9]">#</th>
+              <th className="p-2 border border-[#cbd5e1] text-left uppercase text-[11px] font-extrabold text-[#334155] bg-[#f1f5f9]">Product Description</th>
+              <th className="p-2 border border-[#cbd5e1] text-right uppercase text-[11px] font-extrabold text-[#334155] bg-[#f1f5f9]">Total Ordered / Packing</th>
+              <th className="p-2 border border-[#cbd5e1] text-center uppercase text-[11px] font-extrabold text-[#334155] bg-[#f1f5f9]">Dispatched Qty</th>
+              <th className="p-2 border border-[#cbd5e1] text-center uppercase text-[11px] font-extrabold text-[#334155] bg-[#f1f5f9]">Hold / Remaining</th>
+            </tr>
+          </thead>
+          <tbody>
+            {processedItems.map((it) => (
+              <tr key={it.idx}>
+                <td className="p-2 border border-[#e2e8f0] text-center text-[#64748b]">{it.idx}</td>
+                <td className="p-2 border border-[#e2e8f0]">
+                  <span className="font-bold text-[#0f172a]">{it.name}</span>
+                  {it.sku && it.sku !== '-' && it.sku.toLowerCase() !== it.name.toLowerCase() && (
+                    <span className="ml-2 text-[10px] font-mono text-slate-500 font-semibold">({it.sku})</span>
+                  )}
+                </td>
+                <td className="p-2 border border-[#e2e8f0] text-right font-bold font-mono text-[#0f172a]">{it.dispOrdered}</td>
+                <td className="p-2 border border-[#e2e8f0] text-center font-bold" style={{ color: it.dispatchedQty > 0 ? '#047857' : '#64748b' }}>
+                  {it.dispDispatched} Dispatched
+                </td>
+                <td className="p-2 border border-[#e2e8f0] text-center" style={{ color: it.holdQty > 0 ? '#b45309' : '#64748b', fontWeight: it.holdQty > 0 ? 'bold' : 'normal' }}>
+                  {it.dispHold} Hold
+                </td>
+              </tr>
+            ))}
+            {/* Totals Row */}
+            <tr className="bg-[#f8fafc] font-bold">
+              <td colSpan={2} className="p-2.5 border border-[#cbd5e1] text-right uppercase text-[11px] text-[#334155]">
+                Summary:
+              </td>
+              <td className="p-2.5 border border-[#cbd5e1] text-right font-mono text-[#0f172a]">
+                {formatQtyWithPcs(null, totalOrderedBoxes)} Ordered
+              </td>
+              <td className="p-2.5 border border-[#cbd5e1] text-center font-mono text-[#047857]">
+                {formatQtyWithPcs(null, totalDispatchedBoxes)} Dispatched
+              </td>
+              <td className="p-2.5 border border-[#cbd5e1] text-center font-mono" style={{ color: totalHoldBoxes > 0 ? '#b45309' : '#64748b' }}>
+                {totalHoldBoxes > 0 ? `${formatQtyWithPcs(null, totalHoldBoxes)} Hold` : '0 Hold'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Remarks / Shipping address if any */}
+        {(challan.remarks || challan.shipping_address) && (
+          <div className="mt-4 p-3 bg-[#f8fafc] border border-[#e2e8f0] rounded text-xs text-slate-700 space-y-1">
+            {challan.shipping_address && (
+              <div>
+                <strong className="text-slate-900 font-bold uppercase text-[10px]">Delivery Address:</strong> {challan.shipping_address}
+              </div>
+            )}
+            {challan.remarks && (
+              <div>
+                <strong className="text-slate-900 font-bold uppercase text-[10px]">Remarks:</strong> {formatRemarksText(challan.remarks)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Signatures matching Inward Challan */}
+        <div className="mt-8 flex justify-between items-center text-center text-xs">
+          <div className="w-[28%] border-t border-dashed border-[#64748b] pt-2 text-[11px] font-bold text-[#475569]">
+            Dispatched / Loaded By
+          </div>
+          <div className="w-[28%] border-t border-dashed border-[#64748b] pt-2 text-[11px] font-bold text-[#475569]">
+            Carrier / Driver Signature
+          </div>
+          <div className="w-[28%] border-t border-dashed border-[#64748b] pt-2 text-[11px] font-bold text-[#475569]">
+            Receiver's Stamp & Signature
+          </div>
+        </div>
       </div>
     </div>
   );

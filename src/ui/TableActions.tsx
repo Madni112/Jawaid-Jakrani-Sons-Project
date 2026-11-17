@@ -100,6 +100,7 @@ export interface TableActionsProps {
   deleteTitle?: string;
   children?: React.ReactNode;
   collapseThreshold?: number; // Defaults to 2: if > 2 actions, collapses into ...
+  menuWidth?: string; // Optional custom width for dropdown menu (e.g. 'w-40', 'w-44')
 }
 
 export const TableActions: React.FC<TableActionsProps> = ({
@@ -118,6 +119,7 @@ export const TableActions: React.FC<TableActionsProps> = ({
   deleteTitle,
   children,
   collapseThreshold = 2,
+  menuWidth = 'w-40',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [menuCoords, setMenuCoords] = useState({ top: 0, right: 0 });
@@ -232,7 +234,7 @@ export const TableActions: React.FC<TableActionsProps> = ({
             top: `${menuCoords.top}px`,
             right: `${menuCoords.right}px`,
           }}
-          className="z-99999 w-48 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-[#111827]/95 p-1 shadow-xl backdrop-blur-md text-left text-xs animate-in fade-in zoom-in-95 duration-100"
+          className={`z-99999 ${menuWidth} rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-[#111827]/95 p-1 shadow-xl backdrop-blur-md text-left text-xs animate-in fade-in zoom-in-95 duration-100`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex flex-col font-medium">
@@ -248,10 +250,10 @@ export const TableActions: React.FC<TableActionsProps> = ({
                     setIsOpen(false);
                     action.handler(e);
                   }}
-                  className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg transition duration-150 cursor-pointer text-left font-semibold ${config.menuItemClasses}`}
+                  className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg transition duration-150 cursor-pointer text-left font-semibold ${config.menuItemClasses}`}
                 >
                   <IconComp size={15} className="shrink-0" />
-                  <span>{action.title}</span>
+                  <span className="truncate">{action.title}</span>
                 </button>
               );
             })}

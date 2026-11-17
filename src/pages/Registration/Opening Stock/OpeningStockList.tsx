@@ -6,6 +6,8 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
 import { MdInventory } from 'react-icons/md';
+import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
+import { fetchStockDataset, getTotalAvailableStock, formatStockWithBoxesAndPcs } from '../../../utils/stockCalculator';
 
 const OpeningStockList = () => {
   const { userName, userEmail } = useAuth();
@@ -162,6 +164,31 @@ const OpeningStockList = () => {
     const stockNoLabel = String(group[0]?.stockNo || group[0]?.stock_no || 'N/A');
     const itemCount = group.length;
     const totalQty = group.reduce((sum: number, r: any) => sum + (Number(r.qty ?? r.quantity) || 0), 0);
+
+    // Negative stock guardrail (when allow_negative_stock is disabled)
+    const wfSettings = await fetchWorkflowSettings();
+    if (wfSettings && wfSettings.allow_negative_stock === false) {
+      const stockDataset = await fetchStockDataset();
+      const qtyMap: Record<string, number> = {};
+      group.forEach((r: any) => {
+        const key = String(r.itemName || r.product_name || '').trim();
+        if (key) qtyMap[key] = (qtyMap[key] || 0) + (Number(r.qty ?? r.quantity) || 0);
+      });
+
+      for (const [pName, batchQty] of Object.entries(qtyMap)) {
+        const avail = await getTotalAvailableStock(pName, stockDataset);
+        if (avail - batchQty < -0.0001) {
+          const matchedProd = products.find((p: any) => p.product_name?.toLowerCase() === pName.toLowerCase());
+          const fmtAvail = formatStockWithBoxesAndPcs(avail, matchedProd).inlineText;
+          const fmtBatch = formatStockWithBoxesAndPcs(batchQty, matchedProd).inlineText;
+          toast.error(
+            `Cannot Delete Opening Stock: Removing "${pName}" (${fmtBatch}) would reduce stock below zero (${fmtAvail} available). Negative stock is disabled in settings.`,
+            { duration: 7000 }
+          );
+          return;
+        }
+      }
+    }
 
     if (!window.confirm(`Delete opening stock batch ${stockNoLabel}? It contains ${itemCount} item(s), total qty ${totalQty}. Stock balances will be reversed.`)) {
       return;

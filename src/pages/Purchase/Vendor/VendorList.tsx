@@ -113,12 +113,15 @@ const VendorList = () => {
             }
 
             const vendorName = (selectedVendor.vendor_name || selectedVendor.name || '').trim();
+            const vendBalNum = openingBalanceInput ? Math.abs(Number(openingBalanceInput) || 0) : 0;
             const coaPayload: any = {
                 category_code: '2. LIABILITIES',
                 sub_category_code: 'Current Liabilities',
                 control_code: 'Vendor',
                 account_code: cleanCode,
                 account_title: vendorName,
+                opening_balance: vendBalNum,
+                balance_nature: balanceNatureInput || 'Credit',
                 notes: `Vendor ledger account for ${vendorName}${openingBalanceInput ? ` (Opening Balance: ${openingBalanceInput} ${balanceNatureInput})` : ''}`
             };
 

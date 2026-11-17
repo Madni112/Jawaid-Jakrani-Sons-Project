@@ -41,7 +41,7 @@ function InvoiceReceiptList() {
       const { data, error } = await supabase
         .from('financial_vouchers')
         .select('*')
-        .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher,voucher_type.eq.Cash & Bank Receipt Voucher')
+        .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher,voucher_type.eq.Cash & Bank Receipt Voucher,voucher_type.eq.Customer Receive Voucher,voucher_no.ilike.CRV-%')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -173,27 +173,39 @@ function InvoiceReceiptList() {
                       <td className="py-3.5 px-4 font-mono font-bold text-primary tracking-wide">{r.voucher_no}</td>
                       <td className="py-3.5 px-4 font-mono font-bold">
                         {r.original_invoice_no ? (
-                          <span className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px]">
-                            {String(r.original_invoice_no).startsWith('INV-') ? r.original_invoice_no : `INV-${String(r.original_invoice_no).padStart(4, '0')}`}
-                          </span>
+                          String(r.original_invoice_no).toUpperCase() === 'OPENING_BALANCE' ? (
+                            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-sans">
+                              Opening Balance
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px]">
+                              {/^\d+$/.test(String(r.original_invoice_no).trim())
+                                ? `INV-${String(r.original_invoice_no).padStart(4, '0')}`
+                                : r.original_invoice_no}
+                            </span>
+                          )
                         ) : (
                           <span className="text-[10px] text-gray-400 font-sans">General Ledger</span>
                         )}
                       </td>
                       <td className="py-3.5 px-4">
                         <span className={`inline-flex px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                          r.voucher_type === 'Cash Receipt Voucher' 
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60' 
-                            : r.voucher_type === 'Bank Receipt Voucher'
+                          r.metadata?.paymentMethod === 'By Bank' || r.voucher_type === 'Bank Receipt Voucher'
                             ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60'
-                            : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60'
+                            : r.metadata?.paymentMethod === 'Split' || r.voucher_type === 'Cash & Bank Receipt Voucher'
+                            ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60'
+                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60'
                         }`}>
-                          {r.voucher_type === 'Cash Receipt Voucher' ? 'Cash Counter' : (r.voucher_type === 'Bank Receipt Voucher' ? 'Bank Wire' : 'Split Payment')}
+                          {r.metadata?.paymentMethod === 'By Bank' || r.voucher_type === 'Bank Receipt Voucher'
+                            ? 'Bank Wire'
+                            : r.metadata?.paymentMethod === 'Split' || r.voucher_type === 'Cash & Bank Receipt Voucher'
+                            ? 'Split Payment'
+                            : 'Cash Counter'}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 font-semibold text-black dark:text-white whitespace-nowrap">{r.customer_name}</td>
+                      <td className="py-3.5 px-4 font-semibold text-black dark:text-white whitespace-nowrap">{r.customer_name || r.customerName || r.party_name || '-'}</td>
                       <td className="py-3.5 px-4 text-right font-bold text-success font-mono">Rs. {formatMoney(r.total_amount)}</td>
-                      <td className="py-3.5 px-4 text-center text-gray-500 font-medium whitespace-nowrap">{r.voucher_date}</td>
+                      <td className="py-3.5 px-4 text-center text-gray-500 font-medium whitespace-nowrap">{r.voucher_date || (r.created_at ? r.created_at.split('T')[0] : '-')}</td>
                       <td className="py-3.5 px-4 text-center">
                         <TableActions
                           onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/Print/${r.id}`)}

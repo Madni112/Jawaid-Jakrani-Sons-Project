@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
-import { useAuth } from '../../../Context/Auth';
 import Spinner from '../../../ui/Spinner';
 import { 
   MdAddCircle, 
@@ -20,7 +19,6 @@ interface ReceiveGrnModalProps {
 
 const ReceiveGrnModal: React.FC<ReceiveGrnModalProps> = ({ onClose, defaultLocation }) => {
   const navigate = useNavigate();
-  const { tenantId } = useAuth();
   const [step, setStep] = useState<'CHOICE' | 'LIST'>('CHOICE');
   const [grns, setGrns] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -77,7 +75,7 @@ const ReceiveGrnModal: React.FC<ReceiveGrnModalProps> = ({ onClose, defaultLocat
     onClose();
   };
 
-  const filteredGrns = grns.filter(g => {
+  const filteredGrns = (grns || []).filter(g => {
     const q = searchTerm.toLowerCase().trim();
     return (
       (g.grn_no || '').toLowerCase().includes(q) ||

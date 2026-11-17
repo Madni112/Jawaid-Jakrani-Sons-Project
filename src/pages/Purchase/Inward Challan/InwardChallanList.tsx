@@ -25,7 +25,8 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage] = useState(10);
-  const { tenantId, userLocationName } = useAuth();
+  const { tenantId, userLocationName, role } = useAuth();
+  const isSuperAdmin = Boolean(role && role.toLowerCase().includes('admin'));
   const { showModal, hideModal } = useModal();
 
   const openHistoryModal = () => {
@@ -85,9 +86,9 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
             );
           }}
         />,
-        "Processed Inward Challans",
+        "Processed Inward Challans & Gate Passes",
         undefined,
-        "max-w-5xl"
+        "max-w-6xl"
       );
     }
   };
@@ -105,8 +106,8 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
         supabase.from('grn_receipts').select('*').order('created_at', { ascending: false }),
         supabase.from('grn_items').select('*'),
         supabase.from('supplier_purchases').select('id, purchase_no, metadata'),
-        supabase.from('products').select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name, uom'),
-        supabase.from('sales_returns').select('*').in('inward_status', ['Pending Inward', 'Partially Received']).order('created_at', { ascending: false })
+        supabase.from('products').select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name, uom, loose_conversion_ratio, allow_loose_sales'),
+        supabase.from('sales_returns').select('*').or('inward_status.in.("Pending Inward","Partially Received"),inward_status.is.null').order('created_at', { ascending: false })
       ]);
 
       if (receiptsRes.error) throw receiptsRes.error;
@@ -131,8 +132,65 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
       
       let filteredData = combinedData;
       filteredData = filteredData.map(g => {
-        const pur = (purchases || []).find(p => p.metadata?.grn_id === g.id || (Array.isArray(p.metadata?.grn_ids) && p.metadata.grn_ids.includes(g.id)) || (p.purchase_no && g.grn_no?.includes(p.purchase_no)));
-        return { ...g, purchase_no: pur?.purchase_no || '' };
+        let pur = (purchases || []).find(p => p.metadata?.grn_id === g.id || (Array.isArray(p.metadata?.grn_ids) && p.metadata.grn_ids.includes(g.id)));
+        if (!pur && g.remarks) {
+          const remarkMatch = String(g.remarks).match(/for\s+([A-Za-z0-9_-]+)/i);
+          if (remarkMatch && remarkMatch[1]) {
+            const extracted = remarkMatch[1].trim();
+            const cleanExtracted = extracted.replace(/^PUR-?/i, '');
+            pur = (purchases || []).find(p => {
+              if (!p.purchase_no) return false;
+              const pNo = String(p.purchase_no).trim();
+              const cleanPNo = pNo.replace(/^PUR-?/i, '');
+              return pNo.toUpperCase() === extracted.toUpperCase() || cleanPNo === cleanExtracted;
+            });
+          }
+        }
+        if (!pur && g.grn_no) {
+          const grnUpper = String(g.grn_no).toUpperCase();
+          const grnMatch = grnUpper.match(/(?:^|-)GRN-([A-Za-z0-9]+)$/);
+          if (grnMatch && grnMatch[1]) {
+            const suffix = grnMatch[1];
+            pur = (purchases || []).find(p => {
+              if (!p.purchase_no) return false;
+              const cleanPNo = String(p.purchase_no).trim().replace(/^PUR-?/i, '');
+              return cleanPNo === suffix;
+            });
+          }
+        }
+        const fallbackRemarkPurNo = g.remarks?.match(/for\s+([A-Za-z0-9_-]+)/i)?.[1];
+        const resPurchaseNo = pur?.purchase_no
+          ? (String(pur.purchase_no).toUpperCase().startsWith('PUR-') ? String(pur.purchase_no).toUpperCase() : `PUR-${pur.purchase_no}`)
+          : (fallbackRemarkPurNo ? `PUR-${fallbackRemarkPurNo.replace(/^PUR-?/i, '')}` : '');
+
+        // Parse location-wise gate passes from remarks
+        let gatePasses: Record<string, string> = {};
+        const rawRemarks = String(g.remarks || '');
+        const jsonMatch = rawRemarks.match(/\[GatePasses:\s*(\{.*?\})\]/s);
+        if (jsonMatch) {
+          try {
+            gatePasses = JSON.parse(jsonMatch[1]);
+          } catch (e) {}
+        }
+        if (Object.keys(gatePasses).length === 0) {
+          const singleMatch = rawRemarks.match(/\[Gate Pass:\s*([^\]]+)\]/i);
+          if (singleMatch) {
+            const single = singleMatch[1].trim();
+            (g.grn_items || []).forEach((it: any) => {
+              if (it.warehouse_name) gatePasses[it.warehouse_name] = single;
+            });
+            if (Object.keys(gatePasses).length === 0) {
+              gatePasses['DEFAULT'] = single;
+            }
+          }
+        }
+
+        return {
+          ...g,
+          purchase_no: resPurchaseNo,
+          hasLinkedPurchase: Boolean(pur),
+          gatePasses
+        };
       });
       
       const isItemPending = (item: any) => {
@@ -143,8 +201,8 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
         return (resolved < total && total > 0) || hold > 0;
       };
       
-      // Strict filter for Warehouse Managers locked to a location
-      if (userLocationName) {
+      // Filter for Warehouse Managers locked to a location
+      if (userLocationName && !isSuperAdmin && locationFilter !== 'ALL') {
         filteredData = filteredData.filter(grn => {
           return grn.grn_items?.some((item: any) => {
             const matchesLocation = String(item.warehouse_name).toUpperCase() === String(userLocationName).toUpperCase();
@@ -178,9 +236,27 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
 
       // Process and filter Customer Returns
       let filteredReturns = (returnsRes?.data || []);
+
+      // A return is pending in the Receiving/QC queue only if it has unverified items OR items on hold (> 0)
+      filteredReturns = filteredReturns.filter((ret: any) => {
+        if (!ret.received_items || !Array.isArray(ret.received_items) || ret.received_items.length === 0) return true;
+        const rawItems = Array.isArray(ret.items) ? ret.items : [];
+        const hasUnverified = rawItems.some((ri: any) => {
+          const riSku = ri.skuCode || ri.sku || '';
+          const riName = ri.itemName || ri.product_name || '';
+          return !ret.received_items.some((er: any) => 
+            (er.skuCode && riSku && er.skuCode === riSku) || 
+            (er.itemName && riName && String(er.itemName).trim().toLowerCase() === String(riName).trim().toLowerCase())
+          );
+        });
+        if (hasUnverified) return true;
+        const hasHold = ret.received_items.some((r: any) => Number(r.holdQty || 0) > 0);
+        return hasHold;
+      });
+
       const normalizeWh = (name: string) => (name || '').replace(/[-_\s]/g, '').toUpperCase();
       
-      if (userLocationName) {
+      if (userLocationName && !isSuperAdmin && locationFilter !== 'ALL') {
         const normUserLoc = normalizeWh(userLocationName);
         filteredReturns = filteredReturns.filter((ret: any) => {
           const retWhNorm = normalizeWh(ret.warehouse_name || ret.source_warehouse);
@@ -188,11 +264,13 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
             const itWhNorm = normalizeWh(it.warehouse || it.location);
             return itWhNorm === normUserLoc || 
               (normUserLoc.includes('FATEH') && itWhNorm.includes('FATEH')) || 
-              (normUserLoc.includes('A39') && itWhNorm.includes('A39'));
+              (normUserLoc.includes('A39') && itWhNorm.includes('A39')) ||
+              (normUserLoc.includes('MUHAMMADI') && itWhNorm.includes('MUHAMMADI'));
           });
           return retWhNorm === normUserLoc || 
             (normUserLoc.includes('FATEH') && retWhNorm.includes('FATEH')) || 
             (normUserLoc.includes('A39') && retWhNorm.includes('A39')) || 
+            (normUserLoc.includes('MUHAMMADI') && retWhNorm.includes('MUHAMMADI')) ||
             hasMatchingItem;
         });
       } else if (locationFilter !== 'ALL') {
@@ -219,9 +297,11 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
   const formatItemQty = (productName: string, qty: number) => {
     if (qty === 0) return '0';
     const meta = productMeta[String(productName || '').trim().toLowerCase()];
-    const rawPcs = Number(meta?.pieces_per_box ?? meta?.pcs_per_box ?? meta?.pieces_per_packing ?? 0);
+    const looseRatio = Number(meta?.loose_conversion_ratio || 0);
+    const boxPcs = Number(meta?.pieces_per_box ?? meta?.pcs_per_box ?? meta?.pieces_per_packing ?? 0);
+    const rawPcs = looseRatio > 0 ? looseRatio : boxPcs;
     const isTile = rawPcs > 1 || String(meta?.scenario_name || '').toUpperCase().includes('TILE') || String(meta?.category || '').toUpperCase().includes('TILE') || String(meta?.uom || '').toUpperCase() === 'BOX';
-    const pcsPerBox = rawPcs > 1 ? rawPcs : 4;
+    const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
 
     if (isTile && pcsPerBox > 1) {
       const totalPieces = Math.round(Number(qty || 0) * pcsPerBox);
@@ -235,11 +315,17 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
     return `${qty}`;
   };
 
-  const filteredChallans = challans.filter(c =>
-    String(c.grn_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    String(c.vendor_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    String(c.purchase_no || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredChallans = challans.filter(c => {
+    const q = searchTerm.toLowerCase();
+    const gpValues = Object.values(c.gatePasses || {}).map((v: any) => String(v).toLowerCase());
+    return (
+      String(c.grn_no || '').toLowerCase().includes(q) ||
+      String(c.vendor_name || '').toLowerCase().includes(q) ||
+      String(c.purchase_no || '').toLowerCase().includes(q) ||
+      gpValues.some(v => v.includes(q)) ||
+      (c.remarks && String(c.remarks).toLowerCase().includes(q))
+    );
+  });
 
   const filteredReturns = pendingReturns.filter(r =>
     String(r.return_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -334,7 +420,7 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
             <table className="w-full table-auto border-collapse text-left">
               <thead>
                 <tr className="bg-slate-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider border-b border-stroke text-slate-700 dark:text-white">
-                  <th className="py-3.5 px-4 whitespace-nowrap">Purchase #</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">Challan / Gate Pass #</th>
                   <th className="py-3.5 px-4 whitespace-nowrap">Date</th>
                   <th className="py-3.5 px-4 whitespace-nowrap">Vendor</th>
                   <th className="py-3.5 px-4 whitespace-nowrap">Items Summary</th>
@@ -371,10 +457,78 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
                         }, 0) / totalItemCount) * 100)
                       : 0;
 
+                    const recGatePasses = rec.gatePasses || {};
+                    const relevantWarehouses = new Set<string>();
+                    visibleItems.forEach((it: any) => {
+                      if (it.warehouse_name) relevantWarehouses.add(it.warehouse_name);
+                    });
+                    if (relevantWarehouses.size === 0 && items.length > 0) {
+                      items.forEach((it: any) => {
+                        if (it.warehouse_name) relevantWarehouses.add(it.warehouse_name);
+                      });
+                    }
+
+                    const gpEntries: { warehouse: string; slip: string; fullSlip: string }[] = [];
+                    if (relevantWarehouses.size > 0) {
+                      relevantWarehouses.forEach(wh => {
+                        const slip = recGatePasses[wh] || recGatePasses[Object.keys(recGatePasses).find(k => k.trim().toUpperCase() === wh.trim().toUpperCase()) || ''];
+                        if (slip) {
+                          const safePrefix = wh.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                          const fullSlip = safePrefix && !String(slip).toUpperCase().startsWith(`${safePrefix}-`)
+                            ? `${safePrefix}-${slip}`
+                            : String(slip);
+                          gpEntries.push({ warehouse: wh, slip: String(slip), fullSlip });
+                        }
+                      });
+                    }
+
+                    if (gpEntries.length === 0 && Object.keys(recGatePasses).length > 0) {
+                      Object.entries(recGatePasses).forEach(([wh, slip]: [string, any]) => {
+                        if (!slip) return;
+                        const safePrefix = wh !== 'DEFAULT' ? wh.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+                        const fullSlip = safePrefix && !String(slip).toUpperCase().startsWith(`${safePrefix}-`)
+                          ? `${safePrefix}-${slip}`
+                          : String(slip);
+                        gpEntries.push({ warehouse: wh, slip: String(slip), fullSlip });
+                      });
+                    }
+
+                    const cleanPurNo = rec.purchase_no
+                      ? (String(rec.purchase_no).toUpperCase().startsWith('PUR-') ? String(rec.purchase_no).toUpperCase() : `PUR-${rec.purchase_no}`)
+                      : null;
+
                     return (
                       <tr key={rec.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white">
-                        <td className="py-3 px-4 font-bold font-mono whitespace-nowrap">
-                          <span className="text-primary">{rec.purchase_no ? `PUR-${rec.purchase_no}` : '—'}</span>
+                        <td className="py-3 px-4 font-mono whitespace-nowrap">
+                          {gpEntries.length > 0 ? (
+                            <div className="space-y-0.5">
+                              {gpEntries.map((gp, i) => (
+                                <div key={i} className="flex items-center gap-1.5 font-bold text-xs text-purple-700 dark:text-purple-300">
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                    GP
+                                  </span>
+                                  <span title={gp.warehouse}>{gp.fullSlip}</span>
+                                </div>
+                              ))}
+                              <div className="text-[10px] text-gray-500 font-mono flex items-center gap-1.5 pt-0.5">
+                                <span className="font-semibold text-slate-600 dark:text-slate-400">GRN: {rec.grn_no}</span>
+                                {cleanPurNo && (
+                                  <span className="text-primary font-bold">({cleanPurNo})</span>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="font-bold text-xs text-primary">
+                                {rec.grn_no || cleanPurNo || '—'}
+                              </div>
+                              {cleanPurNo && rec.grn_no && cleanPurNo !== rec.grn_no && (
+                                <div className="text-[10px] text-gray-500 font-mono mt-0.5">
+                                  PUR: {cleanPurNo}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{rec.receipt_date}</td>
                         <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">{rec.vendor_name}</td>
@@ -483,7 +637,7 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
                                 <div key={idx} className="text-[10px] text-slate-700 dark:text-slate-200">
                                   <span className="font-bold">{itName}</span>
                                   <span className="ml-1 text-primary font-mono font-bold">
-                                    ({it.isTileItem && it.boxQty !== undefined ? `${it.boxQty} Box` : `${it.qty} ${it.uom || ''}`})
+                                    ({formatItemQty(itName, it.qty)})
                                   </span>
                                 </div>
                               );

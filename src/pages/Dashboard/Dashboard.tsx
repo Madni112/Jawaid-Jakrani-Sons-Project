@@ -1,182 +1,54 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import ReactApexChart from 'react-apexcharts';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
-import { fetchFinancialMetrics, FinancialSummary } from '../../service/financialCalculations';
+import { FinancialSummary } from '../../service/financialCalculations';
 import Spinner from '../../ui/Spinner';
-import {
-  MdShoppingCart,
-  MdLocalMall,
-  MdAddBox,
-  MdCompareArrows,
-  MdAssessment,
-  MdAccountBalanceWallet,
-  MdAccountBalance,
-  MdTrendingUp,
-  MdArrowUpward,
-  MdArrowDownward,
-  MdReceiptLong,
-  MdWarning,
-  MdPauseCircleFilled,
-  MdCheckCircle,
-  MdPerson,
-  MdWarehouse,
-  MdSearch,
-  MdFilterList,
-  MdCalendarToday,
-  MdLocalFireDepartment,
-  MdAttachMoney,
-  MdOutlineReceipt,
-  MdClose,
-  MdInventory,
-  MdInfoOutline,
-  MdKeyboardArrowDown,
-  MdKeyboardArrowUp,
-  MdShowChart,
-  MdBarChart,
-  MdCorporateFare
-} from 'react-icons/md';
-import StatCard from '../../ui/StatCard';
-import ActionCard from '../../ui/ActionCard';
-import { QtyBadge } from '../../utils/QtyBadge';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
 import SalesmanDashboard from './SalesmanDashboard';
 import WarehouseDashboard from './WarehouseDashboard';
 import {
-  LuPlus,
-  LuShoppingCart,
-  LuFileText,
-  LuArrowDownToLine,
-  LuSearch,
-  LuMoon,
-  LuBell,
-  LuCreditCard,
-  LuArrowDownLeft,
-  LuArrowUpRight,
-} from 'react-icons/lu';
-import {
   MasterThemePreset,
   getMasterThemePreset,
   isNHTTheme2Active,
-  getSavedAccentColor,
-  getContrastTextColor,
+  getSavedAccentColor
 } from '../../constant/themeConfig';
+import { MdKeyboardArrowDown, MdKeyboardArrowUp } from 'react-icons/md';
 
-const AdminRoleSwitcher: React.FC<{
-  activeView: 'executive' | 'salesman' | 'warehouse';
-  onChangeView: (v: 'executive' | 'salesman' | 'warehouse') => void;
-}> = ({ activeView, onChangeView }) => {
-  const { isRTL, t } = useLanguage();
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
-      <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 px-2">
-        <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-        {t('role_dashboard_preview', 'Role Dashboard Preview:')}
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          onClick={() => onChangeView('executive')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeView === 'executive'
-              ? 'bg-emerald-600 text-white shadow-sm scale-102'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
-            }`}
-        >
-          👑 {isRTL ? 'مرکزی جائزہ' : 'Executive Overview'}
-        </button>
-        <button
-          onClick={() => onChangeView('salesman')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeView === 'salesman'
-              ? 'bg-emerald-600 text-white shadow-sm scale-102'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
-            }`}
-        >
-          🛒 {isRTL ? 'سیلزمین ویو' : 'Salesman View'}
-        </button>
-        <button
-          onClick={() => onChangeView('warehouse')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeView === 'warehouse'
-              ? 'bg-teal-700 text-white shadow-sm scale-102'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
-            }`}
-        >
-          📦 {isRTL ? 'گودام' : 'Warehouse'}
-        </button>
-      </div>
-    </div>
-  );
+import AdminRoleSwitcher from './components/AdminRoleSwitcher';
+import DashboardHeroBanner from './components/DashboardHeroBanner';
+import Theme2FinancialPanels from './components/Theme2FinancialPanels';
+import Theme1FinancialCards from './components/Theme1FinancialCards';
+import ReceivablesAndStockSection from './components/ReceivablesAndStockSection';
+import HoldingInventorySection from './components/HoldingInventorySection';
+import LiquidityCenterSection from './components/LiquidityCenterSection';
+import DashboardChartsSection from './components/DashboardChartsSection';
+import FinancialBreakdownModal from './modals/FinancialBreakdownModal';
+
+import {
+  ReceivableInvoice,
+  PayableVendor,
+  TrendingProduct,
+  LowStockAlert,
+  HoldingItemData,
+  CashTransaction
+} from './types/dashboardTypes';
+import {
+  fetchCompleteDashboardOperationalData
+} from './services/dashboardDataService';
+import {
+  getSalesVsPurchasesChartConfig,
+  getCustomerSalesChartConfig,
+  getBankDonutConfig
+} from './utils/dashboardChartConfigs';
+
+export type {
+  ReceivableInvoice,
+  PayableVendor,
+  TrendingProduct,
+  LowStockAlert,
+  HoldingItemData,
+  CashTransaction
 };
-
-// Types for Dashboard Operational Intelligence
-interface ReceivableInvoice {
-  id: string | number;
-  invoiceNo: string;
-  customerName: string;
-  salesman: string;
-  invoiceDate: string;
-  totalAmount: number;
-  paidAmount: number;
-  outstandingBalance: number;
-  daysPending: number;
-}
-
-interface PayableVendor {
-  id: string | number;
-  vendorCode: string;
-  vendorName: string;
-  city: string;
-  phone: string;
-  outstandingBalance: number;
-}
-
-interface TrendingProduct {
-  id: string | number;
-  name: string;
-  category: string;
-  sku: string;
-  totalRevenue: number;
-  unitsSold: number;
-  transactionCount: number;
-  percentageOfTotal: number;
-}
-
-interface LowStockAlert {
-  id: string | number;
-  name: string;
-  category: string;
-  warehouse: string;
-  currentStock: number;
-  minLimit: number;
-  deficit: number;
-  unit: string;
-}
-
-interface HoldingItemData {
-  id: string;
-  dcId: number | string;
-  gatepassNo: string;
-  invoiceNo: string;
-  customerName: string;
-  salesman: string;
-  warehouseGuy: string;
-  productName: string;
-  orderQty: number;
-  dispatchedQty: number;
-  holdQty: number;
-  rate: number;
-  heldAmount: number;
-  date: string;
-}
-
-interface CashTransaction {
-  id: string | number;
-  date: string;
-  type: 'Inflow' | 'Outflow';
-  source: string;
-  party: string;
-  amount: number;
-  description: string;
-}
 
 interface DashboardProps {
   initialView?: 'executive' | 'salesman' | 'warehouse';
@@ -184,7 +56,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
   const navigate = useNavigate();
-  const { role, tenantId, userEmail, userName } = useAuth();
+  const { role, userEmail, userName } = useAuth();
   const { isRTL, t } = useLanguage();
   const [adminView, setAdminView] = useState<'executive' | 'salesman' | 'warehouse'>(initialView);
 
@@ -253,11 +125,21 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
         allowedModules = parsed.map((s: string) => String(s).toLowerCase().trim());
       }
     }
-  } catch (_) { }
+  } catch (_) {}
 
-  const isAdmin = userRoleLower.includes('admin') || userRoleLower.includes('owner') || userRoleLower.includes('super admin');
-  const isSalesman = !isAdmin && (userRoleLower.includes('salesman') || allowedModules.includes('/dashboard/salesman') || allowedModules.includes('salesman-dashboard'));
-  const isWarehouse = !isAdmin && !isSalesman && (userRoleLower.includes('warehouse') || allowedModules.includes('/dashboard/warehouse') || allowedModules.includes('warehouse-dashboard'));
+  const isAdmin =
+    userRoleLower.includes('admin') || userRoleLower.includes('owner') || userRoleLower.includes('super admin');
+  const isSalesman =
+    !isAdmin &&
+    (userRoleLower.includes('salesman') ||
+      allowedModules.includes('/dashboard/salesman') ||
+      allowedModules.includes('salesman-dashboard'));
+  const isWarehouse =
+    !isAdmin &&
+    !isSalesman &&
+    (userRoleLower.includes('warehouse') ||
+      allowedModules.includes('/dashboard/warehouse') ||
+      allowedModules.includes('warehouse-dashboard'));
 
   const [metrics, setMetrics] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -277,13 +159,15 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
   const [selectedHoldingInvoice, setSelectedHoldingInvoice] = useState<string>('All');
   const [liquidityTab, setLiquidityTab] = useState<'bank' | 'cash'>('bank');
   const [stockModalView, setStockModalView] = useState<'allTime' | 'thisMonth'>('allTime');
-  const [activeBreakdownModal, setActiveBreakdownModal] = useState<'cash' | 'bank' | 'receivables' | 'payables' | 'stock' | null>(null);
+  const [activeBreakdownModal, setActiveBreakdownModal] = useState<
+    'cash' | 'bank' | 'receivables' | 'payables' | 'stock' | null
+  >(null);
   const [showOperationalDetails, setShowOperationalDetails] = useState<boolean>(() => {
     return localStorage.getItem('ujc_dashboard_show_details') === 'true';
   });
 
   const toggleOperationalDetails = () => {
-    setShowOperationalDetails(prev => {
+    setShowOperationalDetails((prev) => {
       const next = !prev;
       localStorage.setItem('ujc_dashboard_show_details', String(next));
       return next;
@@ -291,483 +175,28 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
   };
 
   // Customer Sales Graph Data
-  const [customerSalesDaily, setCustomerSalesDaily] = useState<{ dates: string[]; sales: number[] }>({ dates: [], sales: [] });
-  const [customerSalesMonthly, setCustomerSalesMonthly] = useState<{ months: string[]; sales: number[] }>({ months: [], sales: [] });
+  const [customerSalesDaily, setCustomerSalesDaily] = useState<{ dates: string[]; sales: number[] }>({
+    dates: [],
+    sales: []
+  });
+  const [customerSalesMonthly, setCustomerSalesMonthly] = useState<{ months: string[]; sales: number[] }>({
+    months: [],
+    sales: []
+  });
 
-  useEffect(() => {
-    if (!isSalesman && !isWarehouse) {
-      loadCompleteDashboard();
-    }
-  }, [isSalesman, isWarehouse]);
-
-  const loadCompleteDashboard = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-
-      // Fetch financial metrics & database tables in parallel
-      const [
-        metricsData,
-        invoicesRes,
-        productsRes,
-        openStocksRes,
-        purchasesRes,
-        salesReturnsRes,
-        purchaseReturnsRes,
-        vouchersRes,
-        dcsRes,
-        custRecoveriesRes,
-        customersRes,
-        vendorsRes
-      ] = await Promise.all([
-        fetchFinancialMetrics(),
-        supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }),
-        supabase.from('products').select('*'),
-        supabase.from('opening_stocks').select('*'),
-        supabase.from('supplier_purchases').select('*'),
-        supabase.from('sales_returns').select('*'),
-        supabase.from('purchase_returns').select('*'),
-        supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false }),
-        supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
-        supabase.from('customer_recoveries').select('*'),
-        supabase.from('customers').select('*').order('customerName', { ascending: true }),
-        supabase.from('vendors').select('*').order('vendor_name', { ascending: true })
-      ]);
-
-      setMetrics(metricsData);
-
-      const invoices = invoicesRes.data || [];
-      const products = productsRes.data || [];
-      const openStocks = openStocksRes.data || [];
-      const purchases = purchasesRes.data || [];
-      const salesReturns = salesReturnsRes.data || [];
-      const purchaseReturns = purchaseReturnsRes.data || [];
-      const vouchers = vouchersRes.data || [];
-      const dcs = dcsRes.data || [];
-      const recoveries = custRecoveriesRes.data || [];
-      const vendorsData = vendorsRes?.data || [];
-
-      // ==========================================
-      // 1. CUSTOMER RECEIVABLES WITH AGING PENDING
-      // ==========================================
-      // 1a. Include customer opening debit balances / accounts receivable
-      const customersData = customersRes?.data || [];
-      const extractedReceivables: ReceivableInvoice[] = [];
-
-      customersData.forEach((c: any) => {
-        const rawBal = Number(c.currentBalance !== undefined && c.currentBalance !== null && c.currentBalance !== ''
-          ? c.currentBalance
-          : (c.balance !== undefined && c.balance !== null && c.balance !== '' ? c.balance : c.opening_balance || 0));
-        const nature = String(c.balance_nature || c.balanceNature || '').toLowerCase();
-        let effectiveBal = rawBal;
-        if (nature.includes('cr') || nature.includes('credit')) {
-          effectiveBal = -Math.abs(rawBal);
-        } else if (rawBal > 0) {
-          effectiveBal = Math.abs(rawBal);
-        }
-
-        if (effectiveBal > 0.5) {
-          extractedReceivables.push({
-            id: `cust-${c.id}`,
-            invoiceNo: c.customer_code || `CUST-${String(c.id).padStart(3, '0')}`,
-            customerName: c.customerName || 'Customer',
-            salesman: c.city ? `City: ${c.city}` : (c.primaryPhone || 'Direct Ledger'),
-            invoiceDate: c.created_at ? c.created_at.split('T')[0] : 'Opening Bal',
-            totalAmount: effectiveBal,
-            paidAmount: 0,
-            outstandingBalance: effectiveBal,
-            daysPending: 30
-          });
-        }
-      });
-
-      // Map recoveries per invoice
-      const invoiceRecoveriesMap: Record<string, number> = {};
-      recoveries.forEach((rec: any) => {
-        const invId = String(rec.invoice_id || rec.invoiceId || rec.invoice_no || '').trim();
-        if (invId) {
-          const amt = Number(rec.net_collected_amount || rec.amount_paid || rec.amount || 0);
-          invoiceRecoveriesMap[invId] = (invoiceRecoveriesMap[invId] || 0) + amt;
-        }
-      });
-
-      // Map sales returns per invoice
-      const invoiceReturnsMap: Record<string, number> = {};
-      salesReturns.forEach((ret: any) => {
-        const invNo = String(ret.invoice_no || ret.invoice_id || '').trim();
-        if (invNo) {
-          const retAmt = Number(ret.total_amount || ret.total_net_amount || 0);
-          invoiceReturnsMap[invNo] = (invoiceReturnsMap[invNo] || 0) + retAmt;
-        }
-      });
-
-      const today = new Date();
-
-      invoices.forEach((inv: any) => {
-        const total = Number(inv.total_amount || 0);
-        const initialPaid = Number(inv.cash_amount_paid || inv.paid_amount || 0);
-        const invKey = String(inv.id).trim();
-        const invNoKey = String(inv.invoice_no || '').trim();
-
-        const extraRecoveries = (invoiceRecoveriesMap[invKey] || 0) + (invNoKey ? (invoiceRecoveriesMap[invNoKey] || 0) : 0);
-        const retDeductions = (invoiceReturnsMap[invKey] || 0) + (invNoKey ? (invoiceReturnsMap[invNoKey] || 0) : 0);
-
-        const outstanding = Math.max(0, total - initialPaid - extraRecoveries - retDeductions);
-
-        if (outstanding > 0.5) {
-          const rawDate = inv.sale_date || inv.invoice_date || inv.created_at || '';
-          const invDate = rawDate ? new Date(rawDate) : today;
-          const diffTime = Math.max(0, today.getTime() - invDate.getTime());
-          const daysPending = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-          extractedReceivables.push({
-            id: inv.id,
-            invoiceNo: inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`,
-            customerName: inv.customer_name || 'Walk-in Customer',
-            salesman: inv.salesman || 'Direct Sales',
-            invoiceDate: rawDate ? rawDate.split('T')[0] : 'Today',
-            totalAmount: total,
-            paidAmount: initialPaid + extraRecoveries,
-            outstandingBalance: outstanding,
-            daysPending
-          });
-        }
-      });
-
-      // Sort with highest pending receivables on top
-      extractedReceivables.sort((a, b) => b.outstandingBalance - a.outstandingBalance);
-      setReceivablesList(extractedReceivables.slice(0, 15));
-
-      // ==========================================
-      // 1b. VENDOR PAYABLES LEDGER
-      // ==========================================
-      const extractedPayables: PayableVendor[] = [];
-      vendorsData.forEach((v: any) => {
-        const rawBal = Number(v.current_balance !== undefined && v.current_balance !== null
-          ? v.current_balance
-          : (v.balance !== undefined && v.balance !== null ? v.balance : v.opening_balance || 0));
-        const nature = String(v.balance_nature || v.balanceNature || '').toLowerCase();
-        let effectiveBal = rawBal;
-        if (nature.includes('dr') || nature.includes('debit')) {
-          effectiveBal = -Math.abs(rawBal);
-        } else if (rawBal > 0) {
-          effectiveBal = Math.abs(rawBal);
-        }
-
-        if (effectiveBal > 0.5) {
-          extractedPayables.push({
-            id: v.id,
-            vendorCode: v.vendor_code || v.vendorCode || `V-${String(v.id).padStart(3, '0')}`,
-            vendorName: v.vendor_name || v.name || 'Vendor / Mill',
-            city: v.city || v.address || 'Cloth Market',
-            phone: v.phone || v.phone_no || v.cell_no || '-',
-            outstandingBalance: effectiveBal
-          });
-        }
-      });
-
-      // Add unpaid purchases
-      purchases.forEach((pur: any) => {
-        const tot = Number(pur.total_amount || 0);
-        const initialPaid = Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0) || Number(pur.amount_paid || 0);
-        const outstanding = Math.max(0, tot - initialPaid);
-        if (outstanding > 0.5) {
-          extractedPayables.push({
-            id: `pur-${pur.id}`,
-            vendorCode: pur.purchase_no || `PUR-${pur.id}`,
-            vendorName: pur.supplier_name || pur.supplierName || 'Wholesale Supplier',
-            city: pur.destination_warehouse || pur.warehouse || 'Warehouse',
-            phone: '-',
-            outstandingBalance: outstanding
-          });
-        }
-      });
-
-      extractedPayables.sort((a, b) => b.outstandingBalance - a.outstandingBalance);
-      setPayablesList(extractedPayables.slice(0, 15));
-
-      // ==========================================
-      // 2. TRENDING PRODUCTS (REVENUE & VELOCITY)
-      // ==========================================
-      const productSalesMap: Record<string, { name: string; category: string; sku: string; revenue: number; units: number; count: number }> = {};
-      let totalSalesGross = 0;
-
-      invoices.forEach((inv: any) => {
-        let items: any[] = [];
-        if (Array.isArray(inv.items)) {
-          items = inv.items;
-        } else if (typeof inv.items === 'string') {
-          try {
-            items = JSON.parse(inv.items);
-          } catch (_) {
-            items = [];
-          }
-        }
-
-        items.forEach((item: any) => {
-          const pName = String(item.product_name || item.itemName || item.pDescription || item.name || 'Standard Product').trim();
-          const qty = Number(item.qty || item.quantity || item.orderQty || 1);
-          const rate = Number(item.rate || item.rp || item.price || 0);
-          const lineTotal = Number(item.amount || item.total || (qty * rate));
-
-          if (!productSalesMap[pName]) {
-            productSalesMap[pName] = {
-              name: pName,
-              category: item.category || 'General Catalog',
-              sku: item.sku || item.skuCode || 'SKU-GEN',
-              revenue: 0,
-              units: 0,
-              count: 0
-            };
-          }
-
-          productSalesMap[pName].revenue += lineTotal;
-          productSalesMap[pName].units += qty;
-          productSalesMap[pName].count += 1;
-          totalSalesGross += lineTotal;
-        });
-      });
-
-      const rankedProducts: TrendingProduct[] = Object.keys(productSalesMap)
-        .map((key, idx) => {
-          const p = productSalesMap[key];
-          const pct = totalSalesGross > 0 ? (p.revenue / totalSalesGross) * 100 : 0;
-          return {
-            id: idx + 1,
-            name: p.name,
-            category: p.category,
-            sku: p.sku,
-            totalRevenue: p.revenue,
-            unitsSold: p.units,
-            transactionCount: p.count,
-            percentageOfTotal: Math.min(100, Math.max(1, pct))
-          };
-        })
-        .sort((a, b) => b.totalRevenue - a.totalRevenue)
-        .slice(0, 8);
-
-      setTrendingProducts(rankedProducts);
-
-      // ==========================================
-      // 3. LOW STOCK / MINIMUM LIMIT ALERTS
-      // ==========================================
-      const stockAlerts: LowStockAlert[] = [];
-
-      products.forEach((prod: any) => {
-        const prodName = String(prod.product_name || '').trim().toLowerCase();
-        const minLimit = Number(prod.min_stock || prod.reorder_level || prod.minimum_limit || 10);
-
-        // Opening Stock
-        const totalOpening = openStocks
-          .filter((os: any) => {
-            const osName = String(os.product_name || os.item_name || os.itemName || '').trim().toLowerCase();
-            return osName === prodName || (prodName && osName.includes(prodName));
-          })
-          .reduce((sum: number, os: any) => sum + Number(os.quantity || os.qty || 0), 0);
-
-        // Purchases
-        let totalPurchased = 0;
-        purchases.forEach((p: any) => {
-          const pItems = Array.isArray(p.items) ? p.items : (typeof p.items === 'string' ? JSON.parse(p.items || '[]') : []);
-          pItems.forEach((pi: any) => {
-            const piName = String(pi.product_name || pi.itemName || pi.itemDetails || '').trim().toLowerCase();
-            if (piName === prodName || (prodName && piName.includes(prodName))) {
-              totalPurchased += Number(pi.quantity || pi.qty || 0);
-            }
-          });
-        });
-
-        // Sales
-        let totalSold = 0;
-        invoices.forEach((inv: any) => {
-          const invItems = Array.isArray(inv.items) ? inv.items : (typeof inv.items === 'string' ? JSON.parse(inv.items || '[]') : []);
-          invItems.forEach((ii: any) => {
-            const iiName = String(ii.product_name || ii.itemName || ii.pDescription || '').trim().toLowerCase();
-            if (iiName === prodName || (prodName && iiName.includes(prodName))) {
-              totalSold += Number(ii.qty || ii.quantity || 0);
-            }
-          });
-        });
-
-        // Sales Returns (+stock)
-        let totalReturned = 0;
-        salesReturns.forEach((sr: any) => {
-          const srItems = Array.isArray(sr.items) ? sr.items : (typeof sr.items === 'string' ? JSON.parse(sr.items || '[]') : []);
-          srItems.forEach((sri: any) => {
-            const sriName = String(sri.product_name || sri.item_name || sri.itemName || '').trim().toLowerCase();
-            if (sriName === prodName || (prodName && sriName.includes(prodName))) {
-              totalReturned += Number(sri.quantity || sri.qty || 0);
-            }
-          });
-        });
-
-        const currentStock = Math.max(0, totalOpening + totalPurchased - totalSold + totalReturned);
-
-        // Alert condition: currentStock is at or below minimum threshold
-        if (currentStock <= minLimit) {
-          stockAlerts.push({
-            id: prod.id,
-            name: prod.product_name || 'Item',
-            category: prod.category || 'Standard Catalog',
-            warehouse: prod.warehouse || prod.location || 'Main Warehouse',
-            currentStock,
-            minLimit,
-            deficit: Math.max(0, minLimit - currentStock),
-            unit: prod.unit || 'Units'
-          });
-        }
-      });
-
-      // Sort by greatest deficit first and show up to 10
-      stockAlerts.sort((a, b) => b.deficit - a.deficit);
-      setLowStockProducts(stockAlerts.slice(0, 10));
-
-      // ==========================================
-      // 4. HOLDING ITEMS (WAREHOUSE & INVOICE WISE)
-      // ==========================================
-      const extractedHolding: HoldingItemData[] = [];
-
-      dcs.forEach((dc: any) => {
-        let items: any[] = [];
-        if (Array.isArray(dc.items)) {
-          items = dc.items;
-        } else if (typeof dc.items === 'string') {
-          try {
-            items = JSON.parse(dc.items);
-          } catch (_) {
-            items = [];
-          }
-        }
-
-        const gatepassNo = dc.challan_no || `DC-${String(dc.id).padStart(4, '0')}`;
-        const invoiceNo = dc.invoice_no || `INV-${String(dc.invoice_id || dc.id).padStart(4, '0')}`;
-        const customerName = dc.customer_name || 'Direct Buyer';
-        const salesman = dc.salesman || 'Direct Staff';
-        const warehouseGuy = dc.warehouse_guy || dc.warehouse_incharge || dc.dispatch_warehouse || dc.created_by || 'Main Warehouse Storekeeper';
-        const docDate = dc.challan_date || dc.dc_date || String(dc.created_at || '').split('T')[0];
-
-        items.forEach((item: any, idx: number) => {
-          const orderQty = Number(item.orderQty ?? item.qty ?? item.quantity ?? 0);
-          const dispatchedQty = Number(item.dispatchedQty ?? (dc.status === 'Approved' || dc.status === 'Dispatched' ? orderQty : 0));
-          const holdQty = Number(item.holdQty !== undefined ? item.holdQty : Math.max(0, orderQty - dispatchedQty));
-          const rate = Number(item.rate || item.rp || 0);
-
-          if (holdQty > 0) {
-            extractedHolding.push({
-              id: `${dc.id}-${idx}`,
-              dcId: dc.id,
-              gatepassNo,
-              invoiceNo,
-              customerName,
-              salesman,
-              warehouseGuy,
-              productName: item.pDescription || item.itemName || item.product_name || 'Inventory Item',
-              orderQty,
-              dispatchedQty,
-              holdQty,
-              rate,
-              heldAmount: holdQty * rate,
-              date: docDate
-            });
-          }
-        });
-      });
-
-      setHoldingItems(extractedHolding);
-
-      // ==========================================
-      // 5. CUSTOMER SALES GRAPH (DAILY & MONTHLY)
-      // ==========================================
-      // Daily: Last 14 days aggregation
-      const dailyMap: Record<string, number> = {};
-      for (let i = 13; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const key = d.toISOString().split('T')[0];
-        dailyMap[key] = 0;
-      }
-
-      invoices.forEach((inv: any) => {
-        const rawDate = String(inv.sale_date || inv.invoice_date || inv.created_at || '').split('T')[0];
-        if (dailyMap.hasOwnProperty(rawDate)) {
-          dailyMap[rawDate] += Number(inv.total_amount || 0);
-        }
-      });
-
-      setCustomerSalesDaily({
-        dates: Object.keys(dailyMap).map(d => {
-          const dt = new Date(d);
-          return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        }),
-        sales: Object.values(dailyMap)
-      });
-
-      // Monthly: Current Year 12 Months aggregation
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const monthlySalesMap: Record<number, number> = {};
-      monthNames.forEach((_, idx) => { monthlySalesMap[idx] = 0; });
-      const currentYear = new Date().getFullYear();
-
-      invoices.forEach((inv: any) => {
-        const rawDate = inv.sale_date || inv.invoice_date || inv.created_at || '';
-        if (rawDate) {
-          const d = new Date(rawDate);
-          if (d.getFullYear() === currentYear) {
-            monthlySalesMap[d.getMonth()] += Number(inv.total_amount || 0);
-          }
-        }
-      });
-
-      setCustomerSalesMonthly({
-        months: monthNames,
-        sales: monthNames.map((_, idx) => monthlySalesMap[idx])
-      });
-
-      // ==========================================
-      // 6. CASH DRAWER TRANSACTIONS LEDGER
-      // ==========================================
-      const cashTxns: CashTransaction[] = [];
-
-      // Vouchers Cash In/Out
-      vouchers.forEach((v: any) => {
-        const mode = String(v.mode_of_payment || v.voucher_type || '').toLowerCase();
-        if (!mode.includes('bank')) {
-          const text = `${v.voucher_no || ''} ${v.account_title || ''} ${v.narration || ''} ${v.voucher_type || ''} ${v.party_name || ''}`.toLowerCase();
-          const isOB = Boolean(v.metadata?.isOpeningBalance || String(v.voucher_no || '').startsWith('OB'));
-          const isReceipt = String(v.voucher_type || '').toLowerCase().includes('receipt') || (isOB && text.includes('cash'));
-          const isPayment = String(v.voucher_type || '').toLowerCase().includes('payment');
-
-          if (isReceipt || isPayment || (isOB && text.includes('cash'))) {
-            cashTxns.push({
-              id: `v-${v.id}`,
-              date: v.voucher_date || String(v.created_at || '').split('T')[0],
-              type: isReceipt ? 'Inflow' : 'Outflow',
-              source: isOB ? 'Opening Cash Balance' : (v.voucher_type || 'Cash Voucher'),
-              party: v.party_name || v.account_title || 'Cash in Hand',
-              amount: Number(v.total_amount || v.amount || 0),
-              description: v.narration || v.remarks || 'Cash settlement'
-            });
-          }
-        }
-      });
-
-      // Cash Invoices
-      invoices.slice(0, 15).forEach((inv: any) => {
-        const cashPaid = Number(inv.cash_amount_paid || (inv.settlement_mode === 'Cash' ? inv.total_amount : 0) || 0);
-        if (cashPaid > 0) {
-          cashTxns.push({
-            id: `inv-${inv.id}`,
-            date: inv.sale_date || String(inv.created_at || '').split('T')[0],
-            type: 'Inflow',
-            source: `Sale Bill ${inv.invoice_no || inv.id}`,
-            party: inv.customer_name || 'Counter Customer',
-            amount: cashPaid,
-            description: 'Direct Cash Counter Collection'
-          });
-        }
-      });
-
-      setCashTransactions(cashTxns.slice(0, 15));
-
+      const data = await fetchCompleteDashboardOperationalData();
+      setMetrics(data.metrics);
+      setReceivablesList(data.receivablesList);
+      setPayablesList(data.payablesList);
+      setTrendingProducts(data.trendingProducts);
+      setLowStockProducts(data.lowStockProducts);
+      setHoldingItems(data.holdingItems);
+      setCashTransactions(data.cashTransactions);
+      setCustomerSalesDaily(data.customerSalesDaily);
+      setCustomerSalesMonthly(data.customerSalesMonthly);
     } catch (err: any) {
       console.error('Dashboard load error:', err);
     } finally {
@@ -775,10 +204,16 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
     }
   };
 
+  useEffect(() => {
+    if (!isSalesman && !isWarehouse) {
+      loadData();
+    }
+  }, [isSalesman, isWarehouse]);
+
   // Distinct Filter Lists for Holding Items
   const warehouseGuysList = useMemo(() => {
     const set = new Set<string>();
-    holdingItems.forEach(h => {
+    holdingItems.forEach((h) => {
       if (h.warehouseGuy) set.add(h.warehouseGuy);
     });
     return ['All', ...Array.from(set).sort()];
@@ -786,15 +221,14 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
 
   const holdingInvoicesList = useMemo(() => {
     const set = new Set<string>();
-    holdingItems.forEach(h => {
+    holdingItems.forEach((h) => {
       if (h.invoiceNo) set.add(h.invoiceNo);
     });
     return ['All', ...Array.from(set).sort()];
   }, [holdingItems]);
 
-  // Filtered Holding Items
   const filteredHoldingItems = useMemo(() => {
-    return holdingItems.filter(item => {
+    return holdingItems.filter((item) => {
       if (holdingTab === 'warehouse') {
         if (selectedWarehouseGuy !== 'All' && item.warehouseGuy !== selectedWarehouseGuy) return false;
       } else {
@@ -809,7 +243,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
     return <SalesmanDashboard />;
   }
 
-  // 2. Direct auto-render for role: Warehouse Manager (A-39 or SHOP)
+  // 2. Direct auto-render for role: Warehouse Manager
   if (isWarehouse) {
     return <WarehouseDashboard />;
   }
@@ -841,84 +275,12 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
     );
   }
 
-  // --- ApexCharts Configurations ---
-  const hasMonthlyTrend = Boolean(metrics.monthlySalesTrend && metrics.monthlySalesTrend.length > 0);
-  const monthlyCategories = hasMonthlyTrend ? metrics.monthlySalesTrend.map((m) => m.month) : ['Jan', 'Feb', 'Mar'];
-  const grossSalesData = hasMonthlyTrend ? metrics.monthlySalesTrend.map((m) => m.sales) : [0, 0, 0];
-  const procurementData = hasMonthlyTrend ? metrics.monthlySalesTrend.map((m) => m.purchases) : [0, 0, 0];
-
-  // 1. Sales vs Purchases Trend Chart
-  const salesVsPurchasesOptions: any = {
-    chart: { type: 'area', height: 300, toolbar: { show: false }, zoom: { enabled: false } },
-    colors: ['#059669', '#D97706'],
-    dataLabels: { enabled: false },
-    stroke: { curve: 'smooth', width: 2 },
-    xaxis: {
-      categories: monthlyCategories,
-      labels: { style: { colors: '#64748B', fontSize: '11px' } }
-    },
-    yaxis: {
-      labels: {
-        formatter: (val: number) => `Rs. ${(val / 1000).toFixed(0)}k`,
-        style: { colors: '#64748B', fontSize: '11px' }
-      }
-    },
-    tooltip: { y: { formatter: (val: number) => `Rs. ${val.toLocaleString()}` } },
-    legend: { position: 'top', horizontalAlign: 'right' }
-  };
-
-  const salesVsPurchasesSeries = [
-    { name: 'Gross Sales', data: grossSalesData },
-    { name: 'Procurement Purchases', data: procurementData }
-  ];
-
-  // 2. Customer Sales Volume Graph (Monthly & Daily View Switcher)
-  const customerGraphCategories = chartViewTab === 'daily' ? customerSalesDaily.dates : customerSalesMonthly.months;
-  const customerGraphData = chartViewTab === 'daily' ? customerSalesDaily.sales : customerSalesMonthly.sales;
-
-  const customerSalesChartOptions: any = {
-    chart: { type: 'bar', height: 300, toolbar: { show: false } },
-    colors: ['#059669'],
-    plotOptions: {
-      bar: {
-        borderRadius: 4,
-        columnWidth: chartViewTab === 'daily' ? '45%' : '35%',
-        distributed: false
-      }
-    },
-    dataLabels: { enabled: false },
-    xaxis: {
-      categories: customerGraphCategories,
-      labels: { style: { colors: '#64748B', fontSize: '10px' } }
-    },
-    yaxis: {
-      labels: {
-        formatter: (val: number) => `Rs. ${(val / 1000).toFixed(0)}k`,
-        style: { colors: '#64748B', fontSize: '11px' }
-      }
-    },
-    tooltip: {
-      y: { formatter: (val: number) => `Rs. ${Number(val || 0).toLocaleString()}` }
-    }
-  };
-
-  const customerSalesChartSeries = [
-    { name: chartViewTab === 'daily' ? 'Daily Customer Sales' : 'Monthly Customer Sales', data: customerGraphData }
-  ];
-
-  const totalBankBalance = metrics.bankAccounts ? metrics.bankAccounts.reduce((acc, b) => acc + Math.max(0, b.netBalance), 0) : 0;
-
-  const bankDonutOptions: any = {
-    chart: { type: 'donut' },
-    colors: totalBankBalance > 0 ? ['#059669', '#0D9488', '#10B981', '#14B8A6', '#334155'] : ['#CBD5E1'],
-    labels: totalBankBalance > 0 ? metrics.bankAccounts.map((b) => b.accountTitle) : ['Zero Balance'],
-    legend: { position: 'bottom' },
-    tooltip: { y: { formatter: (val: number) => `Rs. ${totalBankBalance > 0 ? val.toLocaleString() : '0.00'}` } }
-  };
-
-  const bankDonutSeries = totalBankBalance > 0
-    ? metrics.bankAccounts.map((b) => Math.max(0, b.netBalance))
-    : [1];
+  // Charts configs
+  const { options: salesVsPurchasesChartOptions, series: salesVsPurchasesChartSeries } =
+    getSalesVsPurchasesChartConfig(metrics);
+  const { options: customerSalesChartOptions, series: customerSalesChartSeries } =
+    getCustomerSalesChartConfig(chartViewTab, customerSalesDaily, customerSalesMonthly);
+  const { options: bankDonutOptions, series: bankDonutSeries } = getBankDonutConfig(metrics);
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs pb-12">
@@ -926,557 +288,29 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
       {!isTheme2 && <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />}
 
       {isTheme2 ? (
-        /* =========================================================================
-         * NHT THEME 2 (AMAL ERP STYLE): Burgundy Hero Banner + 4 Primary Cards + 4 Analytical Panels
-         * ========================================================================= */
         <>
-          {/* Dynamic Hero Banner (Adapts to Navbar & Brand Accent Color) */}
-          {(() => {
-            const bannerBg = accentColor || '#800020';
-            const isLightBanner = getContrastTextColor(bannerBg) === '#0F172A';
-            return (
-              <div
-                className="rounded-2xl p-5 md:p-6 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4 transition-all duration-300"
-                style={{ backgroundColor: bannerBg, color: isLightBanner ? '#0F172A' : '#FFFFFF' }}
-              >
-                <div>
-                  <div className="flex items-baseline gap-3">
-                    <span className={`text-3xl md:text-4xl font-extrabold tracking-tight font-mono ${isLightBanner ? 'text-slate-900' : 'text-white'}`}>
-                      {currentTime}
-                    </span>
-                    <span className={`text-sm font-medium ${isLightBanner ? 'text-slate-700' : 'text-white/80'}`}>
-                      {currentDate}
-                    </span>
-                  </div>
-                  <p className={`text-base md:text-lg font-bold mt-1 tracking-tight ${isLightBanner ? 'text-slate-900' : 'text-white/95'}`}>
-                    {greeting}, {displayName}!
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => navigate('/sales/invoice/new')}
-                    className={`font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
-                      isLightBanner
-                        ? 'bg-slate-900 text-white hover:bg-black'
-                        : 'bg-white text-gray-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <LuPlus size={14} />
-                    <span>New Sale</span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/Purchase/Purchases/list')}
-                    className={`border font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                      isLightBanner
-                        ? 'bg-black/10 hover:bg-black/20 border-black/20 text-slate-900'
-                        : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
-                    }`}
-                  >
-                    <LuShoppingCart size={14} />
-                    <span>Purchase</span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/Reports/Reports-Dashboard')}
-                    className={`border font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                      isLightBanner
-                        ? 'bg-black/10 hover:bg-black/20 border-black/20 text-slate-900'
-                        : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
-                    }`}
-                  >
-                    <LuFileText size={14} />
-                    <span>Reports</span>
-                  </button>
-                  <button
-                    onClick={() => window.print()}
-                    className={`border font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                      isLightBanner
-                        ? 'bg-black/10 hover:bg-black/20 border-black/20 text-slate-900'
-                        : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
-                    }`}
-                  >
-                    <LuArrowDownToLine size={14} />
-                    <span>Export</span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/sales/invoice/list')}
-                    className={`p-2 rounded-lg transition-all cursor-pointer ${
-                      isLightBanner
-                        ? 'bg-black/10 hover:bg-black/20 text-slate-900'
-                        : 'bg-white/10 hover:bg-white/20 text-white'
-                    }`}
-                    title="Search"
-                  >
-                    <LuSearch size={14} />
-                  </button>
-                  <button
-                    onClick={() => window.dispatchEvent(new Event('toggle-dark-mode'))}
-                    className={`p-2 rounded-lg transition-all cursor-pointer ${
-                      isLightBanner
-                        ? 'bg-black/10 hover:bg-black/20 text-slate-900'
-                        : 'bg-white/10 hover:bg-white/20 text-white'
-                    }`}
-                    title="Toggle Dark Mode"
-                  >
-                    <LuMoon size={14} />
-                  </button>
-                  <button
-                    className={`p-2 rounded-lg transition-all cursor-pointer ${
-                      isLightBanner
-                        ? 'bg-black/10 hover:bg-black/20 text-slate-900'
-                        : 'bg-white/10 hover:bg-white/20 text-white'
-                    }`}
-                    title="Notifications"
-                  >
-                    <LuBell size={14} />
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* 4 Financial Metric Cards (Amal Style) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* CASH */}
-            <div
-              onClick={() => setActiveBreakdownModal('cash')}
-              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-cyan-400 cursor-pointer hover:shadow-sm transition-all"
-            >
-              <div className="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 flex items-center justify-center font-bold text-sm mb-3">
-                $
-              </div>
-              <div>
-                <div className={`text-xl font-extrabold ${metrics.cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                  {metrics.cashBalance < 0
-                    ? `-Rs.${Math.abs(metrics.cashBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : `Rs.${metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                </div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                  CASH
-                </div>
-              </div>
-            </div>
-
-            {/* BANK */}
-            <div
-              onClick={() => setActiveBreakdownModal('bank')}
-              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-emerald-400 cursor-pointer hover:shadow-sm transition-all"
-            >
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-bold text-sm mb-3">
-                <LuCreditCard size={16} />
-              </div>
-              <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
-                  Rs.{metrics.totalBankBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                  BANK
-                </div>
-              </div>
-            </div>
-
-            {/* RECEIVABLE */}
-            <div
-              onClick={() => setActiveBreakdownModal('receivables')}
-              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-amber-400 cursor-pointer hover:shadow-sm transition-all"
-            >
-              <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center font-bold text-sm mb-3">
-                <LuArrowDownLeft size={16} />
-              </div>
-              <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
-                  Rs.{metrics.totalReceivables.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                  RECEIVABLE
-                </div>
-              </div>
-            </div>
-
-            {/* PAYABLE */}
-            <div
-              onClick={() => setActiveBreakdownModal('payables')}
-              className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between border-b-2 border-b-rose-400 cursor-pointer hover:shadow-sm transition-all"
-            >
-              <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center font-bold text-sm mb-3">
-                <LuArrowUpRight size={16} />
-              </div>
-              <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-white">
-                  Rs.{metrics.totalPayables.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                  PAYABLE
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4 Analytical Panels (Amal Style) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Money Position */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md bg-rose-50 text-rose-500 flex items-center justify-center text-xs">
-                    📈
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Money Position</h3>
-                    <p className="text-[11px] text-slate-400">Cash and bank, month by month</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                  Total: Rs. {(metrics.cashBalance + metrics.totalBankBalance).toLocaleString()}
-                </span>
-              </div>
-              {hasMonthlyTrend ? (
-                <div className="mt-2 -mb-2">
-                  <ReactApexChart
-                    options={{
-                      chart: { type: 'area', height: 140, sparkline: { enabled: false }, toolbar: { show: false } },
-                      colors: ['#059669', '#0284C7'],
-                      stroke: { curve: 'smooth', width: 2 },
-                      dataLabels: { enabled: false },
-                      xaxis: { categories: monthlyCategories, labels: { style: { colors: '#94A3B8', fontSize: '9px' } } },
-                      yaxis: { labels: { formatter: (val: number) => `Rs.${(val / 1000).toFixed(0)}k`, style: { colors: '#94A3B8', fontSize: '9px' } } },
-                      tooltip: { y: { formatter: (val: number) => `Rs. ${Number(val || 0).toLocaleString()}` } },
-                      legend: { position: 'top', horizontalAlign: 'right', fontSize: '10px' }
-                    }}
-                    series={[
-                      { name: 'Cash Flow Inflow', data: metrics.cashFlowTrend ? metrics.cashFlowTrend.map(c => c.inflow) : [metrics.cashBalance] },
-                      { name: 'Net Bank Liquidity', data: monthlyCategories.map(() => metrics.totalBankBalance) }
-                    ]}
-                    type="area"
-                    height={140}
-                  />
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center py-4">
-                  <div className="flex items-center gap-4 text-center">
-                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Cash in Hand</span>
-                      <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">Rs. {metrics.cashBalance.toLocaleString()}</span>
-                    </div>
-                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-100 dark:border-blue-900/50">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Bank Accounts</span>
-                      <span className="text-sm font-black font-mono text-blue-600 dark:text-blue-400">Rs. {metrics.totalBankBalance.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Owed to you vs owed by you */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md bg-amber-50 text-amber-500 flex items-center justify-center text-xs">
-                    ⏱️
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Owed to you vs owed by you</h3>
-                    <p className="text-[11px] text-slate-400">Settlement clearance & pending balances</p>
-                  </div>
-                </div>
-                <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full ${
-                  (metrics.totalReceivables - metrics.totalPayables) >= 0
-                    ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
-                    : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
-                }`}>
-                  Net: Rs. {(metrics.totalReceivables - metrics.totalPayables).toLocaleString()}
-                </span>
-              </div>
-              {(() => {
-                const totalGrossCust = Number(metrics.totalGrossReceivables || metrics.totalReceivables || 0);
-                const custDue = Number(metrics.totalReceivables || 0);
-                const custRecovered = Number(metrics.totalCustomerRecovered !== undefined ? metrics.totalCustomerRecovered : Math.max(0, totalGrossCust - custDue));
-                const custRecoveredPct = totalGrossCust > 0 ? Math.round((custRecovered / totalGrossCust) * 100) : (custDue === 0 ? 100 : 0);
-                const custPendingPct = Math.max(0, 100 - custRecoveredPct);
-
-                const totalGrossVend = Number(metrics.totalGrossPayables || metrics.totalPayables || 0);
-                const vendDue = Number(metrics.totalPayables || 0);
-                const vendPaid = Number(metrics.totalVendorDisbursed !== undefined ? metrics.totalVendorDisbursed : Math.max(0, totalGrossVend - vendDue));
-                const vendPaidPct = totalGrossVend > 0 ? Math.round((vendPaid / totalGrossVend) * 100) : (vendDue === 0 ? 100 : 0);
-                const vendPendingPct = Math.max(0, 100 - vendPaidPct);
-
-                const hasData = totalGrossCust > 0 || totalGrossVend > 0 || custDue > 0 || vendDue > 0;
-
-                return hasData ? (
-                  <div className="flex-1 flex flex-col justify-center py-2 space-y-3.5">
-                    {/* 1. Customer Receivables */}
-                    <div>
-                      <div className="flex justify-between items-baseline text-xs mb-1">
-                        <span className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                          Receivable from Customers
-                        </span>
-                        <div className="text-right">
-                          <span className="font-mono font-black text-slate-900 dark:text-white text-xs">
-                            Rs. {custDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                          <span className="text-[10px] font-semibold text-rose-500 dark:text-rose-400 ml-1">Due</span>
-                        </div>
-                      </div>
-
-                      {/* Dual-Tone Bar (Green = Recovered, Amber = Pending Due) */}
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
-                        {custRecoveredPct > 0 && (
-                          <div
-                            className="bg-emerald-500 h-2 transition-all duration-500"
-                            style={{ width: `${custRecoveredPct}%` }}
-                            title={`Recovered: Rs. ${custRecovered.toLocaleString()} (${custRecoveredPct}%)`}
-                          />
-                        )}
-                        <div
-                          className="bg-amber-400 h-2 transition-all duration-500"
-                          style={{ width: `${custPendingPct}%` }}
-                          title={`Pending Due: Rs. ${custDue.toLocaleString()} (${custPendingPct}%)`}
-                        />
-                      </div>
-
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 mt-0.5">
-                        <span>Total Billed: <strong className="text-slate-600 dark:text-slate-300 font-mono">Rs. {totalGrossCust.toLocaleString()}</strong></span>
-                        <span>Recovered: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{custRecoveredPct}%</strong> (Rs. {custRecovered.toLocaleString()})</span>
-                      </div>
-                    </div>
-
-                    {/* 2. Vendor Payables */}
-                    <div>
-                      <div className="flex justify-between items-baseline text-xs mb-1">
-                        <span className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                          Payable to Vendors & Mills
-                        </span>
-                        <div className="text-right">
-                          <span className="font-mono font-black text-slate-900 dark:text-white text-xs">
-                            Rs. {vendDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                          <span className="text-[10px] font-semibold text-rose-500 dark:text-rose-400 ml-1">Due</span>
-                        </div>
-                      </div>
-
-                      {/* Dual-Tone Bar (Green = Cleared, Rose = Pending Due) */}
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
-                        {vendPaidPct > 0 && (
-                          <div
-                            className="bg-emerald-500 h-2 transition-all duration-500"
-                            style={{ width: `${vendPaidPct}%` }}
-                            title={`Paid / Cleared: Rs. ${vendPaid.toLocaleString()} (${vendPaidPct}%)`}
-                          />
-                        )}
-                        <div
-                          className="bg-rose-500 h-2 transition-all duration-500"
-                          style={{ width: `${vendPendingPct}%` }}
-                          title={`Pending Due: Rs. ${vendDue.toLocaleString()} (${vendPendingPct}%)`}
-                        />
-                      </div>
-
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 mt-0.5">
-                        <span>Total Liability: <strong className="text-slate-600 dark:text-slate-300 font-mono">Rs. {totalGrossVend.toLocaleString()}</strong></span>
-                        <span>Cleared: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{vendPaidPct}%</strong> (Rs. {vendPaid.toLocaleString()})</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center text-slate-400 text-xs text-center py-6">
-                    Nothing outstanding either way.
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Sales vs Recovery */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md bg-teal-50 text-teal-500 flex items-center justify-center text-xs">
-                    🔄
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Sales vs Recovery</h3>
-                    <p className="text-[11px] text-slate-400">Monthly recovery against billing</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300">
-                  This Month: Rs. {metrics.thisMonthSales.toLocaleString()}
-                </span>
-              </div>
-              {hasMonthlyTrend ? (
-                <div className="mt-2 -mb-2">
-                  <ReactApexChart
-                    options={{
-                      chart: { type: 'bar', height: 140, toolbar: { show: false } },
-                      colors: ['#0D9488', '#F59E0B'],
-                      plotOptions: { bar: { columnWidth: '40%', borderRadius: 3 } },
-                      dataLabels: { enabled: false },
-                      xaxis: { categories: monthlyCategories, labels: { style: { colors: '#94A3B8', fontSize: '9px' } } },
-                      yaxis: { labels: { formatter: (val: number) => `Rs.${(val / 1000).toFixed(0)}k`, style: { colors: '#94A3B8', fontSize: '9px' } } },
-                      tooltip: { y: { formatter: (val: number) => `Rs. ${Number(val || 0).toLocaleString()}` } },
-                      legend: { position: 'top', horizontalAlign: 'right', fontSize: '10px' }
-                    }}
-                    series={[
-                      { name: 'Monthly Gross Sales', data: grossSalesData },
-                      { name: 'Monthly Collections / Inflow', data: metrics.cashFlowTrend ? metrics.cashFlowTrend.map(c => c.inflow) : [metrics.thisMonthCashInflow] }
-                    ]}
-                    type="bar"
-                    height={140}
-                  />
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center py-4">
-                  <div className="flex items-center gap-4 text-center">
-                    <div className="p-3 bg-teal-50 dark:bg-teal-950/40 rounded-xl border border-teal-100 dark:border-teal-900/50">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Invoiced</span>
-                      <span className="text-sm font-black font-mono text-teal-600 dark:text-teal-400">Rs. {metrics.thisMonthSales.toLocaleString()}</span>
-                    </div>
-                    <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-100 dark:border-amber-900/50">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Recovered</span>
-                      <span className="text-sm font-black font-mono text-amber-600 dark:text-amber-400">Rs. {metrics.thisMonthCashInflow.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Sales vs Expense */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs min-h-[190px] flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-500 flex items-center justify-center text-xs">
-                    📊
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Sales vs Expense</h3>
-                    <p className="text-[11px] text-slate-400">Revenue against procurement velocity</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
-                  Purchases: Rs. {metrics.thisMonthPurchases.toLocaleString()}
-                </span>
-              </div>
-              {hasMonthlyTrend ? (
-                <div className="mt-2 -mb-2">
-                  <ReactApexChart
-                    options={{
-                      chart: { type: 'line', height: 140, toolbar: { show: false } },
-                      colors: ['#4F46E5', '#E11D48'],
-                      stroke: { width: [3, 2], curve: 'smooth' },
-                      dataLabels: { enabled: false },
-                      xaxis: { categories: monthlyCategories, labels: { style: { colors: '#94A3B8', fontSize: '9px' } } },
-                      yaxis: { labels: { formatter: (val: number) => `Rs.${(val / 1000).toFixed(0)}k`, style: { colors: '#94A3B8', fontSize: '9px' } } },
-                      tooltip: { y: { formatter: (val: number) => `Rs. ${Number(val || 0).toLocaleString()}` } },
-                      legend: { position: 'top', horizontalAlign: 'right', fontSize: '10px' }
-                    }}
-                    series={[
-                      { name: 'Revenue (Sales)', data: grossSalesData },
-                      { name: 'Procurement (Expense)', data: procurementData }
-                    ]}
-                    type="line"
-                    height={140}
-                  />
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center py-4">
-                  <div className="flex items-center gap-4 text-center">
-                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Sales (Revenue)</span>
-                      <span className="text-sm font-black font-mono text-indigo-600 dark:text-indigo-400">Rs. {metrics.thisMonthSales.toLocaleString()}</span>
-                    </div>
-                    <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-100 dark:border-rose-900/50">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Procurement</span>
-                      <span className="text-sm font-black font-mono text-rose-600 dark:text-rose-400">Rs. {metrics.thisMonthPurchases.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <DashboardHeroBanner
+            accentColor={accentColor}
+            currentTime={currentTime}
+            currentDate={currentDate}
+            greeting={greeting}
+            displayName={displayName}
+            navigate={navigate}
+          />
+          <Theme2FinancialPanels
+            metrics={metrics}
+            setActiveBreakdownModal={setActiveBreakdownModal}
+          />
         </>
       ) : (
-        /* =========================================================================
-         * NHT THEME 1 (ORIGINAL CLASSIC): 8 Action Tiles + 4 Stat Cards
-         * ========================================================================= */
-        <>
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-            <div>
-              <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                {t('executive_dashboard_title', 'Executive Management Dashboard')}
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {t('executive_dashboard_subtitle', 'Real-time fiscal monitoring, procurement velocity & operational intelligence')}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 font-mono text-xs">
-              <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 shadow-sm flex items-center gap-1.5">
-                <MdCalendarToday className="text-emerald-600" />
-                <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
-            <ActionCard title="Sales" subtitle="Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/list')} />
-            <ActionCard title="Purchases" subtitle="Buy New Product" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-teal-700 to-emerald-900" onClick={() => navigate('/Purchase/Purchases/list')} />
-            <ActionCard title="Products" subtitle="Items List" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/list')} />
-            <ActionCard title="Sale Return" subtitle="Customer Return" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/Sales/Sales-Return/List')} />
-            <ActionCard
-              title="Stock Report"
-              subtitle="Inventory Audit"
-              Icon={MdAssessment}
-              bgGradient="bg-gradient-to-br from-emerald-700 to-teal-900"
-              onClick={() => {
-                navigate('/Reports/Reports-Dashboard?category=inventory', { state: { category: 'inventory' } });
-              }}
-            />
-            <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-teal-500 to-emerald-700" onClick={() => { }} />
-            <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-emerald-800 to-slate-900" onClick={() => { }} />
-            <ActionCard title="This Month Purchases" subtitle={`Rs. ${metrics.thisMonthPurchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowDownward} bgGradient="bg-gradient-to-br from-teal-800 to-slate-900" onClick={() => { }} />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-            <StatCard
-              title="Cash"
-              value={metrics.cashBalance}
-              Icon={MdAccountBalanceWallet}
-              bgColor="bg-gradient-to-br from-emerald-500 to-teal-600"
-              thisMonthValue={metrics.thisMonthCashInflow}
-              thisMonthLabel="This Month"
-              onClick={() => setActiveBreakdownModal('cash')}
-            />
-            <StatCard
-              title="Bank Balance"
-              value={metrics.totalBankBalance}
-              Icon={MdAccountBalance}
-              bgColor="bg-gradient-to-br from-teal-600 to-cyan-700"
-              thisMonthValue={metrics.thisMonthBankInflow}
-              thisMonthLabel="This Month"
-              onClick={() => setActiveBreakdownModal('bank')}
-            />
-            <StatCard
-              title="Receivables"
-              value={metrics.totalReceivables}
-              Icon={MdReceiptLong}
-              bgColor="bg-gradient-to-br from-emerald-600 to-teal-700"
-              thisMonthValue={metrics.thisMonthReceivables}
-              thisMonthLabel="This Month"
-              onClick={() => setActiveBreakdownModal('receivables')}
-            />
-            <StatCard
-              title="Stock Assets"
-              value={metrics.inventoryAssetValue}
-              Icon={MdAssessment}
-              bgColor="bg-gradient-to-br from-emerald-700 to-slate-900"
-              thisMonthValue={metrics.inventoryAssetValue}
-              thisMonthLabel="This Month"
-              onClick={() => setActiveBreakdownModal('stock')}
-            />
-          </div>
-        </>
+        <Theme1FinancialCards
+          metrics={metrics}
+          setActiveBreakdownModal={setActiveBreakdownModal}
+          t={t}
+        />
       )}
-      {/* ========================================================================= */}
-      {/* EXPANDABLE OPERATIONAL DETAILS TOGGLE BAR                                */}
-      {/* ========================================================================= */}
+
+      {/* EXPANDABLE OPERATIONAL DETAILS TOGGLE BAR */}
       <div className="flex items-center justify-center pt-2 pb-1">
         <button
           onClick={toggleOperationalDetails}
@@ -1486,8 +320,12 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
               {showOperationalDetails
-                ? (isRTL ? 'آپریشنل لیجرز اور تجزیات چھپائیں' : 'Hide Operational Ledgers & Analytics')
-                : (isRTL ? 'آپریشنل لیجرز اور تجزیات دکھائیں' : 'Show Operational Ledgers & Analytics')}
+                ? isRTL
+                  ? 'آپریشنل لیجرز اور تجزیات چھپائیں'
+                  : 'Hide Operational Ledgers & Analytics'
+                : isRTL
+                ? 'آپریشنل لیجرز اور تجزیات دکھائیں'
+                : 'Show Operational Ledgers & Analytics'}
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono font-bold border border-slate-200/70 dark:border-slate-700/60">
               {isRTL ? '8 فعال ماڈیولز' : '8 Live Modules'}
@@ -1502,1090 +340,54 @@ const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
       {/* COLLAPSIBLE OPERATIONAL SECTIONS */}
       {showOperationalDetails && (
         <div className="space-y-6">
-          {/* ========================================================================= */}
-      {/* SECTION 1: CUSTOMER RECEIVABLES (AGING) & LOW STOCK LIMIT ALERTS           */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* WIDGET 1: CUSTOMER RECEIVABLES AGING LEDGER (7 COLS) */}
-        <div className="lg:col-span-7 relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 flex flex-col justify-between overflow-hidden transition-all duration-200 group">
-          {/* Linear Indigo Accent Notch */}
-          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-indigo-500 shadow-xs transition-all duration-200 group-hover:w-2" />
+          <ReceivablesAndStockSection
+            receivablesList={receivablesList}
+            lowStockProducts={lowStockProducts}
+          />
 
-          <div>
-            <div className="flex justify-between items-center mb-3.5 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200/70 dark:border-indigo-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                  <MdOutlineReceipt size={18} />
-                </div>
-                <div>
-                  <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                    Customer Receivables
-                  </h3>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
-                    Last 10 outstanding sales invoices with real-time aging status
-                  </p>
-                </div>
-              </div>
-              <span className="text-[10.5px] px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-bold font-mono border border-indigo-200/70 dark:border-indigo-800/60 shrink-0">
-                {receivablesList.length} Invoices Due
-              </span>
-            </div>
+          <HoldingInventorySection
+            holdingTab={holdingTab}
+            setHoldingTab={setHoldingTab}
+            selectedWarehouseGuy={selectedWarehouseGuy}
+            setSelectedWarehouseGuy={setSelectedWarehouseGuy}
+            warehouseGuysList={warehouseGuysList}
+            selectedHoldingInvoice={selectedHoldingInvoice}
+            setSelectedHoldingInvoice={setSelectedHoldingInvoice}
+            holdingInvoicesList={holdingInvoicesList}
+            filteredHoldingItems={filteredHoldingItems}
+            trendingProducts={trendingProducts}
+          />
 
-            {/* Table Container with Exactly 5 Visible Rows Height + Scrollbar */}
-            <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200/70 dark:border-slate-800 max-h-[295px] overflow-y-auto pr-1">
-              <table className="w-full table-auto border-collapse font-sans text-xs">
-                <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-800/90 backdrop-blur-xs z-10 shadow-2xs">
-                  <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200/80 dark:border-slate-700/80 text-left text-[10.5px] uppercase tracking-wider">
-                    <th className="py-2.5 px-3">Inv No.</th>
-                    <th className="py-2.5 px-3">Customer</th>
-                    <th className="py-2.5 px-3">Salesman</th>
-                    <th className="py-2.5 px-3">Date & Aging</th>
-                    <th className="py-2.5 px-3 text-right">Outstanding (Rs.)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                  {receivablesList.length > 0 ? (
-                    receivablesList.map((rec) => {
-                      // Linear Aging Badges
-                      let badgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
-                      if (rec.daysPending > 30) {
-                        badgeClass = 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60';
-                      } else if (rec.daysPending > 7) {
-                        badgeClass = 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60';
-                      } else if (rec.daysPending === 0) {
-                        badgeClass = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60';
-                      }
+          <LiquidityCenterSection
+            metrics={metrics}
+            liquidityTab={liquidityTab}
+            setLiquidityTab={setLiquidityTab}
+            bankDonutOptions={bankDonutOptions}
+            bankDonutSeries={bankDonutSeries}
+            cashTransactions={cashTransactions}
+          />
 
-                      return (
-                        <tr key={rec.id} className="hover:bg-slate-50/90 dark:hover:bg-slate-800/50 duration-150 transition-colors">
-                          <td className="py-2.5 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                            {rec.invoiceNo}
-                          </td>
-                          <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-100 max-w-[140px] truncate" title={rec.customerName}>
-                            {rec.customerName}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 max-w-[100px] truncate" title={rec.salesman}>
-                            <span className="inline-flex items-center gap-1 font-medium">
-                              <MdPerson size={13} className="text-slate-400" />
-                              {rec.salesman}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-mono text-[10px] text-slate-400">{rec.invoiceDate}</span>
-                              <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-tight ${badgeClass}`}>
-                                {rec.daysPending === 0 ? 'Today' : `${rec.daysPending} Days Old`}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-black text-rose-600 dark:text-rose-400 text-xs">
-                            Rs. {rec.outstandingBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="py-10 text-center text-slate-400 italic">
-                        No outstanding customer invoices found. All receivables cleared! 🎉
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex justify-between items-center text-[11px] text-slate-400 pl-2.5 mt-2">
-            <span>Scroll table to see full last 10 entries</span>
-            <button
-              onClick={() => navigate('/Accounts/Ledgers?tab=customer-ledger')}
-              className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
-            >
-              <span>Open Receivables Ledger</span>
-              <span>→</span>
-            </button>
-          </div>
-        </div>
-
-        {/* WIDGET 2: LOW STOCK LIMIT ALERTS (5 COLS) */}
-        <div className="lg:col-span-5 relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 flex flex-col justify-between overflow-hidden transition-all duration-200 group">
-          {/* Linear Rose Accent Notch */}
-          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-rose-500 shadow-xs transition-all duration-200 group-hover:w-2" />
-
-          <div>
-            <div className="flex justify-between items-center mb-3.5 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/70 dark:border-rose-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                  <MdWarning size={18} />
-                </div>
-                <div>
-                  <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                    Low Stock Limit Alerts
-                  </h3>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
-                    Products at or below minimum threshold
-                  </p>
-                </div>
-              </div>
-              <span className={`text-[10.5px] px-2.5 py-1 rounded-full font-bold font-mono border shrink-0 ${
-                lowStockProducts.length > 0
-                  ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200/70 dark:border-rose-800/60'
-                  : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60'
-              }`}>
-                {lowStockProducts.length > 0 ? `${lowStockProducts.length} Items Critical` : 'Stock Healthy 🛡️'}
-              </span>
-            </div>
-
-            {/* List with Up to 10 Low Stock Items */}
-            <div className="space-y-2 max-h-[295px] overflow-y-auto pr-1">
-              {lowStockProducts.length > 0 ? (
-                lowStockProducts.map((p) => (
-                  <div
-                    key={p.id}
-                    className="p-2.5 sm:p-3 rounded-xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700 flex justify-between items-center gap-2.5 duration-150 group/item transition-all"
-                  >
-                    <div className="min-w-0 flex-1 pl-1">
-                      <div className="font-bold text-slate-800 dark:text-slate-100 text-xs truncate group-hover/item:text-rose-600 dark:group-hover/item:text-rose-400 transition-colors" title={p.name}>
-                        {p.name}
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-1">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100/80 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/60 dark:border-rose-900/50">
-                          Avail: {p.currentStock} {p.unit}
-                        </span>
-                        <span>•</span>
-                        <span className="font-medium text-slate-400">Min Req: {p.minLimit} {p.unit}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white font-mono font-bold text-[10.5px] shadow-2xs">
-                        -{p.deficit} {p.unit}
-                      </span>
-                      <button
-                        onClick={() => navigate('/Purchase/Purchases/Add')}
-                        className="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-[10.5px] font-bold hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition shadow-2xs cursor-pointer"
-                        title="Create Purchase Order"
-                      >
-                        + Reorder
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-12 text-center text-emerald-600 dark:text-emerald-400 flex flex-col items-center justify-center gap-2">
-                  <MdCheckCircle size={32} />
-                  <span className="font-bold text-xs">All Products are above Minimum Stock Limits</span>
-                  <span className="text-[11px] text-slate-400">Inventory levels are currently optimal.</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 text-right mt-2">
-            <button
-              onClick={() => {
-                navigate('/Reports/Reports-Dashboard?category=inventory', { state: { category: 'inventory' } });
-              }}
-              className="text-rose-600 dark:text-rose-400 font-bold hover:underline text-[11px] inline-flex items-center gap-1 cursor-pointer"
-            >
-              <span>Open Inventory Audit Matrix</span>
-              <span>→</span>
-            </button>
-          </div>
-        </div>
-
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* WIDGET 3: INTERACTIVE HOLDING INVENTORY (7 COLS) */}
-        <div className="lg:col-span-7 relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 flex flex-col justify-between overflow-hidden transition-all duration-200 group">
-          {/* Linear Amber Accent Notch */}
-          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-amber-500 shadow-xs transition-all duration-200 group-hover:w-2" />
-
-          <div>
-            {/* Header with Dual Tabs and Dropdown Filters */}
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-3.5 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                  <MdPauseCircleFilled size={18} />
-                </div>
-                <div>
-                  <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                    Holding Inventory Center
-                  </h3>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
-                    Committed orders held at warehouse pending customer pickup
-                  </p>
-                </div>
-              </div>
-
-              {/* Mode Tabs & Selector */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 text-xs font-bold">
-                  <button
-                    onClick={() => setHoldingTab('warehouse')}
-                    className={`px-2.5 py-1 rounded-md text-[11px] transition-all cursor-pointer ${holdingTab === 'warehouse'
-                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
-                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
-                      }`}
-                  >
-                    Warehouse In-Charge
-                  </button>
-                  <button
-                    onClick={() => setHoldingTab('invoice')}
-                    className={`px-2.5 py-1 rounded-md text-[11px] transition-all cursor-pointer ${holdingTab === 'invoice'
-                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
-                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
-                      }`}
-                  >
-                    Invoice-Wise
-                  </button>
-                </div>
-
-                {/* Dropdown Selector based on Active Tab */}
-                {holdingTab === 'warehouse' ? (
-                  <select
-                    value={selectedWarehouseGuy}
-                    onChange={(e) => setSelectedWarehouseGuy(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 outline-none max-w-[150px] truncate shadow-2xs cursor-pointer focus:ring-1 focus:ring-amber-500"
-                  >
-                    {warehouseGuysList.map(guy => (
-                      <option key={guy} value={guy}>{guy === 'All' ? 'All Warehouse Staff' : guy}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <select
-                    value={selectedHoldingInvoice}
-                    onChange={(e) => setSelectedHoldingInvoice(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 outline-none max-w-[150px] truncate shadow-2xs cursor-pointer focus:ring-1 focus:ring-amber-500"
-                  >
-                    {holdingInvoicesList.map(inv => (
-                      <option key={inv} value={inv}>{inv === 'All' ? 'All Invoices' : inv}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            </div>
-
-            {/* Holding Items Table */}
-            <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200/70 dark:border-slate-800 max-h-[295px] overflow-y-auto pr-1">
-              <table className="w-full table-auto border-collapse font-sans text-xs">
-                <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-800/90 backdrop-blur-xs z-10 shadow-2xs">
-                  <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200/80 dark:border-slate-700/80 text-left text-[10.5px] uppercase tracking-wider">
-                    <th className="py-2.5 px-3">Item / SKU</th>
-                    <th className="py-2.5 px-3">{holdingTab === 'warehouse' ? 'Gatepass (DC)' : 'Invoice #'}</th>
-                    <th className="py-2.5 px-3">Customer</th>
-                    <th className="py-2.5 px-3 text-center">Held Qty</th>
-                    <th className="py-2.5 px-3 text-right">Held Value (Rs.)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {filteredHoldingItems.length > 0 ? (
-                    filteredHoldingItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150 transition-colors">
-                        <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-100 max-w-[150px] truncate" title={item.productName}>
-                          {item.productName}
-                          <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal font-mono mt-0.5">
-                            {holdingTab === 'warehouse' ? `Staff: ${item.warehouseGuy}` : `Salesman: ${item.salesman}`}
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-3 font-mono font-bold text-amber-600 dark:text-amber-400 text-[11px]">
-                          {holdingTab === 'warehouse' ? item.gatepassNo : item.invoiceNo}
-                          <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">{item.date}</div>
-                        </td>
-                        <td className="py-2.5 px-3 font-medium text-slate-700 dark:text-slate-300 max-w-[120px] truncate" title={item.customerName}>
-                          {item.customerName}
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <QtyBadge qty={item.holdQty} />
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-black text-slate-900 dark:text-white">
-                          Rs. {item.heldAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="py-10 text-center text-slate-400 italic">
-                        No active holding items matching your selected criteria.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex justify-between items-center text-[11px] mt-2">
-            <span className="text-slate-400 dark:text-slate-500 font-medium">Showing {filteredHoldingItems.length} active committed holding items</span>
-            <button
-              onClick={() => navigate('/Reports/Holding-Report')}
-              className="text-amber-600 dark:text-amber-400 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
-            >
-              <span>Open Full Holding Report</span>
-              <span>→</span>
-            </button>
-          </div>
-        </div>
-
-        {/* WIDGET 4: TOP TRENDING PRODUCTS (5 COLS) */}
-        <div className="lg:col-span-5 relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 flex flex-col justify-between overflow-hidden transition-all duration-200 group">
-          {/* Linear Orange Accent Notch */}
-          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-orange-500 shadow-xs transition-all duration-200 group-hover:w-2" />
-
-          <div>
-            <div className="flex justify-between items-center mb-3.5 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400 border border-orange-200/70 dark:border-orange-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                  <MdLocalFireDepartment size={18} />
-                </div>
-                <div>
-                  <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                    Top Trending Products
-                  </h3>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
-                    Ranked by revenue velocity & order frequency
-                  </p>
-                </div>
-              </div>
-              <span className="text-[10.5px] px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 font-bold font-mono border border-orange-200/70 dark:border-orange-800/60 shrink-0">
-                Top Demand 🔥
-              </span>
-            </div>
-
-            {/* List with 5 visible rows + scroll */}
-            <div className="space-y-2.5 max-h-[295px] overflow-y-auto pr-1">
-              {trendingProducts.length > 0 ? (
-                trendingProducts.map((p, idx) => (
-                  <div
-                    key={p.name}
-                    className="p-2.5 sm:p-3 rounded-xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700 flex items-center gap-3 transition-all duration-150 group/item"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
-                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : <span className="font-mono text-slate-500 dark:text-slate-400">#{idx + 1}</span>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline mb-1">
-                        <span className="font-bold text-slate-800 dark:text-slate-100 truncate text-xs group-hover/item:text-orange-600 dark:group-hover/item:text-orange-400 transition-colors" title={p.name}>
-                          {p.name}
-                        </span>
-                        <span className="font-mono font-bold text-slate-900 dark:text-white text-xs shrink-0 ml-2">
-                          Rs. {(p.totalRevenue / 1000).toFixed(1)}k
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 dark:text-slate-500 mb-1.5 font-medium">
-                        <span className="truncate mr-2">{p.category}</span>
-                        <span className="shrink-0">{p.unitsSold.toLocaleString()} units sold ({p.transactionCount} bills)</span>
-                      </div>
-                      {/* Mini visual velocity bar */}
-                      <div className="w-full h-1.5 bg-slate-200/80 dark:bg-slate-700/80 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full"
-                          style={{ width: `${Math.max(8, p.percentageOfTotal)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-12 text-center text-slate-400 italic">
-                  No sales invoice items recorded yet.
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 text-right mt-2">
-            <button
-              onClick={() => navigate('/Reports/Sales-Report')}
-              className="text-orange-600 dark:text-orange-400 font-bold hover:underline text-[11px] inline-flex items-center gap-1 cursor-pointer"
-            >
-              <span>View Full Product Sales Analytics</span>
-              <span>→</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* SECTION 2: CHARTS (SALES VS PURCHASES & CUSTOMER SALES WITH DAILY/MONTHLY)*/}
-      {/* ========================================================================= */}
-
-      {/* ========================================================================= */}
-      {/* SECTION 3: HOLDING INVENTORY DUAL-TAB & LOW STOCK LIMIT ALERTS            */}
-      {/* ========================================================================= */}
-
-      {/* ========================================================================= */}
-      {/* SECTION 4: LIQUIDITY CENTER (BANK ACCOUNTS & CASH DRAWER DUAL TABS)       */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Bank Allocation Donut Chart (4 cols) */}
-        <div className="lg:col-span-4 relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 sm:p-6 flex flex-col justify-between overflow-hidden transition-all duration-200 group">
-          {/* Linear Cyan Accent Notch */}
-          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-cyan-500 shadow-xs transition-all duration-200 group-hover:w-2" />
-
-          <div>
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-950/60 dark:text-cyan-400 border border-cyan-200/70 dark:border-cyan-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                  <MdAccountBalance size={18} />
-                </div>
-                <div>
-                  <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                    Bank Balance
-                  </h3>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
-                    Distribution across corporate liquid accounts
-                  </p>
-                </div>
-              </div>
-            </div>
-            <ReactApexChart options={bankDonutOptions} series={bankDonutSeries} type="donut" height={260} />
-          </div>
-          <div className="text-[11px] text-slate-400 dark:text-slate-500 text-center pt-3 border-t border-slate-100 dark:border-slate-800/80 mt-2 font-medium">
-            Net Liquid Reserves: <span className="font-bold text-slate-800 dark:text-slate-100 font-mono">Rs. {(metrics.totalBankBalance + metrics.cashBalance).toLocaleString()}</span>
-          </div>
-        </div>
-
-        {/* Liquid Ledgers (Bank Accounts & Cash Drawer Tabs) (8 cols) */}
-        <div className="lg:col-span-8 relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 sm:p-6 flex flex-col justify-between overflow-hidden transition-all duration-200 group">
-          {/* Linear Emerald Accent Notch */}
-          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-emerald-500 shadow-xs transition-all duration-200 group-hover:w-2" />
-
-          <div>
-            <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                  <MdAccountBalanceWallet size={18} />
-                </div>
-                <div>
-                  <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                    Cash & Bank Ledgers
-                  </h3>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
-                    Reconciled corporate bank accounts & cash drawer transactions
-                  </p>
-                </div>
-              </div>
-
-              {/* Dual Tab: Bank Accounts vs Cash Drawer */}
-              <div className="flex bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 font-bold text-xs">
-                <button
-                  onClick={() => setLiquidityTab('bank')}
-                  className={`px-3 py-1 rounded-md text-[11px] transition-all flex items-center gap-1.5 cursor-pointer ${liquidityTab === 'bank'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
-                    }`}
-                >
-                  <MdAccountBalance size={14} />
-                  <span>Bank Accounts ({metrics.bankAccounts?.length || 0})</span>
-                </button>
-                <button
-                  onClick={() => setLiquidityTab('cash')}
-                  className={`px-3 py-1 rounded-md text-[11px] transition-all flex items-center gap-1.5 cursor-pointer ${liquidityTab === 'cash'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
-                    }`}
-                >
-                  <MdAccountBalanceWallet size={14} />
-                  <span>Cash Drawer</span>
-                </button>
-              </div>
-            </div>
-
-            {/* TAB 1: BANK ACCOUNTS LEDGER TABLE */}
-            {liquidityTab === 'bank' && (
-              <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200/70 dark:border-slate-800 max-h-[260px] overflow-y-auto">
-                <table className="w-full table-auto border-collapse font-mono text-xs">
-                  <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-800/90 backdrop-blur-xs z-10 shadow-2xs">
-                    <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200/80 dark:border-slate-700/80 text-left text-[10.5px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Bank Title</th>
-                      <th className="py-2.5 px-3">Account Number</th>
-                      <th className="py-2.5 px-3 text-right">Debit (+In)</th>
-                      <th className="py-2.5 px-3 text-right">Credit (-Out)</th>
-                      <th className="py-2.5 px-3 text-right font-black">Net Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                    {metrics.bankAccounts && metrics.bankAccounts.length > 0 ? (
-                      metrics.bankAccounts.map((b) => (
-                        <tr
-                          key={b.id}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150 transition-colors"
-                        >
-                          <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-100 font-sans flex items-center gap-2">
-                            <span className="p-1 rounded-md bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-400 border border-cyan-200/60 dark:border-cyan-800/50">
-                              <MdAccountBalance size={14} />
-                            </span>
-                            {b.bankName} - {b.accountTitle}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-mono">{b.accountNumber || '-'}</td>
-                          <td className="py-2.5 px-3 text-right text-emerald-600 dark:text-emerald-400 font-semibold font-mono">
-                            {b.totalInflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-2.5 px-3 text-right text-rose-500 dark:text-rose-400 font-semibold font-mono">
-                            {b.totalOutflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-black text-slate-900 dark:text-white font-mono">
-                            Rs. {b.netBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-400 italic">
-                          No corporate bank accounts registered.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* TAB 2: CASH DRAWER SETTLEMENT TABLE */}
-            {liquidityTab === 'cash' && (
-              <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200/70 dark:border-slate-800 max-h-[260px] overflow-y-auto">
-                <table className="w-full table-auto border-collapse font-mono text-xs">
-                  <thead className="sticky top-0 bg-slate-50/95 dark:bg-slate-800/90 backdrop-blur-xs z-10 shadow-2xs">
-                    <tr className="text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200/80 dark:border-slate-700/80 text-left text-[10.5px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Source / Voucher</th>
-                      <th className="py-2.5 px-3">Party / Particulars</th>
-                      <th className="py-2.5 px-3 text-center">Type</th>
-                      <th className="py-2.5 px-3 text-right">Amount (Rs.)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                    {cashTransactions.length > 0 ? (
-                      cashTransactions.map((c) => (
-                        <tr
-                          key={c.id}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150 transition-colors"
-                        >
-                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-mono">{c.date}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-100 font-sans">
-                            {(() => {
-                              const s = String(c.source || '');
-                              if (s.toLowerCase().includes('sale bill')) {
-                                const parts = s.split(/(sale bill)/i);
-                                return parts.map((part, i) =>
-                                  part.toLowerCase() === 'sale bill'
-                                    ? <span key={i} className="text-rose-500 font-black">{part}</span>
-                                    : <span key={i}>{part}</span>
-                                );
-                              } else if (s.toLowerCase().includes('purchase bill')) {
-                                const parts = s.split(/(purchase bill)/i);
-                                return parts.map((part, i) =>
-                                  part.toLowerCase() === 'purchase bill'
-                                    ? <span key={i} className="text-emerald-600 font-black">{part}</span>
-                                    : <span key={i}>{part}</span>
-                                );
-                              }
-                              return s;
-                            })()}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300 font-sans max-w-[140px] truncate" title={c.party}>
-                            {c.party}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${c.type === 'Inflow'
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/50'
-                              : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/50'
-                              }`}>
-                              {c.type === 'Inflow' ? '+ Received' : '- Paid'}
-                            </span>
-                          </td>
-                          <td className={`py-2.5 px-3 text-right font-black font-mono ${c.type === 'Inflow' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                            }`}>
-                            Rs. {c.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-400 italic">
-                          No recent cash drawer movements found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex justify-between items-center text-xs mt-2">
-            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-              {liquidityTab === 'bank' ? 'Real-time verified bank reconciliation' : `Current Cash In Hand: Rs. ${metrics.cashBalance.toLocaleString()}`}
-            </span>
-            <button
-              onClick={() => navigate('/Accounts/Ledgers?tab=combined-ledger')}
-              className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline text-xs flex items-center gap-1 cursor-pointer"
-            >
-              <span>View Full General Ledger</span>
-              <span>→</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* CHART 1: SALES VS PROCUREMENT */}
-        <div className="relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 sm:p-6 overflow-hidden transition-all duration-200 group">
-          {/* Linear Blue Accent Notch */}
-          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-blue-500 shadow-xs transition-all duration-200 group-hover:w-2" />
-
-          <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200/70 dark:border-blue-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                <MdShowChart size={18} />
-              </div>
-              <div>
-                <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                  Sales vs Purchases
-                </h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">Monthly comparative velocity & margins</p>
-              </div>
-            </div>
-            <span className="text-[10.5px] px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-bold font-mono border border-blue-200/70 dark:border-blue-800/60 shrink-0">
-              Live Sync
-            </span>
-          </div>
-          <ReactApexChart options={salesVsPurchasesOptions} series={salesVsPurchasesSeries} type="area" height={300} />
-        </div>
-
-        {/* CHART 2: CUSTOMER SALES VOLUME GRAPH (TABS: DAILY / MONTHLY) */}
-        <div className="relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xs hover:shadow-xs p-5 sm:p-6 overflow-hidden transition-all duration-200 group">
-          {/* Linear Purple Accent Notch */}
-          <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-purple-500 shadow-xs transition-all duration-200 group-hover:w-2" />
-
-          <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-2.5">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400 border border-purple-200/70 dark:border-purple-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                <MdBarChart size={18} />
-              </div>
-              <div>
-                <h3 className="font-black text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                  Customer Sales Trend
-                </h3>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">Interactive timeframe aggregation</p>
-              </div>
-            </div>
-            {/* Tab Switcher: Daily vs Monthly */}
-            <div className="flex bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 font-bold text-xs">
-              <button
-                onClick={() => setChartViewTab('daily')}
-                className={`px-3 py-1 rounded-md text-[11px] transition-all cursor-pointer ${chartViewTab === 'daily'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
-                  }`}
-              >
-                📅 Daily (Last 14d)
-              </button>
-              <button
-                onClick={() => setChartViewTab('monthly')}
-                className={`px-3 py-1 rounded-md text-[11px] transition-all cursor-pointer ${chartViewTab === 'monthly'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium'
-                  }`}
-              >
-                📆 Monthly
-              </button>
-            </div>
-          </div>
-          <ReactApexChart options={customerSalesChartOptions} series={customerSalesChartSeries} type="bar" height={300} />
-        </div>
-      </div>
+          <DashboardChartsSection
+            salesVsPurchasesChartOptions={salesVsPurchasesChartOptions}
+            salesVsPurchasesChartSeries={salesVsPurchasesChartSeries}
+            customerSalesChartOptions={customerSalesChartOptions}
+            customerSalesChartSeries={customerSalesChartSeries}
+            chartViewTab={chartViewTab}
+            setChartViewTab={setChartViewTab}
+          />
         </div>
       )}
-      {/* ========================================================================= */}
-      {/* ASSET & FINANCIAL METRIC BREAKDOWN POPUP MODAL                            */}
-      {/* ========================================================================= */}
-      {activeBreakdownModal && metrics && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            
-            {/* Top Modal Header */}
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 shadow-2xs border ${
-                  activeBreakdownModal === 'cash'
-                    ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200/70 dark:border-emerald-800/60'
-                    : activeBreakdownModal === 'bank'
-                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 border-blue-200/70 dark:border-blue-800/60'
-                    : activeBreakdownModal === 'receivables'
-                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200/70 dark:border-indigo-800/60'
-                    : activeBreakdownModal === 'payables'
-                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200/70 dark:border-rose-800/60'
-                    : 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200/70 dark:border-amber-800/60'
-                }`}>
-                  {activeBreakdownModal === 'stock' && <MdAssessment size={22} />}
-                  {activeBreakdownModal === 'cash' && <MdAccountBalanceWallet size={22} />}
-                  {activeBreakdownModal === 'bank' && <MdAccountBalance size={22} />}
-                  {activeBreakdownModal === 'receivables' && <MdReceiptLong size={22} />}
-                  {activeBreakdownModal === 'payables' && <MdCorporateFare size={22} />}
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white tracking-tight">
-                    {activeBreakdownModal === 'stock' && 'Stock Assets & Valuation Ledger'}
-                    {activeBreakdownModal === 'cash' && 'Cash Liquidity & Inflow Ledger'}
-                    {activeBreakdownModal === 'bank' && 'Corporate Bank Accounts'}
-                    {activeBreakdownModal === 'receivables' && 'Customer Receivables & Aging'}
-                    {activeBreakdownModal === 'payables' && 'Vendor Payables & Supplier Balances'}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {activeBreakdownModal === 'stock' && 'Real-time warehouse physical stock audit'}
-                    {activeBreakdownModal === 'cash' && 'Cash drawer inflows, outflows & balances'}
-                    {activeBreakdownModal === 'bank' && 'Verified multi-bank treasury accounts'}
-                    {activeBreakdownModal === 'receivables' && 'Outstanding customer debt & collection status'}
-                    {activeBreakdownModal === 'payables' && 'Liabilities owed to fabric suppliers and mills'}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setActiveBreakdownModal(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center transition-colors"
-              >
-                <MdClose size={18} />
-              </button>
-            </div>
 
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-4">
-              
-              {/* === 1. STOCK MODAL === */}
-              {activeBreakdownModal === 'stock' && (
-                <div className="space-y-4">
-                  {/* Linear Hero Card */}
-                  <div className="relative p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs overflow-hidden">
-                    <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-amber-500 shadow-xs" />
-                    <div className="pl-2.5">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                            Current Physical Stock Valuation
-                          </span>
-                          <div className="text-3xl sm:text-4xl font-black mt-1.5 font-mono tracking-tight text-slate-900 dark:text-white">
-                            Rs. {metrics.inventoryAssetValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
-                            Total Inventory
-                          </span>
-                          <span className="font-mono font-black text-xl text-slate-900 dark:text-white">
-                            {(metrics.totalStockUnits || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">Units</span>
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2 flex-wrap">
-                        <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          ✓ 100% Synced with Live Stock Registry
-                        </span>
-                        <span className="text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-300/60 dark:border-slate-600/60">
-                          Evaluated at Selling Price
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 2 Tabs Switcher */}
-                  <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <button
-                      type="button"
-                      onClick={() => setStockModalView('allTime')}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                        stockModalView === 'allTime'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>📦 All-Time Inventory Audit</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStockModalView('thisMonth')}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                        stockModalView === 'thisMonth'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>🗓️ This Month ({new Date().toLocaleString('default', { month: 'short' })}) Movement</span>
-                    </button>
-                  </div>
-
-                  {/* TAB 1: ALL-TIME AUDIT TRAIL */}
-                  {stockModalView === 'allTime' && (
-                    <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 p-4 space-y-2.5 font-mono text-xs">
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 font-sans">
-                        <span className="text-slate-600 dark:text-slate-300 font-medium">1. Initial Opening Stock (Registered):</span>
-                        <span className="font-bold text-slate-900 dark:text-white font-mono">
-                          Rs. {(metrics.baseOpeningStockValue || metrics.monthOpeningStockValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 font-sans">
-                        <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                          <span>➕</span> Total Supplier Purchases (Inflow):
-                        </span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                          +Rs. {(metrics.totalPurchasesStockVal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 font-sans">
-                        <span className="text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
-                          <span>➖</span> Total Sales Invoices (Outflow):
-                        </span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">
-                          -Rs. {(metrics.totalSalesStockVal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      {Number(metrics.totalSalesReturnsStockVal || 0) > 0 && (
-                        <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 font-sans">
-                          <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                            <span>🔄</span> Total Sales Returns (Restored):
-                          </span>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                            +Rs. {(metrics.totalSalesReturnsStockVal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center pt-2 font-sans font-bold text-sm bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40">
-                        <span className="text-slate-900 dark:text-white">Current Physical Stock:</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-mono text-base font-black">
-                          Rs. {metrics.inventoryAssetValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB 2: THIS MONTH'S MOVEMENT */}
-                  {stockModalView === 'thisMonth' && (
-                    <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 p-4 space-y-2.5 font-mono text-xs">
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 font-sans">
-                        <span className="text-slate-600 dark:text-slate-300 font-medium">1. Month Opening Stock ({new Date().toLocaleString('default', { month: 'short' })} 1st):</span>
-                        <span className="font-bold text-slate-900 dark:text-white font-mono">
-                          Rs. {metrics.monthOpeningStockValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 font-sans">
-                        <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                          <span>➕</span> Month Purchases (Inflow):
-                        </span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                          +Rs. {metrics.thisMonthStockInflowVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 font-sans">
-                        <span className="text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
-                          <span>➖</span> Month Sales (Dispatches):
-                        </span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">
-                          -Rs. {metrics.thisMonthStockOutflowVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 font-sans bg-slate-100/70 dark:bg-slate-700/30 px-2 rounded-lg">
-                        <span className="text-slate-700 dark:text-slate-200 font-bold">Month-to-Date Net Movement:</span>
-                        <span className={`font-black font-mono ${metrics.thisMonthStockMovement < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                          {metrics.thisMonthStockMovement < 0 ? '-' : '+'}Rs. {Math.abs(metrics.thisMonthStockMovement).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center pt-2 font-sans font-bold text-sm bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40">
-                        <span className="text-slate-900 dark:text-white">Current Physical Stock:</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-mono text-base font-black">
-                          Rs. {metrics.inventoryAssetValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Top Inventory Valuation Assets List */}
-                  {metrics.topStockProducts && metrics.topStockProducts.length > 0 && (
-                    <div className="border border-slate-200 dark:border-slate-700/60 rounded-2xl p-3 bg-white dark:bg-slate-800/40 space-y-2">
-                      <div className="flex justify-between items-center pb-1 border-b border-slate-100 dark:border-slate-700">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                          Top Stock Assets (By Value)
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveBreakdownModal(null);
-                            navigate('/Reports/Reports-Dashboard?category=inventory', { state: { category: 'inventory' } });
-                          }}
-                          className="text-[11px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
-                        >
-                          Full Report →
-                        </button>
-                      </div>
-                      <div className="space-y-1.5 text-xs">
-                        {metrics.topStockProducts.map((p: any, idx: number) => (
-                          <div key={idx} className="flex justify-between items-center py-1 px-2 rounded-lg bg-slate-50 dark:bg-slate-700/30">
-                            <div className="flex items-center gap-2 truncate pr-2">
-                              <span className="w-5 h-5 rounded-md bg-slate-200 dark:bg-slate-600 text-[10px] font-bold flex items-center justify-center text-slate-700 dark:text-slate-200 shrink-0">
-                                {idx + 1}
-                              </span>
-                              <span className="font-bold text-slate-800 dark:text-slate-200 truncate">{p.name}</span>
-                              <span className="text-[10px] text-slate-400 font-mono shrink-0">({p.qty} pcs @ Rs. {p.unitPrice})</span>
-                            </div>
-                            <span className="font-mono font-black text-slate-900 dark:text-white shrink-0">
-                              Rs. {p.totalValuation.toLocaleString()}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* === 2. CASH MODAL === */}
-              {activeBreakdownModal === 'cash' && (
-                <div className="space-y-4">
-                  {/* Linear Hero Card */}
-                  <div className="relative p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs overflow-hidden">
-                    <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-emerald-500 shadow-xs" />
-                    <div className="pl-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                          Net Cash in Hand
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Reconciled Treasury
-                        </span>
-                      </div>
-                      <div className={`text-3xl sm:text-4xl font-black mt-1.5 font-mono tracking-tight ${metrics.cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                        {metrics.cashBalance < 0
-                          ? `-Rs. ${Math.abs(metrics.cashBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                          : `Rs. ${metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Fintech Inflow vs Outflow Metric Tiles */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40">
-                      <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 block">Total Cash Inflows (All-Time)</span>
-                      <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
-                        +Rs. {metrics.totalCashInflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-800/40">
-                      <span className="text-[11px] font-semibold text-rose-800 dark:text-rose-300 block">Total Cash Outflows (All-Time)</span>
-                      <span className="text-base font-black font-mono text-rose-600 dark:text-rose-400 mt-1 block">
-                        -Rs. {metrics.totalCashOutflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Summary Ledger */}
-                  <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 p-4 space-y-2.5 font-sans text-xs">
-                    <div className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60">
-                      <span className="text-slate-600 dark:text-slate-300 font-medium">This Month Cash Collected:</span>
-                      <span className="font-bold text-slate-900 dark:text-white font-mono text-sm">
-                        Rs. {metrics.thisMonthCashInflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center pt-2 font-bold text-sm bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-700/70">
-                      <span className="text-slate-900 dark:text-white">Net Cash Balance:</span>
-                      <span className={`${metrics.cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} font-mono text-lg font-black`}>
-                        {metrics.cashBalance < 0
-                          ? `-Rs. ${Math.abs(metrics.cashBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                          : `Rs. ${metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* === 3. BANK MODAL === */}
-              {activeBreakdownModal === 'bank' && (
-                <div className="space-y-4">
-                  {/* Linear Hero Card */}
-                  <div className="relative p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs overflow-hidden">
-                    <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-blue-500 shadow-xs" />
-                    <div className="pl-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Bank Balance</span>
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-100/80 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                          {metrics.bankAccounts.length} Verified Accounts
-                        </span>
-                      </div>
-                      <div className="text-3xl sm:text-4xl font-black mt-1.5 font-mono tracking-tight text-slate-900 dark:text-white">
-                        Rs. {metrics.totalBankBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 p-4 space-y-3 font-sans text-xs">
-                    {metrics.bankAccounts.length === 0 ? (
-                      <p className="text-center text-slate-400 py-3">No active corporate bank accounts recorded.</p>
-                    ) : (
-                      metrics.bankAccounts.map((b, idx) => (
-                        <div key={idx} className="flex justify-between items-center py-1.5 border-b border-slate-200/60 dark:border-slate-700/60 last:border-0">
-                          <div>
-                            <span className="font-bold text-slate-900 dark:text-white block">{b.accountTitle || b.bankName}</span>
-                            <span className="text-[10px] text-slate-400 font-mono">{b.accountNumber || 'Primary Account'}</span>
-                          </div>
-                          <span className="font-mono font-bold text-slate-900 dark:text-white">
-                            Rs. {Number(b.netBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* === 4. RECEIVABLES MODAL === */}
-              {activeBreakdownModal === 'receivables' && (
-                <div className="space-y-4">
-                  {/* Linear Hero Card */}
-                  <div className="relative p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs overflow-hidden">
-                    <span className="absolute left-0 top-3.5 bottom-3.5 w-1.25 rounded-r-full bg-indigo-500 shadow-xs" />
-                    <div className="pl-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Customer Receivables</span>
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-100/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                          {receivablesList.length} Active Pending Invoices
-                        </span>
-                      </div>
-                      <div className="text-3xl sm:text-4xl font-black mt-1.5 font-mono tracking-tight text-slate-900 dark:text-white">
-                        Rs. {metrics.totalReceivables.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 p-4 space-y-2 font-sans text-xs max-h-56 overflow-y-auto">
-                    {receivablesList.slice(0, 5).map((rec, idx) => (
-                      <div key={idx} className="flex justify-between items-center py-2 border-b border-slate-200/60 dark:border-slate-700/60 last:border-0">
-                        <div>
-                          <span className="font-bold text-slate-900 dark:text-white block">{rec.customerName}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">Inv: {rec.invoiceNo} • {rec.daysPending} days old</span>
-                        </div>
-                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
-                          Rs. {rec.outstandingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer Actions */}
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-end">
-              <button
-                onClick={() => setActiveBreakdownModal(null)}
-                className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div >
+      {/* ASSET & FINANCIAL METRIC BREAKDOWN POPUP MODAL */}
+      <FinancialBreakdownModal
+        activeBreakdownModal={activeBreakdownModal}
+        setActiveBreakdownModal={setActiveBreakdownModal}
+        metrics={metrics}
+        stockModalView={stockModalView}
+        setStockModalView={setStockModalView}
+        receivablesList={receivablesList}
+      />
+    </div>
   );
 };
 

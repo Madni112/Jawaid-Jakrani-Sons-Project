@@ -1,178 +1,61 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import TableActions from '../../../ui/TableActions';
 import TablePagination from '../../../components/TablePagination';
 import { useAuth } from '../../../Context/Auth';
 import { useModal } from '../../../Context/Modal';
 import { useLanguage } from '../../../Context/LanguageContext';
-import { MdStore, MdPerson, MdEvent } from 'react-icons/md';
-import { FiFileText, FiX, FiChevronLeft, FiChevronRight, FiEdit, FiPrinter } from 'react-icons/fi';
-import PurchaseStockModal from './PurchaseStockModal';
 import ConfirmDeleteModal from '../../../components/Modals/ConfirmDeleteModal';
+import { PurchaseRecord, AllocationMapEntry, UnbilledGRN } from './list/types/purchaseListTypes';
+import { calculatePurchaseAllocations } from './list/utils/purchaseAllocations';
+import { validateAndExecuteDeletePurchase } from './list/services/purchaseDeleteService';
+import { AvailableGrnsModalContent } from './list/components/AvailableGrnsModalContent';
+import { PurchaseQuickViewModal } from './list/components/PurchaseQuickViewModal';
+import { PurchaseTableRow } from './list/components/PurchaseTableRow';
 
-const PurchaseList = () => {
+const PurchaseList: React.FC = () => {
   const navigate = useNavigate();
   const { tenantId } = useAuth();
   const { isRTL } = useLanguage();
   const { showModal, hideModal } = useModal();
-  const [purchases, setPurchases] = useState<any[]>([]);
-  const [purchaseAllocationsMap, setPurchaseAllocationsMap] = useState<Record<string, { totalPaid: number; due: number }>>({});
+
+  const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
+  const [purchaseAllocationsMap, setPurchaseAllocationsMap] = useState<Record<string, AllocationMapEntry>>({});
   const [loading, setLoading] = useState(true);
-  const [unbilledGrns, setUnbilledGrns] = useState<any[]>([]);
-  const [deleteTargetPurchase, setDeleteTargetPurchase] = useState<any | null>(null);
+  const [unbilledGrns, setUnbilledGrns] = useState<UnbilledGRN[]>([]);
+  const [deleteTargetPurchase, setDeleteTargetPurchase] = useState<PurchaseRecord | null>(null);
   const [isDeletingPurchase, setIsDeletingPurchase] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [previewPurchaseIndex, setPreviewPurchaseIndex] = useState<number | null>(null);
 
   const fetchProcurementLogs = async () => {
     try {
       setLoading(true);
-      const { data: purData, error: purError } = await supabase
-        .from('supplier_purchases')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [
+        { data: purData, error: purError },
+        { data: vouchersData },
+        { data: pReturnsData },
+        { data: grnData }
+      ] = await Promise.all([
+        supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false }),
+        supabase
+          .from('financial_vouchers')
+          .select('*')
+          .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher'),
+        supabase.from('purchase_returns').select('*'),
+        supabase.from('grn_receipts').select('*, grn_items(*)').neq('status', 'Billed').order('created_at', { ascending: false })
+      ]);
 
       if (purError) throw purError;
 
-      const { data: vouchersData } = await supabase
-        .from('financial_vouchers')
-        .select('*')
-        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher');
-
-      const { data: pReturnsData } = await supabase
-        .from('purchase_returns')
-        .select('*');
-
-      // Group purchases by vendor
-      const purchasesByVendor: Record<string, any[]> = {};
-      (purData || []).forEach(p => {
-        const vKey = (p.supplier_name || p.vendor_name || 'General Vendor').trim().toLowerCase();
-        if (!purchasesByVendor[vKey]) purchasesByVendor[vKey] = [];
-        purchasesByVendor[vKey].push(p);
-      });
-
-      const allocMap: Record<string, { totalPaid: number; due: number }> = {};
-
-      // For each vendor, allocate vouchers + returns (specific + general unallocated FIFO)
-      Object.keys(purchasesByVendor).forEach(vKey => {
-        const vendorPurs = [...purchasesByVendor[vKey]].sort((a, b) => {
-          const timeA = new Date(a.purchase_date || a.created_at || 0).getTime();
-          const timeB = new Date(b.purchase_date || b.created_at || 0).getTime();
-          if (timeA !== timeB) return timeA - timeB;
-
-          const createdA = new Date(a.created_at || 0).getTime();
-          const createdB = new Date(b.created_at || 0).getTime();
-          if (createdA !== createdB) return createdA - createdB;
-
-          return (Number(a.id) || 0) - (Number(b.id) || 0);
-        });
-
-        const vendorVouchers = (vouchersData || []).filter(v => {
-          const vName = (v.customer_name || v.customerName || v.vendor_name || v.vendorName || '').trim().toLowerCase();
-          return vName === vKey || vName.includes(vKey) || vKey.includes(vName);
-        });
-
-        const vendorReturns = (pReturnsData || []).filter(r => {
-          const rName = (r.vendor_name || r.vendorName || r.supplier_name || '').trim().toLowerCase();
-          return (rName === vKey || rName.includes(vKey) || vKey.includes(rName)) && String(r.status || '').toLowerCase() !== 'cancel';
-        });
-
-        const poAlloc: Record<string, { gross: number; upfront: number; specificVouchers: number; specificReturns: number; generalAllocated: number; totalPaid: number; due: number }> = {};
-        let unallocatedGeneral = 0;
-
-        vendorPurs.forEach(p => {
-          const key = p.purchase_no || String(p.id);
-          const rawId = String(p.id);
-          const gross = Number(p.total_amount) || 0;
-          const upfront = Number(p.cash_amount_paid || 0) + Number(p.bank_amount_paid || 0);
-
-          const initObj = { gross, upfront, specificVouchers: 0, specificReturns: 0, generalAllocated: 0, totalPaid: upfront, due: Math.max(0, gross - upfront) };
-          poAlloc[key] = initObj;
-          poAlloc[rawId] = initObj;
-        });
-
-        // 1. Allocate Vouchers
-        vendorVouchers.forEach(v => {
-          const vAmt = Number(v.total_amount) || 0;
-          const vPoRef = v.original_invoice_no || v.metadata?.linkedPurchaseNo || '';
-          if (vPoRef) {
-            const cleanId = String(vPoRef).replace(/\D/g, '');
-            const matched = vendorPurs.find(p => p.purchase_no === vPoRef || String(p.id) === cleanId);
-            if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
-              poAlloc[matched.purchase_no || String(matched.id)].specificVouchers += vAmt;
-            } else {
-              unallocatedGeneral += vAmt;
-            }
-          } else {
-            unallocatedGeneral += vAmt;
-          }
-        });
-
-        // 2. Allocate Returns (Debit Notes) item-by-item
-        vendorReturns.forEach(r => {
-          const matchedInvoices = r.metadata?.matchedInvoices;
-          if (Array.isArray(matchedInvoices) && matchedInvoices.length > 0) {
-            matchedInvoices.forEach((mi: any) => {
-              const poTarget = mi.purchase_no;
-              const val = Number(mi.deducted_value || (Number(mi.deducted_qty || 0) * Number(mi.invoice_rate || mi.entered_rate || 0)) || 0);
-              const cleanId = String(poTarget).replace(/\D/g, '');
-              const matched = vendorPurs.find(p => p.purchase_no === poTarget || String(p.id) === cleanId);
-              if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
-                poAlloc[matched.purchase_no || String(matched.id)].specificReturns += val;
-              } else {
-                unallocatedGeneral += val;
-              }
-            });
-          } else {
-            const rAmt = Number(r.total_amount) || 0;
-            const rPoRef = r.purchase_no || r.original_invoice_no || r.metadata?.linkedPurchaseNo || '';
-            if (rPoRef) {
-              const cleanId = String(rPoRef).replace(/\D/g, '');
-              const matched = vendorPurs.find(p => p.purchase_no === rPoRef || String(p.id) === cleanId);
-              if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
-                poAlloc[matched.purchase_no || String(matched.id)].specificReturns += rAmt;
-              } else {
-                unallocatedGeneral += rAmt;
-              }
-            } else {
-              unallocatedGeneral += rAmt;
-            }
-          }
-        });
-
-        // 3. FIFO Distribute Unallocated General Vouchers & Returns across oldest open POs
-        let genRemaining = unallocatedGeneral;
-        vendorPurs.forEach(p => {
-          const key = p.purchase_no || String(p.id);
-          const alloc = poAlloc[key];
-          if (alloc) {
-            const dueBeforeGen = Math.max(0, alloc.gross - alloc.upfront - alloc.specificVouchers - alloc.specificReturns);
-            if (dueBeforeGen > 0 && genRemaining > 0) {
-              const toDist = Math.min(dueBeforeGen, genRemaining);
-              alloc.generalAllocated += toDist;
-              genRemaining -= toDist;
-            }
-            alloc.totalPaid = alloc.upfront + alloc.specificVouchers + alloc.specificReturns + alloc.generalAllocated;
-            alloc.due = Math.max(0, alloc.gross - alloc.totalPaid);
-
-            allocMap[key] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns, generalAllocated: alloc.generalAllocated, specificVouchers: alloc.specificVouchers };
-            allocMap[String(p.id)] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns, generalAllocated: alloc.generalAllocated, specificVouchers: alloc.specificVouchers };
-            if (p.purchase_no) {
-              allocMap[p.purchase_no] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns, generalAllocated: alloc.generalAllocated, specificVouchers: alloc.specificVouchers };
-            }
-          }
-        });
-      });
-
+      const allocMap = calculatePurchaseAllocations(purData || [], vouchersData || [], pReturnsData || []);
       setPurchaseAllocationsMap(allocMap);
       setPurchases(purData || []);
-      // Fetch open unbilled GRNs
-      const { data: grnData } = await supabase.from('grn_receipts').select('*, grn_items(*)').neq('status', 'Billed').order('created_at', { ascending: false });
       if (grnData) setUnbilledGrns(grnData);
     } catch (err: any) {
       toast.error('Data Fetching Failure: ' + err.message);
@@ -185,335 +68,55 @@ const PurchaseList = () => {
     fetchProcurementLogs();
   }, []);
 
-  
   const openAvailableGrnsModal = () => {
     showModal(
-      <div className="p-4 sm:p-6 text-black dark:text-white text-xs">
-        <div className="flex items-center justify-between pb-3 border-b border-stroke dark:border-strokedark mb-4">
-          <div>
-            <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
-              <MdStore className="text-emerald-600" size={20} />
-              Available GRNs to Make Purchase Bill
-            </h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">
-              Select an unbilled physical goods receipt to convert into a financial purchase bill
-            </p>
-          </div>
-          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold rounded-full text-xs">
-            {unbilledGrns.length} Available
-          </span>
-        </div>
-
-        {unbilledGrns.length === 0 ? (
-          <div className="py-12 text-center text-gray-400 italic">
-            All received GRNs have already been billed into purchases!
-          </div>
-        ) : (
-          <div className="max-h-96 overflow-y-auto">
-            <table className="w-full table-auto border-collapse text-left">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-gray-600 dark:text-gray-300 border-b border-stroke dark:border-strokedark">
-                  <th className="py-2.5 px-3">GRN #</th>
-                  <th className="py-2.5 px-3">Vendor</th>
-                  <th className="py-2.5 px-3 text-center">Receipt Date</th>
-                  <th className="py-2.5 px-3 text-center">Items</th>
-                  <th className="py-2.5 px-3 text-center">Status</th>
-                  <th className="py-2.5 px-3 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stroke dark:divide-strokedark">
-                {unbilledGrns.map(g => (
-                  <tr key={g.id} className="hover:bg-emerald-50/30 dark:hover:bg-emerald-950/10 font-semibold">
-                    <td className="py-2.5 px-3 font-mono font-bold text-primary">{g.grn_no}</td>
-                    <td className="py-2.5 px-3 text-gray-700 dark:text-gray-200">{g.vendor_name}</td>
-                    <td className="py-2.5 px-3 text-center text-gray-500 font-mono text-[11px]">{g.receipt_date}</td>
-                    <td className="py-2.5 px-3 text-center font-mono">{g.grn_items?.length || 0}</td>
-                    <td className="py-2.5 px-3 text-center">
-                      <span className="px-2 py-0.5 border text-[10px] rounded-full font-bold uppercase bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300">
-                        {g.status}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-center">
-                      <button
-                        onClick={() => {
-                          hideModal();
-                          navigate('/Purchase/Purchases/Add', { 
-                            state: { 
-                              importGrnId: g.id,
-                              importGrn: g,
-                              isTilePurchase: true 
-                            } 
-                          });
-                        }}
-                        className="px-3 py-1 bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700 transition shadow-xs text-xs whitespace-nowrap"
-                      >
-                        Create Purchase Bill &rarr;
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>,
-      "Available GRNs",
+      <AvailableGrnsModalContent
+        unbilledGrns={unbilledGrns}
+        onSelectGrn={(g) => {
+          hideModal();
+          navigate('/Purchase/Purchases/Add', {
+            state: {
+              importGrnId: g.id,
+              importGrn: g,
+              isTilePurchase: true
+            }
+          });
+        }}
+      />,
+      'Available GRNs',
       undefined,
-      "max-w-4xl"
+      'max-w-4xl'
     );
   };
 
   const executeDeletePurchase = async () => {
     if (!deleteTargetPurchase) return;
-    const id = deleteTargetPurchase.id;
-
     try {
       setIsDeletingPurchase(true);
-      const { data: targetRecord } = await supabase.from('supplier_purchases').select('items, target_warehouse, metadata').eq('id', id).single();
-      
-      // PRE-DELETION STOCK VALIDATION
-      // Rule: Allow deletion ONLY if current breakdown EXACTLY matches the purchase bill.
-      // Uses dynamic stock calculation (same as ProductList) instead of static warehouse_inventory table.
-      if (targetRecord?.items) {
-        let grnItems: any[] = [];
-        if (targetRecord.metadata?.grn_id) {
-          const { data: gi } = await supabase.from('grn_items').select('*').eq('grn_id', targetRecord.metadata.grn_id);
-          grnItems = gi || [];
-        }
-
-        // Helper: format qty with UOM label
-        const fmtQty = (qty: number, uom: string): string => {
-          let u = (uom || 'unit').toUpperCase();
-          if (qty !== 1) {
-            if (u === 'BOX') u = 'BOXES';
-            else if (u === 'EACH') u = 'UNITS';
-            else if (!u.endsWith('S')) u += 'S';
-          }
-          return `${qty} ${u}`;
-        };
-
-        // Helper: dynamically calculate available stock for a product (product-level, not warehouse-specific)
-        // Returns { available, uom } based on ALL transactions for that product name
-        const getDynamicStock = async (productName: string): Promise<{ available: number; uom: string }> => {
-          const pNameLower = productName.trim().toLowerCase();
-
-          // Fetch product UOM
-          const { data: prodData } = await supabase.from('products').select('uom').ilike('product_name', productName).maybeSingle();
-          const uom = prodData?.uom || 'unit';
-
-          // 1. Opening stock (product-level)
-          const { data: openStocks } = await supabase.from('opening_stocks').select('*');
-          let opening = 0;
-          (openStocks || []).forEach((os: any) => {
-            const osName = String(os.product_name || os.item_name || '').trim().toLowerCase();
-            if (osName === pNameLower || osName.includes(pNameLower)) {
-              opening += Number(os.quantity || os.qty || 0);
-            }
-          });
-
-          // 2. All GRN accepted qty INCLUDING this purchase's GRN
-          const { data: allGrnItems } = await supabase.from('grn_items').select('*, grn_receipts(status)');
-          let totalPurchased = 0;
-          (allGrnItems || []).forEach((gi: any) => {
-            const grnStatus = gi.grn_receipts?.status || '';
-            if (!['Confirm', 'Partially Received', 'Billed'].includes(grnStatus)) return;
-            const giName = String(gi.product_name || '').trim().toLowerCase();
-            if (giName === pNameLower || giName.includes(pNameLower)) {
-              totalPurchased += Number(gi.accepted_qty ?? gi.qty ?? 0);
-            }
-          });
-
-          // 3. Total sales (product-level, not warehouse-specific)
-          const { data: sales } = await supabase.from('sales_invoices').select('items, sale_status');
-          let totalSold = 0;
-          (sales || []).forEach((s: any) => {
-            if (['cancel', 'deleted'].includes(String(s.sale_status || '').toLowerCase())) return;
-            const itemsArr = Array.isArray(s.items) ? s.items : [];
-            itemsArr.forEach((si: any) => {
-              const siName = String(si.product_name || si.itemName || '').trim().toLowerCase();
-              if (siName === pNameLower || siName.includes(pNameLower)) {
-                totalSold += Number(si.qty || si.quantity || 0);
-              }
-            });
-          });
-
-          // 4. Sales returns
-          const { data: sReturns } = await supabase.from('sales_returns').select('items, status, inward_status, received_items');
-          let totalSalesReturned = 0;
-          (sReturns || []).forEach((sr: any) => {
-            const statusLower = String(sr.status || '').toLowerCase();
-            const inwardLower = String(sr.inward_status || '').toLowerCase();
-            if (statusLower === 'cancel' || statusLower === 'deleted' || inwardLower === 'rejected') return;
-            const isPending = inwardLower === 'pending inward' || inwardLower === 'pending';
-            const receivedItems = Array.isArray(sr.received_items) ? sr.received_items : [];
-            const itemsArr = Array.isArray(sr.items) ? sr.items : [];
-            itemsArr.forEach((si: any) => {
-              const siName = String(si.product_name || si.itemName || '').trim().toLowerCase();
-              if (siName === pNameLower || siName.includes(pNameLower)) {
-                let acceptedQty = 0;
-                if (isPending) {
-                  acceptedQty = 0;
-                } else if (inwardLower === 'partially received') {
-                  const rec = receivedItems.find((r: any) =>
-                    (r.skuCode && String(r.skuCode).trim().toLowerCase() === String(si.sku || si.skuCode || '').trim().toLowerCase()) ||
-                    (r.itemName && String(r.itemName).trim().toLowerCase() === String(si.itemName || si.product_name || '').trim().toLowerCase())
-                  );
-                  acceptedQty = rec ? Number(rec.acceptedQty || 0) : 0;
-                } else {
-                  acceptedQty = Number(si.qty || si.quantity || 0);
-                }
-                totalSalesReturned += acceptedQty;
-              }
-            });
-          });
-
-          // 5. Purchase returns
-          const { data: pReturns } = await supabase.from('purchase_returns').select('items, status');
-          let totalPurchaseReturned = 0;
-          (pReturns || []).forEach((pr: any) => {
-            if (['cancel', 'deleted'].includes(String(pr.status || '').toLowerCase())) return;
-            const itemsArr = Array.isArray(pr.items) ? pr.items : [];
-            itemsArr.forEach((pi: any) => {
-              const piName = String(pi.product_name || pi.itemName || '').trim().toLowerCase();
-              if (piName === pNameLower || piName.includes(pNameLower)) {
-                totalPurchaseReturned += Number(pi.qty || pi.quantity || 0);
-              }
-            });
-          });
-
-          const available = (opening + totalPurchased + totalSalesReturned) - totalSold - totalPurchaseReturned;
-          return { available, uom };
-        };
-
-        for (const item of targetRecord.items) {
-          const pName = item.itemName || item.product_name;
-          if (!pName) continue;
-
-          if (targetRecord.metadata?.grn_id) {
-            const gItem = grnItems.find(g =>
-              String(g.product_name || '').toLowerCase() === String(pName).toLowerCase()
-            );
-
-            if (gItem) {
-              const acceptedQty = Number(gItem.accepted_qty ?? 0);
-
-              // Block deletion if any items have already been approved in inward
-              if (acceptedQty > 0) {
-                toast.error(
-                  `Cannot Delete Purchase\n\nProduct: "${pName}" has ${acceptedQty} units already approved in Inward Challan.\n\nPlease raise a Purchase Return instead.`,
-                  { duration: 7000 }
-                );
-                return;
-              }
-
-              const grnRejected = Number(gItem.rejected_qty ?? 0);
-              const billQty     = Number(item.qty || item.quantity || 0);
-              const expectedRej = billQty - acceptedQty;
-
-              // Check 1: Dynamically calculate current available stock and verify >= accepted_qty
-              if (acceptedQty > 0) {
-                const stockData = await getDynamicStock(pName);
-                const currentAvailable = stockData.available;
-                const formattedStock = fmtQty(currentAvailable, stockData.uom);
-                const formattedReq = fmtQty(acceptedQty, stockData.uom);
-
-                if (currentAvailable < acceptedQty) {
-                  toast.error(
-                    `Cannot Delete Purchase\n\nDeletion blocked because some units have already been sold or transferred.`,
-                    { duration: 6000 }
-                  );
-                  return;
-                }
-              }
-
-              // Check 2: GRN rejected qty mismatch — only relevant if GRN was actually verified (acceptedQty > 0)
-              if (acceptedQty > 0 && expectedRej > 0 && grnRejected !== expectedRej) {
-                toast.error(
-                  `Cannot Delete Purchase\n\nProduct: "${pName}"\nExpected QC Rejection: ${expectedRej}\nActual GRN Rejection: ${grnRejected}\n\nThe current physical breakdown doesn't match the original purchase bill.`,
-                  { duration: 6000 }
-                );
-                return;
-              }
-            }
-          } else {
-            // Non-GRN: dynamically check full qty
-            const qtyToReverse  = Number(item.qty || item.quantity || 0);
-            if (qtyToReverse > 0) {
-              const stockData = await getDynamicStock(pName);
-              const currentAvailable = stockData.available;
-              const formattedStock = fmtQty(currentAvailable, stockData.uom);
-              const formattedReq = fmtQty(qtyToReverse, stockData.uom);
-
-              if (currentAvailable < qtyToReverse) {
-                toast.error(
-                  `Cannot Delete Purchase\n\nDeletion blocked because some units have already been sold or transferred.`,
-                  { duration: 6000 }
-                );
-                return;
-              }
-            }
-          }
-        }
-      }
-      
-      // Only reverse stock if this purchase was NOT linked to a GRN.
-      // If it is linked to a GRN, the GRN is the source of physical stock, so deleting the bill shouldn't touch stock.
-      if (!targetRecord?.metadata?.grn_id) {
-        if (targetRecord?.items) {
-          for (const item of targetRecord.items) {
-            const qty = Number(item.qty || item.quantity || 0);
-            const pName = item.itemName || item.product_name;
-
-            if (pName) {
-              // 1. Decrease Master Product Stock (-)
-              const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', pName).maybeSingle();
-              if (prod) {
-                const newStock = Math.max(0, (Number(prod.current_stock) || 0) - qty);
-                await supabase.from('products').update({ current_stock: newStock }).ilike('product_name', pName);
-              }
-
-              // warehouse_inventory retired — formula-based stock is source of truth
-            }
-          }
-        }
-      } else {
-        // If it was linked to an auto-generated GRN, completely delete the GRN and its items
-        // This automatically reverses stock (since stock is calculated dynamically) and removes it from inward queues.
-        await supabase.from('grn_items').delete().eq('grn_id', targetRecord.metadata.grn_id);
-        await supabase.from('grn_receipts').delete().eq('id', targetRecord.metadata.grn_id);
-      }
-
-      // Cascade delete financial vouchers linked to this purchase (PAV & VPV)
-      const purchaseIdent = targetRecord?.purchase_no || `PUR-${String(id).padStart(4, '0')}`;
-      await supabase
-        .from('financial_vouchers')
-        .delete()
-        .or(`original_invoice_no.eq.${purchaseIdent},metadata->>linkedPurchaseNo.eq.${purchaseIdent}`);
-
-      const { error } = await supabase.from('supplier_purchases').delete().eq('id', id);
-      if (error) throw error;
-
+      await validateAndExecuteDeletePurchase(deleteTargetPurchase.id);
       toast.success('Procurement consignment record dropped and stock levels reversed safely!');
       setDeleteTargetPurchase(null);
       fetchProcurementLogs();
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to delete purchase');
     } finally {
       setIsDeletingPurchase(false);
     }
   };
 
-  const filteredPurchases = purchases.filter(p => {
-    const rawNo = p.purchase_no || '';
-    const formattedNo = rawNo.toUpperCase().startsWith('PUR-') ? rawNo : `PUR-${rawNo}`;
+  const filteredPurchases = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return (
-      rawNo.toLowerCase().includes(term) ||
-      formattedNo.toLowerCase().includes(term) ||
-      (p.supplier_name || '').toLowerCase().includes(term) ||
-      (p.target_warehouse || '').toLowerCase().includes(term)
-    );
-  });
+    return purchases.filter((p) => {
+      const rawNo = p.purchase_no || '';
+      const formattedNo = rawNo.toUpperCase().startsWith('PUR-') ? rawNo : `PUR-${rawNo}`;
+      return (
+        rawNo.toLowerCase().includes(term) ||
+        formattedNo.toLowerCase().includes(term) ||
+        (p.supplier_name || '').toLowerCase().includes(term) ||
+        (p.target_warehouse || '').toLowerCase().includes(term)
+      );
+    });
+  }, [purchases, searchTerm]);
 
   const totalEntries = filteredPurchases.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
@@ -524,9 +127,6 @@ const PurchaseList = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, pageSize]);
-
-  // ── Modal Preview Navigation & Keyboard Controls ──
-  const [previewPurchaseIndex, setPreviewPurchaseIndex] = useState<number | null>(null);
 
   const handlePrevPurchase = () => {
     if (previewPurchaseIndex !== null && previewPurchaseIndex > 0) {
@@ -540,60 +140,45 @@ const PurchaseList = () => {
     }
   };
 
-  useEffect(() => {
-    if (previewPurchaseIndex === null) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handlePrevPurchase();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        handleNextPurchase();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        setPreviewPurchaseIndex(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewPurchaseIndex, filteredPurchases.length]);
-
   const previewPurchase = previewPurchaseIndex !== null ? filteredPurchases[previewPurchaseIndex] : null;
-
-  // ── Smart Money Formatter (Hides .00 for whole numbers, shows decimals if fractional) ──
-  const formatMoney = (val: number | string | undefined | null): string => {
-    const num = Number(val) || 0;
-    if (Number.isInteger(num)) {
-      return num.toLocaleString('en-US');
-    }
-    return num.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-  };
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
-      
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-black dark:text-white">{isRTL ? "ہول سیل خریداری رجسٹر (Purchases)" : "Wholesale Purchase Log Registry"}</h2>
-          <p className="text-xs text-gray-400">{isRTL ? "سپلائرز سے مال کی آمد، کنسائنمنٹس اور بیجز کا انتظام کریں" : "Manage inward vendor supply consignments and trace batch arrivals"}</p>
+          <h2 className="text-xl font-bold text-black dark:text-white">
+            {isRTL ? 'ہول سیل خریداری رجسٹر (Purchases)' : 'Wholesale Purchase Log Registry'}
+          </h2>
+          <p className="text-xs text-gray-400">
+            {isRTL
+              ? 'سپلائرز سے مال کی آمد، کنسائنمنٹس اور بیجز کا انتظام کریں'
+              : 'Manage inward vendor supply consignments and trace batch arrivals'}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate('/Purchase/Purchases/Add')}
-          className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
-        >
-          {isRTL ? "+ نیا مال درج کریں" : "+ Log New Supply"}
-        </button>
+        <div className="flex items-center gap-3">
+          {unbilledGrns.length > 0 && (
+            <button
+              type="button"
+              onClick={openAvailableGrnsModal}
+              className="flex items-center justify-center rounded bg-emerald-600 py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
+            >
+              📥 Available GRNs ({unbilledGrns.length})
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => navigate('/Purchase/Purchases/Add')}
+            className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
+          >
+            {isRTL ? '+ نیا مال درج کریں' : '+ Log New Supply'}
+          </button>
+        </div>
       </div>
 
       <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-        
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">{isRTL ? "دکھائیں" : "Show"}</span>
+            <span className="text-xs text-gray-500">{isRTL ? 'دکھائیں' : 'Show'}</span>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
@@ -604,7 +189,7 @@ const PurchaseList = () => {
               <option value={20}>20</option>
               <option value={50}>50</option>
             </select>
-            <span className="text-xs text-gray-500">{isRTL ? "ریکارڈز" : "entries"}</span>
+            <span className="text-xs text-gray-500">{isRTL ? 'ریکارڈز' : 'entries'}</span>
           </div>
 
           <div className="w-full sm:w-auto">
@@ -612,7 +197,7 @@ const PurchaseList = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={isRTL ? "آرڈر نمبر یا وینڈر کے نام سے تلاش کریں..." : "Search by order # or vendor name..."}
+              placeholder={isRTL ? 'آرڈر نمبر یا وینڈر کے نام سے تلاش کریں...' : 'Search by order # or vendor name...'}
               className="w-full sm:w-64 rounded border border-stroke bg-transparent py-1.5 px-3 text-xs outline-none focus:border-primary dark:border-strokedark"
             />
           </div>
@@ -622,136 +207,48 @@ const PurchaseList = () => {
           <table className="w-full table-auto border-collapse">
             <thead>
               <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                <th className="py-4 px-4 font-semibold w-16 whitespace-nowrap">{isRTL ? "نمبر شمار" : "S#"}</th>
-                <th className="py-4 px-4 font-semibold whitespace-nowrap">{isRTL ? "پرچیز نمبر" : "Purchase No"}</th>
-                <th className="py-4 px-4 font-semibold whitespace-nowrap">{isRTL ? "وینڈر پروفائل" : "Vendor Profile"}</th>
-                <th className="py-4 px-4 font-semibold text-center whitespace-nowrap">{isRTL ? "اندراج تاریخ" : "Entry Date"}</th>
-                <th className="py-4 px-4 font-semibold text-center whitespace-nowrap">{isRTL ? "ادائیگی کی شرط" : "Payment Term"}</th>
-                <th className="py-4 px-4 font-semibold text-right pr-4 whitespace-nowrap">{isRTL ? "کل بل" : "Total Bill"}</th>
-                <th className="py-4 px-4 font-semibold text-right pr-6 whitespace-nowrap">{isRTL ? "ادائیگی کی صورتحال" : "Payment / Due Status"}</th>
-                <th className="py-4 px-4 font-semibold w-24 text-center whitespace-nowrap">{isRTL ? "کارروائی" : "Actions"}</th>
+                <th className="py-4 px-4 font-semibold w-16 whitespace-nowrap">{isRTL ? 'نمبر شمار' : 'S#'}</th>
+                <th className="py-4 px-4 font-semibold whitespace-nowrap">{isRTL ? 'پرچیز نمبر' : 'Purchase No'}</th>
+                <th className="py-4 px-4 font-semibold whitespace-nowrap">{isRTL ? 'وینڈر پروفائل' : 'Vendor Profile'}</th>
+                <th className="py-4 px-4 font-semibold text-center whitespace-nowrap">{isRTL ? 'اندراج تاریخ' : 'Entry Date'}</th>
+                <th className="py-4 px-4 font-semibold text-center whitespace-nowrap">{isRTL ? 'ادائیگی کی شرط' : 'Payment Term'}</th>
+                <th className="py-4 px-4 font-semibold text-right pr-4 whitespace-nowrap">{isRTL ? 'کل بل' : 'Total Bill'}</th>
+                <th className="py-4 px-4 font-semibold text-right pr-6 whitespace-nowrap">{isRTL ? 'ادائیگی کی صورتحال' : 'Payment / Due Status'}</th>
+                <th className="py-4 px-4 font-semibold w-24 text-center whitespace-nowrap">{isRTL ? 'کارروائی' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-sm"><Spinner /></td></tr>
+                <tr>
+                  <td colSpan={8} className="text-center py-12 text-sm">
+                    <Spinner />
+                  </td>
+                </tr>
               ) : paginatedPurchases.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">{isRTL ? "ابھی تک خریداری کا کوئی لاگ درج نہیں ہوا۔" : "No supply restock logs recorded yet."}</td></tr>
+                <tr>
+                  <td colSpan={8} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">
+                    {isRTL ? 'ابھی تک خریداری کا کوئی لاگ درج نہیں ہوا۔' : 'No supply restock logs recorded yet.'}
+                  </td>
+                </tr>
               ) : (
                 paginatedPurchases.map((pur, idx) => {
                   const serialNumber = startIndex + idx + 1;
-                  const totalAmt = Number(pur.total_amount) || 0;
                   const key = pur.purchase_no || String(pur.id);
                   const alloc = purchaseAllocationsMap[key] || purchaseAllocationsMap[String(pur.id)];
-                  const upfrontPaid = Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0);
-                  const paidAmt = alloc ? alloc.totalPaid : (Number(pur.amount_paid) || upfrontPaid);
-                  const dueAmt = alloc ? alloc.due : Math.max(0, totalAmt - paidAmt);
-                  const term = pur.payment_term || 'On Credit';
-                  const vendorName = pur.supplier_name || 'General Vendor';
-                  const formattedPurchaseNo = pur.purchase_no
-                    ? (String(pur.purchase_no).toUpperCase().startsWith('PUR-')
-                        ? pur.purchase_no
-                        : `PUR-${pur.purchase_no}`)
-                    : `PUR-${pur.id}`;
 
                   return (
-                    <tr key={pur.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
-                      <td className="py-3.5 px-4 text-gray-400 whitespace-nowrap">{serialNumber}</td>
-                      <td className="py-3.5 px-4 font-mono whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const foundIdx = filteredPurchases.findIndex((x: any) => x.id === pur.id);
-                            if (foundIdx !== -1) setPreviewPurchaseIndex(foundIdx);
-                          }}
-                          className="font-bold text-primary dark:text-primary hover:underline cursor-pointer transition text-left"
-                          title="Click to preview purchase details"
-                        >
-                          {formattedPurchaseNo}
-                        </button>
-                      </td>
-                      <td className="py-3.5 px-4 flex items-center gap-1.5 whitespace-nowrap"><MdPerson className="text-gray-400 shrink-0" size={16} />{vendorName}</td>
-                      <td className="py-3.5 px-4 text-center text-gray-500 whitespace-nowrap"><span className="inline-flex items-center gap-1 text-[11px] whitespace-nowrap"><MdEvent size={13} className="shrink-0" />{pur.purchase_date}</span></td>
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${term === 'On Credit' ? 'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300' : term === 'By Cash' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-teal-50 text-teal-700 border-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300'}`}>
-                          {term}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-black text-slate-900 dark:text-white pr-4 whitespace-nowrap">
-                        Rs. {formatMoney(totalAmt)}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-xs min-w-[150px]">
-                        {dueAmt <= 0 ? (
-                          <div className="flex flex-col items-center justify-center space-y-0.5">
-                            {(alloc?.returned || 0) > 0 && (
-                              <span className="inline-block px-2 py-0.5 mb-0.5 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[9px] font-black uppercase whitespace-nowrap">
-                                {(alloc?.returned || 0) >= totalAmt ? 'Returned' : 'Partially Returned'}
-                              </span>
-                            )}
-                            {upfrontPaid >= totalAmt && (!alloc || (alloc.generalAllocated <= 0 && alloc.specificVouchers <= 0)) ? (
-                              <span className="inline-block px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase tracking-wider whitespace-nowrap shadow-xs">
-                                Paid Upfront
-                              </span>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center space-y-0.5">
-                                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                                  {upfrontPaid > 0 ? `Upfront: Rs. ${formatMoney(upfrontPaid)}` : 'No Upfront amount'}
-                                </span>
-                                <span className="inline-block px-2.5 py-0.5 my-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase tracking-wide whitespace-nowrap shadow-xs">
-                                  Paid (By Receipt)
-                                </span>
-                                {(() => {
-                                  const receiptPaid = Math.max(0, paidAmt - upfrontPaid);
-                                  return receiptPaid > 0 ? (
-                                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                      Receipt: Rs. {formatMoney(receiptPaid)}
-                                    </span>
-                                  ) : null;
-                                })()}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center space-y-0.5">
-                            {/* Top center text */}
-                            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                              {upfrontPaid > 0 ? `Upfront: Rs. ${formatMoney(upfrontPaid)}` : 'No Upfront amount'}
-                            </span>
-
-                            {/* Center main badge */}
-                            <span className="inline-block px-2.5 py-0.5 my-0.5 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[10px] font-black uppercase tracking-wide whitespace-nowrap">
-                              Credit (Due: Rs. {formatMoney(dueAmt)})
-                            </span>
-
-                            {/* Bottom center text */}
-                            {(() => {
-                              const receiptPaid = Math.max(0, paidAmt - upfrontPaid);
-                              return (
-                                <span className={`text-[10px] font-medium whitespace-nowrap ${receiptPaid > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400 dark:text-slate-500'}`}>
-                                  {receiptPaid > 0 ? `Receipt: Rs. ${formatMoney(receiptPaid)}` : 'No receipt'}
-                                </span>
-                              );
-                            })()}
-
-                            {(alloc?.returned || 0) > 0 && (
-                              <span className="inline-block px-2 py-0.5 mt-0.5 rounded bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[9px] font-bold uppercase whitespace-nowrap">
-                                Returned: Rs. {formatMoney(alloc.returned)}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <TableActions
-                          onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${pur.id}`)}
-                          onEdit={() => navigate(`/Purchase/Purchases/Edit/${pur.id}`, { state: { purchaseRecord: pur } })}
-                          onDelete={() => setDeleteTargetPurchase(pur)}
-                          printTitle="Print Goods Receiving Note"
-                          editTitle="Edit Purchase"
-                          deleteTitle="Delete Purchase"
-                        />
-                      </td>
-                    </tr>
+                    <PurchaseTableRow
+                      key={pur.id}
+                      pur={pur}
+                      serialNumber={serialNumber}
+                      alloc={alloc}
+                      tenantId={tenantId}
+                      onPreview={() => {
+                        const foundIdx = filteredPurchases.findIndex((x) => x.id === pur.id);
+                        if (foundIdx !== -1) setPreviewPurchaseIndex(foundIdx);
+                      }}
+                      onDelete={(p) => setDeleteTargetPurchase(p)}
+                    />
                   );
                 })
               )}
@@ -768,306 +265,36 @@ const PurchaseList = () => {
           onPageChange={setCurrentPage}
           itemName="entries"
         />
-
       </div>
 
       {/* ── QUICK-VIEW PURCHASE PREVIEW MODAL WITH ARROW NAVIGATION ── */}
-      {previewPurchase && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-6">
-          <div className="bg-white dark:bg-boxdark w-full max-w-4xl rounded-2xl shadow-2xl border border-stroke dark:border-strokedark overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            
-            {/* Header Bar */}
-            <div className="flex justify-between items-center bg-slate-900 text-white px-5 py-4 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center text-lg font-bold shrink-0">
-                  <FiFileText />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-black font-mono tracking-tight text-white">
-                      {previewPurchase.purchase_no
-                        ? (String(previewPurchase.purchase_no).toUpperCase().startsWith('PUR-')
-                            ? previewPurchase.purchase_no
-                            : `PUR-${previewPurchase.purchase_no}`)
-                        : `PUR-${previewPurchase.id}`}
-                    </h3>
-                    {(() => {
-                      const purKey = previewPurchase.purchase_no || String(previewPurchase.id);
-                      const purAlloc = purchaseAllocationsMap[purKey] || purchaseAllocationsMap[String(previewPurchase.id)];
-                      const pUpfront = Number(previewPurchase.cash_amount_paid || 0) + Number(previewPurchase.bank_amount_paid || 0);
-                      const pTotal = Number(previewPurchase.total_amount) || 0;
-                      const pPaid = purAlloc ? purAlloc.totalPaid : (Number(previewPurchase.amount_paid) || pUpfront);
-                      const pDue = purAlloc ? purAlloc.due : Math.max(0, pTotal - pPaid);
-                      const isPaid = pDue <= 0;
-
-                      return (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                          isPaid
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                        }`}>
-                          {isPaid ? (pUpfront >= pTotal ? 'Paid Upfront' : 'Paid (By Receipt)') : `Credit (Due: Rs. ${formatMoney(pDue)})`}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                  <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
-                    <span>Vendor: <strong className="text-white">{previewPurchase.supplier_name || previewPurchase.vendor_name || 'General Vendor'}</strong></span>
-                    <span>•</span>
-                    <span>Date: <strong className="text-slate-300">{previewPurchase.purchase_date || '-'}</strong></span>
-                    <span>•</span>
-                    <span>Payment Term: <strong className="text-slate-300">{previewPurchase.payment_term || 'On Credit'}</strong></span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Navigation & Close */}
-              <div className="flex items-center gap-2">
-                <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
-                  <button
-                    type="button"
-                    disabled={previewPurchaseIndex === 0}
-                    onClick={handlePrevPurchase}
-                    title="Previous Purchase (Left Arrow)"
-                    className="p-1.5 rounded-md hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent text-slate-300 hover:text-white transition cursor-pointer"
-                  >
-                    <FiChevronLeft size={16} />
-                  </button>
-                  <span className="px-2 font-mono text-[11px] font-bold text-slate-400 select-none">
-                    {(previewPurchaseIndex ?? 0) + 1} / {filteredPurchases.length}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={previewPurchaseIndex === filteredPurchases.length - 1}
-                    onClick={handleNextPurchase}
-                    title="Next Purchase (Right Arrow)"
-                    className="p-1.5 rounded-md hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent text-slate-300 hover:text-white transition cursor-pointer"
-                  >
-                    <FiChevronRight size={16} />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPreviewPurchaseIndex(null)}
-                  className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-                  title="Close (Esc)"
-                >
-                  <FiX size={18} />
-                </button>
-              </div>
-            </div>
-
-            {/* Body: Items Table */}
-            <div className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
-              {/* Quick Meta Pills */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-                <div className="bg-slate-50 dark:bg-meta-4/20 p-2.5 rounded-xl border border-stroke dark:border-strokedark">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Receiving Location</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 truncate block">
-                    {previewPurchase.target_warehouse || (Array.isArray(previewPurchase.items) && previewPurchase.items[0]?.warehouse) || 'Main Warehouse'}
-                  </span>
-                </div>
-                <div className="bg-slate-50 dark:bg-meta-4/20 p-2.5 rounded-xl border border-stroke dark:border-strokedark">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Procurement Type</span>
-                  <span className="font-bold text-black dark:text-white truncate block">{previewPurchase.purchase_type || 'Standard Supply'}</span>
-                </div>
-                <div className="bg-slate-50 dark:bg-meta-4/20 p-2.5 rounded-xl border border-stroke dark:border-strokedark">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Payment Term</span>
-                  <span className="font-bold text-primary truncate block">{previewPurchase.payment_term || 'On Credit'}</span>
-                </div>
-                <div className="bg-slate-50 dark:bg-meta-4/20 p-2.5 rounded-xl border border-stroke dark:border-strokedark">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Vendor Profile</span>
-                  <span className="font-bold text-black dark:text-white truncate block">{previewPurchase.supplier_name || previewPurchase.vendor_name || 'General Vendor'}</span>
-                </div>
-                <div className="bg-slate-50 dark:bg-meta-4/20 p-2.5 rounded-xl border border-stroke dark:border-strokedark">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Total Quantity</span>
-                  <span className="font-mono font-black text-emerald-600 dark:text-emerald-400">
-                    {(previewPurchase.items || []).reduce((sum: number, it: any) => sum + Number(it.qty ?? it.quantity ?? 0), 0)} Units
-                  </span>
-                </div>
-              </div>
-
-              {/* Items List Table */}
-              <div className="border border-stroke dark:border-strokedark rounded-xl overflow-hidden shadow-xs">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                      <th className="p-3 w-8 text-center">S#</th>
-                      <th className="p-3 w-32">Code</th>
-                      <th className="p-3">Product Description</th>
-                      <th className="p-3 w-36 text-center">Qty / Warehouse</th>
-                      <th className="p-3 w-28 text-right">Cost Rate</th>
-                      <th className="p-3 w-20 text-center">Disc</th>
-                      <th className="p-3 w-28 text-right pr-4">Net Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                    {(previewPurchase.items || []).map((it: any, idx: number) => {
-                      const qtyNum = Number(it.qty ?? it.quantity ?? 0);
-                      const rateNum = Number(it.costPricePerBox ?? it.cost_price ?? it.rate ?? it.purchase_price ?? it.costPrice ?? 0);
-                      const discAmt = Number(it.discountAmt ?? it.disAmt ?? 0);
-                      const itemTotal = Number(it.totalAmount ?? it.netTotal ?? it.total ?? ((qtyNum * rateNum) - discAmt));
-                      const locationName = it.warehouse || it.location || previewPurchase.target_warehouse || 'Main Warehouse';
-
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                          <td className="p-3 text-center text-gray-400 font-sans">{idx + 1}</td>
-                          <td className="p-3 font-mono font-bold text-emerald-600 dark:text-emerald-400 text-[11px]">
-                            {it.skuCode || it.itemCode || it.item_sr_no || '-'}
-                          </td>
-                          <td className="p-3">
-                            <p className="font-bold text-black dark:text-white">{it.itemName || it.product_name || it.pDescription || 'Unknown Product'}</p>
-                          </td>
-                          <td className="p-3 text-center">
-                            <p className="font-black font-mono text-black dark:text-white text-sm">{qtyNum} {it.uom ? it.uom : ''}</p>
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded mt-0.5">
-                              📍 {locationName}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300">
-                            Rs. {formatMoney(rateNum)}
-                          </td>
-                          <td className="p-3 text-center font-mono text-[11px] text-slate-500">
-                            {discAmt > 0 ? `-Rs. ${formatMoney(discAmt)}` : '0%'}
-                          </td>
-                          <td className="p-3 text-right pr-4 font-mono font-black text-black dark:text-white text-sm">
-                            Rs. {formatMoney(itemTotal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Financials & Summary Footer */}
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pt-2">
-                <div className="text-slate-500 text-[11px] space-y-1">
-                  <p className="font-bold text-slate-700 dark:text-slate-300">Keyboard Navigation Shortcuts:</p>
-                  <p className="flex items-center gap-1.5 flex-wrap">
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-[10px] font-bold text-black dark:text-white">←</kbd>
-                    <span>Prev Purchase</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-[10px] font-bold text-black dark:text-white">→</kbd>
-                    <span>Next Purchase</span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-[10px] font-bold text-black dark:text-white">ESC</kbd>
-                    <span>Close</span>
-                  </p>
-                </div>
-
-                {(() => {
-                  const purKey = previewPurchase.purchase_no || String(previewPurchase.id);
-                  const purAlloc = purchaseAllocationsMap[purKey] || purchaseAllocationsMap[String(previewPurchase.id)];
-                  const pUpfront = Number(previewPurchase.cash_amount_paid || 0) + Number(previewPurchase.bank_amount_paid || 0);
-                  const pTotal = Number(previewPurchase.total_amount) || 0;
-                  const pPaid = purAlloc ? purAlloc.totalPaid : (Number(previewPurchase.amount_paid) || pUpfront);
-                  const pDue = purAlloc ? purAlloc.due : Math.max(0, pTotal - pPaid);
-                  const grossAmt = (previewPurchase.items || []).reduce((acc: number, it: any) => {
-                    const q = Number(it.qty ?? it.quantity ?? 0);
-                    const r = Number(it.costPricePerBox ?? it.cost_price ?? it.rate ?? it.purchase_price ?? 0);
-                    return acc + (q * r);
-                  }, 0);
-
-                  return (
-                    <div className="w-full sm:w-80 bg-slate-50 dark:bg-meta-4/20 p-3.5 rounded-xl border border-stroke dark:border-strokedark space-y-2 text-xs">
-                      <div className="flex justify-between text-slate-500 dark:text-slate-400">
-                        <span>Gross Amount:</span>
-                        <span className="font-mono font-bold text-black dark:text-white">
-                          Rs. {formatMoney(grossAmt > 0 ? grossAmt : pTotal)}
-                        </span>
-                      </div>
-                      {Number(previewPurchase.freight_charges || previewPurchase.transport_charges || 0) > 0 && (
-                        <div className="flex justify-between text-slate-500 dark:text-slate-400">
-                          <span>Freight / Transport:</span>
-                          <span className="font-mono font-bold text-black dark:text-white">
-                            + Rs. {formatMoney(previewPurchase.freight_charges || previewPurchase.transport_charges)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="border-t border-stroke dark:border-strokedark pt-2 flex justify-between items-center">
-                        <span className="font-bold text-black dark:text-white text-sm">Grand Total:</span>
-                        <span className="font-mono font-black text-slate-900 dark:text-white text-sm">
-                          Rs. {formatMoney(pTotal)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-bold">
-                        <span>Amount Paid (Live):</span>
-                        <span className="font-mono font-black">
-                          Rs. {formatMoney(pPaid)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center font-bold">
-                        <span className="text-slate-700 dark:text-slate-300">Remaining Due (Live):</span>
-                        <span className={`font-mono font-black ${pDue > 0.01 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                          Rs. {formatMoney(pDue)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-
-            {/* Modal Bottom Actions */}
-            <div className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-stroke dark:border-strokedark">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={previewPurchaseIndex === 0}
-                  onClick={handlePrevPurchase}
-                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-bold text-xs hover:bg-slate-100 transition disabled:opacity-40 cursor-pointer flex items-center gap-1"
-                >
-                  <FiChevronLeft /> Prev Purchase
-                </button>
-                <button
-                  type="button"
-                  disabled={previewPurchaseIndex === filteredPurchases.length - 1}
-                  onClick={handleNextPurchase}
-                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-bold text-xs hover:bg-slate-100 transition disabled:opacity-40 cursor-pointer flex items-center gap-1"
-                >
-                  Next Purchase <FiChevronRight />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const purToEdit = previewPurchase;
-                    setPreviewPurchaseIndex(null);
-                    navigate(`/Purchase/Purchases/Edit/${purToEdit.id}`, { state: { purchaseRecord: purToEdit } });
-                  }}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <FiEdit /> Edit Purchase
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const purId = previewPurchase.id;
-                    setPreviewPurchaseIndex(null);
-                    navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${purId}`);
-                  }}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <FiPrinter /> Print Purchase
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
+      {previewPurchase && previewPurchaseIndex !== null && (
+        <PurchaseQuickViewModal
+          previewPurchase={previewPurchase}
+          previewPurchaseIndex={previewPurchaseIndex}
+          totalFilteredCount={filteredPurchases.length}
+          allocationsMap={purchaseAllocationsMap}
+          tenantId={tenantId}
+          onPrev={handlePrevPurchase}
+          onNext={handleNextPurchase}
+          onClose={() => setPreviewPurchaseIndex(null)}
+        />
       )}
 
       <ConfirmDeleteModal
         isOpen={!!deleteTargetPurchase}
         title="Delete Wholesale Purchase?"
         itemType="Purchase Bill"
-        itemName={deleteTargetPurchase?.purchase_no ? `Bill #${deleteTargetPurchase.purchase_no}` : `Purchase #${deleteTargetPurchase?.id}`}
+        itemName={
+          deleteTargetPurchase?.purchase_no
+            ? `Bill #${deleteTargetPurchase.purchase_no}`
+            : `Purchase #${deleteTargetPurchase?.id}`
+        }
         subtitle="Consignment records and shelf stock allocations will be reversed."
         details={[
-          { label: "Vendor", value: deleteTargetPurchase?.supplier_name || 'N/A' },
-          { label: "Warehouse", value: deleteTargetPurchase?.target_warehouse || 'N/A' },
-          { label: "Total Amount", value: `Rs. ${Number(deleteTargetPurchase?.total_amount || 0).toLocaleString()}` },
+          { label: 'Vendor', value: deleteTargetPurchase?.supplier_name || 'N/A' },
+          { label: 'Warehouse', value: deleteTargetPurchase?.target_warehouse || 'N/A' },
+          { label: 'Total Amount', value: `Rs. ${Number(deleteTargetPurchase?.total_amount || 0).toLocaleString()}` }
         ]}
         warning="Deleting this purchase bill will reverse all inventory allocations and drop associated financial payment vouchers."
         confirmButtonText="Confirm & Reverse Stock"

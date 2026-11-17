@@ -167,13 +167,22 @@ const BOMList: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => navigate('/Manufacturing/add')}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-center font-medium text-white hover:bg-opacity-90 shadow-sm transition-all"
-        >
-          <MdAdd className="text-xl" />
-          <span>{isRTL ? 'نیا نسخہ بنائیں' : 'Create New BOM'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/Manufacturing/production-orders')}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-meta-4/40 px-4 py-2.5 text-center font-bold text-xs text-black dark:text-white hover:bg-gray-100 dark:hover:bg-meta-4 transition-all shadow-xs cursor-pointer"
+          >
+            <MdPrecisionManufacturing className="text-lg text-emerald-600" />
+            <span>Production Orders (Jobs)</span>
+          </button>
+          <button
+            onClick={() => navigate('/Manufacturing/add')}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-center font-medium text-white hover:bg-opacity-90 shadow-sm transition-all cursor-pointer"
+          >
+            <MdAdd className="text-xl" />
+            <span>{isRTL ? 'نیا نسخہ بنائیں' : 'Create New BOM'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Metric Cards */}

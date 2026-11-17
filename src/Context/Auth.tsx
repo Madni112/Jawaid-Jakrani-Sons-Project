@@ -30,6 +30,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
+
 /**
  * Detects any legacy portal slug if present in URL.
  */
@@ -595,15 +603,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-export const usePermission = (path: string) => {
+export function usePermission(path: string) {
   const { can, getPermissions, role } = useAuth();
   const isSuperAdmin = Boolean(role && role.toLowerCase().includes('admin'));
   const perms = getPermissions(path);

@@ -5,6 +5,8 @@ import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
+import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
+import { isChallanNumberTaken } from '../../../utils/challanValidation';
 
 const AddDeliveryChallan = () => {
   const [loading, setLoading] = useState(false);
@@ -201,6 +203,16 @@ const AddDeliveryChallan = () => {
             };
 
             try {
+              const workflowSettings = await fetchWorkflowSettings();
+              if (workflowSettings?.allow_duplicate_challan_sale === false && values.gatePassNo?.trim()) {
+                const { isTaken, existingRecord } = await isChallanNumberTaken('sale', values.gatePassNo.trim(), editData?.id, values.invoiceNo);
+                if (isTaken) {
+                  toast.error(`Gate Pass / Challan # "${values.gatePassNo.trim()}" already exists in ${existingRecord?.challan_no || 'Challan Records'}! Duplicate challan numbers are strictly blocked in settings.`);
+                  setLoading(false);
+                  return;
+                }
+              }
+
               if (isEditMode) {
                 const { error } = await supabase
                   .from('delivery_challans')
@@ -462,7 +474,7 @@ const AddDeliveryChallan = () => {
               <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-stroke dark:border-strokedark">
                 <button
                   type="button"
-                  onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/Delivery-Challans/List`)}
+                  onClick={() => navigate('/Sales/Delivery-Challans/List')}
                   className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                 >
                   Cancel

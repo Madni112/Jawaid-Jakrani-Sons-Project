@@ -5,13 +5,39 @@ import Spinner from '../../../ui/Spinner';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../Context/Auth';
 import toast from 'react-hot-toast';
+import { printDeliveryChallanSlip } from './utils/printDeliveryChallanSlip';
 
 interface DeliveryChallanProcessedHistoryProps {
   locationFilter?: string;
   isPurchaseReturn?: boolean;
+  productsMaster?: any[];
   onPrint?: (record: any) => void;
   onClose?: () => void;
 }
+
+const resolvePcsPerBox = (prod: any, sampleQty?: number): number => {
+  if (prod) {
+    const looseRatio = Number(prod.loose_conversion_ratio || 0);
+    const boxPcs = Number(prod.pieces_per_box || prod.pcs_per_box || prod.pieces_per_packing || 0);
+    if (looseRatio > 1) return looseRatio;
+    if (boxPcs > 1) return boxPcs;
+    const isTile = Boolean(
+      String(prod.category || '').toLowerCase().includes('tile') ||
+      String(prod.scenario_name || '').toLowerCase().includes('tile')
+    );
+    if (isTile) return 4;
+  }
+  if (typeof sampleQty === 'number' && Math.abs(sampleQty - Math.round(sampleQty)) > 0.0001) {
+    const fraction = sampleQty - Math.floor(sampleQty);
+    for (const cand of [12, 6, 4, 8, 10, 16, 24]) {
+      const pcs = fraction * cand;
+      if (Math.abs(pcs - Math.round(pcs)) < 0.01) {
+        return cand;
+      }
+    }
+  }
+  return 1;
+};
 
 const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryProps> = ({
   locationFilter,
@@ -22,9 +48,11 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
   const navigate = useNavigate();
   const { tenantId } = useAuth();
   const [records, setRecords] = useState<any[]>([]);
+  const [productsMaster, setProductsMaster] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Dispatched' | 'Partially Dispatched'>('ALL');
+  const [workflowFilter, setWorkflowFilter] = useState<'ALL' | 'AUTOMATIC' | 'MANUAL'>('ALL');
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [editingRecord, setEditingRecord] = useState<any | null>(null);
   const [editItems, setEditItems] = useState<any[]>([]);
@@ -66,8 +94,32 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
   };
 
   useEffect(() => {
+    supabase.from('products').select('*').then(({ data }) => {
+      if (data) setProductsMaster(data);
+    });
+  }, []);
+
+  useEffect(() => {
     fetchHistory();
   }, [locationFilter, isPurchaseReturn]);
+
+  const formatItemDisplay = (it: any, quantity: number) => {
+    const pName = String(it.itemName || it.pDescription || it.product_name || '').trim().toLowerCase();
+    const prod = productsMaster.find(p => String(p?.product_name || '').trim().toLowerCase() === pName);
+    const pcsPerBox = resolvePcsPerBox(prod, quantity);
+
+    if (pcsPerBox > 1) {
+      const totPcs = Math.round(quantity * pcsPerBox);
+      const b = Math.floor(totPcs / pcsPerBox);
+      const p = totPcs % pcsPerBox;
+      if (p === 0) return `${b} Boxes`;
+      if (b === 0) return `${p} Pcs`;
+      return `${b} Boxes + ${p} Pcs`;
+    }
+    const cleanQty = Math.round(quantity * 100) / 100;
+    const uom = it.uom && it.uom !== 'Nos' ? ` ${it.uom}` : (it.uom || '');
+    return `${cleanQty}${uom ? ` ${uom}` : ''}`;
+  };
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -84,30 +136,46 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
 
         const { data, error } = await query;
         if (error) throw error;
-        setRecords(data || []);
+        const processed = (data || []).filter((r: any) => {
+          return r.status === 'Dispatched' || r.status === 'Fully Dispatched' || r.status === 'Refunded' || r.status === 'Processed';
+        });
+        const normalized = processed.map((r: any) => ({
+          ...r,
+          gate_pass_no: r.gate_pass_no || r.metadata?.gate_pass_no || ''
+        }));
+        setRecords(normalized);
       } else {
         let query = supabase
           .from('delivery_challans')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (locationFilter) {
-          query = query.eq('dispatch_warehouse', locationFilter);
-        }
-
         const { data, error } = await query;
         if (error) throw error;
 
-        const allDc = data || [];
-        const processed = allDc.filter(
-          (c) =>
-            c.status === 'Dispatched' ||
-            c.status === 'Fully Dispatched' ||
-            c.status === 'Partially Dispatched' ||
-            c.is_printed
+        let allDc = data || [];
+        if (locationFilter) {
+          const locMatched = allDc.filter(c => String(c.dispatch_warehouse || '').toLowerCase() === String(locationFilter).toLowerCase());
+          if (locMatched.length > 0) {
+            allDc = locMatched;
+          }
+        }
+
+        // Orders that still have pending hold or unfulfilled items belong in the active dispatch queue
+        const pendingInvoiceNos = new Set(
+          allDc
+            .filter(c => c.status === 'Pending' || c.status === 'Pending Approval' || c.status === 'Pending Dispatch' || c.status === 'Partially Dispatched')
+            .map(c => String(c.invoice_no || '').trim().toLowerCase())
         );
 
-        setRecords(processed.length > 0 ? processed : allDc);
+        const processed = allDc.filter(
+          (c) =>
+            (c.status === 'Dispatched' || c.status === 'Fully Dispatched') &&
+            c.status !== 'Partially Dispatched' &&
+            !pendingInvoiceNos.has(String(c.invoice_no || '').trim().toLowerCase())
+        );
+
+        setRecords(processed);
       }
     } catch (err: any) {
       console.error('Failed to load history:', err);
@@ -119,10 +187,8 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
   const handlePrint = (rec: any) => {
     if (onPrint) {
       onPrint(rec);
-    } else if (isPurchaseReturn) {
-      navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Print/${rec.id}`);
     } else {
-      navigate(`${tenantId ? `/${tenantId}` : ''}/Delivery-Challan/Print/${rec.id}`);
+      printDeliveryChallanSlip(rec, productsMaster || [], isPurchaseReturn);
     }
   };
 
@@ -151,15 +217,45 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
 
     if (!matchesSearch) return false;
 
+    // Workflow Mode Filter (Automatic vs Manual Gate Pass)
+    const isAuto = String(r.remarks || '').includes('[AUTOMATIC]');
+    const isManual = !isAuto;
+    if (workflowFilter === 'AUTOMATIC' && !isAuto) return false;
+    if (workflowFilter === 'MANUAL' && !isManual) return false;
+
+    if (r.status === 'Partially Dispatched') return false;
     if (statusFilter === 'ALL') return true;
     if (statusFilter === 'Dispatched') {
       return r.status === 'Dispatched' || r.status === 'Fully Dispatched';
     }
-    if (statusFilter === 'Partially Dispatched') {
-      return r.status === 'Partially Dispatched';
-    }
     return true;
   });
+
+  // Group processed sales delivery challans by linked invoice
+  const groupedInvoices = React.useMemo(() => {
+    if (isPurchaseReturn) return [];
+    const groups: Record<string, {
+      invoice_no: string;
+      customer_name: string;
+      warehouse: string;
+      challans: any[];
+    }> = {};
+
+    filteredRecords.forEach((rec) => {
+      const invKey = rec.invoice_no || `DIRECT-${rec.id}`;
+      if (!groups[invKey]) {
+        groups[invKey] = {
+          invoice_no: rec.invoice_no || 'Direct DC',
+          customer_name: rec.customer_name || 'Walk-in',
+          warehouse: rec.dispatch_warehouse || rec.source_warehouse || rec.warehouse_name || '—',
+          challans: []
+        };
+      }
+      groups[invKey].challans.push(rec);
+    });
+
+    return Object.values(groups);
+  }, [filteredRecords, isPurchaseReturn]);
 
   // EDIT VIEW
   if (editingRecord) {
@@ -438,7 +534,7 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
                         <td className="py-2.5 px-4 text-center font-bold text-gray-400">{idx + 1}</td>
                         <td className="py-2.5 px-4 font-bold text-black dark:text-white">{itemName}</td>
                         <td className="py-2.5 px-4 text-center font-mono font-black text-emerald-600 dark:text-emerald-400">
-                          {qty} {it.uom || ''}
+                          {formatItemDisplay(it, qty)}
                         </td>
                         <td className="py-2.5 px-4 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
                           {rate > 0 ? `Rs. ${rate.toLocaleString()}` : '—'}
@@ -460,7 +556,7 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
 
   // LIST VIEW
   return (
-    <div className="w-full text-black dark:text-white text-xs max-h-[75vh] flex flex-col space-y-3">
+    <div className="w-full text-black dark:text-white text-xs flex flex-col space-y-3">
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
         <div className="relative flex-1 sm:max-w-xs">
@@ -475,191 +571,292 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
         </div>
 
         {!isPurchaseReturn && (
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-meta-4 p-1 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                statusFilter === 'ALL'
-                  ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
-                  : 'text-gray-500 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              All ({records.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('Dispatched')}
-              className={`px-3 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                statusFilter === 'Dispatched'
-                  ? 'bg-white dark:bg-boxdark text-emerald-600 shadow-xs'
-                  : 'text-gray-500 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              Fully Dispatched
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('Partially Dispatched')}
-              className={`px-3 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                statusFilter === 'Partially Dispatched'
-                  ? 'bg-white dark:bg-boxdark text-amber-600 shadow-xs'
-                  : 'text-gray-500 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              Partial
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Workflow Mode Tabs */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-meta-4 p-1 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setWorkflowFilter('ALL')}
+                className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                  workflowFilter === 'ALL'
+                    ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                All Mode ({records.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkflowFilter('AUTOMATIC')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                  workflowFilter === 'AUTOMATIC'
+                    ? 'bg-white dark:bg-boxdark text-emerald-600 shadow-xs'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <span>⚡ Automatic</span>
+                <span className="text-[10px] opacity-75">
+                  ({records.filter(r => String(r.remarks || '').includes('[AUTOMATIC]')).length})
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkflowFilter('MANUAL')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                  workflowFilter === 'MANUAL'
+                    ? 'bg-white dark:bg-boxdark text-indigo-600 shadow-xs'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <span>📋 Manual</span>
+                <span className="text-[10px] opacity-75">
+                  ({records.filter(r => !String(r.remarks || '').includes('[AUTOMATIC]')).length})
+                </span>
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* History Table */}
-      <div className="rounded-xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark flex-grow overflow-hidden flex flex-col">
-        <div className="max-w-full overflow-y-auto max-h-[55vh]">
-          <table className="w-full table-auto border-collapse text-left">
-            <thead className="sticky top-0 bg-slate-100 dark:bg-meta-4 z-10 shadow-xs">
-              <tr className="text-[10px] font-black uppercase tracking-wider border-b border-stroke text-slate-700 dark:text-white">
-                <th className="py-3 px-4 whitespace-nowrap">{isPurchaseReturn ? 'Return / Debit Note #' : 'Challan / GP #'}</th>
-                <th className="py-3 px-4 whitespace-nowrap">Date</th>
-                <th className="py-3 px-4 whitespace-nowrap">{isPurchaseReturn ? 'Linked Purchase #' : 'Invoice #'}</th>
-                <th className="py-3 px-4 whitespace-nowrap">{isPurchaseReturn ? 'Vendor / Supplier' : 'Customer Name'}</th>
-                <th className="py-3 px-4 whitespace-nowrap">Warehouse</th>
-                {!isPurchaseReturn && <th className="py-3 px-4 whitespace-nowrap">Vehicle / Driver</th>}
-                <th className="py-3 px-4 text-center whitespace-nowrap">Status</th>
-                <th className="py-3 px-4 text-center w-28 whitespace-nowrap">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stroke dark:divide-strokedark">
-              {loading ? (
-                <tr>
-                  <td colSpan={isPurchaseReturn ? 7 : 8} className="text-center py-12">
-                    <Spinner />
-                  </td>
+      {/* History Content */}
+      <div className="flex-grow overflow-y-auto max-h-[72vh] space-y-3 pr-1">
+        {loading ? (
+          <div className="p-12 text-center bg-white dark:bg-boxdark rounded-xl border border-stroke dark:border-strokedark">
+            <Spinner />
+          </div>
+        ) : isPurchaseReturn ? (
+          /* Purchase Return Flat Table */
+          <div className="rounded-xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark overflow-hidden">
+            <table className="w-full table-auto border-collapse text-left">
+              <thead className="sticky top-0 bg-slate-100 dark:bg-meta-4 z-10 shadow-xs">
+                <tr className="text-[10px] font-black uppercase tracking-wider border-b border-stroke text-slate-700 dark:text-white">
+                  <th className="py-3 px-4 whitespace-nowrap">Return / Debit Note #</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Date</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Linked Purchase #</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Vendor / Supplier</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Warehouse</th>
+                  <th className="py-3 px-4 text-center whitespace-nowrap">Status</th>
+                  <th className="py-3 px-4 text-center w-28 whitespace-nowrap">Actions</th>
                 </tr>
-              ) : filteredRecords.length === 0 ? (
-                <tr>
-                  <td colSpan={isPurchaseReturn ? 7 : 8} className="text-center py-12 text-slate-400 font-bold italic">
-                    {isPurchaseReturn ? 'No processed purchase returns found.' : 'No processed delivery challans found.'}
-                  </td>
-                </tr>
-              ) : (
-                filteredRecords.map((rec) => {
-                  const code = isPurchaseReturn
-                    ? (rec.return_no || `PR-${rec.id}`)
-                    : (rec.challan_no || `DC-${String(rec.id).padStart(4, '0')}`);
-                  const isDone = rec.status === 'Dispatched' || rec.status === 'Fully Dispatched' || rec.status === 'Refunded';
-                  const dateStr = rec.return_date || rec.challan_date || (rec.created_at ? new Date(rec.created_at).toLocaleDateString() : '—');
+              </thead>
+              <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                {filteredRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-12 text-slate-400 font-bold italic">
+                      No processed purchase returns found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRecords.map((rec) => {
+                    const code = rec.return_no || `PR-${rec.id}`;
+                    const isDone = rec.status === 'Refunded' || rec.status === 'Dispatched';
+                    const dateStr = rec.return_date || (rec.created_at ? new Date(rec.created_at).toLocaleDateString() : '—');
 
-                  return (
-                    <tr
-                      key={rec.id}
-                      className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white"
-                    >
-                      {/* Code */}
-                      <td className="py-3 px-4 font-bold font-mono whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span className="text-primary">{code}</span>
-                          {!isPurchaseReturn && rec.gate_pass_no && (
-                            <span className="text-[10px] text-emerald-600 font-black">
-                              GP: {rec.gate_pass_no}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Date */}
-                      <td className="py-3 px-4 text-gray-500 whitespace-nowrap font-medium">
-                        {dateStr}
-                      </td>
-
-                      {/* Reference */}
-                      <td className="py-3 px-4 font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">
-                        {isPurchaseReturn ? (rec.purchase_no || 'Direct Return') : (rec.invoice_no || 'Direct DC')}
-                      </td>
-
-                      {/* Party */}
-                      <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">
-                        {isPurchaseReturn ? (rec.vendor_name || '—') : (rec.customer_name || 'Walk-in')}
-                      </td>
-
-                      {/* Warehouse */}
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <span className="inline-flex rounded-md py-0.5 px-2 text-[10px] font-black uppercase tracking-wide bg-slate-100 dark:bg-meta-4 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-600">
-                          {rec.source_warehouse || rec.warehouse_name || rec.dispatch_warehouse || '—'}
-                        </span>
-                      </td>
-
-                      {/* Vehicle if sales */}
-                      {!isPurchaseReturn && (
+                    return (
+                      <tr
+                        key={rec.id}
+                        className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white"
+                      >
+                        <td className="py-3 px-4 font-bold font-mono whitespace-nowrap text-primary">{code}</td>
+                        <td className="py-3 px-4 text-gray-500 whitespace-nowrap font-medium">{dateStr}</td>
+                        <td className="py-3 px-4 font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">{rec.purchase_no || 'Direct Return'}</td>
+                        <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">{rec.vendor_name || '—'}</td>
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <p className="font-bold text-black dark:text-white">{rec.vehicle_no || 'By Hand'}</p>
-                          <p className="text-[10px] text-gray-400">{rec.driver_name || rec.transport_name || '—'}</p>
+                          <span className="inline-flex rounded-md py-0.5 px-2 text-[10px] font-black uppercase tracking-wide bg-slate-100 dark:bg-meta-4 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-600">
+                            {rec.source_warehouse || rec.warehouse_name || '—'}
+                          </span>
                         </td>
-                      )}
-
-                      {/* Status */}
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <span
-                          className={`inline-flex rounded-md py-0.5 px-2.5 text-[9px] font-black uppercase tracking-wide border ${
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <span className={`inline-flex rounded-md py-0.5 px-2.5 text-[9px] font-black uppercase tracking-wide border ${
                             isDone
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
                               : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60'
-                          }`}
-                        >
-                          {rec.status || 'Dispatched'}
-                        </span>
-                      </td>
+                          }`}>
+                            {rec.status || 'Dispatched'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRecord(rec)}
+                              className="bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 p-1.5 rounded transition shadow-xs cursor-pointer"
+                              title="View Details"
+                            >
+                              <FiEye size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePrint(rec)}
+                              className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-400 p-1.5 rounded transition shadow-xs cursor-pointer"
+                              title="Print Debit Note"
+                            >
+                              <FiPrinter size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : groupedInvoices.length === 0 ? (
+          <div className="p-12 text-center bg-white dark:bg-boxdark rounded-xl border border-stroke dark:border-strokedark text-slate-400 font-bold italic">
+            No processed delivery challans found.
+          </div>
+        ) : (
+          /* Sales Delivery Challans Grouped by Invoice */
+          groupedInvoices.map((group) => (
+            <div
+              key={group.invoice_no}
+              className="rounded-xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark overflow-hidden transition"
+            >
+              {/* Group Header */}
+              <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-meta-4/20 border-b border-stroke dark:border-strokedark gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs font-black text-rose-600 dark:text-rose-400">
+                    {group.invoice_no}
+                  </span>
+                  <span className="text-gray-300 dark:text-gray-600">•</span>
+                  <span className="text-xs font-bold text-black dark:text-white">
+                    {group.customer_name}
+                  </span>
+                  <span className="text-gray-300 dark:text-gray-600">•</span>
+                  <span className="text-[11px] text-gray-500 font-medium">
+                    Dispatch Warehouse: <span className="font-semibold text-slate-700 dark:text-slate-300">{group.warehouse}</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 dark:bg-meta-4 text-slate-700 dark:text-slate-200 font-mono">
+                    {group.challans.length} {group.challans.length === 1 ? 'Challan' : 'Challans / Gate Passes'}
+                  </span>
+                </div>
+              </div>
 
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedRecord(rec)}
-                            className="bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 p-1.5 rounded transition shadow-xs cursor-pointer"
-                            title="View Details"
-                          >
-                            <FiEye size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingRecord(rec);
-                              const parsed = (rec.items || []).map((it: any) => {
-                                const orderQty = Number(it.orderQty ?? it.qty ?? 0);
-                                const dispatchedQty = Number(it.dispatchedQty ?? orderQty);
-                                return {
-                                  ...it,
-                                  orderQty,
-                                  dispatchedQty,
-                                  holdQty: Math.max(0, Number((orderQty - dispatchedQty).toFixed(3))),
-                                  remarks: it.remarks || ''
-                                };
-                              });
-                              setEditItems(parsed);
-                            }}
-                            className="bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 p-1.5 rounded transition shadow-xs cursor-pointer"
-                            title="Edit Dispatched / Hold Quantities"
-                          >
-                            <FiEdit2 size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handlePrint(rec)}
-                            className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-400 p-1.5 rounded transition shadow-xs cursor-pointer"
-                            title={isPurchaseReturn ? "Print Debit Note" : "Print Challan"}
-                          >
-                            <FiPrinter size={15} />
-                          </button>
-                        </div>
-                      </td>
+              {/* Sub-table for Challans of this Invoice */}
+              <div className="overflow-x-auto">
+                <table className="w-full table-auto border-collapse text-left">
+                  <thead className="bg-slate-100/60 dark:bg-meta-4/10">
+                    <tr className="text-[10px] font-black uppercase tracking-wider border-b border-stroke text-slate-600 dark:text-slate-300">
+                      <th className="py-2.5 px-4 whitespace-nowrap w-40">Challan / GP #</th>
+                      <th className="py-2.5 px-4 whitespace-nowrap">Date</th>
+                      <th className="py-2.5 px-4 whitespace-nowrap">Vehicle / Driver</th>
+                      <th className="py-2.5 px-4 text-center whitespace-nowrap">Workflow Mode</th>
+                      <th className="py-2.5 px-4">Items / Breakdown</th>
+                      <th className="py-2.5 px-4 text-center whitespace-nowrap">Status</th>
+                      <th className="py-2.5 px-4 text-center w-28 whitespace-nowrap">Actions</th>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                  </thead>
+                  <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                    {group.challans.map((rec: any) => {
+                      const code = rec.challan_no || `DC-${String(rec.id).padStart(4, '0')}`;
+                      const isDone = rec.status === 'Dispatched' || rec.status === 'Fully Dispatched';
+                      const dateStr = rec.return_date || rec.challan_date || (rec.created_at ? new Date(rec.created_at).toLocaleDateString() : '—');
+                      const isAuto = String(rec.remarks || '').includes('[AUTOMATIC]');
+
+                      return (
+                        <tr
+                          key={rec.id}
+                          className="hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white"
+                        >
+                          {/* Code */}
+                          <td className="py-3 px-4 font-bold font-mono whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span className="text-primary">{code}</span>
+                              {rec.gate_pass_no && rec.gate_pass_no !== code && (
+                                <span className="text-[10px] text-emerald-600 font-black">
+                                  GP: {rec.gate_pass_no}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Date */}
+                          <td className="py-3 px-4 text-gray-500 whitespace-nowrap font-medium text-[11px]">
+                            {dateStr}
+                          </td>
+
+                          {/* Vehicle */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <p className="font-bold text-black dark:text-white text-[11px]">{rec.vehicle_no || 'By Hand'}</p>
+                            <p className="text-[10px] text-gray-400">{rec.driver_name || rec.transport_name || '—'}</p>
+                          </td>
+
+                          {/* Workflow Mode */}
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            {isAuto ? (
+                              <span className="inline-flex items-center gap-1 rounded-md py-0.5 px-2 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60 shadow-2xs">
+                                ⚡ Automatic
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-md py-0.5 px-2 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60 shadow-2xs">
+                                📋 Manual GP
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Items / Breakdown */}
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col gap-0.5 max-w-[280px]">
+                              {(rec.items || []).map((it: any, itIdx: number) => {
+                                const q = Number(it.qty ?? it.dispatchedQty ?? 0);
+                                return (
+                                  <div key={itIdx} className="text-[10px] text-slate-700 dark:text-slate-200 leading-tight">
+                                    <span className="font-semibold">• {it.itemName || it.pDescription || it.product_name}</span>
+                                    <span className="ml-1 text-primary font-mono font-bold">
+                                      ({formatItemDisplay(it, q)})
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            <span
+                              className={`inline-flex rounded-md py-0.5 px-2.5 text-[9px] font-black uppercase tracking-wide border ${
+                                isDone
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60'
+                              }`}
+                            >
+                              {rec.status || 'Dispatched'}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecord(rec)}
+                                className="bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 p-1.5 rounded transition shadow-xs cursor-pointer"
+                                title="View Details"
+                              >
+                                <FiEye size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handlePrint(rec)}
+                                className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-400 p-1.5 rounded transition shadow-xs cursor-pointer"
+                                title="Print Challan / Gate Pass"
+                              >
+                                <FiPrinter size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

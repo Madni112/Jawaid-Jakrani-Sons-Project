@@ -4,13 +4,11 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdCheckCircle, MdArrowBack } from 'react-icons/md';
-import { useAuth } from '../../../Context/Auth';
 
 const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly, isEditMode }: { inwardId?: string, locationFilter?: string, onSuccess?: () => void, onCancel?: () => void, readonly?: boolean, isEditMode?: boolean }) => {
   const params = useParams();
   const idToUse = inwardId || params.id;
   const navigate = useNavigate();
-  const { tenantId } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -26,25 +24,73 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
   const fetchChallanData = async () => {
     setLoading(true);
     try {
-      // Fetch Header & Purchases in parallel
+      // Fetch Header & Purchases in parallel (limit purchases to recent)
       const [ { data: grnData, error: grnError }, { data: purchasesData } ] = await Promise.all([
         supabase.from('grn_receipts').select('*').eq('id', idToUse).single(),
-        supabase.from('supplier_purchases').select('id, purchase_no, bill_no, metadata, created_at')
+        supabase.from('supplier_purchases').select('id, purchase_no, bill_no, metadata, created_at').order('created_at', { ascending: false }).limit(60)
       ]);
 
       if (grnError) throw grnError;
 
-      const linkedPur = (purchasesData || []).find((p: any) =>
+      // 1. Match by metadata ID
+      let linkedPur = (purchasesData || []).find((p: any) =>
         p.metadata?.grn_id === idToUse ||
-        (Array.isArray(p.metadata?.grn_ids) && p.metadata.grn_ids.includes(idToUse)) ||
-        (p.purchase_no && grnData?.grn_no && String(grnData.grn_no).includes(String(p.purchase_no)))
+        (Array.isArray(p.metadata?.grn_ids) && p.metadata.grn_ids.includes(idToUse))
       );
 
+      // 2. Remarks match (e.g. "[MANUAL] ... for 04 (..." or "for PUR-04")
+      if (!linkedPur && grnData?.remarks) {
+        const remarkMatch = String(grnData.remarks).match(/for\s+([A-Za-z0-9_-]+)/i);
+        if (remarkMatch && remarkMatch[1]) {
+          const extracted = remarkMatch[1].trim();
+          const cleanExtracted = extracted.replace(/^PUR-?/i, '');
+          linkedPur = (purchasesData || []).find((p: any) => {
+            if (!p.purchase_no) return false;
+            const pNo = String(p.purchase_no).trim();
+            const cleanPNo = pNo.replace(/^PUR-?/i, '');
+            return pNo.toUpperCase() === extracted.toUpperCase() || cleanPNo === cleanExtracted;
+          });
+        }
+      }
+
+      // 3. Fallback for automatic GRNs that end with -GRN-{purchaseNo} or GRN-{purchaseNo}
+      if (!linkedPur && grnData?.grn_no) {
+        const grnUpper = String(grnData.grn_no).toUpperCase();
+        const grnMatch = grnUpper.match(/(?:^|-)GRN-([A-Za-z0-9]+)$/);
+        if (grnMatch && grnMatch[1]) {
+          const suffix = grnMatch[1];
+          linkedPur = (purchasesData || []).find((p: any) => {
+            if (!p.purchase_no) return false;
+            const cleanPNo = String(p.purchase_no).trim().replace(/^PUR-?/i, '');
+            return cleanPNo === suffix;
+          });
+        }
+      }
+
+      const fallbackRemarkPurNo = grnData?.remarks?.match(/for\s+([A-Za-z0-9_-]+)/i)?.[1];
       const resolvedPurchaseNo = linkedPur?.purchase_no
         ? (String(linkedPur.purchase_no).toUpperCase().startsWith('PUR-')
             ? String(linkedPur.purchase_no).toUpperCase()
             : `PUR-${linkedPur.purchase_no}`)
-        : (grnData?.grn_no ? `PUR-${grnData.grn_no.replace(/^GRN-/, '')}` : 'PUR-01');
+        : (fallbackRemarkPurNo
+            ? `PUR-${fallbackRemarkPurNo.replace(/^PUR-?/i, '')}`
+            : '');
+
+      // Parse Gate Passes from remarks
+      let gatePasses: Record<string, string> = {};
+      const rawRemarks = String(grnData?.remarks || '');
+      const jsonMatch = rawRemarks.match(/\[GatePasses:\s*(\{.*?\})\]/s);
+      if (jsonMatch) {
+        try {
+          gatePasses = JSON.parse(jsonMatch[1]);
+        } catch (e) {}
+      }
+      if (Object.keys(gatePasses).length === 0) {
+        const singleMatch = rawRemarks.match(/\[Gate Pass:\s*([^\]]+)\]/i);
+        if (singleMatch) {
+          gatePasses['DEFAULT'] = singleMatch[1].trim();
+        }
+      }
 
       const resolvedChallanNo = grnData?.challan_no || (grnData?.grn_no ? `IC-${grnData.grn_no.replace(/^GRN-/, '')}` : 'IC-01');
 
@@ -52,7 +98,8 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
         ...grnData,
         purchase_no: resolvedPurchaseNo,
         challan_no: resolvedChallanNo,
-        linked_purchase: linkedPur
+        linked_purchase: linkedPur,
+        gatePasses
       });
 
       // Fetch Items
@@ -63,16 +110,25 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
 
       if (itemsError) throw itemsError;
 
-      // Initialize items
-      const initializedItems = await Promise.all(itemsData.map(async (item) => {
-        // Fetch product info to support Box/Pieces UI for Tiles
-        const { data: prodInfo } = await supabase
+      // Batch fetch product info for all items in 1 query instead of looping N times
+      const prodNames = Array.from(new Set((itemsData || []).map((i: any) => i.product_name).filter(Boolean)));
+      const prodMap: Record<string, any> = {};
+      if (prodNames.length > 0) {
+        const { data: prodList } = await supabase
           .from('products')
-          .select('category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name, uom')
-          .ilike('product_name', item.product_name)
-          .maybeSingle();
+          .select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name, uom, allow_loose_sales, loose_conversion_ratio')
+          .in('product_name', prodNames);
+        (prodList || []).forEach((p: any) => {
+          if (p.product_name) prodMap[String(p.product_name).trim().toLowerCase()] = p;
+        });
+      }
 
-        const rawPcs = Number(prodInfo?.pieces_per_box ?? prodInfo?.pcs_per_box ?? prodInfo?.pieces_per_packing ?? 0);
+      // Initialize items synchronously from the batch map
+      const initializedItems = (itemsData || []).map((item) => {
+        const prodInfo = prodMap[String(item.product_name).trim().toLowerCase()];
+        const looseRatio = Number(prodInfo?.loose_conversion_ratio || 0);
+        const boxPcs = Number(prodInfo?.pieces_per_box ?? prodInfo?.pcs_per_box ?? prodInfo?.pieces_per_packing ?? 0);
+        const rawPcs = looseRatio > 0 ? looseRatio : boxPcs;
         const isTile = rawPcs > 1 || String(prodInfo?.scenario_name || '').toUpperCase().includes('TILE') || String(prodInfo?.category || '').toUpperCase().includes('TILE') || String(prodInfo?.uom || '').toUpperCase() === 'BOX';
         const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
 
@@ -99,7 +155,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
           isTile,
           pcsPerBox
         };
-      }));
+      });
       
       setAllItems(initializedItems);
 
@@ -116,7 +172,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
     } catch (err: any) {
       toast.error('Error fetching challan details.');
       if (onSuccess) onSuccess();
-      else navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Inward-Challan/List`);
+      else navigate(`/Purchase/Inward-Challan/List`);
     } finally {
       setLoading(false);
     }
@@ -264,7 +320,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
       toast.success(toastMessage);
 
       if (onSuccess) onSuccess();
-      else navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Inward-Challan/List`);
+      else navigate(`/Purchase/Inward-Challan/List`);
     } catch (err: any) {
       toast.error('Failed to verify challan: ' + err.message);
     } finally {
@@ -295,7 +351,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
             {readonly ? 'View Inward Challan Details' : (isEditMode ? 'Edit Inward Challan & QC Adjustments' : 'Receive Inward Stock (Incremental)')}
           </h2>
           <button
-            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Inward-Challan/List`)}
+            onClick={() => navigate(`/Purchase/Inward-Challan/List`)}
             className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline cursor-pointer"
           >
             <MdArrowBack /> Back to List
@@ -307,13 +363,41 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
         {/* Header Info */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8 pb-6 border-b border-stroke dark:border-strokedark">
           <div>
-            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1 text-[11px]">Purchase #</p>
-            <p className="text-lg font-mono font-bold text-primary">{challan.purchase_no || 'PUR-01'}</p>
+            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1 text-[11px]">Challan / Gate Pass #</p>
+            {(() => {
+              const gps = challan.gatePasses || {};
+              const gpKeys = Object.keys(gps);
+              if (gpKeys.length > 0) {
+                return (
+                  <div className="space-y-0.5">
+                    {gpKeys.map((wh) => {
+                      const slip = gps[wh];
+                      const safePrefix = wh !== 'DEFAULT' ? wh.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+                      const fullSlip = safePrefix && !String(slip).toUpperCase().startsWith(`${safePrefix}-`)
+                        ? `${safePrefix}-${slip}`
+                        : String(slip);
+                      return (
+                        <p key={wh} className="text-lg font-mono font-bold text-purple-700 dark:text-purple-300">
+                          {fullSlip}
+                        </p>
+                      );
+                    })}
+                  </div>
+                );
+              }
+              return (
+                <p className="text-lg font-mono font-bold text-black dark:text-white">
+                  {challan.challan_no || (challan.grn_no ? challan.grn_no.replace(/^GRN-/, 'IC-') : 'IC-01')}
+                </p>
+              );
+            })()}
             <span className="text-[11px] font-mono text-gray-500 block mt-0.5">GRN: {challan.grn_no}</span>
           </div>
           <div>
-            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1 text-[11px]">Inward Challan #</p>
-            <p className="text-lg font-mono font-bold text-black dark:text-white">{challan.challan_no || (challan.grn_no ? challan.grn_no.replace(/^GRN-/, 'IC-') : 'IC-01')}</p>
+            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1 text-[11px]">Purchase #</p>
+            <p className="text-lg font-mono font-bold text-primary">
+              {challan.purchase_no || <span className="text-gray-400 text-sm font-normal italic">Pending Bill (GRN)</span>}
+            </p>
             <span className="inline-flex rounded py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60 mt-0.5">
               {challan.status === 'Confirm' ? 'Verified & Received' : (challan.status || 'Received')}
             </span>
@@ -675,7 +759,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly,
             onClick={() => {
               if (onCancel) onCancel();
               else if (onSuccess) onSuccess();
-              else navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Inward-Challan/List`);
+              else navigate(`/Purchase/Inward-Challan/List`);
             }}
             className="rounded-lg border border-stroke px-6 py-2 font-medium hover:bg-slate-50 dark:border-strokedark dark:hover:bg-meta-4 transition"
             disabled={submitting}

@@ -58,7 +58,54 @@ const PurchaseReturnList = () => {
       }
 
       setSubsequentReceiptsMap(receiptTotals);
-      setReturns(rtnData || []);
+
+      // Group child split dispatches (e.g. 001-B) into parent return (001) so return registry counts 1 return
+      const parentMap: Record<string, any> = {};
+      const childList: any[] = [];
+
+      (rtnData || []).forEach((r: any) => {
+        const isChild = Boolean(
+          r.metadata?.parent_return_id ||
+          r.metadata?.parent_return_no ||
+          String(r.remarks || '').toLowerCase().includes('remaining hold items from')
+        );
+        if (isChild) {
+          childList.push(r);
+        } else {
+          parentMap[String(r.id)] = {
+            ...r,
+            childDispatches: []
+          };
+        }
+      });
+
+      childList.forEach((child: any) => {
+        const pId = child.metadata?.parent_return_id;
+        const pNo = child.metadata?.parent_return_no || (child.return_no || '').replace(/-[A-Z]+$/i, '');
+        let parent = pId ? parentMap[String(pId)] : null;
+        if (!parent && pNo) {
+          parent = Object.values(parentMap).find(p => (p.return_no || '').toUpperCase() === pNo.toUpperCase());
+        }
+
+        if (parent) {
+          parent.childDispatches.push(child);
+        } else {
+          parentMap[String(child.id)] = {
+            ...child,
+            childDispatches: []
+          };
+        }
+      });
+
+      // Sort newest date first (descending by return_date / created_at, then ID)
+      const sortedReturns = Object.values(parentMap).sort((a: any, b: any) => {
+        const dateA = new Date(a.return_date || a.created_at || 0).getTime();
+        const dateB = new Date(b.return_date || b.created_at || 0).getTime();
+        if (dateB !== dateA) return dateB - dateA;
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+
+      setReturns(sortedReturns);
     } catch (err: any) {
       toast.error('Data Fetching Failure: ' + err.message);
     } finally {
@@ -103,11 +150,16 @@ const PurchaseReturnList = () => {
     }
   };
 
-  const filteredReturns = returns.filter(r =>
-    (r.return_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (r.vendor_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (r.source_warehouse || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredReturns = returns.filter(r => {
+    const q = searchTerm.toLowerCase();
+    const childMatches = (r.childDispatches || []).some((c: any) => (c.return_no || '').toLowerCase().includes(q));
+    return (
+      (r.return_no || '').toLowerCase().includes(q) ||
+      (r.vendor_name || '').toLowerCase().includes(q) ||
+      (r.source_warehouse || '').toLowerCase().includes(q) ||
+      childMatches
+    );
+  });
 
   const totalEntries = filteredReturns.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
@@ -204,7 +256,17 @@ const PurchaseReturnList = () => {
                   return (
                     <tr key={rtn.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
                       <td className="py-3.5 px-4 text-center text-gray-400 whitespace-nowrap">{serialNumber}</td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-primary whitespace-nowrap">{rtn.return_no}</td>
+                      <td className="py-3.5 px-4 font-mono whitespace-nowrap">
+                        <div className="font-bold text-primary">{rtn.return_no}</div>
+                        {rtn.childDispatches?.length > 0 && (
+                          <div 
+                            className="text-[10px] text-purple-600 dark:text-purple-400 font-sans tracking-tight font-normal cursor-help"
+                            title={`Physical Delivery Challans: ${[rtn.return_no, ...rtn.childDispatches.map((c: any) => c.return_no)].join(', ')}`}
+                          >
+                            Challans ({rtn.childDispatches.length + 1}): {[rtn.return_no, ...rtn.childDispatches.map((c: any) => c.return_no)].join(', ')}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4 flex items-center gap-1.5 whitespace-nowrap"><MdPerson className="text-gray-400 shrink-0" size={16} />{rtn.vendor_name}</td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className="bg-slate-100 dark:bg-meta-4 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1 whitespace-nowrap">

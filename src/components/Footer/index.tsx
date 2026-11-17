@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { MdPhone, MdShield, MdStorefront, MdVerified } from 'react-icons/md';
-import { FaWhatsapp } from 'react-icons/fa';
 import { LuCode2, LuTerminal, LuCpu, LuActivity, LuCheckCircle2 } from 'react-icons/lu';
 import { useAuth } from '../../Context/Auth';
 import { useLanguage } from '../../Context/LanguageContext';
@@ -117,18 +116,6 @@ const Footer: React.FC = () => {
               <MdPhone size={13} className="text-emerald-600 dark:text-emerald-400" />
               <span>{phoneFormatted}</span>
             </a>
-
-            {/* Direct WhatsApp */}
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 hover:shadow-lg transition duration-150 cursor-pointer"
-              title="Chat Directly on WhatsApp with Abdul Sattar"
-            >
-              <FaWhatsapp size={14} />
-              <span>{isRTL ? 'واٹس ایپ' : 'WhatsApp'}</span>
-            </a>
           </div>
 
         </div>
@@ -198,7 +185,7 @@ const Footer: React.FC = () => {
           <span className="text-neutral-500">v1.3.9</span>
         </div>
 
-        {/* Right: Hotline & WhatsApp Action Strip */}
+        {/* Right: Hotline Action Strip */}
         <div className="flex items-center gap-2">
           <a
             href={`tel:${phoneIntl}`}
@@ -207,17 +194,6 @@ const Footer: React.FC = () => {
           >
             <MdPhone size={12} className="text-emerald-400" />
             <span>{phoneFormatted}</span>
-          </a>
-
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-sm shadow-emerald-500/20 transition cursor-pointer"
-            title="Chat on WhatsApp with Abdul Sattar"
-          >
-            <FaWhatsapp size={13} />
-            <span>WhatsApp</span>
           </a>
         </div>
 

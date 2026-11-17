@@ -127,6 +127,7 @@ const PrintSalesReturn: React.FC = () => {
     const rawPcs = Number(
       item.pcsPerBox || 
       item.pcs_per_box || 
+      prodMeta?.loose_conversion_ratio ||
       prodMeta?.pieces_per_box || 
       prodMeta?.pcs_per_box || 
       prodMeta?.pieces_per_packing || 

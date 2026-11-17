@@ -119,6 +119,8 @@ const PrintInvoice = () => {
   const processedItems = items.map((item) => {
     const pName = item.itemName ?? item.product_name ?? 'N/A';
     const prodMeta = productsCatalog.find(p => p.product_name === pName);
+    const desc = String(prodMeta?.product_description || item.product_description || '');
+    const sku = String(item.skuCode || item.sku || prodMeta?.item_sr_no || '');
 
     const rawPcs = Number(item.piecesPerBox || prodMeta?.pieces_per_box || prodMeta?.pcs_per_box || prodMeta?.pieces_per_packing || 0);
     const isTile = Boolean(

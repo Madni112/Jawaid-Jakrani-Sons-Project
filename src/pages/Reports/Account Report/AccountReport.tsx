@@ -6,12 +6,16 @@ import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 import { SearchableMultiSelect } from '../../../components/SearchableMultiSelect';
 import { DEFAULT_SUB_AREAS, DEFAULT_AREAS, DEFAULT_SUBAREA_AREAS_MAP } from '../../../components/SubAreaAreaInput';
+import AccountReportPrint from './AccountReportPrint';
 
 const AccountReport = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { tenantId } = useAuth();
   const [loading, setLoading] = useState(true);
+
+  const [hasGenerated, setHasGenerated] = useState(false);
+  const [generatedPayload, setGeneratedPayload] = useState<{ tab: number; criteria: any } | null>(null);
 
   const initialTab = Number(location.state?.activeTab || location.state?.tab || 1);
   const [activeTab, setActiveTab] = useState<number>(initialTab);
@@ -299,9 +303,11 @@ const AccountReport = () => {
       }
     }
 
-    navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Account-Report/Print`, {
-      state: { tab: activeTab, criteria: filters }
-    });
+    setGeneratedPayload({ tab: activeTab, criteria: { ...filters } });
+    setHasGenerated(true);
+    setTimeout(() => {
+      document.getElementById('generated-account-report')?.scrollIntoView({ behavior: 'smooth' });
+    }, 150);
   };
 
   if (loading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
@@ -335,6 +341,9 @@ const AccountReport = () => {
         <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Operational Expenses</button>
         <button type="button" onClick={() => handleTabChange(11)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 11 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Trial Balance</button>
         <button type="button" onClick={() => handleTabChange(5)} className={`py-2.5 px-3 transition border-b-2 cursor-pointer ${activeTab === 5 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Chart of Accounts</button>
+
+        <span className="h-4 w-[2px] bg-stroke dark:bg-strokedark mx-1"></span>
+        <button type="button" onClick={() => navigate('/Accounts/Ledgers')} className="py-2.5 px-3 transition border-b-2 whitespace-nowrap border-transparent text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-bold cursor-pointer">Party Ledgers Hub ↗</button>
       </div>
 
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
@@ -542,6 +551,38 @@ const AccountReport = () => {
           </button>
         </div>
       </div>
+
+      {/* Below Report Output (Rendered after clicking Show Report) */}
+      {hasGenerated && generatedPayload && (
+        <div id="generated-account-report" className="mt-8 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-6 shadow-md transition-all">
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-stroke dark:border-strokedark">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <h3 className="text-sm font-black text-black dark:text-white uppercase tracking-wider">
+                Generated Live Report Result
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Account-Report/Print`, {
+                  state: { tab: generatedPayload.tab, criteria: generatedPayload.criteria }
+                });
+              }}
+              className="text-xs font-bold text-primary hover:underline cursor-pointer"
+            >
+              Open in Fullscreen Print View →
+            </button>
+          </div>
+
+          <AccountReportPrint
+            key={`${generatedPayload.tab}_${JSON.stringify(generatedPayload.criteria)}`}
+            embedded={true}
+            tabOverride={generatedPayload.tab}
+            filtersOverride={generatedPayload.criteria}
+          />
+        </div>
+      )}
     </div>
   );
 };

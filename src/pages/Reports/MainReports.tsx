@@ -30,6 +30,15 @@ import {
   MdClear
 } from 'react-icons/md';
 import * as XLSX from 'xlsx';
+import { CustomerLedgerTab } from './MainReports/tabs/CustomerLedgerTab';
+import { VendorLedgerTab } from './MainReports/tabs/VendorLedgerTab';
+import { CombinedLedgerTab } from './MainReports/tabs/CombinedLedgerTab';
+import { ProfitLossTab } from './MainReports/tabs/ProfitLossTab';
+import { ExpenseReportTab } from './MainReports/tabs/ExpenseReportTab';
+import { DailyBookTab } from './MainReports/tabs/DailyBookTab';
+import { MainReportsMetrics } from './MainReports/components/MainReportsMetrics';
+import { exportMainReportToExcel } from './MainReports/services/mainReportsExport';
+
 
 type TabKey = 'customer-ledger' | 'vendor-ledger' | 'combined-ledger' | 'profit-loss' | 'expense-report' | 'daily-book';
 
@@ -115,9 +124,9 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       navigate(`/Accounts/Ledgers?tab=${p}`, { replace: true, state: location.state });
       return;
     }
-    // If user hit /Accounts with a Reports tab, forward to /Reports/Reports-Dashboard
+    // If user hit /Accounts with a Reports tab, forward to /Reports/Main-Reports
     if (effectiveMode === 'accounts' && ['profit-loss', 'daily-book'].includes(p)) {
-      navigate(`/Reports/Reports-Dashboard?tab=${p}`, { replace: true, state: location.state });
+      navigate(`/Reports/Main-Reports?tab=${p}`, { replace: true, state: location.state });
       return;
     }
 
@@ -170,6 +179,12 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   const [pnlData, setPnlData] = useState<any>(null);
   const [pnlBasis, setPnlBasis] = useState<'accrual' | 'cash'>('accrual');
   const [pnlIncludeOB, setPnlIncludeOB] = useState<boolean>(false);
+  const [pnlCalculationMode, setPnlCalculationMode] = useState<string>('net');
+  const [pnlExpenseFilter, setPnlExpenseFilter] = useState<string>('all');
+  const [expandedPnLSections, setExpandedPnLSections] = useState<Record<string, boolean>>({});
+  const togglePnLSection = (section: string) => {
+    setExpandedPnLSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
   const [expenseRows, setExpenseRows] = useState<any[]>([]);
   const [dailyBookRows, setDailyBookRows] = useState<any[]>([]);
 
@@ -1777,134 +1792,23 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   // Export to Excel helper
   const handleExportExcel = () => {
     if (!hasGenerated) {
-      toast.error('Please generate the report first before exporting.');
+      toast.error('Please click Generate Report first.');
       return;
     }
 
-    let exportData: any[] = [];
-    const filename = `Report_${activeTab}_${fromDate}_${toDate}.xlsx`;
-
-    if (activeTab === 'customer-ledger') {
-      exportData = customerLedgerRows.map(r => ({
-        'S#': r.index,
-        'Date': r.date,
-        'Ref / Doc #': r.refNo,
-        'Customer Name (Code)': `${r.partyName} (${r.accountCode})`,
-        'City': r.city || '',
-        'Area': r.area || '',
-        'Entry Type': r.entryType,
-        'Sales (Dr)': r.sales,
-        'Return (Cr)': r.returns,
-        'Received (Cr)': r.received,
-        'Running Balance': r.runningBalance
-      }));
-    } else if (activeTab === 'vendor-ledger') {
-      exportData = vendorLedgerRows.map(r => ({
-        'S#': r.index,
-        'Date': r.date,
-        'Ref / Doc #': r.refNo,
-        'Vendor Name (Code)': `${r.partyName} (${r.accountCode})`,
-        'City': r.city || '',
-        'Area': r.area || '',
-        'Entry Type': r.entryType,
-        'Purchase (Cr)': r.purchases,
-        'Return (Dr)': r.returns,
-        'Payment (Dr)': r.payments,
-        'Running Balance': r.runningBalance
-      }));
-    } else if (activeTab === 'combined-ledger') {
-      exportData = filteredCombinedRows.map((r, i) => ({
-        'S#': i + 1,
-        'Date': r.date,
-        'Ref / Doc #': r.refNo,
-        'Party Name': r.partyName,
-        'Party Type': r.partyType,
-        'Code': r.accountCode,
-        'City': r.city,
-        'Area': r.area,
-        'Entry Type': r.entryType,
-        'Debit (Dr)': r.debit,
-        'Credit (Cr)': r.credit,
-        'Running Balance': r.runningBalance
-      }));
-    } else if (activeTab === 'profit-loss' && pnlData) {
-      if (pnlBasis === 'cash') {
-        exportData = [
-          { 'Calculation Basis': 'Cash Basis (Realized Pocket Profit)', 'Line Item': 'Cash Collected / Received from Customers', 'Amount (PKR)': pnlData.cashFromCustomers },
-          { 'Calculation Basis': 'Cash Basis (Realized Pocket Profit)', 'Line Item': 'Less: Cash Paid to Suppliers / Vendors', 'Amount (PKR)': -pnlData.cashPaidToVendors },
-          { 'Calculation Basis': 'Cash Basis (Realized Pocket Profit)', 'Line Item': 'Net Trading Cash Generated', 'Amount (PKR)': pnlData.cashFromCustomers - pnlData.cashPaidToVendors },
-          ...Object.entries(pnlData.expenseMap).map(([k, v]) => ({
-            'Calculation Basis': 'Cash Basis (Realized Pocket Profit)',
-            'Line Item': `Operating Expense: ${k}`,
-            'Amount (PKR)': -Number(v)
-          })),
-          { 'Calculation Basis': 'Cash Basis (Realized Pocket Profit)', 'Line Item': 'Total Operating Expenses Paid', 'Amount (PKR)': -pnlData.totalExpenses },
-          { 'Calculation Basis': 'Cash Basis (Realized Pocket Profit)', 'Line Item': 'Net Realized Cash Profit / (Loss)', 'Amount (PKR)': pnlData.netCashProfit },
-          { 'Calculation Basis': 'Market Standing', 'Line Item': pnlIncludeOB ? 'Total Customer Receivables (Including Prior OB)' : 'Period Customer Receivables (Excluding Prior OB)', 'Amount (PKR)': pnlIncludeOB ? pnlData.totalReceivables : (pnlData.periodReceivables ?? (pnlData.periodSales - pnlData.periodSalesReturns - pnlData.cashFromCustomers)) },
-          { 'Calculation Basis': 'Market Standing', 'Line Item': pnlIncludeOB ? 'Less: Total Vendor Payables (Including Prior OB)' : 'Less: Period Vendor Payables (Excluding Prior OB)', 'Amount (PKR)': -(pnlIncludeOB ? pnlData.totalPayables : (pnlData.periodPayables ?? (pnlData.periodCogs - pnlData.cashPaidToVendors))) },
-          { 'Calculation Basis': 'Market Standing', 'Line Item': 'Net Market Outstanding Position', 'Amount (PKR)': (pnlIncludeOB ? pnlData.totalReceivables : (pnlData.periodReceivables ?? (pnlData.periodSales - pnlData.periodSalesReturns - pnlData.cashFromCustomers))) - (pnlIncludeOB ? pnlData.totalPayables : (pnlData.periodPayables ?? (pnlData.periodCogs - pnlData.cashPaidToVendors))) }
-        ];
-      } else {
-        const effGrossSales = pnlData.periodSales + (pnlIncludeOB ? pnlData.customerOB : 0);
-        const effCOGS = pnlData.periodCogs + (pnlIncludeOB ? pnlData.vendorOB : 0);
-        const effNetSales = Math.max(0, effGrossSales - pnlData.periodSalesReturns);
-        const effGrossProfit = effNetSales - effCOGS;
-        const effNetProfit = effGrossProfit - pnlData.totalExpenses;
-
-        exportData = [
-          ...(pnlIncludeOB ? [
-            { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Customer Opening Balance (Prior Sales)', 'Amount (PKR)': pnlData.customerOB },
-            { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Period Sales Revenue (SAV & Invoices)', 'Amount (PKR)': pnlData.periodSales }
-          ] : []),
-          { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Gross Sales Revenue', 'Amount (PKR)': effGrossSales },
-          { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Less: Sales Returns (SRV)', 'Amount (PKR)': -pnlData.periodSalesReturns },
-          { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Net Sales Turnover', 'Amount (PKR)': effNetSales },
-          ...(pnlIncludeOB && pnlData.vendorOB > 0 ? [
-            { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Vendor Opening Balance (Prior Purchases)', 'Amount (PKR)': -pnlData.vendorOB },
-            { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Period Purchases / Material (PAV)', 'Amount (PKR)': -pnlData.periodCogs }
-          ] : []),
-          { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Cost of Goods Sold (Purchases / Material)', 'Amount (PKR)': -effCOGS },
-          { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Gross Trading Profit', 'Amount (PKR)': effGrossProfit },
-          ...Object.entries(pnlData.expenseMap).map(([k, v]) => ({
-            'Calculation Basis': 'Accrual Basis (Trading P&L)',
-            'Line Item': `Operating Expense: ${k}`,
-            'Amount (PKR)': -Number(v)
-          })),
-          { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Total Operating Expenses', 'Amount (PKR)': -pnlData.totalExpenses },
-          { 'Calculation Basis': 'Accrual Basis (Trading P&L)', 'Line Item': 'Net Trading Profit / (Loss)', 'Amount (PKR)': effNetProfit },
-          { 'Calculation Basis': 'Market Standing', 'Line Item': pnlIncludeOB ? 'Total Customer Receivables (Including Prior OB)' : 'Period Customer Receivables (Excluding Prior OB)', 'Amount (PKR)': pnlIncludeOB ? pnlData.totalReceivables : (pnlData.periodReceivables ?? (pnlData.periodSales - pnlData.periodSalesReturns - pnlData.cashFromCustomers)) },
-          { 'Calculation Basis': 'Market Standing', 'Line Item': pnlIncludeOB ? 'Less: Total Vendor Payables (Including Prior OB)' : 'Less: Period Vendor Payables (Excluding Prior OB)', 'Amount (PKR)': -(pnlIncludeOB ? pnlData.totalPayables : (pnlData.periodPayables ?? (pnlData.periodCogs - pnlData.cashPaidToVendors))) },
-          { 'Calculation Basis': 'Market Standing', 'Line Item': 'Net Market Outstanding Position', 'Amount (PKR)': (pnlIncludeOB ? pnlData.totalReceivables : (pnlData.periodReceivables ?? (pnlData.periodSales - pnlData.periodSalesReturns - pnlData.cashFromCustomers))) - (pnlIncludeOB ? pnlData.totalPayables : (pnlData.periodPayables ?? (pnlData.periodCogs - pnlData.cashPaidToVendors))) }
-        ];
-      }
-    } else if (activeTab === 'expense-report') {
-      exportData = filteredExpenseRows.map(r => ({
-        'S#': r.index,
-        'Date': r.date,
-        'Voucher #': r.voucherNo,
-        'Chart of Accounts': r.coaCodeTitle,
-        'Paid Via': r.paidVia,
-        'Amount (PKR)': r.amount
-      }));
-    } else if (activeTab === 'daily-book') {
-      exportData = dailyBookRows.map(r => ({
-        'S#': r.index,
-        'Date': r.date,
-        'Voucher / Ref #': r.voucherNo,
-        'Account Title (Code)': r.accountCode ? `${r.accountTitle} (${r.accountCode})` : r.accountTitle,
-        'Entry Type': r.entryType,
-        'Payment Mode': r.paymentMode,
-        'Cash / Bank In (Dr)': r.cashIn,
-        'Cash / Bank Out (Cr)': r.cashOut,
-        'Net Drawer Cash': r.netDrawerCash
-      }));
-    }
-
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Report');
-    XLSX.writeFile(wb, filename);
-    toast.success('Downloaded ' + filename);
+    exportMainReportToExcel({
+      activeTab,
+      fromDate,
+      toDate,
+      customerLedgerRows,
+      vendorLedgerRows,
+      filteredCombinedRows,
+      filteredExpenseRows,
+      dailyBookRows,
+      pnlData,
+      pnlBasis,
+      pnlIncludeOB
+    });
   };
 
   const handlePrint = () => {
@@ -2417,6 +2321,42 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
               </button>
             );
           })}
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Sales-Report')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Sales Reports ↗</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Purchase-Report')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Purchase Reports ↗</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Stock-Report')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Stock Reports ↗</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Account-Report')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Account Auditing ↗</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/Reports/Balance-Sheet')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
+          >
+            <span>Balance Sheet ↗</span>
+          </button>
         </div>
       </div>
 
@@ -2774,260 +2714,13 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       ) : (
         <div className="space-y-5 animate-in fade-in duration-200 print:space-y-0 print:animate-none">
           {/* KPI Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 print:hidden">
-            {activeTab === 'customer-ledger' && (
-              <>
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Opening Balance</span>
-                  <div className="text-base font-black text-slate-800 dark:text-white font-mono mt-1">
-                    Rs. {Number(summary.opening).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-emerald-600 uppercase">Sales (Debit)</span>
-                  <div className="text-base font-black text-emerald-600 font-mono mt-1">
-                    Rs. {Number(summary.debit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-amber-600 uppercase">Returns (Credit)</span>
-                  <div className="text-base font-black text-amber-600 font-mono mt-1">
-                    Rs. {Number(summary.returnAmt).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-teal-600 uppercase">Received (Credit)</span>
-                  <div className="text-base font-black text-teal-600 font-mono mt-1">
-                    Rs. {Number(summary.credit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-primary/30 bg-primary/5 dark:bg-primary/10 shadow-2xs">
-                  <span className="text-[11px] font-bold text-primary uppercase">Net Closing Balance</span>
-                  <div className="text-base font-black text-primary font-mono mt-1">
-                    Rs. {Number(Math.abs(summary.closing)).toLocaleString(undefined, { minimumFractionDigits: 2 })} {summary.closing >= 0 ? 'Dr' : 'Cr'}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'vendor-ledger' && (
-              <>
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Opening Payable</span>
-                  <div className="text-base font-black text-slate-800 dark:text-white font-mono mt-1">
-                    Rs. {Number(summary.opening).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-blue-600 uppercase">Purchases (Credit)</span>
-                  <div className="text-base font-black text-blue-600 font-mono mt-1">
-                    Rs. {Number(summary.credit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-amber-600 uppercase">Purchase Returns (Dr)</span>
-                  <div className="text-base font-black text-amber-600 font-mono mt-1">
-                    Rs. {Number(summary.returnAmt).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-emerald-600 uppercase">Payments Made (Dr)</span>
-                  <div className="text-base font-black text-emerald-600 font-mono mt-1">
-                    Rs. {Number(summary.debit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-primary/30 bg-primary/5 dark:bg-primary/10 shadow-2xs">
-                  <span className="text-[11px] font-bold text-primary uppercase">Net Payable Balance</span>
-                  <div className="text-base font-black text-primary font-mono mt-1">
-                    Rs. {Number(Math.abs(summary.closing)).toLocaleString(undefined, { minimumFractionDigits: 2 })} {summary.closing >= 0 ? 'Cr' : 'Dr'}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'combined-ledger' && (
-              <>
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Opening Balance</span>
-                  <div className="text-base font-black text-slate-800 dark:text-white font-mono mt-1">
-                    Rs. {Number(Math.abs(combinedSummary.opening)).toLocaleString(undefined, { minimumFractionDigits: 2 })} {combinedSummary.opening >= 0 ? 'Dr' : 'Cr'}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-emerald-600 uppercase">Total Debits (Dr)</span>
-                  <div className="text-base font-black text-emerald-600 font-mono mt-1">
-                    Rs. {Number(combinedSummary.debit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-amber-600 uppercase">Total Credits (Cr)</span>
-                  <div className="text-base font-black text-amber-600 font-mono mt-1">
-                    Rs. {Number(combinedSummary.credit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-primary/30 bg-primary/5 dark:bg-primary/10 shadow-2xs sm:col-span-2">
-                  <span className="text-[11px] font-bold text-primary uppercase">Net Market Position</span>
-                  <div className="text-base font-black text-primary font-mono mt-1">
-                    Rs. {Number(Math.abs(combinedSummary.closing)).toLocaleString(undefined, { minimumFractionDigits: 2 })} {combinedSummary.closing >= 0 ? 'Dr (Net Asset / Receivable)' : 'Cr (Net Liability / Payable)'}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'expense-report' && (
-              <>
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs sm:col-span-2">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Expense Records</span>
-                  <div className="text-base font-black text-slate-800 dark:text-white font-mono mt-1">
-                    {expenseSummary.count} Entries
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-rose-300 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 shadow-2xs sm:col-span-3">
-                  <span className="text-[11px] font-bold text-rose-600 uppercase">Grand Total Operating Expenses</span>
-                  <div className="text-base font-black text-rose-600 font-mono mt-1">
-                    Rs. {Number(expenseSummary.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'daily-book' && (
-              <>
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Opening Drawer Cash</span>
-                  <div className="text-base font-black text-slate-800 dark:text-white font-mono mt-1">
-                    Rs. {Number(dailySummary.opening).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-emerald-600 uppercase">Cash & Bank In (Dr)</span>
-                  <div className="text-base font-black text-emerald-600 font-mono mt-1">
-                    Rs. {Number(dailySummary.cashIn).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                  <span className="text-[11px] font-bold text-amber-600 uppercase">Cash & Bank Out (Cr)</span>
-                  <div className="text-base font-black text-amber-600 font-mono mt-1">
-                    Rs. {Number(dailySummary.cashOut).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-primary/30 bg-primary/5 dark:bg-primary/10 shadow-2xs">
-                  <span className="text-[11px] font-bold text-primary uppercase">Closing Drawer Balance</span>
-                  <div className="text-base font-black text-primary font-mono mt-1">
-                    Rs. {Number(dailySummary.closing).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 shadow-2xs">
-                  <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase">Credit Sales (Receivable)</span>
-                  <div className="text-base font-black text-blue-600 dark:text-blue-400 font-mono mt-1">
-                    Rs. {Number(dailySummary.creditSales).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-              </>
-            )}
-            {activeTab === 'profit-loss' && pnlData && (
-              <>
-                {pnlBasis === 'cash' ? (
-                  <>
-                    <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                      <span className="text-[11px] font-bold text-emerald-600 uppercase">Cash & Bank Recovered</span>
-                      <div className="text-base font-black text-emerald-600 font-mono mt-1">
-                        Rs. {Number(pnlData.cashFromCustomers).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                      <span className="text-[11px] font-bold text-amber-600 uppercase">Paid to Vendors (Cash/Bank)</span>
-                      <div className="text-base font-black text-amber-600 font-mono mt-1">
-                        Rs. {Number(pnlData.cashPaidToVendors).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                      <span className="text-[11px] font-bold text-rose-600 uppercase">Paid Expenses (Cash/Bank)</span>
-                      <div className="text-base font-black text-rose-600 font-mono mt-1">
-                        Rs. {Number(pnlData.totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className={`p-4 bg-white dark:bg-boxdark rounded-2xl border shadow-2xs ${pnlData.netCashProfit >= 0 ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20' : 'border-rose-300 dark:border-rose-800 bg-rose-50/40 dark:bg-rose-950/20'}`}>
-                      <span className={`text-[11px] font-bold uppercase ${pnlData.netCashProfit >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-                        Net Realized Profit (Cash & Bank)
-                      </span>
-                      <div className={`text-base font-black font-mono mt-1 ${pnlData.netCashProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        Rs. {Number(pnlData.netCashProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-primary/30 bg-primary/5 dark:bg-primary/10 shadow-2xs">
-                      <span className="text-[11px] font-bold text-primary uppercase">
-                        {pnlIncludeOB ? 'Net Market Asset (+OB)' : 'Net Period Market Asset'}
-                      </span>
-                      <div className="text-base font-black text-primary font-mono mt-1">
-                        Rs. {Number(pnlIncludeOB ? pnlData.netMarketPosition : (pnlData.periodNetMarketPosition ?? (pnlData.periodReceivables - pnlData.periodPayables))).toLocaleString(undefined, { minimumFractionDigits: 2 })} Dr
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                      <span className="text-[11px] font-bold text-emerald-600 uppercase">
-                        {pnlIncludeOB ? 'Gross Sales (+OB)' : 'Gross Sales Revenue'}
-                      </span>
-                      <div className="text-base font-black text-emerald-600 font-mono mt-1">
-                        Rs. {Number(pnlData.periodSales + (pnlIncludeOB ? pnlData.customerOB : 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                      <span className="text-[11px] font-bold text-amber-600 uppercase">Sales Returns</span>
-                      <div className="text-base font-black text-amber-600 font-mono mt-1">
-                        Rs. {Number(pnlData.periodSalesReturns).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                      <span className="text-[11px] font-bold text-blue-600 uppercase">
-                        {pnlIncludeOB && pnlData.vendorOB > 0 ? 'COGS (+OB)' : 'Cost of Goods (COGS)'}
-                      </span>
-                      <div className="text-base font-black text-blue-600 font-mono mt-1">
-                        Rs. {Number(pnlData.periodCogs + (pnlIncludeOB ? pnlData.vendorOB : 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs">
-                      <span className="text-[11px] font-bold text-rose-600 uppercase">Total Expenses</span>
-                      <div className="text-base font-black text-rose-600 font-mono mt-1">
-                        Rs. {Number(pnlData.totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    {(() => {
-                      const effProfit = (pnlData.periodNetSales + (pnlIncludeOB ? pnlData.customerOB : 0)) - (pnlData.periodCogs + (pnlIncludeOB ? pnlData.vendorOB : 0)) - pnlData.totalExpenses;
-                      return (
-                        <div className={`p-4 bg-white dark:bg-boxdark rounded-2xl border shadow-2xs ${effProfit >= 0 ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20' : 'border-rose-300 dark:border-rose-800 bg-rose-50/40 dark:bg-rose-950/20'}`}>
-                          <span className={`text-[11px] font-bold uppercase ${effProfit >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-                            Net Trading Profit
-                          </span>
-                          <div className={`text-base font-black font-mono mt-1 ${effProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            Rs. {Number(effProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+          <MainReportsMetrics
+            activeTab={activeTab}
+            summary={summary}
+            pnlData={pnlData}
+            pnlCalculationMode={pnlCalculationMode}
+            pnlIncludeOB={pnlIncludeOB}
+          />
 
           {/* Search Table Toolbar with Quick Filters */}
           {activeTab !== 'profit-loss' && (
@@ -3259,984 +2952,72 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
           {/* ── TABLE: CUSTOMER LEDGER ── */}
           {activeTab === 'customer-ledger' && (
-            <div className={`bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs ${isGeneratingPdf ? 'overflow-visible border-none shadow-none rounded-none' : 'overflow-hidden'} print:border-none print:shadow-none print:rounded-none print:overflow-visible`}>
-              <div className={`${isGeneratingPdf ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
-                <table className="w-full text-left border-collapse text-xs print:text-[10px]">
-                  <thead className="print:table-header-group">
-                    <tr className="border-b border-stroke dark:border-strokedark bg-slate-50/75 dark:bg-slate-800/60 font-bold text-slate-700 dark:text-slate-200 select-none print:bg-slate-100 print:text-black print:border-b-2 print:border-slate-800">
-                      <th className="py-2.5 px-2 text-center w-8 whitespace-nowrap">S#</th>
-                      <th 
-                        onClick={() => handleSort('date')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Date</span>
-                          {renderSortIcon('date')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('refNo')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Ref / Doc #</span>
-                          {renderSortIcon('refNo')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('partyName')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Customer Name (Code)</span>
-                          {renderSortIcon('partyName')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('city')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>City</span>
-                          {renderSortIcon('city')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('area')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Area</span>
-                          {renderSortIcon('area')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('entryType')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Entry Type</span>
-                          {renderSortIcon('entryType')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('sales')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Sales (Dr)</span>
-                          {renderSortIcon('sales')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('returns')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Return (Cr)</span>
-                          {renderSortIcon('returns')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('received')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Received (Cr)</span>
-                          {renderSortIcon('received')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('runningBalance')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Running Balance</span>
-                          {renderSortIcon('runningBalance')}
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                    {filteredCustomerRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={11} className="py-8 text-center text-slate-400 italic">
-                          No transactions found matching your selected customer, city, area and date range.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredCustomerRows.map(row => (
-                        <tr key={row.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition print:break-inside-avoid print:border-b print:border-slate-300">
-                          <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px] whitespace-nowrap">{row.index}</td>
-                          <td className="py-2 px-2 font-mono text-[11px] whitespace-nowrap">{row.date}</td>
-                          <td className="py-2 px-2 font-mono font-bold text-primary whitespace-nowrap">{row.refNo}</td>
-                          <td className="py-2 px-2 font-bold text-slate-800 dark:text-white">
-                            <span>{row.partyName}</span>{' '}
-                            <bdi dir="ltr" className="font-mono text-slate-400 text-[10px] inline-block font-normal">{`\u200E(${row.accountCode})\u200E`}</bdi>
-                          </td>
-                          <td className="py-2 px-2 text-slate-700 dark:text-slate-200 font-medium whitespace-nowrap">
-                            {row.city || '-'}
-                          </td>
-                          <td className="py-2 px-2 text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
-                            {row.area || '-'}
-                          </td>
-                          <td className="py-2 px-2 whitespace-nowrap">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                              row.isOpening ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300' :
-                              row.entryType.includes('Return') ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' :
-                              row.entryType.includes('Receipt') ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300' :
-                              'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
-                            }`}>
-                              {row.entryType}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                            {row.sales > 0 ? `Rs. ${Number(row.sales).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-amber-600 whitespace-nowrap">
-                            {row.returns > 0 ? `Rs. ${Number(row.returns).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-teal-600 whitespace-nowrap">
-                            {row.received > 0 ? `Rs. ${Number(row.received).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                            Rs. {Number(Math.abs(row.runningBalance)).toLocaleString(undefined, { minimumFractionDigits: 2 })} {row.runningBalance >= 0 ? 'Dr' : 'Cr'}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <CustomerLedgerTab
+              filteredCustomerRows={filteredCustomerRows}
+              handleSort={handleSort}
+              renderSortIcon={renderSortIcon}
+              isGeneratingPdf={isGeneratingPdf}
+            />
           )}
 
           {/* ── TABLE: VENDOR LEDGER ── */}
           {activeTab === 'vendor-ledger' && (
-            <div className={`bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs ${isGeneratingPdf ? 'overflow-visible border-none shadow-none rounded-none' : 'overflow-hidden'} print:border-none print:shadow-none print:rounded-none print:overflow-visible`}>
-              <div className={`${isGeneratingPdf ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
-                <table className="w-full text-left border-collapse text-xs print:text-[10px]">
-                  <thead className="print:table-header-group">
-                    <tr className="border-b border-stroke dark:border-strokedark bg-slate-50/75 dark:bg-slate-800/60 font-bold text-slate-700 dark:text-slate-200 select-none print:bg-slate-100 print:text-black print:border-b-2 print:border-slate-800">
-                      <th className="py-2.5 px-2 text-center w-8 whitespace-nowrap">S#</th>
-                      <th 
-                        onClick={() => handleSort('date')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Date</span>
-                          {renderSortIcon('date')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('refNo')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Ref / Doc #</span>
-                          {renderSortIcon('refNo')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('partyName')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Vendor Name (Code)</span>
-                          {renderSortIcon('partyName')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('city')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>City</span>
-                          {renderSortIcon('city')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('area')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Area</span>
-                          {renderSortIcon('area')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('entryType')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Entry Type</span>
-                          {renderSortIcon('entryType')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('purchases')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Purchase (Cr)</span>
-                          {renderSortIcon('purchases')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('returns')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Return (Dr)</span>
-                          {renderSortIcon('returns')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('payments')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Payment (Dr)</span>
-                          {renderSortIcon('payments')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('runningBalance')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Running Balance</span>
-                          {renderSortIcon('runningBalance')}
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                    {filteredVendorRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={11} className="py-8 text-center text-slate-400 italic">
-                          No vendor entries found in this date range.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredVendorRows.map(row => (
-                        <tr key={row.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition print:break-inside-avoid print:border-b print:border-slate-300">
-                          <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px] whitespace-nowrap">{row.index}</td>
-                          <td className="py-2 px-2 font-mono text-[11px] whitespace-nowrap">{row.date}</td>
-                          <td className="py-2 px-2 font-mono font-bold text-primary whitespace-nowrap">{row.refNo}</td>
-                          <td className="py-2 px-2 font-bold text-slate-800 dark:text-white">
-                            <span>{row.partyName}</span>{' '}
-                            <bdi dir="ltr" className="font-mono text-slate-400 text-[10px] inline-block font-normal">{`\u200E(${row.accountCode})\u200E`}</bdi>
-                          </td>
-                          <td className="py-2 px-2 text-slate-700 dark:text-slate-200 font-medium whitespace-nowrap">
-                            {row.city || '-'}
-                          </td>
-                          <td className="py-2 px-2 text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
-                            {row.area || '-'}
-                          </td>
-                          <td className="py-2 px-2 whitespace-nowrap">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                              row.isOpening ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300' :
-                              row.entryType.includes('Return') ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' :
-                              row.entryType.includes('Payment') ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' :
-                              'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
-                            }`}>
-                              {row.entryType}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-blue-600 whitespace-nowrap">
-                            {row.purchases > 0 ? `Rs. ${Number(row.purchases).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-amber-600 whitespace-nowrap">
-                            {row.returns > 0 ? `Rs. ${Number(row.returns).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-emerald-600 whitespace-nowrap">
-                            {row.payments > 0 ? `Rs. ${Number(row.payments).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                            Rs. {Number(Math.abs(row.runningBalance)).toLocaleString(undefined, { minimumFractionDigits: 2 })} {row.runningBalance >= 0 ? 'Cr' : 'Dr'}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <VendorLedgerTab
+              filteredVendorRows={filteredVendorRows}
+              handleSort={handleSort}
+              renderSortIcon={renderSortIcon}
+              isGeneratingPdf={isGeneratingPdf}
+            />
           )}
 
           {/* ── TABLE: ALL PARTIES (COMBINED FULL TRANSACTION LEDGER) ── */}
           {activeTab === 'combined-ledger' && (
-            <div className={`bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs ${isGeneratingPdf ? 'overflow-visible border-none shadow-none rounded-none' : 'overflow-hidden'} print:border-none print:shadow-none print:rounded-none print:overflow-visible`}>
-              <div className={`${isGeneratingPdf ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
-                <table className="w-full text-left border-collapse text-xs print:text-[10px]">
-                  <thead className="print:table-header-group">
-                    <tr className="border-b border-stroke dark:border-strokedark bg-slate-50/75 dark:bg-slate-800/60 font-bold text-slate-700 dark:text-slate-200 select-none print:bg-slate-100 print:text-black print:border-b-2 print:border-slate-800">
-                      <th className="py-2.5 px-2 text-center w-8 whitespace-nowrap">S#</th>
-                      <th 
-                        onClick={() => handleSort('date')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Date</span>
-                          {renderSortIcon('date')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('refNo')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Ref / Doc #</span>
-                          {renderSortIcon('refNo')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('partyName')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Party Name (Code)</span>
-                          {renderSortIcon('partyName')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('partyType')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Type</span>
-                          {renderSortIcon('partyType')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('city')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>City</span>
-                          {renderSortIcon('city')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('area')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Area</span>
-                          {renderSortIcon('area')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('entryType')}
-                        className="py-2.5 px-2 cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Entry Type</span>
-                          {renderSortIcon('entryType')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('debit')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Debit (Dr)</span>
-                          {renderSortIcon('debit')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('credit')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Credit (Cr)</span>
-                          {renderSortIcon('credit')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('runningBalance')}
-                        className="py-2.5 px-2 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Running Balance</span>
-                          {renderSortIcon('runningBalance')}
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                    {filteredCombinedRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={11} className="py-8 text-center text-slate-400 italic">
-                          No party transaction records found.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredCombinedRows.map((row, idx) => (
-                        <tr key={row.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition print:break-inside-avoid print:border-b print:border-slate-300">
-                          <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px] whitespace-nowrap">{idx + 1}</td>
-                          <td className="py-2 px-2 font-mono text-[11px] whitespace-nowrap">{row.date}</td>
-                          <td className="py-2 px-2 font-mono font-bold text-primary whitespace-nowrap">{row.refNo}</td>
-                          <td className="py-2 px-2 font-bold text-slate-800 dark:text-white">
-                            <span>{row.partyName}</span>{' '}
-                            <bdi dir="ltr" className="font-mono text-slate-400 text-[10px] inline-block font-normal">{`\u200E(${row.accountCode})\u200E`}</bdi>
-                          </td>
-                          <td className="py-2 px-2 whitespace-nowrap">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                              row.partyType === 'Customer' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-                            }`}>
-                              {row.partyType}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-slate-700 dark:text-slate-200 font-medium whitespace-nowrap">{row.city || '-'}</td>
-                          <td className="py-2 px-2 text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">{row.area || '-'}</td>
-                          <td className="py-2 px-2 whitespace-nowrap">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                              row.isOpening ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300' :
-                              row.entryType.includes('Return') ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' :
-                              row.entryType.includes('Payment') || row.entryType.includes('Receipt') ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' :
-                              row.partyType === 'Customer' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' :
-                              'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-                            }`}>
-                              {row.entryType}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-blue-600 whitespace-nowrap">
-                            {row.debit > 0 ? `Rs. ${Number(row.debit).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-amber-600 whitespace-nowrap">
-                            {row.credit > 0 ? `Rs. ${Number(row.credit).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                            Rs. {Number(Math.abs(row.runningBalance)).toLocaleString(undefined, { minimumFractionDigits: 2 })} {row.runningBalance >= 0 ? 'Dr' : 'Cr'}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <CombinedLedgerTab
+              filteredCombinedRows={filteredCombinedRows}
+              handleSort={handleSort}
+              renderSortIcon={renderSortIcon}
+              isGeneratingPdf={isGeneratingPdf}
+            />
           )}
 
           {/* ── PROFIT & LOSS STATEMENT ── */}
           {activeTab === 'profit-loss' && pnlData && (
-            <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs p-6 space-y-6 print:border-none print:shadow-none print:rounded-none print:p-0 print:space-y-4">
-              {/* Header with Title and View Controls */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stroke dark:border-strokedark pb-4 print:border-b-2 print:border-slate-800">
-                <div>
-                  <h4 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    Income Statement (Profit & Loss)
-                  </h4>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Duration Window: {fromDate} to {toDate}
-                  </p>
-                </div>
-
-                {/* Calculation Mode Switcher & Opening Balance Toggle (Hidden in Print) */}
-                <div className="flex flex-wrap items-center gap-2.5 print:hidden">
-                  <div className="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800/80 border border-stroke dark:border-strokedark">
-                    <button
-                      type="button"
-                      onClick={() => setPnlBasis('accrual')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        pnlBasis === 'accrual'
-                          ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                      }`}
-                    >
-                      Trading Profit (Accrual)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPnlBasis('cash')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        pnlBasis === 'cash'
-                          ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                      }`}
-                    >
-                      Realized Profit (Cash & Bank)
-                    </button>
-                  </div>
-
-                  <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-stroke dark:border-strokedark">
-                    <button
-                      type="button"
-                      onClick={() => setPnlIncludeOB(false)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        !pnlIncludeOB
-                          ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                      }`}
-                    >
-                      Exclude Opening Balances
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPnlIncludeOB(true)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        pnlIncludeOB
-                          ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                      }`}
-                    >
-                      Include Opening Balances
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── ACCRUAL BASIS STATEMENT ── */}
-              {pnlBasis === 'accrual' && (() => {
-                const effGrossSales = pnlData.periodSales + (pnlIncludeOB ? pnlData.customerOB : 0);
-                const effCOGS = pnlData.periodCogs + (pnlIncludeOB ? pnlData.vendorOB : 0);
-                const effNetSales = Math.max(0, effGrossSales - pnlData.periodSalesReturns);
-                const effGrossProfit = effNetSales - effCOGS;
-                const effNetProfit = effGrossProfit - pnlData.totalExpenses;
-
-                return (
-                  <div className="space-y-4 max-w-3xl font-mono text-xs">
-                    {/* Sales Section */}
-                    <div className="space-y-2 border-b border-stroke dark:border-strokedark pb-3">
-                      {pnlIncludeOB && (
-                        <div className="flex justify-between items-center text-purple-600 pl-2 text-[11px]">
-                          <span>Customer Opening Balance (Prior Sales)</span>
-                          <span>Rs. {Number(pnlData.customerOB).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center text-slate-800 dark:text-white font-bold">
-                        <span>{pnlIncludeOB ? 'Total Gross Sales Revenue (SAV + Invoices + OB)' : 'Gross Sales Revenue (SAV & Invoices)'}</span>
-                        <span>Rs. {Number(effGrossSales).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-amber-600 pl-4 text-[11px]">
-                        <span>Less: Sales Returns (SRV)</span>
-                        <span>(Rs. {Number(pnlData.periodSalesReturns).toLocaleString(undefined, { minimumFractionDigits: 2 })})</span>
-                      </div>
-                      <div className="flex justify-between items-center font-black text-primary border-t border-dashed border-stroke dark:border-strokedark pt-2">
-                        <span>Net Sales Turnover</span>
-                        <span>Rs. {Number(effNetSales).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    </div>
-
-                    {/* COGS Section */}
-                    <div className="space-y-2 border-b border-stroke dark:border-strokedark pb-3">
-                      {pnlIncludeOB && pnlData.vendorOB > 0 && (
-                        <div className="flex justify-between items-center text-purple-600 pl-2 text-[11px]">
-                          <span>Vendor Opening Balance (Prior Purchases)</span>
-                          <span>Rs. {Number(pnlData.vendorOB).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center text-slate-800 dark:text-white font-bold">
-                        <span>Cost of Goods Sold (Purchases / Material)</span>
-                        <span className="text-rose-600">(Rs. {Number(effCOGS).toLocaleString(undefined, { minimumFractionDigits: 2 })})</span>
-                      </div>
-                      <div className="flex justify-between items-center font-black text-emerald-600 border-t border-dashed border-stroke dark:border-strokedark pt-2">
-                        <span>Gross Profit (Trading Profit)</span>
-                        <span>Rs. {Number(effGrossProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    </div>
-
-                    {/* Operating Expenses Section */}
-                    <div className="space-y-2 border-b border-stroke dark:border-strokedark pb-3">
-                      <span className="block font-bold text-slate-800 dark:text-white mb-2">Operating Expenses:</span>
-                      {Object.entries(pnlData.expenseMap).length === 0 ? (
-                        <div className="text-slate-400 italic pl-4">No operational expenses recorded in this period.</div>
-                      ) : (
-                        Object.entries(pnlData.expenseMap).map(([head, amt]) => (
-                          <div key={head} className="flex justify-between items-center text-slate-600 dark:text-slate-300 pl-4 text-[11px]">
-                            <span>{head}</span>
-                            <span>Rs. {Number(amt).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                          </div>
-                        ))
-                      )}
-                      <div className="flex justify-between items-center font-bold text-rose-600 border-t border-dashed border-stroke dark:border-strokedark pt-2">
-                        <span>Total Operating Expenses</span>
-                        <span>(Rs. {Number(pnlData.totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2 })})</span>
-                      </div>
-                    </div>
-
-                    {/* Net Trading Profit */}
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-stroke dark:border-strokedark flex justify-between items-center text-sm font-black">
-                      <span className="text-slate-900 dark:text-white">Net Trading Profit / (Loss) for the Period</span>
-                      <span className={effNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                        Rs. {Number(effNetProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ── CASH & BANK BASIS (REALIZED LIQUID PROFIT) STATEMENT ── */}
-              {pnlBasis === 'cash' && (
-                <div className="space-y-4 max-w-3xl font-mono text-xs">
-                  <div className="p-3 rounded-xl bg-teal-50/60 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-900 text-teal-800 dark:text-teal-300 text-[11px] font-medium">
-                    💡 <strong>Realized Pocket Profit:</strong> Measures actual liquid funds collected from customers (Cash + Bank / Wallets) minus payments made to vendors and operational expenses paid. Credit receivables (udhaar) are not counted until collected.
-                  </div>
-
-                  <div className="space-y-2 border-b border-stroke dark:border-strokedark pb-3">
-                    <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400 font-bold">
-                      <span>1. Cash & Bank Recovered from Customers (Receipts & Invoices Paid)</span>
-                      <span>Rs. {Number(pnlData.cashFromCustomers).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-amber-600 pl-4 text-[11px]">
-                      <span>Less: Paid to Suppliers / Vendors (Cash & Bank Outflows)</span>
-                      <span>(Rs. {Number(pnlData.cashPaidToVendors).toLocaleString(undefined, { minimumFractionDigits: 2 })})</span>
-                    </div>
-                    <div className="flex justify-between items-center font-black text-primary border-t border-dashed border-stroke dark:border-strokedark pt-2">
-                      <span>Net Cash & Bank Generated from Trading</span>
-                      <span>Rs. {Number(pnlData.cashFromCustomers - pnlData.cashPaidToVendors).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 border-b border-stroke dark:border-strokedark pb-3">
-                    <span className="block font-bold text-slate-800 dark:text-white mb-2">Operating Expenses Paid (Cash / Bank):</span>
-                    {Object.entries(pnlData.expenseMap).length === 0 ? (
-                      <div className="text-slate-400 italic pl-4">No operational expenses paid in this period.</div>
-                    ) : (
-                      Object.entries(pnlData.expenseMap).map(([head, amt]) => (
-                        <div key={head} className="flex justify-between items-center text-slate-600 dark:text-slate-300 pl-4 text-[11px]">
-                          <span>{head}</span>
-                          <span>Rs. {Number(amt).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      ))
-                    )}
-                    <div className="flex justify-between items-center font-bold text-rose-600 border-t border-dashed border-stroke dark:border-strokedark pt-2">
-                      <span>Total Operating Expenses Paid</span>
-                      <span>(Rs. {Number(pnlData.totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2 })})</span>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-stroke dark:border-strokedark flex justify-between items-center text-sm font-black">
-                    <span className="text-slate-900 dark:text-white">Net Realized Profit / (Loss) [Cash & Bank]</span>
-                    <span className={pnlData.netCashProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                      Rs. {Number(pnlData.netCashProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* ── MARKET NET OUTSTANDING POSITION (RECEIVABLES - PAYABLES) ── */}
-              {(() => {
-                const displayReceivables = pnlIncludeOB ? pnlData.totalReceivables : (pnlData.periodReceivables ?? (pnlData.periodSales - pnlData.periodSalesReturns - pnlData.cashFromCustomers));
-                const displayPayables = pnlIncludeOB ? pnlData.totalPayables : (pnlData.periodPayables ?? (pnlData.periodCogs - pnlData.cashPaidToVendors));
-                const displayNetMarket = displayReceivables - displayPayables;
-
-                const hasPriorOB = (pnlData.priorCustomerOB || 0) > 0 || (pnlData.priorVendorOB || 0) > 0;
-                const hasInPeriodOB = (pnlData.inPeriodCustomerOB || 0) > 0 || (pnlData.inPeriodVendorOB || 0) > 0;
-
-                const periodSubtitle = pnlIncludeOB
-                  ? 'Includes Prior Opening Balances (Cumulative as of ' + (toDate || 'End Date') + ')'
-                  : hasInPeriodOB
-                    ? 'Strict Date Period (Includes In-Period Opening Balances)'
-                    : hasPriorOB
-                      ? 'Strict Date Period (Excludes Prior Opening Balances)'
-                      : 'Strict Date Period';
-
-                return (
-                  <div className="max-w-3xl mt-6 p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-stroke dark:border-strokedark space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-stroke dark:border-strokedark">
-                      <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <span>📊</span>
-                        <span>{pnlIncludeOB ? `Cumulative Market Standing (As of ${toDate || 'End Date'})` : `Period Market Standing (${fromDate || 'Start'} to ${toDate || 'End'})`}</span>
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 font-mono">
-                        {periodSubtitle}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
-                      <div className="bg-white dark:bg-boxdark p-3 rounded-xl border border-stroke dark:border-strokedark">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">1. Customer Receivables</span>
-                        <div className="text-sm font-black text-emerald-600 mt-1">
-                          Rs. {Number(displayReceivables).toLocaleString(undefined, { minimumFractionDigits: 2 })} Dr
-                        </div>
-                        <span className="text-[9px] text-slate-400">
-                          {pnlIncludeOB ? 'All-time market se lena (Asset)' : hasInPeriodOB ? 'Includes in-period opening balances + sales' : 'Period net receivables (Asset)'}
-                        </span>
-                      </div>
-
-                      <div className="bg-white dark:bg-boxdark p-3 rounded-xl border border-stroke dark:border-strokedark">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">2. Vendor Payables</span>
-                        <div className="text-sm font-black text-amber-600 mt-1">
-                          Rs. {Number(displayPayables).toLocaleString(undefined, { minimumFractionDigits: 2 })} Cr
-                        </div>
-                        <span className="text-[9px] text-slate-400">
-                          {pnlIncludeOB ? 'All-time suppliers ko dena (Liability)' : 'Period net payables (Liability)'}
-                        </span>
-                      </div>
-
-                      <div className="bg-white dark:bg-boxdark p-3 rounded-xl border border-primary/30 shadow-2xs">
-                        <span className="text-[10px] font-bold text-primary uppercase block">3. Net Market Position</span>
-                        <div className="text-sm font-black text-primary mt-1">
-                          Rs. {Number(Math.abs(displayNetMarket)).toLocaleString(undefined, { minimumFractionDigits: 2 })} {displayNetMarket >= 0 ? 'Dr (Net Asset)' : 'Cr (Net Liability)'}
-                        </div>
-                        <span className="text-[9px] text-slate-500">
-                          {displayNetMarket >= 0 ? 'Market Surplus Position' : 'Market Liability Position'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-            </div>
+            <ProfitLossTab
+              pnlData={pnlData}
+              pnlBasis={pnlBasis}
+              setPnlBasis={setPnlBasis}
+              pnlIncludeOB={pnlIncludeOB}
+              setPnlIncludeOB={setPnlIncludeOB}
+              pnlCalculationMode={pnlCalculationMode}
+              setPnlCalculationMode={setPnlCalculationMode}
+              pnlExpenseFilter={pnlExpenseFilter}
+              setPnlExpenseFilter={setPnlExpenseFilter}
+              expandedPnLSections={expandedPnLSections}
+              togglePnLSection={togglePnLSection}
+              isGeneratingPdf={isGeneratingPdf}
+            />
           )}
 
           {/* ── TABLE: EXPENSE REPORT ── */}
           {activeTab === 'expense-report' && (
-            <div className={`bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs ${isGeneratingPdf ? 'overflow-visible border-none shadow-none rounded-none w-full' : 'overflow-hidden'} print:border-none print:shadow-none print:rounded-none print:overflow-visible`}>
-              <div className={`${isGeneratingPdf ? 'overflow-visible w-full' : 'overflow-x-auto'} print:overflow-visible`}>
-                <table className="w-full text-left border-collapse text-xs print:text-[10px]">
-                  <thead className="print:table-header-group">
-                    <tr className="border-b-2 border-slate-900 dark:border-strokedark bg-slate-50/75 dark:bg-slate-800/60 font-bold text-slate-800 dark:text-slate-200 print:bg-slate-100 print:text-black">
-                      <th className="py-2.5 px-3 text-center w-12 whitespace-nowrap">S#</th>
-                      <th 
-                        onClick={() => handleSort('date')}
-                        className="py-2.5 px-3 cursor-pointer group hover:text-primary transition whitespace-nowrap w-28"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Date</span>
-                          {renderSortIcon('date')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('voucherNo')}
-                        className="py-2.5 px-3 cursor-pointer group hover:text-primary transition whitespace-nowrap w-28"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Voucher #</span>
-                          {renderSortIcon('voucherNo')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('coaCodeTitle')}
-                        className="py-2.5 px-3 cursor-pointer group hover:text-primary transition min-w-[200px]"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Chart of Accounts (Code & Title)</span>
-                          {renderSortIcon('coaCodeTitle')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('paidVia')}
-                        className="py-2.5 px-3 cursor-pointer group hover:text-primary transition whitespace-nowrap w-32"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Paid Via</span>
-                          {renderSortIcon('paidVia')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('amount')}
-                        className="py-2.5 px-3 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap w-36"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Amount (PKR)</span>
-                          {renderSortIcon('amount')}
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                    {filteredExpenseRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400 italic">
-                          No expense entries recorded in this window.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredExpenseRows.map((row, idx) => (
-                        <tr key={row.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition print:break-inside-avoid print:border-b print:border-slate-300">
-                          <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] whitespace-nowrap align-middle">{idx + 1}</td>
-                          <td className="py-2.5 px-3 font-mono text-[11px] whitespace-nowrap align-middle">{row.date}</td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-rose-600 whitespace-nowrap align-middle">{row.voucherNo}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-white whitespace-nowrap align-middle">{row.coaCodeTitle}</td>
-                          <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                            {isGeneratingPdf ? (
-                              <span className="font-semibold text-slate-800 text-[11px]">
-                                {row.paidVia}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 print:bg-transparent print:p-0 print:text-black">
-                                {row.paidVia}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-black text-rose-600 whitespace-nowrap align-middle">
-                            Rs. {Number(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {filteredExpenseRows.length > 0 && (
-                    <tfoot className="print:table-footer-group border-t-2 border-slate-900 dark:border-slate-300 bg-slate-50/90 dark:bg-slate-800/80 font-bold">
-                      <tr>
-                        <td colSpan={5} className="py-3 px-3 text-right uppercase tracking-wider font-bold text-slate-700 dark:text-slate-200">
-                          Total Operating Expenses ({expenseSummary.count} Entries):
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-black text-rose-600 whitespace-nowrap text-sm print:text-xs">
-                          Rs. {Number(expenseSummary.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            </div>
+            <ExpenseReportTab
+              filteredExpenseRows={filteredExpenseRows}
+              expenseSummary={expenseSummary}
+              handleSort={handleSort}
+              renderSortIcon={renderSortIcon}
+              isGeneratingPdf={isGeneratingPdf}
+            />
           )}
 
           {/* ── TABLE: DAILYBOOK (ROZNAMCHA) ── */}
           {activeTab === 'daily-book' && (
-            <div className={`bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs ${isGeneratingPdf ? 'overflow-visible border-none shadow-none rounded-none w-full' : 'overflow-hidden'} print:border-none print:shadow-none print:rounded-none print:overflow-visible`}>
-              <div className={`${isGeneratingPdf ? 'overflow-visible w-full' : 'overflow-x-auto'} print:overflow-visible`}>
-                <table className="w-full text-left border-collapse text-xs print:text-[10px]">
-                  <thead className="print:table-header-group">
-                    <tr className="border-b-2 border-slate-900 dark:border-strokedark bg-slate-50/75 dark:bg-slate-800/60 font-bold text-slate-800 dark:text-slate-200 print:bg-slate-100 print:text-black">
-                      <th className="py-3 px-3 text-center w-12 whitespace-nowrap">S#</th>
-                      <th 
-                        onClick={() => handleSort('date')}
-                        className="py-3 px-3 cursor-pointer group hover:text-primary transition whitespace-nowrap w-28"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Date</span>
-                          {renderSortIcon('date')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('voucherNo')}
-                        className="py-3 px-3 cursor-pointer group hover:text-primary transition whitespace-nowrap w-32"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Voucher / Ref #</span>
-                          {renderSortIcon('voucherNo')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('accountTitle')}
-                        className="py-3 px-3 cursor-pointer group hover:text-primary transition min-w-[200px]"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Account Title (Code)</span>
-                          {renderSortIcon('accountTitle')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('entryType')}
-                        className="py-3 px-3 cursor-pointer group hover:text-primary transition whitespace-nowrap w-28"
-                      >
-                        <div className="flex items-center gap-0.5">
-                          <span>Entry Type</span>
-                          {renderSortIcon('entryType')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('cashIn')}
-                        className="py-3 px-3 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap w-32"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Cash In (Dr)</span>
-                          {renderSortIcon('cashIn')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('cashOut')}
-                        className="py-3 px-3 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap w-32"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Cash Out (Cr)</span>
-                          {renderSortIcon('cashOut')}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => handleSort('netDrawerCash')}
-                        className="py-3 px-3 text-right cursor-pointer group hover:text-primary transition whitespace-nowrap w-36"
-                      >
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span>Net Drawer Cash</span>
-                          {renderSortIcon('netDrawerCash')}
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                    {filteredDailyRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="py-8 text-center text-slate-400 italic">
-                          No daily transactions found in this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredDailyRows.map((row, idx) => (
-                        <tr key={row.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition print:break-inside-avoid print:border-b print:border-slate-300">
-                          <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] whitespace-nowrap align-middle">{idx + 1}</td>
-                          <td className="py-2.5 px-3 font-mono text-[11px] whitespace-nowrap align-middle">{row.date}</td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-primary whitespace-nowrap align-middle">{row.voucherNo}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-white whitespace-nowrap align-middle">
-                            <span dir="auto">{row.accountTitle}</span>
-                            {row.accountCode && (
-                              <>
-                                {' '}
-                                <bdi dir="ltr" className="font-mono text-slate-400 dark:text-slate-500 text-[10px] inline-block font-normal">
-                                  {`\u200E(${row.accountCode})\u200E`}
-                                </bdi>
-                              </>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold text-slate-800 dark:text-white text-[11px]">
-                                {row.entryType}
-                              </span>
-                              {row.paymentMode && (
-                                <span className={`text-[10px] font-bold ${
-                                  row.paymentMode.includes('Credit')
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : row.paymentMode.includes('Bank')
-                                    ? 'text-blue-600 dark:text-blue-400'
-                                    : 'text-emerald-600 dark:text-emerald-400'
-                                }`}>
-                                  {row.paymentMode}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-600 whitespace-nowrap align-middle">
-                            {row.cashIn > 0 ? `Rs. ${Number(row.cashIn).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-600 whitespace-nowrap align-middle">
-                            {row.cashOut > 0 ? `Rs. ${Number(row.cashOut).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap align-middle">
-                            Rs. {Number(row.netDrawerCash).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {filteredDailyRows.length > 0 && (
-                    <tfoot className="print:table-footer-group border-t-2 border-slate-900 dark:border-slate-300 bg-slate-50/90 dark:bg-slate-800/80 font-bold">
-                      <tr>
-                        <td colSpan={5} className="py-3 px-3 text-right uppercase tracking-wider font-bold text-slate-700 dark:text-slate-200">
-                          Total Daily Inflow & Outflow:
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-black text-emerald-600 whitespace-nowrap">
-                          Rs. {Number(dailySummary.cashIn).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-black text-rose-600 whitespace-nowrap">
-                          Rs. {Number(dailySummary.cashOut).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-black text-slate-900 dark:text-white whitespace-nowrap">
-                          Rs. {Number(dailySummary.closing).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            </div>
+            <DailyBookTab
+              filteredDailyRows={filteredDailyRows}
+              dailySummary={dailySummary}
+              handleSort={handleSort}
+              renderSortIcon={renderSortIcon}
+              isGeneratingPdf={isGeneratingPdf}
+            />
           )}
           </div>
         </div>

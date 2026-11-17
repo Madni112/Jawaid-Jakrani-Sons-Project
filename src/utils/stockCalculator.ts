@@ -334,29 +334,30 @@ function buildBreakdown(
   });
 
   const totalManufactured = 0;
-  const totalAvailable =
-    (totalOpening + totalPurchased + totalManufactured + totalSalesReturned) - totalSold - totalPurchaseReturned - totalRejected;
+  const rawTotalAvail = (totalOpening + totalPurchased + totalManufactured + totalSalesReturned) - totalSold - totalPurchaseReturned - totalRejected;
+  const totalAvailable = Math.abs(rawTotalAvail) < 0.0001 ? 0 : Number(rawTotalAvail.toFixed(4));
 
   const byWarehouse: Record<string, WarehouseBreakdown> = {};
   Object.keys(whBreakdowns).forEach((key) => {
     const w = whBreakdowns[key];
     const tIn = w.transferredIn || 0;
     const tOut = w.transferredOut || 0;
-    const avail = (w.opening + w.purchased + (w.manufactured || 0) + w.salesReturned + tIn) - w.sold - w.purchaseReturned - (w.rejected || 0) - tOut;
+    const rawAvail = (w.opening + w.purchased + (w.manufactured || 0) + w.salesReturned + tIn) - w.sold - w.purchaseReturned - (w.rejected || 0) - tOut;
+    const avail = Math.abs(rawAvail) < 0.0001 ? 0 : Number(rawAvail.toFixed(4));
     byWarehouse[key] = {
-      opening: w.opening,
-      purchased: w.purchased,
-      manufactured: w.manufactured || 0,
-      sold: w.sold,
-      salesReturned: w.salesReturned,
-      purchaseReturned: w.purchaseReturned,
-      rejected: w.rejected || 0,
-      transferredIn: tIn,
-      transferredOut: tOut,
-      hold: w.hold || 0,
-      purchaseHold: w.purchaseHold || 0,
+      opening: Number((w.opening || 0).toFixed(4)),
+      purchased: Number((w.purchased || 0).toFixed(4)),
+      manufactured: Number((w.manufactured || 0).toFixed(4)),
+      sold: Number((w.sold || 0).toFixed(4)),
+      salesReturned: Number((w.salesReturned || 0).toFixed(4)),
+      purchaseReturned: Number((w.purchaseReturned || 0).toFixed(4)),
+      rejected: Number((w.rejected || 0).toFixed(4)),
+      transferredIn: Number(tIn.toFixed(4)),
+      transferredOut: Number(tOut.toFixed(4)),
+      hold: Number((w.hold || 0).toFixed(4)),
+      purchaseHold: Number((w.purchaseHold || 0).toFixed(4)),
       available: avail,
-      onHand: avail + (w.hold || 0),
+      onHand: Math.abs(avail + (w.hold || 0)) < 0.0001 ? 0 : Number((avail + (w.hold || 0)).toFixed(4)),
     };
   });
 
@@ -440,7 +441,8 @@ export function getWarehouseAvailableStock(productName: string, warehouseName: s
 
   if (isBalancesDataset(dataset)) {
     const row = (dataset.balances || []).find(balancesMatch(productName, warehouseName));
-    return row ? (Number(row.quantity) || 0) : 0;
+    const q = Number(row ? row.quantity : 0) || 0;
+    return Math.abs(q) < 0.0001 ? 0 : Number(q.toFixed(4));
   }
 
   try {
@@ -448,7 +450,8 @@ export function getWarehouseAvailableStock(productName: string, warehouseName: s
     const matchKey = Object.keys(result.byWarehouse).find(
       (k) => k.toLowerCase() === warehouseName.trim().toLowerCase()
     );
-    return matchKey ? result.byWarehouse[matchKey].available : 0;
+    const val = matchKey ? result.byWarehouse[matchKey].available : 0;
+    return Math.abs(val) < 0.0001 ? 0 : Number(val.toFixed(4));
   } catch {
     return 0;
   }
@@ -529,3 +532,166 @@ export async function getTotalAvailableStock(productName: string, dataset?: Stoc
 
   return buildBreakdown(productName.trim().toLowerCase(), data, itemCode).totalAvailable;
 }
+
+/**
+ * Universal formatter for stock / quantity:
+ * For box/tile products or products with pieces_per_box > 1, converts decimal quantities into
+ * "{boxes} Boxes + {pcs} Pcs" (e.g. 190.5 Box with 4 pcs/box becomes "190 Boxes + 2 Pcs").
+ */
+export function formatStockWithBoxesAndPcs(
+  rawQty: number | string,
+  prod?: any,
+  fallbackUom: string = 'Nos'
+): {
+  boxes: number;
+  loose: number;
+  isBoxProduct: boolean;
+  inlineText: string;
+  piecesPerBox: number;
+} {
+  const num = Number(rawQty) || 0;
+  const uom = String(prod?.uom || fallbackUom || '').toLowerCase().trim();
+  const cat = String(prod?.category || prod?.sub_sub_category || '').toLowerCase().trim();
+
+  const rawPcs = Number(
+    prod?.loose_conversion_ratio ||
+    prod?.pieces_per_box ||
+    prod?.pcs_per_box ||
+    prod?.pieces_per_packing ||
+    0
+  );
+
+  const isBoxProduct =
+    uom === 'box' ||
+    uom === 'boxes' ||
+    cat.includes('tile') ||
+    rawPcs > 1 ||
+    Boolean(prod?.isTileItem);
+
+  let piecesPerBox = rawPcs > 1 ? rawPcs : 0;
+  if (piecesPerBox <= 1 && prod?.product_description) {
+    const match = String(prod.product_description).match(/Box:\s*(\d+)\s*pcs/i);
+    if (match && Number(match[1]) > 0) piecesPerBox = Number(match[1]);
+  }
+
+  // Decimal fraction detection: only guess native packaging ratio if piecesPerBox was not defined on product
+  if (piecesPerBox <= 1) {
+    if (Math.abs(num - Math.round(num)) > 0.0001) {
+      const fraction = Math.abs(num) - Math.floor(Math.abs(num));
+      for (const cand of [12, 6, 8, 4, 10, 16, 24]) {
+        const pcs = fraction * cand;
+        if (Math.abs(pcs - Math.round(pcs)) < 0.01) {
+          piecesPerBox = cand;
+          break;
+        }
+      }
+    }
+  }
+
+  if (piecesPerBox <= 1) {
+    piecesPerBox = 4;
+  }
+
+  if (!isBoxProduct) {
+    return {
+      boxes: num,
+      loose: 0,
+      isBoxProduct: false,
+      inlineText: `${num.toLocaleString()} ${prod?.uom || fallbackUom || 'Nos'}`,
+      piecesPerBox: 1
+    };
+  }
+
+  // Calculate box and loose pcs based on total pieces
+  const totalPieces = Math.round(num * piecesPerBox);
+  if (totalPieces < 0) {
+    const absPieces = Math.abs(totalPieces);
+    const absBoxes = Math.floor(absPieces / piecesPerBox);
+    const absLoose = absPieces % piecesPerBox;
+    let inlineText = '';
+    if (absBoxes > 0 && absLoose > 0) {
+      inlineText = `-${absBoxes} ${absBoxes === 1 ? 'Box' : 'Boxes'} + ${absLoose} Pcs`;
+    } else if (absBoxes > 0) {
+      inlineText = `-${absBoxes} ${absBoxes === 1 ? 'Box' : 'Boxes'}`;
+    } else {
+      inlineText = `-${absLoose} Pcs`;
+    }
+    return {
+      boxes: -absBoxes,
+      loose: -absLoose,
+      isBoxProduct: true,
+      inlineText,
+      piecesPerBox
+    };
+  }
+
+  const boxes = Math.floor(totalPieces / piecesPerBox);
+  const loose = totalPieces % piecesPerBox;
+
+  let inlineText = '';
+  if (boxes > 0 && loose > 0) {
+    inlineText = `${boxes.toLocaleString()} ${boxes === 1 ? 'Box' : 'Boxes'} + ${loose} Pcs`;
+  } else if (boxes > 0) {
+    inlineText = `${boxes.toLocaleString()} ${boxes === 1 ? 'Box' : 'Boxes'}`;
+  } else if (loose > 0) {
+    inlineText = `${loose} Pcs`;
+  } else {
+    inlineText = `0 Boxes`;
+  }
+
+  return {
+    boxes,
+    loose,
+    isBoxProduct: true,
+    inlineText,
+    piecesPerBox
+  };
+}
+
+/**
+ * Scan all products and return any product whose current total available stock is negative (< 0).
+ */
+export async function getNegativeStockProducts(): Promise<{
+  product: any;
+  productName: string;
+  itemCode: string;
+  availableStock: number;
+  formattedStock: string;
+}[]> {
+  try {
+    const [dataset, { data: products }] = await Promise.all([
+      fetchStockDataset(),
+      supabase.from('products').select('*')
+    ]);
+
+    if (!products || products.length === 0) return [];
+
+    const negativeItems: {
+      product: any;
+      productName: string;
+      itemCode: string;
+      availableStock: number;
+      formattedStock: string;
+    }[] = [];
+
+    for (const prod of products) {
+      const res = buildBreakdown(String(prod.product_name || '').trim().toLowerCase(), dataset, prod.item_sr_no);
+      if (res.totalAvailable < -0.0001) {
+        const formatted = formatStockWithBoxesAndPcs(res.totalAvailable, prod).inlineText;
+        negativeItems.push({
+          product: prod,
+          productName: prod.product_name,
+          itemCode: prod.item_sr_no || '',
+          availableStock: res.totalAvailable,
+          formattedStock: formatted
+        });
+      }
+    }
+
+    return negativeItems;
+  } catch (err) {
+    console.error('Error checking negative stock products:', err);
+    return [];
+  }
+}
+

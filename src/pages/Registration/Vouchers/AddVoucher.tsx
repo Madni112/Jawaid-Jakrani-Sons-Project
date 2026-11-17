@@ -1,189 +1,31 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Formik, Form, FieldArray } from 'formik';
+import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import AccountCombobox from '../../../components/AccountCombobox';
+
 import {
-  MdReceiptLong,
-  MdCompareArrows,
-  MdShoppingCart,
-  MdAssignmentReturn,
-  MdAccountBalanceWallet,
-  MdPayments,
-  MdTrendingDown,
-  MdPerson,
-  MdCorporateFare,
-  MdPhone,
-  MdLocationOn,
-  MdCheckCircle,
-  MdOutlineReceipt,
-  MdCalendarToday,
-  MdArrowForward,
-  MdAccountBalance
-} from 'react-icons/md';
+  AddVoucherProps,
+  PartyMetadata,
+  VoucherFormValues
+} from './types/voucherTypes';
+import {
+  PRESET_DEFINITIONS,
+  normalizeVoucherType,
+  buildInitialItems
+} from './utils/voucherConstants';
+import {
+  syncVoucherBalances,
+  saveVoucherToDatabase
+} from './utils/voucherBalanceSync';
 
-export interface AddVoucherProps {
-  voucherTypePreset?: 'SAV' | 'SRV' | 'CRV' | 'PAV' | 'PRV' | 'VPV' | 'EXP' | string;
-}
-
-interface PresetMeta {
-  title: string;
-  prefix: string;
-  typeName: string;
-  listRoute: string;
-  isSingleRow: boolean;
-  defaultDebitOrCredit: 'Debit' | 'Credit';
-  amountLabel: string;
-  partyLabel: string;
-  descPlaceholder: string;
-  badgeColor: string;
-  badgeBg: string;
-}
-
-const PRESET_DEFINITIONS: Record<string, PresetMeta> = {
-  SAV: {
-    title: 'Sale Amount Voucher',
-    prefix: 'SAV',
-    typeName: 'Sale Amount Voucher',
-    listRoute: '/Registration/Vouchers/List?type=SAV',
-    isSingleRow: true,
-    defaultDebitOrCredit: 'Debit',
-    amountLabel: 'Sale Amount (PKR)',
-    partyLabel: 'Customer Account',
-    descPlaceholder: 'e.g. Sale of 50 thaan Latha / Bill # 104',
-    badgeColor: 'text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
-    badgeBg: 'bg-emerald-50 dark:bg-emerald-950/50'
-  },
-  SRV: {
-    title: 'Sale Amount Return',
-    prefix: 'SRV',
-    typeName: 'Sale Amount Return',
-    listRoute: '/Registration/Vouchers/List?type=SRV',
-    isSingleRow: true,
-    defaultDebitOrCredit: 'Credit',
-    amountLabel: 'Return Credit Amount (PKR)',
-    partyLabel: 'Customer Account',
-    descPlaceholder: 'e.g. Return of 10 thaan defective cloth',
-    badgeColor: 'text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800',
-    badgeBg: 'bg-amber-50 dark:bg-amber-950/50'
-  },
-  CRV: {
-    title: 'Customer Receive Voucher',
-    prefix: 'CRV',
-    typeName: 'Customer Receive Voucher',
-    listRoute: '/Registration/Vouchers/List?type=CRV',
-    isSingleRow: false,
-    defaultDebitOrCredit: 'Credit',
-    amountLabel: 'Received Amount (PKR)',
-    partyLabel: 'Customer Account',
-    descPlaceholder: 'e.g. Cash / Bank receipt on account',
-    badgeColor: 'text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-800',
-    badgeBg: 'bg-teal-50 dark:bg-teal-950/50'
-  },
-  CPV: {
-    title: 'Customer Payment Voucher (Refund)',
-    prefix: 'CPV',
-    typeName: 'Customer Payment Voucher',
-    listRoute: '/Registration/Vouchers/List?type=CPV',
-    isSingleRow: false,
-    defaultDebitOrCredit: 'Debit',
-    amountLabel: 'Refund Amount Disbursed (PKR)',
-    partyLabel: 'Customer Account',
-    descPlaceholder: 'e.g. Cash / Bank refund payout for returned items',
-    badgeColor: 'text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800',
-    badgeBg: 'bg-indigo-50 dark:bg-indigo-950/50'
-  },
-  PAV: {
-    title: 'Purchase Amount Voucher',
-    prefix: 'PAV',
-    typeName: 'Purchase Amount Voucher',
-    listRoute: '/Registration/Vouchers/List?type=PAV',
-    isSingleRow: true,
-    defaultDebitOrCredit: 'Credit',
-    amountLabel: 'Purchase Amount (PKR)',
-    partyLabel: 'Vendor / Supplier Account',
-    descPlaceholder: 'e.g. Purchase from mill / weaving invoice # 205',
-    badgeColor: 'text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800',
-    badgeBg: 'bg-blue-50 dark:bg-blue-950/50'
-  },
-  PRV: {
-    title: 'Purchase Amount Return',
-    prefix: 'PRV',
-    typeName: 'Purchase Amount Return',
-    listRoute: '/Registration/Vouchers/List?type=PRV',
-    isSingleRow: true,
-    defaultDebitOrCredit: 'Debit',
-    amountLabel: 'Return Debit Amount (PKR)',
-    partyLabel: 'Vendor / Supplier Account',
-    descPlaceholder: 'e.g. Return of damaged thaan to supplier',
-    badgeColor: 'text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800',
-    badgeBg: 'bg-rose-50 dark:bg-rose-950/50'
-  },
-  VPV: {
-    title: 'Vendor Payment Voucher',
-    prefix: 'VPV',
-    typeName: 'Vendor Payment Voucher',
-    listRoute: '/Registration/Vouchers/List?type=VPV',
-    isSingleRow: false,
-    defaultDebitOrCredit: 'Debit',
-    amountLabel: 'Paid Amount (PKR)',
-    partyLabel: 'Vendor / Supplier Account',
-    descPlaceholder: 'e.g. Payment disbursed to mill / vendor',
-    badgeColor: 'text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800',
-    badgeBg: 'bg-purple-50 dark:bg-purple-950/50'
-  },
-  VRV: {
-    title: 'Vendor Receive Voucher (Refund)',
-    prefix: 'VRV',
-    typeName: 'Vendor Receive Voucher',
-    listRoute: '/Registration/Vouchers/List?type=VRV',
-    isSingleRow: false,
-    defaultDebitOrCredit: 'Credit',
-    amountLabel: 'Refund Amount Collected (PKR)',
-    partyLabel: 'Vendor / Supplier Account',
-    descPlaceholder: 'e.g. Refund received back from vendor for returned items',
-    badgeColor: 'text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-800',
-    badgeBg: 'bg-teal-50 dark:bg-teal-950/50'
-  },
-  EXP: {
-    title: 'Expense Voucher',
-    prefix: 'EXP',
-    typeName: 'Expense Voucher',
-    listRoute: '/Registration/Vouchers/List?type=EXP',
-    isSingleRow: false,
-    defaultDebitOrCredit: 'Debit',
-    amountLabel: 'Expense Amount (PKR)',
-    partyLabel: 'Expense Head',
-    descPlaceholder: 'e.g. Shop rent, electricity bill, tea, carriage',
-    badgeColor: 'text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-800',
-    badgeBg: 'bg-orange-50 dark:bg-orange-950/50'
-  }
-};
-
-const normalizeVoucherType = (type?: string) => {
-  if (!type) return '';
-  const t = type.trim();
-  if (t === 'JV' || t.toLowerCase().includes('journal')) return 'Journal Voucher';
-  if (t === 'CPV' || t.toLowerCase().includes('cash payment')) return 'Cash Payment Voucher';
-  if (t === 'CRV' || t.toLowerCase().includes('cash receipt')) return 'Cash Receipt Voucher';
-  if (t === 'BPV' || t.toLowerCase().includes('bank payment')) return 'Bank Payment Voucher';
-  if (t === 'BRV' || t.toLowerCase().includes('bank receipt')) return 'Bank Receipt Voucher';
-  return t;
-};
-
-interface PartyMetadata {
-  code: string;
-  name: string;
-  type: string;
-  phone: string;
-  city: string;
-  address: string;
-  currentBalance: number;
-  balanceNature: string;
-}
+import { VoucherNoticeBanners } from './components/VoucherNoticeBanners';
+import { VoucherHeaderCard } from './components/VoucherHeaderCard';
+import { VoucherQuickMetaBar } from './components/VoucherQuickMetaBar';
+import { VoucherKhataForm } from './components/VoucherKhataForm';
+import { VoucherGeneralJournalTable } from './components/VoucherGeneralJournalTable';
 
 function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
   const navigate = useNavigate();
@@ -207,6 +49,7 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
   const isOpeningBalance = isEditMode && (
     String(editData?.voucher_no || '').startsWith('OB-') ||
     String(editData?.voucher_no || '').startsWith('OBV-') ||
+    editData?.metadata?.isOpeningBalance === true ||
     String(editData?.narration || '').toLowerCase().includes('opening balance') ||
     String(editData?.notes || '').toLowerCase().includes('opening balance')
   );
@@ -247,11 +90,30 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
         // Pre-aggregate voucher debits and credits per account code
         const coaDebits: Record<string, number> = {};
         const coaCredits: Record<string, number> = {};
+        const accountsWithOBVoucher = new Set<string>();
 
         if (vchRes.data && Array.isArray(vchRes.data)) {
           vchRes.data.forEach((v: any) => {
+            const isOB = String(v.voucher_no || '').startsWith('OB-') ||
+              String(v.voucher_no || '').startsWith('OBV-') ||
+              String(v.voucher_no || '').startsWith('OBC-') ||
+              Boolean(v.metadata?.isOpeningBalance);
+
             // Exclude current voucher when in edit mode so Previous Balance reflects prior state
-            if (queryId && String(v.id) === String(queryId)) return;
+            const isCurrentEditing = queryId && String(v.id) === String(queryId);
+
+            if (isOB && !isCurrentEditing) {
+              const code = String(v.account_code || '').trim();
+              if (code) accountsWithOBVoucher.add(code);
+              if (v.items && Array.isArray(v.items)) {
+                v.items.forEach((it: any) => {
+                  const itCode = String(it.accountCode || it.account_code || '').trim();
+                  if (itCode) accountsWithOBVoucher.add(itCode);
+                });
+              }
+            }
+
+            if (isCurrentEditing) return;
 
             if (v.items && Array.isArray(v.items) && v.items.length > 0) {
               v.items.forEach((it: any) => {
@@ -287,7 +149,9 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
               const isCustomer = code.startsWith('2020-') || inferredType === 'Customer';
               const isVendor = code.startsWith('2010-') || inferredType === 'Vendor';
               const isAssetOrExp = code.startsWith('1') || code.startsWith('5') || isCustomer;
-              const opBal = Number(a.opening_balance || 0);
+
+              const hasOBInVouchers = accountsWithOBVoucher.has(code);
+              const opBal = hasOBInVouchers ? 0 : Number(a.opening_balance || 0);
               const d = coaDebits[code] || 0;
               const c = coaCredits[code] || 0;
 
@@ -297,11 +161,11 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
               if (isCustomer) {
                 nature = nature || 'Debit';
                 const signedOp = nature.toLowerCase() === 'credit' ? -opBal : opBal;
-                computedBal = signedOp + (d - c); // Debits are Sales, Credits are Payments
+                computedBal = signedOp + (d - c);
               } else if (isVendor) {
                 nature = nature || 'Credit';
                 const signedOp = nature.toLowerCase() === 'debit' ? -opBal : opBal;
-                computedBal = signedOp + (c - d); // Credits are Purchases, Debits are Payments
+                computedBal = signedOp + (c - d);
               } else if (isAssetOrExp) {
                 nature = nature || 'Debit';
                 computedBal = opBal + (d - c);
@@ -336,13 +200,14 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
             const code = String(c.customer_code || c.customerCode || c.account_code || c.coa_code || '').trim();
             const d = coaDebits[code] || 0;
             const cr = coaCredits[code] || 0;
-            const opBal = Number(c.opening_balance || 0);
+            const hasOBInVouchers = accountsWithOBVoucher.has(code);
+            const opBal = hasOBInVouchers ? 0 : Number(c.opening_balance || 0);
             const isCr = String(c.balance_nature || '').toLowerCase() === 'credit';
             const signedOp = isCr ? -opBal : opBal;
             const computedFromVouchers = signedOp + (d - cr);
 
-            const finalBal = pMap[code]?.currentBalance !== undefined 
-              ? pMap[code].currentBalance 
+            const finalBal = pMap[code]?.currentBalance !== undefined
+              ? pMap[code].currentBalance
               : computedFromVouchers;
 
             const phone = c.primaryPhone || c.phone || c.mobile || '';
@@ -351,6 +216,8 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
 
             if (code) {
               const partyObj: PartyMetadata = {
+                id: c.id,
+                raw: c,
                 code,
                 name: c.customerName || c.customer_name || `Customer ${code}`,
                 type: 'Customer',
@@ -381,13 +248,14 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
             const code = String(v.vendor_code || v.vendorCode || v.account_code || '').trim();
             const d = coaDebits[code] || 0;
             const cr = coaCredits[code] || 0;
-            const opBal = Number(v.opening_balance || 0);
+            const hasOBInVouchers = accountsWithOBVoucher.has(code);
+            const opBal = hasOBInVouchers ? 0 : Number(v.opening_balance || 0);
             const isDr = String(v.balance_nature || '').toLowerCase() === 'debit';
             const signedOp = isDr ? -opBal : opBal;
             const computedFromVouchers = signedOp + (cr - d);
 
-            const finalBal = pMap[code]?.currentBalance !== undefined 
-              ? pMap[code].currentBalance 
+            const finalBal = pMap[code]?.currentBalance !== undefined
+              ? pMap[code].currentBalance
               : computedFromVouchers;
 
             const phone = v.phone || v.cell_no || v.phone_no || '';
@@ -396,6 +264,8 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
 
             if (code) {
               const vendObj: PartyMetadata = {
+                id: v.id,
+                raw: v,
                 code,
                 name: v.vendor_name || v.name || `Vendor ${code}`,
                 type: 'Vendor',
@@ -558,74 +428,6 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
     return allAccounts;
   };
 
-  const buildInitialItems = () => {
-    if (editData) {
-      if (editData.items && Array.isArray(editData.items) && editData.items.length > 0) {
-        return editData.items.filter((it: any) => it.accountCode !== '3010-001').map((it: any) => ({
-          accountCode: it.accountCode || it.account_code || '',
-          description: it.description !== undefined ? it.description : (editData.metadata?.particulars || (String(editData.narration || '').split(' | ')[0]) || ''),
-          debit: Number(it.debit || 0),
-          credit: Number(it.credit || 0)
-        }));
-      }
-      const d = Number(editData.debit) || (editData.credit ? 0 : Number(editData.total_amount)) || 0;
-      const c = Number(editData.credit) || 0;
-      const parts = String(editData.narration || '').split(' | ');
-      const desc = editData.metadata?.particulars !== undefined
-        ? editData.metadata.particulars
-        : (parts.length > 1 ? parts[0] : (editData.narration || ''));
-      return [
-        { accountCode: editData.account_code || '', description: desc, debit: d, credit: c }
-      ];
-    }
-
-    if (presetMeta && presetMeta.isSingleRow) {
-      return [
-        { accountCode: '', description: '', debit: 0, credit: 0 }
-      ];
-    }
-
-    if (activePreset === 'CRV') {
-      return [
-        { accountCode: '1010-001', description: 'Cash received from customer', debit: 0, credit: 0 },
-        { accountCode: '', description: 'Payment on account', debit: 0, credit: 0 }
-      ];
-    }
-
-    if (activePreset === 'CPV') {
-      return [
-        { accountCode: '', description: 'Refund paid to customer', debit: 0, credit: 0 },
-        { accountCode: '1010-001', description: 'Cash disbursed from drawer', debit: 0, credit: 0 }
-      ];
-    }
-
-    if (activePreset === 'VPV') {
-      return [
-        { accountCode: '', description: 'Vendor payment', debit: 0, credit: 0 },
-        { accountCode: '1010-001', description: 'Cash disbursed to vendor', debit: 0, credit: 0 }
-      ];
-    }
-
-    if (activePreset === 'VRV') {
-      return [
-        { accountCode: '1010-001', description: 'Cash refund received from vendor', debit: 0, credit: 0 },
-        { accountCode: '', description: 'Vendor credit balance adjustment', debit: 0, credit: 0 }
-      ];
-    }
-
-    if (activePreset === 'EXP') {
-      return [
-        { accountCode: '5020-001', description: 'Shop expense', debit: 0, credit: 0 },
-        { accountCode: '1010-001', description: 'Paid via cash', debit: 0, credit: 0 }
-      ];
-    }
-
-    return [
-      { accountCode: '', description: '', debit: 0, credit: 0 },
-      { accountCode: '', description: '', debit: 0, credit: 0 }
-    ];
-  };
-
   const validationSchema = Yup.object().shape({
     voucherType: Yup.string().required('Please select a voucher type'),
     voucherDate: Yup.string().required('Transaction Date is required'),
@@ -633,40 +435,84 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
       Yup.object().shape({
         accountCode: Yup.string().required('Account is required'),
         debit: Yup.number().min(0),
-        credit: Yup.number().min(0),
+        credit: Yup.number().min(0)
       })
     ).min(isSingleRowMode ? 1 : 2, isSingleRowMode ? 'At least 1 row required' : 'Voucher entries require at least 2 balanced row lines')
   });
-
-  const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) =>
-    ['-', 'e', 'E', '+'].includes(e.key) && e.preventDefault();
 
   if (metadataLoading) {
     return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
   }
 
-  const pageTitle = presetMeta ? presetMeta.title : 'General Journal Voucher';
+  const pageTitle = isOpeningBalance ? 'Opening Balance Voucher' : (presetMeta ? presetMeta.title : 'General Journal Voucher');
   const listReturnRoute = presetMeta ? presetMeta.listRoute : '/Registration/Vouchers/List';
 
-  const isAutoGenerated = Boolean(editData?.original_invoice_no || editData?.metadata?.auto_generated);
   const isOpeningBalanceLocked = isOpeningBalance;
+  const isAutoGenerated = !isOpeningBalanceLocked && Boolean(
+    editData?.original_invoice_no ||
+    editData?.metadata?.invoice_no ||
+    editData?.metadata?.linkedReturnNo ||
+    editData?.metadata?.linkedInvoiceNo ||
+    (editData?.metadata?.auto_generated && !editData?.metadata?.isOpeningBalance && !String(editData?.voucher_no || '').startsWith('OB-'))
+  );
   const isLockedVoucher = isAutoGenerated || isOpeningBalanceLocked;
 
   // Party resolution for Opening Balance vouchers
   const obPartyCode = String(editData?.account_code || '').trim();
-  const isVendorOB = String(editData?.voucher_no || '').startsWith('OBV-') || 
-    String(editData?.voucher_no || '').startsWith('OB-2010') || 
+  const isVendorOB = String(editData?.voucher_no || '').startsWith('OBV-') ||
+    String(editData?.voucher_no || '').startsWith('OB-2010') ||
     obPartyCode.startsWith('2010-');
-  const isCustomerOB = isOpeningBalance && !isVendorOB;
   const obPartyName = editData?.account_title || partiesMap[obPartyCode]?.name || (isVendorOB ? 'Vendor' : 'Customer');
 
-  const handleOpenPartyProfile = () => {
+  const handleOpenPartyProfile = async () => {
     if (isVendorOB) {
-      // Navigate to Vendor List or Edit with party filter
-      navigate(`/Purchase/Vendor/List?search=${encodeURIComponent(obPartyName)}`);
+      const party = partiesMap[obPartyCode];
+      let vendorId = party?.id;
+      let vendorRecord = party?.raw;
+
+      if (!vendorId) {
+        let vendQuery = supabase.from('vendors').select('*');
+        if (obPartyCode) {
+          vendQuery = vendQuery.or(`account_code.eq.${obPartyCode},vendor_code.eq.${obPartyCode}`);
+        } else if (obPartyName) {
+          vendQuery = vendQuery.or(`vendor_name.eq.${obPartyName},name.eq.${obPartyName}`);
+        }
+        const { data: vDb } = await vendQuery.limit(1).maybeSingle();
+        if (vDb) {
+          vendorId = vDb.id;
+          vendorRecord = vDb;
+        }
+      }
+
+      if (vendorId) {
+        navigate(`/Purchase/Vendor/Edit/${vendorId}`, { state: { vendor: vendorRecord } });
+      } else {
+        navigate(`/Purchase/Vendor/List?search=${encodeURIComponent(obPartyName)}`);
+      }
     } else {
-      // Navigate to Customer Directory with party filter
-      navigate(`/Sales/Customers/List?search=${encodeURIComponent(obPartyName)}`);
+      const party = partiesMap[obPartyCode];
+      let customerId = party?.id;
+      let customerRecord = party?.raw;
+
+      if (!customerId) {
+        let custQuery = supabase.from('customers').select('*');
+        if (obPartyCode) {
+          custQuery = custQuery.or(`account_code.eq.${obPartyCode},customer_code.eq.${obPartyCode},coa_code.eq.${obPartyCode},customercode.eq.${obPartyCode},customerCode.eq.${obPartyCode}`);
+        } else if (obPartyName) {
+          custQuery = custQuery.or(`customerName.eq.${obPartyName},customer_name.eq.${obPartyName},name.eq.${obPartyName}`);
+        }
+        const { data: cDb } = await custQuery.limit(1).maybeSingle();
+        if (cDb) {
+          customerId = cDb.id;
+          customerRecord = cDb;
+        }
+      }
+
+      if (customerId) {
+        navigate(`/Sales/Customers/Edit/${customerId}`, { state: { customer: customerRecord } });
+      } else {
+        navigate(`/Sales/Customers/List?search=${encodeURIComponent(obPartyName)}`);
+      }
     }
   };
 
@@ -692,8 +538,22 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
     ? 'Sales Return Note'
     : (moduleSource === 'sales_receipt' || String(editData?.voucher_no || '').startsWith('CRV-') ? 'Sales Receipt' : 'Sales Invoice'));
 
-  const handleOpenSourceDocument = () => {
+  const handleOpenSourceDocument = async () => {
     if (moduleSource === 'purchase_bill') {
+      if (autoInvoiceNo) {
+        const isNum = /^\d+$/.test(String(autoInvoiceNo));
+        const query = supabase.from('purchases').select('*');
+        if (isNum) {
+          query.or(`id.eq.${autoInvoiceNo},purchase_no.eq.${autoInvoiceNo}`);
+        } else {
+          query.eq('purchase_no', autoInvoiceNo);
+        }
+        const { data: pur } = await query.maybeSingle();
+        if (pur?.id) {
+          navigate(`/Purchase/Purchases/Edit/${pur.id}`, { state: { purchaseRecord: pur } });
+          return;
+        }
+      }
       navigate(`/Purchase/Purchase/List?search=${encodeURIComponent(autoInvoiceNo || '')}`);
     } else if (moduleSource === 'purchase_return') {
       navigate(`/Purchase/Purchase-Return/List?search=${encodeURIComponent(autoInvoiceNo || '')}`);
@@ -708,100 +568,57 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
     } else if (moduleSource === 'sales_receipt' || String(editData?.voucher_no || '').startsWith('CRV-')) {
       navigate(`/Sales/InvoiceReceipt/List?search=${encodeURIComponent(autoInvoiceNo || '')}`);
     } else {
-      navigate(`/Sales/Invoice?search=${encodeURIComponent(autoInvoiceNo || '')}`);
+      if (autoInvoiceNo) {
+        const isNum = /^\d+$/.test(String(autoInvoiceNo));
+        const query = supabase.from('sales_invoices').select('*');
+        if (isNum) {
+          query.or(`id.eq.${autoInvoiceNo},invoice_no.eq.${autoInvoiceNo}`);
+        } else {
+          query.eq('invoice_no', autoInvoiceNo);
+        }
+        const { data: inv } = await query.maybeSingle();
+        if (inv?.id) {
+          const parsedItems = Array.isArray(inv.items)
+            ? inv.items
+            : (typeof inv.items === 'string' ? JSON.parse(inv.items || '[]') : []);
+          const enrichedInv = {
+            ...inv,
+            items: parsedItems.map((it: any) => ({
+              ...it,
+              warehouse: it.warehouse || inv.dispatch_warehouse || ''
+            }))
+          };
+          navigate(`/Sales/Invoice/edit/${inv.id}`, { state: { invoice: enrichedInv } });
+          return;
+        }
+      }
+      navigate(`/Sales/Invoice/edit/${encodeURIComponent(autoInvoiceNo || '')}`);
     }
   };
 
   return (
     <div className="mx-auto max-w-7xl text-xs space-y-5 pb-12">
-      {/* Opening Balance Voucher Notice Banner (Locked View Mode) */}
-      {isOpeningBalanceLocked && (
-        <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-3">
-            <span className="text-xl">🔒</span>
-            <div>
-              <h3 className="font-bold text-blue-900 dark:text-blue-200 text-sm">
-                Opening Balance Voucher (View Only)
-              </h3>
-              <p className="text-blue-700 dark:text-blue-300 text-xs mt-0.5">
-                This voucher establishes the initial opening balance for <strong>{obPartyName}</strong> ({obPartyCode}). Direct edits here are locked to maintain master ledger integrity.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleOpenPartyProfile}
-            className="shrink-0 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>Edit {isVendorOB ? 'Vendor Details' : 'Customer Details'}</span>
-            <span>→</span>
-          </button>
-        </div>
-      )}
+      <VoucherNoticeBanners
+        isOpeningBalanceLocked={isOpeningBalanceLocked}
+        obPartyName={obPartyName}
+        obPartyCode={obPartyCode}
+        isVendorOB={isVendorOB}
+        onOpenPartyProfile={handleOpenPartyProfile}
+        isAutoGenerated={isAutoGenerated}
+        autoInvoiceNo={autoInvoiceNo}
+        sourceDocumentLabel={sourceDocumentLabel}
+        onOpenSourceDocument={handleOpenSourceDocument}
+      />
 
-      {/* Auto-Generated Voucher Notice Banner (Option A - Read Only) */}
-      {isAutoGenerated && (
-        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-3">
-            <span className="text-xl">⚠️</span>
-            <div>
-              <h3 className="font-bold text-amber-900 dark:text-amber-200 text-sm">
-                System-Generated Voucher (Read-Only)
-              </h3>
-              <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
-                This voucher was automatically posted from <strong>{sourceDocumentLabel} #{autoInvoiceNo}</strong>. Direct edits here are locked to protect double-entry ledger accuracy.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleOpenSourceDocument}
-            className="shrink-0 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>Open {sourceDocumentLabel} #{autoInvoiceNo}</span>
-            <span>→</span>
-          </button>
-        </div>
-      )}
-
-      {/* Top Header Card */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <div className="flex items-center gap-3">
-          <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold shrink-0 shadow-2xs border ${presetMeta ? presetMeta.badgeBg : 'bg-indigo-50 dark:bg-indigo-950/60'} ${presetMeta ? presetMeta.badgeColor : 'text-indigo-600 border-indigo-200'}`}>
-            {activePreset === 'SAV' && <MdReceiptLong size={24} />}
-            {activePreset === 'SRV' && <MdCompareArrows size={24} />}
-            {activePreset === 'CRV' && <MdPayments size={24} />}
-            {activePreset === 'PAV' && <MdShoppingCart size={24} />}
-            {activePreset === 'PRV' && <MdAssignmentReturn size={24} />}
-            {activePreset === 'VPV' && <MdAccountBalanceWallet size={24} />}
-            {activePreset === 'EXP' && <MdTrendingDown size={24} />}
-            {!presetMeta && <MdOutlineReceipt size={24} />}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
-                {isEditMode ? `Modify ${pageTitle}: ${editData.voucher_no}` : `Create New ${pageTitle}`}
-              </h2>
-              {presetMeta && (
-                <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full border ${presetMeta.badgeBg} ${presetMeta.badgeColor}`}>
-                  {presetMeta.prefix}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {presetMeta ? presetMeta.descPlaceholder : 'General ledger debit/credit posting'}
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => navigate(listReturnRoute)}
-          className="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 transition cursor-pointer self-start sm:self-auto"
-        >
-          ← Back to List
-        </button>
-      </div>
+      <VoucherHeaderCard
+        isEditMode={isEditMode}
+        pageTitle={pageTitle}
+        voucherNo={editData?.voucher_no}
+        activePreset={activePreset}
+        presetMeta={presetMeta}
+        isOpeningBalance={isOpeningBalance}
+        listReturnRoute={listReturnRoute}
+      />
 
       <Formik
         initialValues={{
@@ -815,11 +632,11 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
             if (parts.length > 1) return parts.slice(1).join(' | ');
             return '';
           })(),
-          items: buildInitialItems()
+          items: buildInitialItems(editData, presetMeta, activePreset)
         }}
         enableReinitialize={true}
         validationSchema={validationSchema}
-        onSubmit={async (values) => {
+        onSubmit={async (values: VoucherFormValues) => {
           if (isOpeningBalanceLocked) {
             toast.error(`Opening Balance vouchers are view-only. Please edit ${isVendorOB ? 'Vendor' : 'Customer'} details from their profile.`);
             return;
@@ -838,7 +655,6 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
             sumCredits += Number(item.credit) || 0;
           });
 
-          // Single row entry validation
           if (isSingleRowMode) {
             const primaryItem = values.items[0];
             const enteredAmt = Number(primaryItem.debit) || Number(primaryItem.credit) || 0;
@@ -855,7 +671,7 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
 
           try {
             setLoading(true);
-            const firstItem = values.items[0] || {};
+            const firstItem = values.items[0] || ({} as any);
             const firstAcc = allAccounts.find((a: any) => a.account_code === firstItem.accountCode);
 
             let effectiveDebit = Number(firstItem.debit) || 0;
@@ -886,9 +702,8 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
             const isCust = activePreset === 'SAV' || activePreset === 'SRV' || activePreset === 'CRV' || activePreset === 'CPV' || (firstItem.accountCode && String(firstItem.accountCode).startsWith('2020'));
             const isVend = activePreset === 'PAV' || activePreset === 'PRV' || activePreset === 'VPV' || activePreset === 'VRV' || (firstItem.accountCode && String(firstItem.accountCode).startsWith('2010'));
 
-            // Extract particulars (bill # / thaan ref) and notes
             const primaryItemIdx = activePreset === 'CRV' || activePreset === 'VRV' ? 1 : 0;
-            const primaryItem = values.items[primaryItemIdx] || values.items[0] || {};
+            const primaryItem = values.items[primaryItemIdx] || values.items[0] || ({} as any);
             const particularsText = String(primaryItem.description || '').trim();
             const notesText = String(values.notes || '').trim();
 
@@ -927,180 +742,16 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
               }
             };
 
-            const executeSave = async (payloadToTry: any) => {
-              if (isEditMode) {
-                return await supabase
-                  .from('financial_vouchers')
-                  .update(payloadToTry)
-                  .eq('id', editData.id);
-              } else {
-                return await supabase
-                  .from('financial_vouchers')
-                  .insert([payloadToTry]);
-              }
-            };
+            await saveVoucherToDatabase(databasePayload, isEditMode, editData?.id);
 
-            let saveResult = await executeSave(databasePayload);
-
-            if (saveResult.error && (saveResult.error.code === 'PGRST204' || saveResult.error.message?.includes('schema cache'))) {
-              const fallbackPayload = { ...databasePayload };
-              for (let attempt = 0; attempt < 5 && saveResult.error; attempt++) {
-                const errMsg = saveResult.error.message || '';
-                const colMatch = errMsg.match(/Could not find the '([^']+)' column/i);
-                if (colMatch && colMatch[1]) {
-                  delete fallbackPayload[colMatch[1]];
-                  saveResult = await executeSave(fallbackPayload);
-                } else {
-                  break;
-                }
-              }
-            }
-
-            if (saveResult.error) throw saveResult.error;
-
-            // Two-Way Live Balance Sync
-            try {
-              // Synchronize Opening Balance voucher changes back to Customer Profile
-              const vNumStr = String(values.voucherNo || editData?.voucher_no || '').trim().toUpperCase();
-              const isOBVoucher = vNumStr.startsWith('OB-') || vNumStr.startsWith('OBV-') || String(values.notes || '').toLowerCase().includes('opening balance') || String(editData?.narration || '').toLowerCase().includes('opening balance');
-              
-              if (isOBVoucher) {
-                const targetCode = (firstItem.accountCode || editData?.account_code || '').trim();
-                const targetTitle = (firstAcc?.account_title || editData?.account_title || '').trim();
-                
-                if (targetCode || targetTitle) {
-                  // 1. Sync to Customers (2020-XXX)
-                  let custQuery = supabase.from('customers').select('id, balance, currentBalance, opening_balance');
-                  if (targetCode && targetTitle) {
-                    custQuery = custQuery.or(`customer_code.eq.${targetCode},account_code.eq.${targetCode},customerCode.eq.${targetCode},customerName.eq.${targetTitle}`);
-                  } else if (targetCode) {
-                    custQuery = custQuery.or(`customer_code.eq.${targetCode},account_code.eq.${targetCode},customerCode.eq.${targetCode}`);
-                  } else {
-                    custQuery = custQuery.eq('customerName', targetTitle);
-                  }
-                  
-                  const { data: matchedCust } = await custQuery.maybeSingle();
-                  if (matchedCust) {
-                    const custUpdate: any = {};
-                    if (effectiveTotal > 0) {
-                      custUpdate.opening_balance = effectiveTotal;
-                      custUpdate.balance = effectiveTotal;
-                      custUpdate.currentBalance = effectiveTotal;
-                    }
-                    if (Object.keys(custUpdate).length > 0) {
-                      await supabase.from('customers').update(custUpdate).eq('id', matchedCust.id);
-                    }
-                  }
-
-                  // 2. Sync to Vendors (2010-XXX)
-                  let vendQuery = supabase.from('vendors').select('id, balance, currentBalance, opening_balance, vendor_name');
-                  if (targetCode && targetTitle) {
-                    vendQuery = vendQuery.or(`vendor_code.eq.${targetCode},account_code.eq.${targetCode},vendorCode.eq.${targetCode},vendor_name.eq.${targetTitle}`);
-                  } else if (targetCode) {
-                    vendQuery = vendQuery.or(`vendor_code.eq.${targetCode},account_code.eq.${targetCode},vendorCode.eq.${targetCode}`);
-                  } else {
-                    vendQuery = vendQuery.eq('vendor_name', targetTitle);
-                  }
-
-                  const { data: matchedVend } = await vendQuery.maybeSingle();
-                  if (matchedVend) {
-                    const isCredit = (firstItem.credit && Number(firstItem.credit) > 0) || !firstItem.debit;
-                    const signedBal = isCredit ? effectiveTotal : -effectiveTotal;
-                    await supabase.from('vendors').update({
-                      balance: signedBal,
-                      currentBalance: signedBal,
-                      opening_balance: effectiveTotal,
-                      balance_nature: isCredit ? 'Credit' : 'Debit'
-                    }).eq('id', matchedVend.id);
-                  }
-
-                  // 3. Sync to Chart of Accounts (COA)
-                  if (targetCode) {
-                    const isCredit = (firstItem.credit && Number(firstItem.credit) > 0) || !firstItem.debit;
-                    await supabase.from('chart_of_accounts').update({
-                      opening_balance: effectiveTotal,
-                      balance_nature: isCredit ? 'Credit' : 'Debit'
-                    }).eq('account_code', targetCode);
-                  }
-                }
-              }
-
-              if (activePreset === 'SAV' || activePreset === 'SRV' || activePreset === 'CRV') {
-                const custItem = values.items.find((it: any) => (it.accountCode || '').startsWith('2020-'));
-                if (custItem) {
-                  const custCode = custItem.accountCode.trim();
-                  // Recalculate true Khata balance for affected Customer from all vouchers in database
-                  const [{ data: allVchs }, { data: coaItem }, { data: custRec }] = await Promise.all([
-                    supabase.from('financial_vouchers').select('debit, credit, total_amount, items, account_code'),
-                    supabase.from('chart_of_accounts').select('opening_balance, balance_nature').eq('account_code', custCode).maybeSingle(),
-                    supabase.from('customers').select('id, opening_balance').or(`customer_code.eq.${custCode},account_code.eq.${custCode}`).maybeSingle()
-                  ]);
-
-                  let totalD = 0;
-                  let totalC = 0;
-                  (allVchs || []).forEach((v: any) => {
-                    if (Array.isArray(v.items) && v.items.length > 0) {
-                      v.items.forEach((it: any) => {
-                        if (String(it.accountCode || it.account_code || '').trim() === custCode) {
-                          totalD += Number(it.debit || 0);
-                          totalC += Number(it.credit || 0);
-                        }
-                      });
-                    } else if (String(v.account_code || '').trim() === custCode) {
-                      totalD += Number(v.debit || (v.credit ? 0 : v.total_amount) || 0);
-                      totalC += Number(v.credit || 0);
-                    }
-                  });
-
-                  const op = Number(coaItem?.opening_balance ?? custRec?.opening_balance ?? 0);
-                  const isCr = coaItem?.balance_nature?.toLowerCase() === 'credit';
-                  const exactCustBal = (isCr ? -op : op) + (totalD - totalC);
-
-                  if (custRec?.id) {
-                    await supabase.from('customers').update({ balance: exactCustBal, currentBalance: exactCustBal }).eq('id', custRec.id);
-                  }
-                }
-              }
-
-              if (activePreset === 'PAV' || activePreset === 'PRV' || activePreset === 'VPV') {
-                const vendItem = values.items.find((it: any) => (it.accountCode || '').startsWith('2010-'));
-                if (vendItem) {
-                  const vendCode = vendItem.accountCode.trim();
-                  // Recalculate true Khata balance for affected Vendor from all vouchers in database
-                  const [{ data: allVchs }, { data: coaItem }, { data: vendRec }] = await Promise.all([
-                    supabase.from('financial_vouchers').select('debit, credit, total_amount, items, account_code'),
-                    supabase.from('chart_of_accounts').select('opening_balance, balance_nature').eq('account_code', vendCode).maybeSingle(),
-                    supabase.from('vendors').select('id, opening_balance').eq('vendor_code', vendCode).maybeSingle()
-                  ]);
-
-                  let totalD = 0;
-                  let totalC = 0;
-                  (allVchs || []).forEach((v: any) => {
-                    if (Array.isArray(v.items) && v.items.length > 0) {
-                      v.items.forEach((it: any) => {
-                        if (String(it.accountCode || it.account_code || '').trim() === vendCode) {
-                          totalD += Number(it.debit || 0);
-                          totalC += Number(it.credit || 0);
-                        }
-                      });
-                    } else if (String(v.account_code || '').trim() === vendCode) {
-                      totalD += Number(v.debit || (v.credit ? 0 : v.total_amount) || 0);
-                      totalC += Number(v.credit || 0);
-                    }
-                  });
-
-                  const op = Number(coaItem?.opening_balance ?? vendRec?.opening_balance ?? 0);
-                  const isDr = coaItem?.balance_nature?.toLowerCase() === 'debit';
-                  const exactVendBal = (isDr ? -op : op) + (totalC - totalD);
-
-                  if (vendRec?.id) {
-                    await supabase.from('vendors').update({ balance: exactVendBal, currentBalance: exactVendBal, current_balance: exactVendBal }).eq('id', vendRec.id);
-                  }
-                }
-              }
-            } catch (syncErr) {
-              console.warn('Customer/Vendor balance sync note:', syncErr);
-            }
+            await syncVoucherBalances({
+              values,
+              editData,
+              firstItem,
+              firstAcc,
+              effectiveTotal,
+              activePreset
+            });
 
             toast.success(isEditMode ? 'Voucher updated successfully!' : 'Voucher recorded successfully!');
             navigate(listReturnRoute);
@@ -1112,7 +763,6 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
         }}
       >
         {({ handleChange, values, setFieldValue }) => {
-          // Identify Primary Party from items
           let primaryPartyCode = '';
           let primaryItemIndex = 0;
 
@@ -1134,7 +784,6 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
 
           const partyData = partiesMap[String(primaryPartyCode || '').trim()];
 
-          // Amount calculation
           let currentEnteredAmount = 0;
           if (isSingleRowMode) {
             const it = values.items[0];
@@ -1144,46 +793,36 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
             currentEnteredAmount = Number(it?.debit) || Number(it?.credit) || 0;
           }
 
-          // Real-time khata impact calculation
           const oldBalance = partyData ? Number(partyData.currentBalance || 0) : 0;
           const creationBalance = editData?.metadata?.previous_balance !== undefined
             ? Number(editData.metadata.previous_balance)
             : null;
           let expectedNewBalance = oldBalance;
           let impactSign = '+';
-          let impactDesc = 'No impact';
 
           if (activePreset === 'SAV') {
             impactSign = '+';
-            impactDesc = 'Sale Debit (+Receivable)';
             expectedNewBalance = oldBalance + currentEnteredAmount;
           } else if (activePreset === 'SRV') {
             impactSign = '-';
-            impactDesc = 'Return Credit (-Receivable)';
             expectedNewBalance = Math.max(0, oldBalance - currentEnteredAmount);
           } else if (activePreset === 'CRV') {
             impactSign = '-';
-            impactDesc = 'Payment Received (-Receivable)';
             expectedNewBalance = oldBalance - currentEnteredAmount;
           } else if (activePreset === 'PAV') {
             impactSign = '+';
-            impactDesc = 'Purchase Credit (+Payable)';
             expectedNewBalance = oldBalance + currentEnteredAmount;
           } else if (activePreset === 'PRV') {
             impactSign = '-';
-            impactDesc = 'Return Debit (-Payable)';
             expectedNewBalance = Math.max(0, oldBalance - currentEnteredAmount);
           } else if (activePreset === 'VPV') {
             impactSign = '-';
-            impactDesc = 'Payment Disbursed (-Payable)';
             expectedNewBalance = oldBalance - currentEnteredAmount;
           } else if (activePreset === 'EXP') {
             impactSign = '+';
-            impactDesc = 'Expense Debit (+Expense)';
             expectedNewBalance = oldBalance + currentEnteredAmount;
           }
 
-          // Balance Display Nature
           const isCustomer = activePreset === 'SAV' || activePreset === 'SRV' || activePreset === 'CRV' || (partyData?.type === 'Customer');
           const isVendor = activePreset === 'PAV' || activePreset === 'PRV' || activePreset === 'VPV' || (partyData?.type === 'Vendor');
           const isExpense = activePreset === 'EXP' || (partyData?.type === 'Expense');
@@ -1191,474 +830,52 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
 
           return (
             <Form className="space-y-5">
-              {/* Top Quick Meta Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs font-mono text-xs">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                    Voucher Slip #
-                  </span>
-                  <div className="font-mono font-black text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-                    {values.voucherNo}
-                  </div>
-                </div>
+              <VoucherQuickMetaBar
+                voucherNo={values.voucherNo}
+                voucherType={values.voucherType}
+                voucherDate={values.voucherDate}
+                onChange={handleChange}
+              />
 
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                    Voucher Type
-                  </span>
-                  <div className="font-bold text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-                    {values.voucherType}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                    Transaction Date *
-                  </span>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      name="voucherDate"
-                      onChange={handleChange}
-                      value={values.voucherDate}
-                      className="w-full font-mono font-bold text-xs text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 outline-none focus:border-emerald-500 cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* ========================================================================= */}
-              {/* OPTION 1: 2-COLUMN MODERN KHATA CARD WITH LIVE IMPACT                      */}
-              {/* ========================================================================= */}
               {(isSingleRowMode || isTwoPartyMode) ? (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                  
-                  {/* LEFT COLUMN: VOUCHER DETAILS & AMOUNT ENTRY (7 COLS) */}
-                  <div className="lg:col-span-7 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs p-5 sm:p-6 space-y-5">
-                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                        <h3 className="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight">
-                          Khata Voucher Details
-                        </h3>
-                      </div>
-                      <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">
-                        Step 1 &bull; Entry
-                      </span>
-                    </div>
-
-                    {/* Field 1: Party Account Selection */}
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                        {presetMeta?.partyLabel || 'Select Account'} *
-                      </label>
-                      <AccountCombobox
-                        accounts={getFilteredAccounts(primaryItemIndex)}
-                        value={String(values.items[primaryItemIndex]?.accountCode || '')}
-                        onChange={(selectedCode) => {
-                          setFieldValue(`items.${primaryItemIndex}.accountCode`, selectedCode);
-                        }}
-                      />
-                    </div>
-
-                    {/* Optional Second Account for CRV / VPV / EXP (Cash or Bank) */}
-                    {isTwoPartyMode && (
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                          <MdAccountBalanceWallet className="text-emerald-600" />
-                          <span>
-                            {activePreset === 'CRV' ? 'Deposit Into (Cash or Bank Account) *' :
-                             activePreset === 'VPV' ? 'Paid From (Cash or Bank Account) *' :
-                             'Paid From (Cash or Bank Account) *'}
-                          </span>
-                        </label>
-                        <AccountCombobox
-                          accounts={getFilteredAccounts(primaryItemIndex === 0 ? 1 : 0)}
-                          value={String(values.items[primaryItemIndex === 0 ? 1 : 0]?.accountCode || '')}
-                          onChange={(selectedCode) => {
-                            setFieldValue(`items.${primaryItemIndex === 0 ? 1 : 0}.accountCode`, selectedCode);
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Field 2: Prominent Financial Amount Input */}
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                        {presetMeta?.amountLabel || 'Voucher Amount (PKR)'} *
-                      </label>
-                      <div className="relative flex items-center rounded-2xl bg-slate-50/70 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-2 sm:p-2.5">
-                        <span className="px-3 text-base sm:text-lg font-black font-mono text-emerald-600 dark:text-emerald-400 select-none">
-                          Rs.
-                        </span>
-                        <input
-                          type="number"
-                          step="any"
-                          name="amountInput"
-                          onKeyDown={blockInvalidChar}
-                          value={currentEnteredAmount > 0 ? currentEnteredAmount : ''}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 0;
-                            if (isSingleRowMode) {
-                              if (presetMeta?.defaultDebitOrCredit === 'Credit') {
-                                setFieldValue(`items.0.credit`, val);
-                                setFieldValue(`items.0.debit`, 0);
-                              } else {
-                                setFieldValue(`items.0.debit`, val);
-                                setFieldValue(`items.0.credit`, 0);
-                              }
-                            } else {
-                              // Balanced two-row preset
-                              if (activePreset === 'CRV') {
-                                setFieldValue('items.0.debit', val);
-                                setFieldValue('items.0.credit', 0);
-                                setFieldValue('items.1.credit', val);
-                                setFieldValue('items.1.debit', 0);
-                              } else if (activePreset === 'VPV') {
-                                setFieldValue('items.0.debit', val);
-                                setFieldValue('items.0.credit', 0);
-                                setFieldValue('items.1.credit', val);
-                                setFieldValue('items.1.debit', 0);
-                              } else if (activePreset === 'EXP') {
-                                setFieldValue('items.0.debit', val);
-                                setFieldValue('items.0.credit', 0);
-                                setFieldValue('items.1.credit', val);
-                                setFieldValue('items.1.debit', 0);
-                              }
-                            }
-                          }}
-                          className="w-full text-xl sm:text-2xl font-black font-mono bg-transparent outline-none text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600 pr-2"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Field 3: Bill # / Particulars Reference */}
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Bill # / Particulars / Thaan Reference
-                      </label>
-                      <input
-                        type="text"
-                        name={`items.${primaryItemIndex}.description`}
-                        onChange={handleChange}
-                        value={values.items[primaryItemIndex]?.description || ''}
-                        className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white outline-none focus:border-emerald-500"
-                        placeholder={presetMeta?.descPlaceholder || 'e.g. Bill # 104 - 50 Thaan Latha'}
-                      />
-                    </div>
-
-                    {/* Field 4: Voucher Narration / Notes */}
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Overall Narration / Notes
-                      </label>
-                      <textarea
-                        name="notes"
-                        rows={2}
-                        onChange={handleChange}
-                        value={values.notes}
-                        className="w-full text-xs font-medium p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white outline-none focus:border-emerald-500"
-                        placeholder="Enter general khata remarks or details..."
-                      />
-                    </div>
-                  </div>
-
-                  {/* RIGHT COLUMN: LIVE KHATA IMPACT & PARTY PREVIEW (5 COLS) */}
-                  <div className="lg:col-span-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs p-5 sm:p-6 flex flex-col justify-between space-y-5">
-                    <div>
-                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                          <h3 className="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight">
-                            Khata Balance Impact
-                          </h3>
-                        </div>
-                        <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">
-                          Live Sync
-                        </span>
-                      </div>
-
-                      {/* Party Identity Badge */}
-                      {partyData ? (
-                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 space-y-2 mb-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-black text-xs flex items-center justify-center shrink-0">
-                                {partyData.type === 'Customer' ? <MdPerson size={16} /> : <MdCorporateFare size={16} />}
-                              </div>
-                              <div className="min-w-0">
-                                <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate" title={partyData.name}>
-                                  {partyData.name}
-                                </h4>
-                                <span className="font-mono text-[10.5px] text-slate-400 font-semibold">
-                                  {partyData.code} &bull; {partyData.type}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {(partyData.phone || partyData.city) && (
-                            <div className="flex items-center gap-3 text-[10.5px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                              {partyData.phone && (
-                                <span className="flex items-center gap-1 font-mono">
-                                  <MdPhone size={12} className="text-slate-400" />
-                                  {partyData.phone}
-                                </span>
-                              )}
-                              {partyData.city && (
-                                <span className="flex items-center gap-1 truncate">
-                                  <MdLocationOn size={12} className="text-slate-400" />
-                                  {partyData.city}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="p-6 text-center text-slate-400 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700 mb-4">
-                          <span className="block text-base mb-1">👈</span>
-                          <span className="font-bold text-xs">Select an Account</span>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Select customer or vendor to preview real-time khata balance impact.
-                          </p>
-                        </div>
-                      )}
-
-                      {/* 3-Step Live Khata Flow */}
-                      <div className="space-y-3 font-mono text-xs">
-                        {/* Static Snapshot at Creation (Shown on Edit Mode if available) */}
-                        {isEditMode && creationBalance !== null && (
-                          <div className="flex justify-between items-center p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60">
-                            <div>
-                              <span className="font-sans font-bold text-amber-800 dark:text-amber-200 block text-[11px]">
-                                Balance at Creation Time:
-                              </span>
-                              <span className="font-sans text-[10px] text-amber-600/80 dark:text-amber-400/80">
-                                Snapshot when voucher was created
-                              </span>
-                            </div>
-                            <span className="font-black text-amber-950 dark:text-amber-100 text-sm">
-                              Rs. {creationBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* 1. Current Balance */}
-                        <div className="flex justify-between items-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800">
-                          <span className="font-sans font-bold text-slate-600 dark:text-slate-300">
-                            {isEditMode ? '1. Net Balance (Excl. This Voucher):' : '1. Previous Balance:'}
-                          </span>
-                          <span className="font-black text-slate-900 dark:text-white">
-                            Rs. {oldBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            <span className="text-[10px] font-sans font-normal text-slate-400 ml-1">
-                              {balSuffix}
-                            </span>
-                          </span>
-                        </div>
-
-                        {/* 2. Voucher Delta */}
-                        <div className="flex justify-between items-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800">
-                          <span className="font-sans font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                            <span>2. This Voucher:</span>
-                            <span className="text-[10px] font-sans px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
-                              {impactSign}
-                            </span>
-                          </span>
-                          <span className={`font-black ${impactSign === '+' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                            {impactSign}Rs. {currentEnteredAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-
-                        {/* 3. Expected New Balance Hero Card */}
-                        <div className="p-4 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white shadow-xs space-y-1">
-                          <div className="flex justify-between items-center text-[10.5px] uppercase font-bold tracking-wider text-slate-400 font-sans">
-                            <span>3. Expected New Khata Balance</span>
-                            <span className="text-emerald-400">Post Save</span>
-                          </div>
-                          <div className="text-2xl font-black font-mono tracking-tight text-white flex items-baseline justify-between pt-1">
-                            <span>Rs. {expectedNewBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                            <span className="text-xs font-sans font-normal text-slate-300">
-                              {balSuffix}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                      {isOpeningBalanceLocked ? (
-                        <div className="space-y-2">
-                          <button
-                            type="button"
-                            onClick={handleOpenPartyProfile}
-                            className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 font-extrabold text-white text-xs transition shadow-md cursor-pointer flex items-center justify-center gap-2"
-                          >
-                            <span>Edit {isVendorOB ? 'Vendor Details' : 'Customer Details'} Directly</span>
-                            <span>→</span>
-                          </button>
-                          <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-center text-slate-500 font-semibold text-[11px] border border-dashed border-slate-300 dark:border-slate-700">
-                            🔒 Opening balance editing is locked here. Please edit from {isVendorOB ? 'Vendor' : 'Customer'} profile.
-                          </div>
-                        </div>
-                      ) : isAutoGenerated ? (
-                        <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-center text-slate-500 font-semibold text-xs border border-dashed border-slate-300 dark:border-slate-700">
-                          Editing locked. Please modify via {sourceDocumentLabel} #{autoInvoiceNo}.
-                        </div>
-                      ) : (
-                        <button
-                          type="submit"
-                          disabled={loading || !primaryPartyCode || currentEnteredAmount <= 0}
-                          className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-extrabold text-white text-xs transition disabled:opacity-50 shadow-md cursor-pointer flex items-center justify-center gap-2"
-                        >
-                          {loading ? (
-                            <Spinner color="border-white" size="w-4 h-4" />
-                          ) : (
-                            <>
-                              <MdCheckCircle size={18} />
-                              <span>{isEditMode ? 'Update & Post Voucher' : 'Save & Post Voucher'}</span>
-                            </>
-                          )}
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => navigate(listReturnRoute)}
-                        className="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-slate-600 dark:text-slate-300 text-xs transition cursor-pointer text-center"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <VoucherKhataForm
+                  values={values}
+                  handleChange={handleChange}
+                  setFieldValue={setFieldValue}
+                  presetMeta={presetMeta}
+                  activePreset={activePreset}
+                  isSingleRowMode={isSingleRowMode}
+                  isTwoPartyMode={isTwoPartyMode}
+                  primaryItemIndex={primaryItemIndex}
+                  primaryPartyCode={primaryPartyCode}
+                  partyData={partyData}
+                  getFilteredAccounts={getFilteredAccounts}
+                  currentEnteredAmount={currentEnteredAmount}
+                  oldBalance={oldBalance}
+                  creationBalance={creationBalance}
+                  expectedNewBalance={expectedNewBalance}
+                  impactSign={impactSign}
+                  balSuffix={balSuffix}
+                  isEditMode={isEditMode}
+                  isOpeningBalanceLocked={isOpeningBalanceLocked}
+                  isAutoGenerated={isAutoGenerated}
+                  isVendorOB={isVendorOB}
+                  sourceDocumentLabel={sourceDocumentLabel}
+                  autoInvoiceNo={autoInvoiceNo}
+                  loading={loading}
+                  onOpenPartyProfile={handleOpenPartyProfile}
+                  onCancel={() => navigate(listReturnRoute)}
+                />
               ) : (
-                /* ========================================================================= */
-                /* GENERAL MULTI-ROW JOURNAL VOUCHER TABLE (FALLBACK FOR COMPLEX JVs)       */
-                /* ========================================================================= */
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-                  <div className="overflow-x-auto">
-                    <table className="w-full table-auto text-center border-collapse min-w-[700px]">
-                      <thead>
-                        <tr className="bg-slate-100 dark:bg-slate-800 font-bold text-slate-700 dark:text-slate-200 text-[11px] uppercase tracking-wide border-b">
-                          <th className="p-2.5 border w-12">S.#</th>
-                          <th className="p-2.5 border text-left min-w-[260px]">Chart Of Account *</th>
-                          <th className="p-2.5 border min-w-[220px]">Description / Reference</th>
-                          <th className="p-2.5 border w-36">Debit (Dr)</th>
-                          <th className="p-2.5 border w-36">Credit (Cr)</th>
-                          <th className="p-2.5 border w-10"></th>
-                        </tr>
-                      </thead>
-                      <FieldArray name="items">
-                        {({ push, remove }) => (
-                          <tbody>
-                            {values.items.map((item: any, idx: number) => {
-                              const rowAccounts = getFilteredAccounts(idx);
-                              return (
-                                <tr key={idx} className="hover:bg-slate-50/50">
-                                  <td className="p-2 border text-slate-400 font-medium bg-slate-50/30">
-                                    {idx + 1}
-                                  </td>
-                                  <td className="p-2 border min-w-[260px]">
-                                    <AccountCombobox
-                                      accounts={rowAccounts}
-                                      value={String(item.accountCode || '')}
-                                      onChange={(selectedCode) => {
-                                        setFieldValue(`items.${idx}.accountCode`, selectedCode);
-                                      }}
-                                    />
-                                  </td>
-                                  <td className="p-1 border">
-                                    <input
-                                      type="text"
-                                      name={`items.${idx}.description`}
-                                      onChange={handleChange}
-                                      value={item.description}
-                                      className="w-full px-2 outline-none bg-transparent h-8 text-slate-900 dark:text-white"
-                                      placeholder="Enter line details"
-                                    />
-                                  </td>
-                                  <td className="p-1 border">
-                                    <input
-                                      type="number"
-                                      name={`items.${idx}.debit`}
-                                      onKeyDown={blockInvalidChar}
-                                      onChange={(e) => {
-                                        handleChange(e);
-                                        const val = Number(e.target.value) || 0;
-                                        if (val > 0) setFieldValue(`items.${idx}.credit`, 0);
-                                      }}
-                                      value={item.debit || ''}
-                                      className="w-full text-center font-mono font-bold outline-none h-8 bg-transparent text-slate-900 dark:text-white"
-                                      placeholder="0.00"
-                                    />
-                                  </td>
-                                  <td className="p-1 border">
-                                    <input
-                                      type="number"
-                                      name={`items.${idx}.credit`}
-                                      onKeyDown={blockInvalidChar}
-                                      onChange={(e) => {
-                                        handleChange(e);
-                                        const val = Number(e.target.value) || 0;
-                                        if (val > 0) setFieldValue(`items.${idx}.debit`, 0);
-                                      }}
-                                      value={item.credit || ''}
-                                      className="w-full text-center font-mono font-bold outline-none h-8 bg-transparent text-slate-900 dark:text-white"
-                                      placeholder="0.00"
-                                    />
-                                  </td>
-                                  <td className="p-2 border text-center">
-                                    {values.items.length > 2 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => remove(idx)}
-                                        className="text-red-500 font-bold hover:scale-110 transition cursor-pointer"
-                                      >
-                                        ✕
-                                      </button>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                            <tr>
-                              <td colSpan={6} className="p-2.5 text-left bg-slate-50/20">
-                                <button
-                                  type="button"
-                                  onClick={() => push({ accountCode: '', description: '', debit: 0, credit: 0 })}
-                                  className="text-emerald-600 font-black hover:underline cursor-pointer"
-                                >
-                                  + Add Row
-                                </button>
-                              </td>
-                            </tr>
-                          </tbody>
-                        )}
-                      </FieldArray>
-                    </table>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => navigate(listReturnRoute)}
-                      className="rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 text-xs cursor-pointer"
-                    >
-                      {isLockedVoucher ? 'Back to List' : 'Cancel'}
-                    </button>
-                    {!isLockedVoucher && (
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white text-xs cursor-pointer flex items-center gap-2"
-                      >
-                        {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>Save Voucher</span>}
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <VoucherGeneralJournalTable
+                  values={values}
+                  handleChange={handleChange}
+                  setFieldValue={setFieldValue}
+                  getFilteredAccounts={getFilteredAccounts}
+                  isLockedVoucher={isLockedVoucher}
+                  loading={loading}
+                  onCancel={() => navigate(listReturnRoute)}
+                />
               )}
             </Form>
           );

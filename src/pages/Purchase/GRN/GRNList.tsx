@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
-import { useAuth } from '../../../Context/Auth';
 import Spinner from '../../../ui/Spinner';
 import { MdInventory, MdEvent, MdBusiness, MdDelete, MdEdit, MdSearch, MdVisibility } from 'react-icons/md';
 import { useModal } from '../../../Context/Modal';
@@ -13,13 +12,13 @@ import ConfirmDeleteModal from '../../../components/Modals/ConfirmDeleteModal';
 
 const GRNList = () => {
     const navigate = useNavigate();
-    const { tenantId } = useAuth();
     const { showModal, hideModal } = useModal();
     const [grns, setGrns] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [entriesPerPage, setEntriesPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
+    const [workflowFilter, setWorkflowFilter] = useState<'ALL' | 'AUTOMATIC' | 'MANUAL'>('ALL');
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [deleteTargetGrn, setDeleteTargetGrn] = useState<any | null>(null);
 
@@ -63,14 +62,21 @@ const GRNList = () => {
         }
     };
 
-    const filteredGrns = grns.filter(g => {
+    const filteredGrns = (grns || []).filter(g => {
         const query = searchTerm.toLowerCase();
-        return (
+        const matchesSearch = (
             (g.grn_no || '').toLowerCase().includes(query) ||
             (g.vendor_name || '').toLowerCase().includes(query) ||
             (g.receipt_date || '').toLowerCase().includes(query) ||
             (g.status || '').toLowerCase().includes(query)
         );
+        if (!matchesSearch) return false;
+
+        const isAuto = String(g.remarks || '').includes('[AUTOMATIC]');
+        if (workflowFilter === 'AUTOMATIC' && !isAuto) return false;
+        if (workflowFilter === 'MANUAL' && isAuto) return false;
+
+        return true;
     });
 
     const totalEntries = filteredGrns.length;
@@ -78,37 +84,37 @@ const GRNList = () => {
     const startIndex = (currentPage - 1) * entriesPerPage;
     const paginatedGrns = filteredGrns.slice(startIndex, startIndex + entriesPerPage);
 
+    const fetchGRNs = async () => {
+        try {
+            setLoading(true);
+            const [ receiptsRes, itemsRes ] = await Promise.all([
+                supabase.from('grn_receipts').select('*').order('created_at', { ascending: false }),
+                supabase.from('grn_items').select('*')
+            ]);
+
+            if (receiptsRes.error) throw receiptsRes.error;
+
+            const itemsByGrn: Record<string, any[]> = {};
+            (itemsRes.data || []).forEach((it: any) => {
+                const gId = String(it.grn_id || '');
+                if (!itemsByGrn[gId]) itemsByGrn[gId] = [];
+                itemsByGrn[gId].push(it);
+            });
+
+            const combined = (receiptsRes.data || []).map((g: any) => ({
+                ...g,
+                grn_items: itemsByGrn[String(g.id)] || []
+            }));
+
+            setGrns(combined);
+        } catch (err: any) {
+            console.error('Failed to fetch GRNs:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchGRNs = async () => {
-            try {
-                setLoading(true);
-                const [ receiptsRes, itemsRes ] = await Promise.all([
-                    supabase.from('grn_receipts').select('*').order('created_at', { ascending: false }),
-                    supabase.from('grn_items').select('*')
-                ]);
-
-                if (receiptsRes.error) throw receiptsRes.error;
-
-                const itemsByGrn: Record<string, any[]> = {};
-                (itemsRes.data || []).forEach((it: any) => {
-                    const gId = String(it.grn_id || '');
-                    if (!itemsByGrn[gId]) itemsByGrn[gId] = [];
-                    itemsByGrn[gId].push(it);
-                });
-
-                const combined = (receiptsRes.data || []).map((g: any) => ({
-                    ...g,
-                    grn_items: itemsByGrn[String(g.id)] || []
-                }));
-
-                setGrns(combined);
-            } catch (err: any) {
-                console.error('Failed to fetch GRNs:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchGRNs();
     }, []);
 
@@ -148,17 +154,62 @@ const GRNList = () => {
                         <span className="text-sm font-medium text-gray-500">entries</span>
                     </div>
 
-                    <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                            <MdSearch size={18} />
-                        </span>
-                        <input 
-                            type="text" 
-                            placeholder="Search GRNs..." 
-                            value={searchTerm}
-                            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                            className="pl-9 pr-4 py-2 border border-stroke dark:border-strokedark rounded bg-gray-50 dark:bg-meta-4/20 outline-none focus:border-primary text-sm min-w-[250px] text-black dark:text-white"
-                        />
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* Workflow Filter Pills */}
+                        <div className="flex items-center gap-1 bg-slate-100 dark:bg-meta-4 p-1 rounded-lg">
+                            <button
+                                type="button"
+                                onClick={() => { setWorkflowFilter('ALL'); setCurrentPage(1); }}
+                                className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                                    workflowFilter === 'ALL'
+                                        ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
+                                        : 'text-gray-500 hover:text-black dark:hover:text-white'
+                                }`}
+                            >
+                                All ({grns.length})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setWorkflowFilter('AUTOMATIC'); setCurrentPage(1); }}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                                    workflowFilter === 'AUTOMATIC'
+                                        ? 'bg-white dark:bg-boxdark text-emerald-600 shadow-xs'
+                                        : 'text-gray-500 hover:text-black dark:hover:text-white'
+                                }`}
+                            >
+                                <span>⚡ Automatic</span>
+                                <span className="text-[10px] opacity-75">
+                                    ({(grns || []).filter(g => String(g.remarks || '').includes('[AUTOMATIC]')).length})
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setWorkflowFilter('MANUAL'); setCurrentPage(1); }}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                                    workflowFilter === 'MANUAL'
+                                        ? 'bg-white dark:bg-boxdark text-indigo-600 shadow-xs'
+                                        : 'text-gray-500 hover:text-black dark:hover:text-white'
+                                }`}
+                            >
+                                <span>📋 Manual</span>
+                                <span className="text-[10px] opacity-75">
+                                    ({(grns || []).filter(g => !String(g.remarks || '').includes('[AUTOMATIC]')).length})
+                                </span>
+                            </button>
+                        </div>
+
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                <MdSearch size={18} />
+                            </span>
+                            <input 
+                                type="text" 
+                                placeholder="Search GRNs..." 
+                                value={searchTerm}
+                                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                                className="pl-9 pr-4 py-2 border border-stroke dark:border-strokedark rounded bg-gray-50 dark:bg-meta-4/20 outline-none focus:border-primary text-sm min-w-[220px] text-black dark:text-white"
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -171,20 +222,55 @@ const GRNList = () => {
                                 <th className="py-3 px-4">Vendor Profile</th>
                                 <th className="py-3 px-4 text-center">Receipt Date</th>
                                 <th className="py-3 px-4 text-center">Items Count</th>
+                                <th className="py-3 px-4 text-center">Workflow</th>
                                 <th className="py-3 px-4 text-center">Status</th>
                                 <th className="py-3 px-4 text-center w-24">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={7} className="text-center py-12"><Spinner /></td></tr>
+                                <tr><td colSpan={8} className="text-center py-12"><Spinner /></td></tr>
                             ) : paginatedGrns.length === 0 ? (
-                                <tr><td colSpan={7} className="text-center py-10 text-sm text-gray-500 italic">No GRNs found.</td></tr>
+                                <tr><td colSpan={8} className="text-center py-10 text-sm text-gray-500 italic">No GRNs found.</td></tr>
                             ) : (
                                 paginatedGrns.map((grn, idx) => (
                                     <tr key={grn.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
                                         <td className="py-3 px-4 text-center text-gray-400">{idx + 1}</td>
-                                        <td className="py-3 px-4 font-bold font-mono text-primary">{grn.grn_no}</td>
+                                        <td className="py-3 px-4 font-bold font-mono text-primary">
+                                            <div>{grn.grn_no}</div>
+                                            {(() => {
+                                                const rem = String(grn.remarks || '');
+                                                const jsonMatch = rem.match(/\[GatePasses:\s*(\{.*?\})\]/s);
+                                                if (jsonMatch) {
+                                                    try {
+                                                        const parsed = JSON.parse(jsonMatch[1]);
+                                                        const entries = Object.entries(parsed).filter(([_, v]) => Boolean(v));
+                                                        if (entries.length === 1) {
+                                                            return (
+                                                                <div className="text-[10px] font-normal text-purple-600 dark:text-purple-400 font-sans tracking-tight">
+                                                                    GP: {String(entries[0][1])}
+                                                                </div>
+                                                            );
+                                                        } else if (entries.length > 1) {
+                                                            return (
+                                                                <div 
+                                                                    className="text-[10px] font-normal text-purple-600 dark:text-purple-400 font-sans tracking-tight cursor-help"
+                                                                    title={entries.map(([k, v]) => `${k}: ${v}`).join(' | ')}
+                                                                >
+                                                                    GPs ({entries.length}): {entries.map(([_, v]) => v).join(', ')}
+                                                                </div>
+                                                            );
+                                                        }
+                                                    } catch (e) {}
+                                                }
+                                                const gpMatch = rem.match(/\[Gate Pass:\s*([^\]]+)\]/i);
+                                                return gpMatch ? (
+                                                    <div className="text-[10px] font-normal text-purple-600 dark:text-purple-400 font-sans tracking-tight">
+                                                        GP: {gpMatch[1]}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </td>
                                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
                                             <span className="flex items-center gap-1"><MdBusiness className="text-gray-400" />{grn.vendor_name}</span>
                                         </td>
@@ -193,6 +279,17 @@ const GRNList = () => {
                                         </td>
                                         <td className="py-3 px-4 text-center font-mono">
                                             {grn.grn_items?.length || 0}
+                                        </td>
+                                        <td className="py-3 px-4 text-center">
+                                            {String(grn.remarks || '').includes('[AUTOMATIC]') ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60 shadow-2xs">
+                                                    ⚡ Automatic
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60 shadow-2xs">
+                                                    📋 Manual Inward
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="py-3 px-4 text-center">
                                             <span className={`px-2 py-0.5 border text-[10px] rounded-full font-bold uppercase tracking-wide whitespace-nowrap ${grn.status === 'Billed'
