@@ -35,6 +35,7 @@ import {
   getSavedSidebarColor,
   getSafeSidebarColor,
   isSidebarBackgroundLight,
+  isBackgroundLight,
   getContrastTextColor,
   isDarkModeActive,
   SidebarLayoutMode,
@@ -66,6 +67,246 @@ import {
   getNavbarDesignMode,
   setNavbarDesignMode,
 } from '../../../constant/themeConfig';
+
+interface GradientAngleClockProps {
+  angle: number;
+  onChange: (newAngle: number) => void;
+  accentColor?: string;
+  isRTL?: boolean;
+}
+
+const GradientAngleClock: React.FC<GradientAngleClockProps> = ({
+  angle,
+  onChange,
+  accentColor = '#2563EB',
+  isRTL = false,
+}) => {
+  const dialRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const calculateAngle = (clientX: number, clientY: number, shiftKey = false) => {
+    if (!dialRef.current) return;
+    const rect = dialRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+
+    // In CSS gradients, 0deg points UP (12 o'clock), 90deg points RIGHT (3 o'clock), 180deg points DOWN (6 o'clock), 270deg points LEFT (9 o'clock)
+    let deg = Math.round(Math.atan2(dy, dx) * (180 / Math.PI) + 90);
+    if (deg < 0) deg += 360;
+    if (deg >= 360) deg -= 360;
+
+    // Shift key snaps to 15-degree increments
+    if (shiftKey) {
+      deg = Math.round(deg / 15) * 15;
+      if (deg >= 360) deg = 0;
+    }
+
+    onChange(deg);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+    calculateAngle(e.clientX, e.clientY, e.shiftKey);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      calculateAngle(e.clientX, e.clientY, e.shiftKey);
+    };
+
+    const handlePointerUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [isDragging]);
+
+  // Human-readable direction description
+  const getDirectionInfo = (deg: number) => {
+    const normalized = ((deg % 360) + 360) % 360;
+    if (normalized >= 338 || normalized < 23) return { label: 'Top (Vertical)', arrow: '↑' };
+    if (normalized >= 23 && normalized < 68) return { label: 'Top-Right', arrow: '↗' };
+    if (normalized >= 68 && normalized < 113) return { label: 'Right (Horizontal)', arrow: '→' };
+    if (normalized >= 113 && normalized < 158) return { label: 'Bottom-Right (Diagonal)', arrow: '↘' };
+    if (normalized >= 158 && normalized < 203) return { label: 'Bottom (Vertical)', arrow: '↓' };
+    if (normalized >= 203 && normalized < 248) return { label: 'Bottom-Left', arrow: '↙' };
+    if (normalized >= 248 && normalized < 293) return { label: 'Left (Horizontal)', arrow: '←' };
+    return { label: 'Top-Left', arrow: '↖' };
+  };
+
+  const direction = getDirectionInfo(angle);
+
+  // Quick snap preset angles
+  const SNAP_PRESETS = [
+    { deg: 0, label: '0° Top', icon: '↑' },
+    { deg: 45, label: '45°', icon: '↗' },
+    { deg: 90, label: '90° Right', icon: '→' },
+    { deg: 135, label: '135°', icon: '↘' },
+    { deg: 180, label: '180° Down', icon: '↓' },
+    { deg: 270, label: '270° Left', icon: '←' },
+  ];
+
+  return (
+    <div className="space-y-2">
+      {/* Label and Live Angle Readout */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+          <span>{isRTL ? 'گریڈینٹ زاویہ اور بہاؤ کی سمت' : 'Gradient Angle & Flow Direction'}</span>
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold text-primary flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20">
+            <span className="text-xs font-black">{direction.arrow}</span>
+            <span>{direction.label}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Main Clock Dial + Interactive Controls Row */}
+      <div className="flex flex-col sm:flex-row items-center sm:items-stretch gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/90 dark:border-slate-700/80">
+        
+        {/* 1. CLOCK TYPE DIRECTION DIAL */}
+        <div className="flex flex-col items-center justify-center shrink-0">
+          <div
+            ref={dialRef}
+            onPointerDown={handlePointerDown}
+            className={`relative w-24 h-24 rounded-full border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-md cursor-grab active:cursor-grabbing select-none transition-shadow ${
+              isDragging ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-slate-900 shadow-lg' : 'hover:border-primary/60'
+            }`}
+            title="Click or drag to rotate gradient angle"
+            style={{ touchAction: 'none' }}
+          >
+            {/* Cardinal Marks (0, 90, 180, 270) */}
+            <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] font-black font-mono text-slate-400 select-none pointer-events-none">0°</span>
+            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] font-black font-mono text-slate-400 select-none pointer-events-none">90°</span>
+            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-black font-mono text-slate-400 select-none pointer-events-none">180°</span>
+            <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[8px] font-black font-mono text-slate-400 select-none pointer-events-none">270°</span>
+
+            {/* Subtle Diagonal Tick Dots (45°, 135°, 225°, 315°) */}
+            <span className="absolute top-3.5 right-3.5 w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 pointer-events-none" />
+            <span className="absolute bottom-3.5 right-3.5 w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 pointer-events-none" />
+            <span className="absolute bottom-3.5 left-3.5 w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 pointer-events-none" />
+            <span className="absolute top-3.5 left-3.5 w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 pointer-events-none" />
+
+            {/* Subtle Center Dial Grid Ring */}
+            <div className="absolute inset-4 rounded-full border border-dashed border-slate-200 dark:border-slate-700 pointer-events-none" />
+
+            {/* Rotating Needle and Knob Hand */}
+            <div
+              className="absolute inset-0 pointer-events-none flex items-center justify-center"
+              style={{
+                transform: `rotate(${angle}deg)`,
+                transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+              }}
+            >
+              {/* Needle Line (from center to knob) */}
+              <div
+                className="absolute top-2 bottom-1/2 w-0.5 rounded-full"
+                style={{ backgroundColor: accentColor }}
+              />
+
+              {/* Arrow Head / Handle Knob at the needle tip */}
+              <div
+                className="absolute top-1.5 w-4 h-4 rounded-full border-2 border-white shadow-md flex items-center justify-center pointer-events-none"
+                style={{ backgroundColor: accentColor }}
+              >
+                <div className="w-1 h-1 rounded-full bg-white" />
+              </div>
+            </div>
+
+            {/* Center Pivot Pin */}
+            <div
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white dark:bg-slate-800 border-2 shadow-xs pointer-events-none"
+              style={{ borderColor: accentColor }}
+            />
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium mt-1">Drag clock dial</span>
+        </div>
+
+        {/* 2. DIRECT ANGLE INPUT & QUICK SNAP BUTTONS */}
+        <div className="flex-1 flex flex-col justify-between gap-2.5 w-full">
+          {/* Degree Numeric Control */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Angle:</span>
+            <div className="flex items-center rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 overflow-hidden shadow-2xs">
+              <input
+                type="number"
+                min={0}
+                max={360}
+                value={angle}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val)) {
+                    onChange(((val % 360) + 360) % 360);
+                  }
+                }}
+                className="w-16 px-2 py-1 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 bg-transparent text-center focus:outline-none"
+              />
+              <span className="px-2 py-1 text-xs font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700">
+                °
+              </span>
+            </div>
+
+            {/* - / + Step Buttons */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onChange((angle - 15 + 360) % 360)}
+                className="w-7 h-7 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer transition"
+                title="Rotate -15° counter-clockwise"
+              >
+                -15°
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange((angle + 15) % 360)}
+                className="w-7 h-7 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer transition"
+                title="Rotate +15° clockwise"
+              >
+                +15°
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Cardinal Snap Presets */}
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Quick Angles:</span>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+              {SNAP_PRESETS.map((preset) => {
+                const isActive = angle === preset.deg;
+                return (
+                  <button
+                    key={preset.deg}
+                    type="button"
+                    onClick={() => onChange(preset.deg)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center justify-center gap-1 ${
+                      isActive
+                        ? 'border-primary bg-primary text-white shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
+                  >
+                    <span>{preset.icon}</span>
+                    <span>{preset.deg}°</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface ThemeTabProps {
   isRTL?: boolean;
@@ -748,13 +989,20 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
 
                   {/* Interactive Canvas Workspace */}
                   {(() => {
-                    const isLight = isSidebarBackgroundLight();
-                    const sidebarBg = sidebarCustomBg || (
+                    const studioDraftBg = customBgType === 'gradient'
+                      ? `linear-gradient(${customGradientAngle}deg, ${customColorStop1} 0%, ${customColorStop2} 100%)`
+                      : customSolidColor;
+
+                    const activeBg = sidebarCustomBg || (
                       sidebarThemeMode === 'light' ? '#FFFFFF' :
                       sidebarThemeMode === 'navy' ? '#0F172A' :
                       sidebarThemeMode === 'emerald' ? '#0A1A18' :
                       sidebarThemeMode === 'charcoal' ? '#1C1917' : '#0B0F17'
                     );
+
+                    const isStudioPreviewing = sidebarActiveConfigTab === 'theme' && customBgSubTab === 'custom';
+                    const sidebarBg = isStudioPreviewing ? studioDraftBg : activeBg;
+                    const isLight = isBackgroundLight(sidebarBg);
 
                     const sidebarTextColor = isLight ? '#0F172A' : '#FFFFFF';
                     const sidebarSubTextColor = isLight ? '#64748B' : '#94A3B8';
@@ -1961,33 +2209,13 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
                                           </div>
                                         </div>
 
-                                        {/* Angle Presets */}
-                                        <div className="space-y-1.5">
-                                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                            Gradient Angle & Flow Direction
-                                          </span>
-                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                            {[
-                                              { angle: 135, label: 'Diagonal 135°' },
-                                              { angle: 180, label: 'Vertical 180°' },
-                                              { angle: 90, label: 'Horizontal 90°' },
-                                              { angle: 45, label: 'Angled 45°' },
-                                            ].map((preset) => (
-                                              <button
-                                                key={preset.angle}
-                                                type="button"
-                                                onClick={() => setCustomGradientAngle(preset.angle)}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
-                                                  customGradientAngle === preset.angle
-                                                    ? 'border-primary bg-primary/10 text-primary font-bold'
-                                                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
-                                                }`}
-                                              >
-                                                {preset.label}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        </div>
+                                        {/* Interactive Clock Type Angle & Flow Direction Dial */}
+                                        <GradientAngleClock
+                                          angle={customGradientAngle}
+                                          onChange={(newAngle) => setCustomGradientAngle(newAngle)}
+                                          accentColor={selectedAccentColor}
+                                          isRTL={isRTL}
+                                        />
 
                                         {/* Live Preview Box & Quick Apply */}
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">

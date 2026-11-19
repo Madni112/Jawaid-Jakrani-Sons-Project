@@ -57,11 +57,9 @@ export const BasicSalesReportPrint: React.FC = () => {
     }
   });
 
-  // Print Density / Rows per Page: 'standard' (18 / 22) | 'compact' (22 / 26) | 'relaxed' (14 / 18)
-  const [printDensity, setPrintDensity] = useState<'standard' | 'compact' | 'relaxed'>('standard');
-
   // Global & Per-Row Breakdown Expansion (High-Speed O(1) State)
   const [expandAllBreakdown, setExpandAllBreakdown] = useState(false);
+  const [isTogglingExpand, setIsTogglingExpand] = useState(false);
   const [individualToggledIds, setIndividualToggledIds] = useState<Set<string>>(new Set());
 
   // Check if a row is expanded: O(1) instant lookup
@@ -94,10 +92,19 @@ export const BasicSalesReportPrint: React.FC = () => {
     });
   };
 
-  // Toggle all breakdowns (Instant 0ms flip without looping 1,600+ items)
+  // Toggle all breakdowns with asynchronous loader to prevent UI freeze
   const handleToggleAllBreakdowns = () => {
-    setExpandAllBreakdown((prev) => !prev);
-    setIndividualToggledIds(new Set()); // Reset individual overrides
+    if (isTogglingExpand) return;
+    setIsTogglingExpand(true);
+    // Yield execution to the browser thread so the spinner paints immediately
+    setTimeout(() => {
+      setExpandAllBreakdown((prev) => !prev);
+      setIndividualToggledIds(new Set()); // Reset individual overrides
+      // Allow browser to render the updated DOM before hiding the spinner
+      setTimeout(() => {
+        setIsTogglingExpand(false);
+      }, 120);
+    }, 50);
   };
 
   // Load Database Records with fetchAllPages
@@ -470,50 +477,155 @@ export const BasicSalesReportPrint: React.FC = () => {
     };
   }, [parsedInvoiceRows]);
 
+  // ── SMART PRINTING: ATOMIC BLOCKS, ADAPTIVE HEIGHT BUDGETS & GIANT INVOICE SLICING ──
+  interface InvoicePageItem {
+    inv: any;
+    serialNum: number;
+    isExpanded: boolean;
+    itemsSlice?: {
+      items: any[];
+      partIndex: number;
+      totalParts: number;
+      isFirstPart: boolean;
+      isLastPart: boolean;
+    };
+  }
+
+  interface ChunkedPage {
+    pageIndex: number;
+    items: InvoicePageItem[];
+    pageGross: number;
+    pageFreight: number;
+    pageDiscounts: number;
+    pageNet: number;
+    invoicesCount: number;
+  }
+
+  // Calculate row height weight (units) for atomic block checking
+  const getInvoiceUnits = (inv: any, expanded: boolean): number => {
+    if (!expanded) return 1;
+    const itemsCount = inv.parsedItems?.length || 1;
+    // 1 unit for master row + 1 unit for drawer header/padding + 0.65 units per item line
+    return 2 + Math.ceil(itemsCount * 0.65);
+  };
+
   // Chunk parsed invoices into printable page sheets with per-page subtotal tracking
-  const chunkedInvoicePages = useMemo(() => {
+  const chunkedInvoicePages = useMemo<ChunkedPage[]>(() => {
     if (parsedInvoiceRows.length === 0) return [];
 
-    let firstCap = 18;
-    let subsequentCap = 22;
+    // Adaptive page capacity: Page 1 accommodates header + KPI cards; Page 2+ takes full capacity
+    const firstCap = 16;
+    const subsequentCap = 22;
 
-    if (printDensity === 'compact') {
-      firstCap = 22;
-      subsequentCap = 26;
-    } else if (printDensity === 'relaxed') {
-      firstCap = 14;
-      subsequentCap = 18;
-    }
-
-    const pages: { rows: any[]; startIndex: number }[] = [];
-    let currentRows: any[] = [];
+    const pages: ChunkedPage[] = [];
+    let currentPageItems: InvoicePageItem[] = [];
     let currentUsedUnits = 0;
     let currentCap = firstCap;
-    let pageStartIndex = 0;
+    let runningSerial = 1;
 
-    parsedInvoiceRows.forEach((inv, idx) => {
+    const commitPage = () => {
+      if (currentPageItems.length === 0) return;
+
+      let pageGross = 0;
+      let pageFreight = 0;
+      let pageDiscounts = 0;
+      let pageNet = 0;
+      const uniqueInvoicesOnPage = new Set<string>();
+
+      currentPageItems.forEach((item) => {
+        const inv = item.inv;
+        uniqueInvoicesOnPage.add(String(inv.id));
+
+        // Avoid double-counting financial sums if a giant invoice spans multiple pages
+        if (item.itemsSlice && !item.itemsSlice.isFirstPart) {
+          return;
+        }
+
+        pageGross += Number(inv.grossSaleAmount || 0);
+        pageFreight += Number(inv.freightAmount || 0);
+        pageDiscounts += Number(inv.discountAmount || 0);
+        pageNet += Number(inv.netTotalAmount || 0);
+      });
+
+      pages.push({
+        pageIndex: pages.length,
+        items: currentPageItems,
+        pageGross,
+        pageFreight,
+        pageDiscounts,
+        pageNet,
+        invoicesCount: uniqueInvoicesOnPage.size
+      });
+
+      currentPageItems = [];
+      currentUsedUnits = 0;
+      currentCap = subsequentCap;
+    };
+
+    parsedInvoiceRows.forEach((inv) => {
       const isExpanded = isRowExpanded(inv.id);
-      const itemsCount = inv.parsedItems?.length || 1;
-      const rowUnits = isExpanded ? Math.max(3, 1 + Math.ceil(itemsCount * 0.7)) : 1;
+      const invoiceUnits = getInvoiceUnits(inv, isExpanded);
+      const itemsList = inv.parsedItems || [];
 
-      if (currentUsedUnits + rowUnits > currentCap && currentRows.length > 0) {
-        pages.push({ rows: currentRows, startIndex: pageStartIndex });
-        currentRows = [inv];
-        pageStartIndex = idx;
-        currentUsedUnits = rowUnits;
-        currentCap = subsequentCap;
-      } else {
-        currentRows.push(inv);
-        currentUsedUnits += rowUnits;
+      // ── CASE 1: Standard Invoice (Fits within single page capacity) ──
+      // Treats master row + items as an ATOMIC BLOCK
+      if (invoiceUnits <= subsequentCap) {
+        // If it doesn't fit in remaining space on this page, push whole block to start fresh on next page
+        if (currentUsedUnits + invoiceUnits > currentCap && currentPageItems.length > 0) {
+          commitPage();
+        }
+
+        currentPageItems.push({
+          inv,
+          serialNum: runningSerial++,
+          isExpanded
+        });
+        currentUsedUnits += invoiceUnits;
+        return;
+      }
+
+      // ── CASE 2: Giant Invoice (Exceeds an entire page's height by itself) ──
+      // Starts fresh at the top of a new page, then paginates item lines with continuation tags
+      if (currentPageItems.length > 0) {
+        commitPage();
+      }
+
+      const itemsPerPage = Math.max(8, Math.floor((currentCap - 2) / 0.65));
+      const totalParts = Math.ceil(itemsList.length / itemsPerPage);
+
+      for (let part = 0; part < totalParts; part++) {
+        const sliceStart = part * itemsPerPage;
+        const sliceItems = itemsList.slice(sliceStart, sliceStart + itemsPerPage);
+        const isFirstPart = part === 0;
+        const isLastPart = part === totalParts - 1;
+
+        if (part > 0) {
+          commitPage();
+        }
+
+        currentPageItems.push({
+          inv,
+          serialNum: isFirstPart ? runningSerial++ : runningSerial - 1,
+          isExpanded: true,
+          itemsSlice: {
+            items: sliceItems,
+            partIndex: part + 1,
+            totalParts,
+            isFirstPart,
+            isLastPart
+          }
+        });
+
+        currentUsedUnits += 2 + Math.ceil(sliceItems.length * 0.65);
       }
     });
 
-    if (currentRows.length > 0) {
-      pages.push({ rows: currentRows, startIndex: pageStartIndex });
+    if (currentPageItems.length > 0) {
+      commitPage();
     }
 
     return pages;
-  }, [parsedInvoiceRows, printDensity, expandAllBreakdown, individualToggledIds]);
+  }, [parsedInvoiceRows, expandAllBreakdown, individualToggledIds]);
 
   // Grouped Hierarchies for Modes 2, 3, 4, 5 (Salesmen / Brand / Color / Product)
   const groupedHierarchyData = useMemo(() => {
@@ -720,7 +832,7 @@ export const BasicSalesReportPrint: React.FC = () => {
     }
 
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-stroke dark:border-strokedark">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 print:pb-1.5 print:gap-2 border-b border-stroke dark:border-strokedark">
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
@@ -739,14 +851,14 @@ export const BasicSalesReportPrint: React.FC = () => {
                 : 'Color & Surface Shade Analysis'}
             </span>
           </div>
-          <h1 className="text-2xl font-black text-black dark:text-white tracking-tight mt-1">
+          <h1 className="text-2xl print:text-lg font-black text-black dark:text-white tracking-tight mt-1">
             {businessName || 'Zohaib Ali & Company'}
           </h1>
         </div>
 
-        <div className="text-right text-xs text-gray-500 dark:text-gray-400">
+        <div className="text-right text-xs print:text-[10px] text-gray-500 dark:text-gray-400">
           <p>Period: <strong className="text-black dark:text-white">{criteria.dateMode === 'single' ? criteria.singleDate : `${criteria.dateFrom} → ${criteria.dateTo}`}</strong></p>
-          <p className="text-[11px] mt-0.5">Print Date: {new Date().toLocaleDateString('en-GB')}</p>
+          <p className="text-[11px] print:text-[9px] mt-0.5">Print Date: {new Date().toLocaleDateString('en-GB')}</p>
         </div>
       </div>
     );
@@ -756,7 +868,7 @@ export const BasicSalesReportPrint: React.FC = () => {
   const renderRunningHeader = (pageNum: number, totalPages: number) => {
     if (isClassic) {
       return (
-        <div className="border-b border-black pb-1.5 mb-3 flex items-center justify-between text-xs font-mono">
+        <div className="border-b border-black pb-1.5 mb-3 print:pb-1 print:mb-1.5 flex items-center justify-between text-xs font-mono">
           <span className="font-bold uppercase tracking-wider">{businessName || 'ZOHAIB ALI AND COMPANY'} — BASIC SALES REPORT</span>
           <span>Page {pageNum} of {totalPages}</span>
         </div>
@@ -764,7 +876,7 @@ export const BasicSalesReportPrint: React.FC = () => {
     }
 
     return (
-      <div className="flex items-center justify-between pb-2 mb-3 border-b border-stroke dark:border-strokedark text-xs">
+      <div className="flex items-center justify-between pb-2 mb-3 print:pb-1 print:mb-1.5 border-b border-stroke dark:border-strokedark text-xs">
         <div className="flex items-center gap-2">
           <span className="font-black text-black dark:text-white uppercase tracking-wider">
             {businessName || 'Zohaib Ali & Company'}
@@ -787,7 +899,7 @@ export const BasicSalesReportPrint: React.FC = () => {
 
   // Render Top 6 KPI Metric Cards
   const renderKpiCards = () => (
-    <div className={`grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 ${isClassic ? 'border-b border-black pb-3 mb-4 text-center' : 'mb-6'}`}>
+    <div className={`grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 print:grid-cols-6 gap-2.5 print:gap-1.5 ${isClassic ? 'border-b border-black pb-3 mb-4 print:pb-1.5 print:mb-2 text-center' : 'mb-6 print:mb-2'}`}>
       {[
         {
           label: 'Total Invoices',
@@ -825,7 +937,7 @@ export const BasicSalesReportPrint: React.FC = () => {
       ].map((kpi, idx) => (
         <div
           key={idx}
-          className={`p-2.5 rounded-xl min-w-0 ${
+          className={`p-2.5 print:p-1.5 rounded-xl min-w-0 ${
             isClassic
               ? 'border border-black bg-white'
               : kpi.highlight
@@ -833,13 +945,13 @@ export const BasicSalesReportPrint: React.FC = () => {
               : 'bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark'
           }`}
         >
-          <span className="text-[10px] font-bold uppercase tracking-wider block text-gray-500 dark:text-gray-400 truncate">
+          <span className="text-[10px] print:text-[8px] font-bold uppercase tracking-wider block text-gray-500 dark:text-gray-400 truncate">
             {kpi.label}
           </span>
-          <span className={`text-xs sm:text-sm lg:text-[15px] xl:text-base font-black block mt-0.5 leading-tight tracking-tight break-words ${kpi.textColor || ''}`}>
+          <span className={`text-xs sm:text-sm lg:text-[15px] xl:text-base print:text-[11px] font-black block mt-0.5 leading-tight tracking-tight break-words ${kpi.textColor || ''}`}>
             {kpi.value}
           </span>
-          <span className="text-[9px] text-gray-400 block mt-0.5 truncate">{kpi.note}</span>
+          <span className="text-[9px] print:text-[7px] text-gray-400 block mt-0.5 truncate">{kpi.note}</span>
         </div>
       ))}
     </div>
@@ -847,7 +959,7 @@ export const BasicSalesReportPrint: React.FC = () => {
 
   // Render Formal Audit Signatures
   const renderAuditFooter = () => (
-    <div className={`pt-6 mt-6 flex items-center justify-between text-[11px] text-gray-500 border-t ${isClassic ? 'border-black' : 'border-stroke dark:border-strokedark'}`}>
+    <div className={`pt-6 mt-6 print:pt-2 print:mt-2 flex items-center justify-between text-[11px] print:text-[9px] text-gray-500 border-t ${isClassic ? 'border-black' : 'border-stroke dark:border-strokedark'}`}>
       <div>
         <span>Audited Electronic Statement • System Master ID: {businessName || 'ZAC-ERP'}</span>
       </div>
@@ -948,35 +1060,32 @@ export const BasicSalesReportPrint: React.FC = () => {
             </button>
           </div>
 
-          {/* Print Density Selector for Invoice-Wise Mode */}
-          {criteria.reportType === 'invoice' && (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-meta-4 border border-stroke dark:border-strokedark text-xs">
-              <span className="text-gray-500 dark:text-gray-400 font-semibold text-[11px]">Rows / Page:</span>
-              <select
-                value={printDensity}
-                onChange={(e) => setPrintDensity(e.target.value as any)}
-                className="bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-lg px-2 py-0.5 text-xs font-bold text-gray-800 dark:text-gray-200 cursor-pointer focus:outline-hidden"
-              >
-                <option value="standard">Standard (18 / 22)</option>
-                <option value="compact">Compact (22 / 26)</option>
-                <option value="relaxed">Relaxed (14 / 18)</option>
-              </select>
-            </div>
-          )}
-
-          {/* Breakdown Toggle (for Invoice Wise) */}
+          {/* Breakdown Toggle (for Invoice Wise) with Animated Loader & Rich Hover/Active Design */}
           {criteria.reportType === 'invoice' && (
             <button
               type="button"
               onClick={handleToggleAllBreakdowns}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
-                expandAllBreakdown
-                  ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
-                  : 'border-stroke dark:border-strokedark text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-meta-4'
+              disabled={isTogglingExpand}
+              className={`group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all duration-200 cursor-pointer select-none shadow-xs disabled:cursor-wait ${
+                isTogglingExpand
+                  ? 'bg-blue-50/80 dark:bg-blue-950/50 border-blue-400 text-blue-600 dark:text-blue-300 opacity-90'
+                  : expandAllBreakdown
+                  ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white border-blue-600 shadow-md shadow-blue-500/20 active:scale-95'
+                  : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark text-gray-700 dark:text-gray-200 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 dark:hover:bg-meta-4/60 dark:hover:border-blue-500 dark:hover:text-blue-300 active:bg-blue-100 active:scale-95'
               }`}
             >
-              {expandAllBreakdown ? <MdUnfoldLess size={16} /> : <MdUnfoldMore size={16} />}
-              <span>{expandAllBreakdown ? 'Collapse All Items' : 'Expand All Items'}</span>
+              {isTogglingExpand ? (
+                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+              ) : expandAllBreakdown ? (
+                <MdUnfoldLess size={16} className="shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:translate-y-0" />
+              ) : (
+                <MdUnfoldMore size={16} className="shrink-0 transition-transform duration-200 group-hover:translate-y-0.5 group-active:translate-y-0" />
+              )}
+              <span>
+                {isTogglingExpand
+                  ? (expandAllBreakdown ? 'Collapsing Items...' : 'Expanding Items...')
+                  : (expandAllBreakdown ? 'Collapse All Items' : 'Expand All Items')}
+              </span>
             </button>
           )}
         </div>
@@ -1018,12 +1127,6 @@ export const BasicSalesReportPrint: React.FC = () => {
             chunkedInvoicePages.map((pageObj, pageIdx) => {
               const isFirstPage = pageIdx === 0;
               const isLastPage = pageIdx === chunkedInvoicePages.length - 1;
-              const pageRows = pageObj.rows;
-
-              const pageGross = pageRows.reduce((s, r) => s + Number(r.grossSaleAmount || 0), 0);
-              const pageFreight = pageRows.reduce((s, r) => s + Number(r.freightAmount || 0), 0);
-              const pageDiscounts = pageRows.reduce((s, r) => s + Number(r.discountAmount || 0), 0);
-              const pageNet = pageRows.reduce((s, r) => s + Number(r.netTotalAmount || 0), 0);
 
               return (
                 <div
@@ -1031,7 +1134,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                   className={`print-page-sheet ${
                     isClassic
                       ? 'bg-white text-black p-4 border border-black shadow-none font-serif mb-6 print:mb-0 print:border-none print:p-0'
-                      : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-5 md:p-8 space-y-4 text-black dark:text-white font-sans mb-6 print:mb-0 print:p-0 print:border-none print:shadow-none print:rounded-none'
+                      : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-5 md:p-8 space-y-4 print:space-y-1.5 text-black dark:text-white font-sans mb-6 print:mb-0 print:p-0 print:border-none print:shadow-none print:rounded-none'
                   }`}
                 >
                   {/* Top Header: Full header + KPI cards on Page 1, Compact running header on Page 2+ */}
@@ -1049,25 +1152,28 @@ export const BasicSalesReportPrint: React.FC = () => {
                     <table className={`w-full text-left border-collapse ${isClassic ? 'border border-black text-xs' : 'text-xs'}`}>
                       <thead>
                         <tr className={`${isClassic ? 'border-b-2 border-black bg-gray-100 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-100/70 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 font-bold'}`}>
-                          <th className="py-2.5 px-2 text-center w-10">S#</th>
-                          <th className="py-2.5 px-2">Date</th>
-                          <th className="py-2.5 px-2">Invoice #</th>
-                          <th className="py-2.5 px-2">Customer Name & Code</th>
-                          <th className="py-2.5 px-2">Products Summary</th>
-                          <th className="py-2.5 px-2">Terms</th>
-                          <th className="py-2.5 px-2 text-right">Sale Amount</th>
-                          <th className="py-2.5 px-2 text-right">Freight</th>
-                          <th className="py-2.5 px-2 text-right">Discount</th>
-                          <th className="py-2.5 px-2 text-right">Total Net</th>
+                          <th className="py-2.5 print:py-1 px-2 text-center w-10">S#</th>
+                          <th className="py-2.5 print:py-1 px-2">Date</th>
+                          <th className="py-2.5 print:py-1 px-2">Invoice #</th>
+                          <th className="py-2.5 print:py-1 px-2">Customer Name & Code</th>
+                          <th className="py-2.5 print:py-1 px-2">Products Summary</th>
+                          <th className="py-2.5 print:py-1 px-2">Terms</th>
+                          <th className="py-2.5 print:py-1 px-2 text-right">Sale Amount</th>
+                          <th className="py-2.5 print:py-1 px-2 text-right">Freight</th>
+                          <th className="py-2.5 print:py-1 px-2 text-right">Discount</th>
+                          <th className="py-2.5 print:py-1 px-2 text-right">Total Net</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-stroke dark:divide-strokedark">
-                        {pageRows.map((inv, rowIdx) => {
-                          const serialNum = pageObj.startIndex + rowIdx + 1;
-                          const isExpanded = isRowExpanded(inv.id);
+                        {pageObj.items.map((pageItem, rowIdx) => {
+                          const inv = pageItem.inv;
+                          const serialNum = pageItem.serialNum;
+                          const isExpanded = pageItem.isExpanded;
+                          const isContinuation = !!(pageItem.itemsSlice && !pageItem.itemsSlice.isFirstPart);
+                          const displayItems = pageItem.itemsSlice ? pageItem.itemsSlice.items : inv.parsedItems;
 
                           return (
-                            <React.Fragment key={inv.id}>
+                            <React.Fragment key={`${inv.id}-${pageItem.itemsSlice?.partIndex || 0}`}>
                               {/* Master Row */}
                               <tr
                                 onClick={() => toggleInvoiceBreakdown(String(inv.id))}
@@ -1078,28 +1184,47 @@ export const BasicSalesReportPrint: React.FC = () => {
                                     : 'hover:bg-blue-50/40 dark:hover:bg-meta-4/20'
                                 } ${isExpanded ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''}`}
                               >
-                                <td className="py-2 px-2 text-center font-mono">{serialNum}</td>
-                                <td className="py-2 px-2 whitespace-nowrap">
+                                <td className="py-2 print:py-1 px-2 text-center font-mono">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px]">—</span>
+                                  ) : (
+                                    serialNum
+                                  )}
+                                </td>
+                                <td className="py-2 print:py-1 px-2 whitespace-nowrap">
                                   {inv.sale_date || inv.created_at?.split('T')[0] || '—'}
                                 </td>
-                                <td className="py-2 px-2 font-bold whitespace-nowrap text-primary">
-                                  #{inv.invoice_no || inv.id}
+                                <td className="py-2 print:py-1 px-2 font-bold whitespace-nowrap text-primary">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span>#{inv.invoice_no || inv.id}</span>
+                                    {pageItem.itemsSlice && (
+                                      <span className="inline-block text-[9px] font-sans px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 border border-amber-300">
+                                        Part {pageItem.itemsSlice.partIndex}/{pageItem.itemsSlice.totalParts}
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
-                                <td className="py-2 px-2">
+                                <td className="py-2 print:py-1 px-2">
                                   <div className="font-bold leading-tight">{inv.customer_name || 'Cash Customer'}</div>
                                   <div className="text-[10px] text-gray-400 font-mono">
                                     Code: {inv.customerCode} {inv.customerAddress ? `• ${inv.customerAddress}` : ''}
                                   </div>
                                 </td>
-                                <td className="py-2 px-2 whitespace-nowrap">
+                                <td className="py-2 print:py-1 px-2 whitespace-nowrap">
                                   <span className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300">
-                                    <span>{inv.totalItemsCount} item{inv.totalItemsCount !== 1 ? 's' : ''} ({inv.totalItemQty} qty)</span>
+                                    {pageItem.itemsSlice ? (
+                                      <span>
+                                        Showing {displayItems.length} items (Part {pageItem.itemsSlice.partIndex}/{pageItem.itemsSlice.totalParts})
+                                      </span>
+                                    ) : (
+                                      <span>{inv.totalItemsCount} item{inv.totalItemsCount !== 1 ? 's' : ''} ({inv.totalItemQty} qty)</span>
+                                    )}
                                     <span className="text-[10px] text-primary underline print:hidden">
                                       {isExpanded ? '▲ hide' : '▼ items'}
                                     </span>
                                   </span>
                                 </td>
-                                <td className="py-2 px-2 whitespace-nowrap">
+                                <td className="py-2 print:py-1 px-2 whitespace-nowrap">
                                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                                     inv.payment_term === 'Cash'
                                       ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
@@ -1108,17 +1233,37 @@ export const BasicSalesReportPrint: React.FC = () => {
                                     {inv.payment_term || 'Cash'}
                                   </span>
                                 </td>
-                                <td className="py-2 px-2 text-right font-mono">
-                                  {inv.grossSaleAmount.toLocaleString()}
+                                <td className="py-2 print:py-1 px-2 text-right font-mono">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px]">—</span>
+                                  ) : (
+                                    inv.grossSaleAmount.toLocaleString()
+                                  )}
                                 </td>
-                                <td className="py-2 px-2 text-right font-mono text-gray-500">
-                                  {inv.freightAmount > 0 ? inv.freightAmount.toLocaleString() : '—'}
+                                <td className="py-2 print:py-1 px-2 text-right font-mono text-gray-500">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px]">—</span>
+                                  ) : inv.freightAmount > 0 ? (
+                                    inv.freightAmount.toLocaleString()
+                                  ) : (
+                                    '—'
+                                  )}
                                 </td>
-                                <td className="py-2 px-2 text-right font-mono text-red-500">
-                                  {inv.discountAmount > 0 ? `-${inv.discountAmount.toLocaleString()}` : '—'}
+                                <td className="py-2 print:py-1 px-2 text-right font-mono text-red-500">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px]">—</span>
+                                  ) : inv.discountAmount > 0 ? (
+                                    `-${inv.discountAmount.toLocaleString()}`
+                                  ) : (
+                                    '—'
+                                  )}
                                 </td>
-                                <td className="py-2 px-2 text-right font-bold font-mono text-black dark:text-white">
-                                  {inv.netTotalAmount.toLocaleString()}
+                                <td className="py-2 print:py-1 px-2 text-right font-bold font-mono text-black dark:text-white">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px] italic font-normal">Cont.</span>
+                                  ) : (
+                                    inv.netTotalAmount.toLocaleString()
+                                  )}
                                 </td>
                               </tr>
 
@@ -1130,9 +1275,19 @@ export const BasicSalesReportPrint: React.FC = () => {
                                 >
                                   <td colSpan={10} className="p-3 pl-8">
                                     <div className={`p-3 rounded-xl ${isClassic ? 'border border-black bg-white' : 'border border-blue-200 dark:border-blue-900 bg-white dark:bg-boxdark shadow-xs'}`}>
-                                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-1.5">
-                                        <MdTableChart size={14} />
-                                        <span>Invoice Line Items Breakdown (#{inv.invoice_no || inv.id})</span>
+                                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 mb-2 flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                          <MdTableChart size={14} />
+                                          <span>
+                                            Invoice Line Items Breakdown (#{inv.invoice_no || inv.id})
+                                            {pageItem.itemsSlice && ` — Part ${pageItem.itemsSlice.partIndex} of ${pageItem.itemsSlice.totalParts}`}
+                                          </span>
+                                        </div>
+                                        {pageItem.itemsSlice && (
+                                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200">
+                                            Part {pageItem.itemsSlice.partIndex} of {pageItem.itemsSlice.totalParts} ({displayItems.length} lines)
+                                          </span>
+                                        )}
                                       </h4>
                                       <table className="w-full text-xs">
                                         <thead>
@@ -1146,7 +1301,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-stroke/60 dark:divide-strokedark/60 font-mono">
-                                          {inv.parsedItems.map((it: any, itemIdx: number) => (
+                                          {displayItems.map((it: any, itemIdx: number) => (
                                             <tr key={itemIdx} className="hover:bg-gray-50/50">
                                               <td className="py-1 px-1.5 font-bold text-gray-600 dark:text-gray-300">{it.code}</td>
                                               <td className="py-1 px-1.5 font-sans font-medium">{it.name}</td>
@@ -1175,39 +1330,39 @@ export const BasicSalesReportPrint: React.FC = () => {
                       <tfoot>
                         {/* 📄 1. PAGE SUB-TOTAL (Strictly for this page's rows) */}
                         <tr className={`${isClassic ? 'border-t-2 border-b border-black font-bold bg-gray-100 text-black' : 'border-t-2 border-b border-stroke dark:border-strokedark font-bold bg-blue-50/60 dark:bg-meta-4/30 text-black dark:text-white'}`}>
-                          <td colSpan={6} className="py-2.5 px-2 text-right uppercase tracking-wider text-[11px] font-bold text-blue-900 dark:text-blue-300">
-                            Page {pageIdx + 1} Subtotal ({pageRows.length} Invoices):
+                          <td colSpan={6} className="py-2.5 print:py-1 px-2 text-right uppercase tracking-wider text-[11px] font-bold text-blue-900 dark:text-blue-300">
+                            Page {pageIdx + 1} Subtotal ({pageObj.invoicesCount} Invoices):
                           </td>
-                          <td className="py-2.5 px-2 text-right font-mono text-xs font-bold">
-                            Rs. {Math.round(pageGross).toLocaleString()}
+                          <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs font-bold">
+                            Rs. {Math.round(pageObj.pageGross).toLocaleString()}
                           </td>
-                          <td className="py-2.5 px-2 text-right font-mono text-xs text-gray-600 dark:text-gray-300">
-                            {pageFreight > 0 ? `Rs. ${Math.round(pageFreight).toLocaleString()}` : '—'}
+                          <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs text-gray-600 dark:text-gray-300">
+                            {pageObj.pageFreight > 0 ? `Rs. ${Math.round(pageObj.pageFreight).toLocaleString()}` : '—'}
                           </td>
-                          <td className="py-2.5 px-2 text-right font-mono text-xs text-red-600">
-                            {pageDiscounts > 0 ? `-Rs. ${Math.round(pageDiscounts).toLocaleString()}` : '—'}
+                          <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs text-red-600">
+                            {pageObj.pageDiscounts > 0 ? `-Rs. ${Math.round(pageObj.pageDiscounts).toLocaleString()}` : '—'}
                           </td>
-                          <td className="py-2.5 px-2 text-right font-mono text-xs text-primary font-black">
-                            Rs. {Math.round(pageNet).toLocaleString()}
+                          <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs text-primary font-black">
+                            Rs. {Math.round(pageObj.pageNet).toLocaleString()}
                           </td>
                         </tr>
 
                         {/* 📊 2. LAST PAGE ONLY: GRAND TOTAL (Directly below Page Sub-total) */}
                         {isLastPage && (
                           <tr className={`${isClassic ? 'border-t-2 border-b-4 border-double border-black font-black bg-gray-200 text-black' : 'border-t-2 border-b-2 border-emerald-400 dark:border-emerald-600 font-black bg-emerald-50 dark:bg-emerald-950/40 text-black dark:text-white'}`}>
-                            <td colSpan={6} className="py-3 px-2 text-right uppercase tracking-wider text-xs font-black text-emerald-900 dark:text-emerald-300">
+                            <td colSpan={6} className="py-3 print:py-1.5 px-2 text-right uppercase tracking-wider text-xs font-black text-emerald-900 dark:text-emerald-300">
                               Grand Total ({kpiTotals.totalInvoices} Invoices):
                             </td>
-                            <td className="py-3 px-2 text-right font-mono text-xs font-black">
+                            <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs font-black">
                               Rs. {Math.round(kpiTotals.totalGrossSales).toLocaleString()}
                             </td>
-                            <td className="py-3 px-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300 font-bold">
+                            <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300 font-bold">
                               {kpiTotals.totalFreight > 0 ? `Rs. ${Math.round(kpiTotals.totalFreight).toLocaleString()}` : '—'}
                             </td>
-                            <td className="py-3 px-2 text-right font-mono text-xs text-red-600 font-bold">
+                            <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs text-red-600 font-bold">
                               {kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : '—'}
                             </td>
-                            <td className="py-3 px-2 text-right font-mono text-xs text-primary font-black">
+                            <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs text-primary font-black">
                               Rs. {Math.round(kpiTotals.totalNetRevenue).toLocaleString()}
                             </td>
                           </tr>
