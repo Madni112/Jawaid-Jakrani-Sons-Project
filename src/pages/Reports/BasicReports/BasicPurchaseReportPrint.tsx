@@ -345,7 +345,7 @@ export const BasicPurchaseReportPrint: React.FC = () => {
       return {
         id: p.id,
         purchase_no: purchaseNo,
-        bill_number: p.bill_number || '—',
+        bill_number: p.bill_number || p.bill_no || '—',
         date: dateStr,
         vendor_name: p.supplier_name || p.vendor_name || 'Cash Vendor',
         vendorCode: vInfo?.vendor_code || vInfo?.vendorCode || '—',

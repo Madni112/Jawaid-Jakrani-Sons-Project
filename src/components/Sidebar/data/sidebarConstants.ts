@@ -171,12 +171,6 @@ export const NHT2_REPORTS_CHILDREN: SidebarReportCategory[] = [
     categoryKey: 'purchases',
     children: [
       { path: '/basic-purchase-report', label: 'Basic Purchase Report', reportId: 'basic-purchase-report' },
-      { path: '/Reports/Purchase-Report?tab=purchase', label: 'General Purchase Detail', reportId: 'purchase-ledger' },
-      { path: '/Reports/Purchase-Report?tab=category-purchases', label: 'Category-Wise Volume', reportId: 'category-purchases' },
-      { path: '/Reports/Purchase-Report?tab=product-purchase-history', label: 'Product History & Trends', reportId: 'product-purchase-history' },
-      { path: '/Reports/Purchase-Report?tab=vendor-purchase-summary', label: 'Vendor Purchase Analysis', reportId: 'purchase-query-center' },
-      { path: '/Reports/Purchase-Report?tab=return', label: 'Purchase Return', reportId: 'vendor-return-ledger' },
-      { path: '/Reports/Purchase-Report?tab=invoice', label: 'Itemized Invoice Detail', reportId: 'purchase-invoice-detail' },
     ],
   },
   {

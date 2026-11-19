@@ -405,8 +405,8 @@ export const BasicPurchaseReport: React.FC = () => {
         }
 
         const [p1, p2, pr1, pr2, catRes, venRes] = await Promise.all([
-          supabase.from('supplier_purchases').select('id, purchase_no, bill_number, supplier_name, vendor_id, target_warehouse, purchase_date, payment_term, total_amount, items, created_at').order('id', { ascending: false }).range(0, 999),
-          supabase.from('supplier_purchases').select('id, purchase_no, bill_number, supplier_name, vendor_id, target_warehouse, purchase_date, payment_term, total_amount, items, created_at').order('id', { ascending: false }).range(1000, 2999),
+          supabase.from('supplier_purchases').select('id, purchase_no, bill_no, supplier_name, vendor_name, target_warehouse, purchase_date, payment_term, total_amount, items, created_at').order('id', { ascending: false }).range(0, 999),
+          supabase.from('supplier_purchases').select('id, purchase_no, bill_no, supplier_name, vendor_name, target_warehouse, purchase_date, payment_term, total_amount, items, created_at').order('id', { ascending: false }).range(1000, 2999),
           supabase.from('products').select('id, product_name, sku, parent_category, sub_category, category, brand, cost_price, purchase_price, uom').order('id', { ascending: true }).range(0, 999),
           supabase.from('products').select('id, product_name, sku, parent_category, sub_category, category, brand, cost_price, purchase_price, uom').order('id', { ascending: true }).range(1000, 2999),
           supabase.from('inventory_categories').select('id, name, parent_id').order('name'),
@@ -697,8 +697,8 @@ export const BasicPurchaseReport: React.FC = () => {
   // Searchable Options for Secondary Dropdowns
   const targetPurchaseOptions = useMemo<SearchableOption[]>(() => {
     return purchasesMaster.map((p) => {
-      const pNo = p.purchase_no || `PUR-${p.id}`;
-      const vName = p.supplier_name || 'Unknown Vendor';
+      const pNo = p.bill_no ? `Bill #${p.bill_no}` : p.purchase_no ? `PO #${p.purchase_no}` : `PUR-${p.id}`;
+      const vName = p.vendor_name || p.supplier_name || 'Vendor';
       const amt = Number(p.total_amount || 0).toLocaleString();
       const date = p.purchase_date || String(p.created_at || '').split('T')[0];
       return {
@@ -794,15 +794,6 @@ export const BasicPurchaseReport: React.FC = () => {
     navigate(dest, { state: { criteria } });
   };
 
-  // Sister Reports Nav
-  const sisterPurchaseNav = [
-    { id: 'basic-purchase-report', label: 'Basic Purchase Report', path: '/basic-purchase-report', icon: MdShoppingBag },
-    { id: 'purchase-bill-detail', label: 'Purchase Invoice Detail Report', path: '/Reports/Purchase-Report?tab=invoice', icon: MdReceipt },
-    { id: 'category-wise-purchases', label: 'Category-Wise Purchases', path: '/Reports/Purchase-Report?tab=category-volume', icon: MdLayers },
-    { id: 'product-purchase-history', label: 'Product Purchase History', path: '/Reports/Purchase-Report?tab=product-history', icon: MdLayers },
-    { id: 'purchase-register', label: 'Purchase Register', path: '/Reports/Purchase-Report?tab=register', icon: MdStore }
-  ];
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -846,37 +837,19 @@ export const BasicPurchaseReport: React.FC = () => {
         </button>
       </div>
 
-      {/* ── SISTER PURCHASE REPORTS TABS SWITCHER ── */}
+      {/* ── PURCHASE REPORTS TAB ── */}
       <div className="bg-white dark:bg-boxdark p-1.5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs overflow-x-auto print:hidden">
         <div className="flex items-center gap-1.5 min-w-max">
-          {sisterPurchaseNav.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = tab.id === 'basic-purchase-report';
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  if (tab.path && tab.id !== 'basic-purchase-report') {
-                    navigate(tab.path);
-                  }
-                }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap ${
-                  isActive
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-meta-4'
-                }`}
-              >
-                <Icon size={16} />
-                <span>{tab.label}</span>
-                {isActive && (
-                  <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-white/20 text-white ml-0.5">
-                    BASIC
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          <button
+            type="button"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap bg-primary text-white shadow-sm"
+          >
+            <MdShoppingBag size={16} />
+            <span>Basic Purchase Report</span>
+            <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-white/20 text-white ml-0.5">
+              BASIC
+            </span>
+          </button>
         </div>
       </div>
 
