@@ -514,8 +514,8 @@ export const BasicSalesReportPrint: React.FC = () => {
     if (parsedInvoiceRows.length === 0) return [];
 
     // Adaptive page capacity: Page 1 accommodates header + KPI cards; Page 2+ takes full capacity
-    const firstCap = 16;
-    const subsequentCap = 22;
+    const firstCap = 24;
+    const subsequentCap = 28;
 
     const pages: ChunkedPage[] = [];
     let currentPageItems: InvoicePageItem[] = [];
