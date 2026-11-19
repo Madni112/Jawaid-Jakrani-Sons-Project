@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import TablePagination from '../../../components/TablePagination';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -36,18 +36,25 @@ const PurchaseReturnList = () => {
   const fetchReturnLogs = async () => {
     try {
       setLoading(true);
-      const { data: rtnData, error: rtnError } = await supabase
-        .from('purchase_returns')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [rtnRes, recRes] = await Promise.all([
+        fetchAllPages(
+          supabase
+            .from('purchase_returns')
+            .select('*')
+            .order('created_at', { ascending: false })
+        ),
+        fetchAllPages(
+          supabase
+            .from('purchase_return_receipts')
+            .select('return_no, amount_received')
+        )
+      ]);
 
-      if (rtnError) throw rtnError;
+      if (rtnRes.error) throw rtnRes.error;
+      if (recRes.error) throw recRes.error;
 
-      const { data: recData, error: recError } = await supabase
-        .from('purchase_return_receipts')
-        .select('return_no, amount_received');
-
-      if (recError) throw recError;
+      const rtnData = rtnRes.data;
+      const recData = recRes.data;
 
       const receiptTotals: { [key: string]: number } = {};
       if (recData) {

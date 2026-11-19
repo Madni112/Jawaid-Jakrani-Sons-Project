@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Breadcrumb from '../../../components/Breadcrumbs/Breadcrumb';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { useAuth, usePermission } from '../../../Context/Auth';
 import { getBrandConfig } from '../../../utils/brand';
 import Spinner from '../../../ui/Spinner';
@@ -63,10 +63,12 @@ const QuotationList: React.FC = () => {
   const fetchQuotations = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('crm_quotations')
-        .select('*')
-        .order('id', { ascending: false });
+      const { data, error } = await fetchAllPages(
+        supabase
+          .from('crm_quotations')
+          .select('*')
+          .order('id', { ascending: false })
+      );
 
       if (error) {
         console.warn('crm_quotations cloud query note:', error.message);

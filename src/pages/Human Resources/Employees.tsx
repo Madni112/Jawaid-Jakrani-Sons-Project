@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import TablePagination from '../../components/TablePagination';
 import { useLanguage } from '../../Context/LanguageContext';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
 import {
@@ -72,7 +72,7 @@ export const EmployeesPage: React.FC = () => {
   const fetchCOA = async () => {
     try {
       setLoadingCOA(true);
-      const { data, error } = await supabase.from('chart_of_accounts').select('*');
+      const { data, error } = await fetchAllPages(supabase.from('chart_of_accounts').select('*'));
       if (!error && data) {
         setCoaAccounts(data);
       }

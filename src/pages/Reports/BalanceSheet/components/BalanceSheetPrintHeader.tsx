@@ -59,7 +59,7 @@ export const BalanceSheetPrintHeader: React.FC<BalanceSheetPrintHeaderProps> = (
               WebkitPrintColorAdjust: 'exact',
               printColorAdjust: 'exact',
             }}
-          >AM</span>
+          >ZAC</span>
         </div>
       </div>
       <h1 className="text-3xl font-black text-slate-950 uppercase tracking-widest font-serif">

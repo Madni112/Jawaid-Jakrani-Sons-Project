@@ -10,6 +10,7 @@ export type FilterFieldType =
   | 'subCategory'
   | 'subSubCategory'
   | 'product'
+  | 'color'
   | 'brand'
   | 'uom'
   | 'saleType'
@@ -50,6 +51,7 @@ export interface FilterCriteria {
   uom: string[];
   bin: string[];
   product: string[];
+  color?: string[];
   location: string[];
   customerCategory?: string[];
   saleType: string;

@@ -56,7 +56,7 @@ const STORAGE_KEY = 'alm_manufacturing_work_orders_v1';
 const DEFAULT_SAMPLE_ORDERS: ProductionOrder[] = [
   {
     id: 'wo-sample-001',
-    tenant_id: 'al-muhammadi',
+    tenant_id: 'Zohaib Ali and Company',
     order_number: 'WO-2026-0001',
     bom_id: 'bom-sample-002',
     bom_number: 'BOM-2026-0002',
@@ -126,7 +126,7 @@ const DEFAULT_SAMPLE_ORDERS: ProductionOrder[] = [
   },
   {
     id: 'wo-sample-002',
-    tenant_id: 'al-muhammadi',
+    tenant_id: 'Zohaib Ali and Company',
     order_number: 'WO-2026-0002',
     bom_id: 'bom-sample-002',
     bom_number: 'BOM-2026-0002',

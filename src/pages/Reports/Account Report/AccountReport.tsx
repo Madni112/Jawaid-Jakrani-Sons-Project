@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -69,11 +69,11 @@ const AccountReport = () => {
       try {
         setLoading(true);
         const [custRes, vendRes, smRes, compRes, coaRes] = await Promise.all([
-          supabase.from('customers').select('id, customerName, registrationType, primaryPhone, customer_code, customerCode, city, address, notes'),
-          supabase.from('vendors').select('id, vendor_name'),
-          supabase.from('salesmen').select('id, name'),
-          supabase.from('companies').select('id, name'),
-          supabase.from('chart_of_accounts').select('id, category_code, sub_category_code, control_code, account_code, account_title')
+          fetchAllPages(supabase.from('customers').select('id, customerName, registrationType, primaryPhone, customer_code, customerCode, city, address, notes')),
+          fetchAllPages(supabase.from('vendors').select('id, vendor_name')),
+          fetchAllPages(supabase.from('salesmen').select('id, name')),
+          fetchAllPages(supabase.from('companies').select('id, name')),
+          fetchAllPages(supabase.from('chart_of_accounts').select('id, category_code, sub_category_code, control_code, account_code, account_title'))
         ]);
 
         if (custRes.data) setCustomers(custRes.data);

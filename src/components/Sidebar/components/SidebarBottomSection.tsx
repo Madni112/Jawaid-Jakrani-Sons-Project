@@ -34,7 +34,7 @@ export const SidebarBottomSection: React.FC<SidebarBottomSectionProps> = ({
             {userEmail ? userEmail.split('@')[0].toUpperCase() : 'MUHAMMAD SAAD'}
           </span>
           <span className="text-[9px] text-neutral-400 truncate uppercase tracking-wider font-semibold mt-0.5">
-            {brand.fullName || 'AL MUHAMMADI TILE EMPORIUM'}
+            {brand.fullName || 'ZOHAIB ALI AND COMPANY'}
           </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">

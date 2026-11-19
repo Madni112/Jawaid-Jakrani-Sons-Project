@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import TablePagination from '../../../components/TablePagination';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -203,10 +203,12 @@ function VoucherList({ voucherTypePreset }: VoucherListProps) {
   const fetchVoucherLedgerHistory = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('financial_vouchers')
-        .select('*')
-        .order('id', { ascending: false });
+      const { data, error } = await fetchAllPages(
+        supabase
+          .from('financial_vouchers')
+          .select('*')
+          .order('id', { ascending: false })
+      );
 
       if (error) throw error;
 
@@ -294,7 +296,7 @@ function VoucherList({ voucherTypePreset }: VoucherListProps) {
       if (custCode) {
         try {
           const [{ data: remVchs }, { data: coaItem }, { data: custRecord }] = await Promise.all([
-            supabase.from('financial_vouchers').select('debit, credit, total_amount, items, account_code'),
+            fetchAllPages(supabase.from('financial_vouchers').select('debit, credit, total_amount, items, account_code')),
             supabase.from('chart_of_accounts').select('opening_balance, balance_nature').eq('account_code', custCode).maybeSingle(),
             supabase.from('customers').select('id, opening_balance').or(`customer_code.eq.${custCode},account_code.eq.${custCode}`).maybeSingle()
           ]);
@@ -335,7 +337,7 @@ function VoucherList({ voucherTypePreset }: VoucherListProps) {
       if (vendCode) {
         try {
           const [{ data: remVchs }, { data: coaItem }, { data: vendRecord }] = await Promise.all([
-            supabase.from('financial_vouchers').select('debit, credit, total_amount, items, account_code'),
+            fetchAllPages(supabase.from('financial_vouchers').select('debit, credit, total_amount, items, account_code')),
             supabase.from('chart_of_accounts').select('opening_balance, balance_nature').eq('account_code', vendCode).maybeSingle(),
             supabase.from('vendors').select('id, opening_balance').eq('vendor_code', vendCode).maybeSingle()
           ]);

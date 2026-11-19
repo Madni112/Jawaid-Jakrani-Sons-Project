@@ -107,7 +107,7 @@ export const InvoiceHeader: React.FC<InvoiceHeaderProps> = ({
             name="saleDate" 
             value={values.saleDate} 
             onChange={handleChange}
-            min={editData ? undefined : new Date(new Date().setDate(new Date().getDate() - 3)).toISOString().split('T')[0]}
+            min={editData ? undefined : new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0]}
             max={new Date().toISOString().split('T')[0]}
             className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && errors.saleDate ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} 
           />

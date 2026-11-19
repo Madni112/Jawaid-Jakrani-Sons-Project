@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TablePagination from '../../../components/TablePagination';
@@ -42,13 +42,15 @@ const PurchaseList: React.FC = () => {
         { data: pReturnsData },
         { data: grnData }
       ] = await Promise.all([
-        supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false }),
-        supabase
-          .from('financial_vouchers')
-          .select('*')
-          .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher'),
-        supabase.from('purchase_returns').select('*'),
-        supabase.from('grn_receipts').select('*, grn_items(*)').neq('status', 'Billed').order('created_at', { ascending: false })
+        fetchAllPages(supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false })),
+        fetchAllPages(
+          supabase
+            .from('financial_vouchers')
+            .select('*')
+            .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher')
+        ),
+        fetchAllPages(supabase.from('purchase_returns').select('*')),
+        fetchAllPages(supabase.from('grn_receipts').select('*, grn_items(*)').neq('status', 'Billed').order('created_at', { ascending: false }))
       ]);
 
       if (purError) throw purError;

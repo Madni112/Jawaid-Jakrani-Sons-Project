@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -19,18 +19,23 @@ import {
     MdSearch,
     MdFileDownload,
     MdPictureAsPdf,
-    MdPrint
+    MdPrint,
+    MdCardGiftcard
 } from 'react-icons/md';
+import { fetchSystemMasterConfig, SystemMasterConfig } from '../../../utils/systemPermissions';
+import { fetchProductColors, extractProductColor } from '../../../utils/colorService';
 
 const salesTabs = [
-    { key: 'category-sales', label: 'Category-Wise Sales', icon: MdCategory, badge: 'NEW' },
-    { key: 'product-sales-history', label: 'Product Sales History', icon: MdInventory },
-    { key: 'sale', label: 'Commercial Sales (Salesman-Wise)', icon: MdTrendingUp },
-    { key: 'sales-query', label: 'Parameter Register', icon: MdTune },
-    { key: 'customer-sales', label: 'Customer Sales & Volume', icon: MdPeople },
-    { key: 'return', label: 'Sales Return & Credit', icon: MdLayers },
-    { key: 'invoice', label: 'Sale Invoice Report', icon: MdReceipt }
-] as const;
+    { key: 'basic-sales', reportId: 'basic-sales-report', label: 'Basic Sales Report', icon: MdTrendingUp, path: '/basic-sales-report', badge: 'BASIC' },
+    { key: 'invoice', reportId: 'sale-inv-detail', label: 'Sales Invoice Detail Report', icon: MdReceipt },
+    { key: 'category-sales', reportId: 'category-wise-sales', label: 'Category-Wise Sales Report', icon: MdCategory, badge: 'NEW' },
+    { key: 'product-sales-history', reportId: 'product-sales-history', label: 'Product Sales History Report', icon: MdInventory },
+    { key: 'sale', reportId: 'commercial-sale-ledger', label: 'Sale (Salesmen wise)', icon: MdTrendingUp },
+    { key: 'sales-query', reportId: 'sales-query-center', label: 'Sales Filter & Parameter Builder', icon: MdTune },
+    { key: 'return', reportId: 'sales-return-ledger', label: 'Sales Return & Credit Ledger', icon: MdLayers },
+    { key: 'customer-sales', reportId: 'customer-sales-breakdown', label: 'Customer Sales & Volume Analysis', icon: MdPeople },
+    { key: 'loyalty', reportId: 'customer-loyalty-ledger', label: 'Customer Financial Statement & Invoice Ledger', icon: MdCardGiftcard },
+];
 
 const SalesReport = () => {
     const navigate = useNavigate();
@@ -41,10 +46,48 @@ const SalesReport = () => {
     const [hasGenerated, setHasGenerated] = useState(false);
     const [generatedPayload, setGeneratedPayload] = useState<{ type: string; filters: any } | null>(null);
 
+    const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(() => {
+        try {
+            const cached = localStorage.getItem('erp_system_master_permissions_cache');
+            return cached ? JSON.parse(cached) : null;
+        } catch {
+            return null;
+        }
+    });
+
+    useEffect(() => {
+        fetchSystemMasterConfig().then(setSystemConfig);
+        const onSync = (e: any) => {
+            if (e.detail) setSystemConfig(e.detail);
+        };
+        window.addEventListener('erp_system_permissions_updated', onSync);
+        return () => window.removeEventListener('erp_system_permissions_updated', onSync);
+    }, []);
+
+    const hiddenReports = useMemo(() => {
+        return Array.isArray(systemConfig?.hidden_reports) ? systemConfig.hidden_reports : [];
+    }, [systemConfig?.hidden_reports]);
+
+    const visibleSalesTabs = useMemo(() => {
+        return salesTabs.filter(t => !hiddenReports.includes(t.reportId));
+    }, [hiddenReports]);
+
     const searchParams = new URLSearchParams(location.search);
     const queryTab = searchParams.get('tab');
-    const initialReportType = (queryTab || location.state?.reportType || location.state?.tab || location.state?.activeTab || 'category-sales') as 'sale' | 'sales-query' | 'customer-sales' | 'return' | 'invoice' | 'product-sales-history' | 'category-sales';
-    const [reportType, setReportType] = useState<'sale' | 'sales-query' | 'customer-sales' | 'return' | 'invoice' | 'product-sales-history' | 'category-sales'>(initialReportType);
+    const initialReportType = (queryTab || location.state?.reportType || location.state?.tab || location.state?.activeTab || 'invoice') as string;
+    const [reportType, setReportType] = useState<string>(initialReportType);
+
+    // If active tab gets hidden, automatically fallback to first visible tab
+    useEffect(() => {
+        if (visibleSalesTabs.length > 0 && !visibleSalesTabs.some(t => t.key === reportType)) {
+            const firstTab = visibleSalesTabs[0];
+            if ((firstTab as any).path) {
+                navigate((firstTab as any).path);
+            } else {
+                handleTabChange(firstTab.key as any);
+            }
+        }
+    }, [visibleSalesTabs, reportType]);
 
     useEffect(() => {
         const tabParam = new URLSearchParams(location.search).get('tab');
@@ -63,6 +106,7 @@ const SalesReport = () => {
     const [products, setProducts] = useState<any[]>([]);
     const [locations, setLocations] = useState<any[]>([]);
     const [availableInvoices, setAvailableInvoices] = useState<any[]>([]);
+    const [colorOptions, setColorOptions] = useState<string[]>([]);
 
     const parseCriteriaArray = (val: any) => Array.isArray(val) ? val : (typeof val === 'string' && val !== 'All' ? [val] : []);
 
@@ -77,6 +121,7 @@ const SalesReport = () => {
             subSubCategory: location.state?.subSubCategory ? [location.state.subSubCategory] : parseCriteriaArray(base.subSubCategory),
             uom: parseCriteriaArray(base.uom), 
             bin: parseCriteriaArray(base.bin), 
+            color: parseCriteriaArray(base.color),
             product: parseCriteriaArray(base.product), 
             location: parseCriteriaArray(base.location),
             saleType: base.saleType || 'All', 
@@ -100,14 +145,14 @@ const SalesReport = () => {
             try {
                 setLoading(true);
                 const [custRes, smRes, transRes, catRes, binRes, prodRes, locRes, invRes, uomRes] = await Promise.all([
-                    supabase.from('customers').select('id, customerName, customer_code, customerCode'),
+                    fetchAllPages(supabase.from('customers').select('id, customerName, customer_code, customerCode')),
                     supabase.from('salesmen').select('id, name'),
                     supabase.from('logistics_transportation').select('id, name'),
                     supabase.from('inventory_categories').select('id, name, parent_id'),
                     supabase.from('inventory_surface_finishes').select('id, name'),
-                    supabase.from('products').select('id, product_name'),
+                    fetchAllPages(supabase.from('products').select('id, product_name, product_description, bin')),
                     supabase.from('inventory_locations').select('id, name'),
-                    supabase.from('sales_invoices').select('id, total_amount, customer_name').order('id', { ascending: false }),
+                    fetchAllPages(supabase.from('sales_invoices').select('id, total_amount, customer_name').order('id', { ascending: false })),
                     supabase.from('inventory_uom').select('id, short_code, full_name').eq('is_active', true)
                 ]);
 
@@ -117,6 +162,13 @@ const SalesReport = () => {
                 if (catRes.data) setCategories(catRes.data);
                 if (binRes.data) setBins(binRes.data);
                 if (prodRes.data) setProducts(prodRes.data);
+                
+                try {
+                    const dbColors = await fetchProductColors();
+                    const prodColors = (prodRes.data || []).map((p: any) => extractProductColor(p)).filter(Boolean);
+                    const uniqueColors = Array.from(new Set([...dbColors, ...prodColors])).sort() as string[];
+                    setColorOptions(uniqueColors);
+                } catch (_) {}
                 if (locRes.data) setLocations(locRes.data);
                 if (invRes.data) setAvailableInvoices(invRes.data);
 
@@ -199,7 +251,7 @@ const SalesReport = () => {
             salesman: [],
             transport: [],
             parentCategory: [], subCategory: [], subSubCategory: [],
-            uom: [], bin: [], product: [], location: [],
+            uom: [], bin: [], color: [], product: [], location: [],
             saleType: 'All', saleMethod: 'All', invoiceNo: 'All',
             withLedgerSummary: false,
             dateFrom: prev.dateFrom,
@@ -244,7 +296,7 @@ const SalesReport = () => {
 
     if (loading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
 
-    const currentTabObj = salesTabs.find(t => t.key === reportType) || salesTabs[0];
+    const currentTabObj = visibleSalesTabs.find(t => t.key === reportType) || visibleSalesTabs[0] || salesTabs[0];
 
     return (
         <div className="mx-auto max-w-7xl flex flex-col gap-5 text-black dark:text-bodydark text-xs antialiased font-sans relative pb-16 print:max-w-none print:p-0 print:m-0 print:space-y-0 print:pb-0">
@@ -256,7 +308,7 @@ const SalesReport = () => {
                         <span>/</span>
                         <span>Auditing Reports</span>
                         <span>/</span>
-                        <span className="text-primary font-bold">{currentTabObj.label}</span>
+                        <span className="text-primary font-bold">{currentTabObj?.label || 'Sales Report'}</span>
                     </div>
                     <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1 tracking-tight flex items-center gap-2">
                         <span>Commercial Sales Auditing Center</span>
@@ -270,14 +322,20 @@ const SalesReport = () => {
             {/* ── 1. HORIZONTAL TABS BAR ── */}
             <div className="bg-white dark:bg-boxdark p-1.5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs overflow-x-auto print:hidden">
                 <div className="flex items-center gap-1.5 min-w-max">
-                    {salesTabs.map(tab => {
+                    {visibleSalesTabs.map(tab => {
                         const Icon = tab.icon;
                         const isActive = reportType === tab.key;
                         return (
                             <button
                                 key={tab.key}
                                 type="button"
-                                onClick={() => handleTabChange(tab.key as any)}
+                                onClick={() => {
+                                    if ((tab as any).path) {
+                                        navigate((tab as any).path);
+                                        return;
+                                    }
+                                    handleTabChange(tab.key as any);
+                                }}
                                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap ${
                                     isActive
                                         ? 'bg-primary text-white shadow-sm'
@@ -634,6 +692,43 @@ const SalesReport = () => {
                         <button type="button" onClick={() => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().split('T')[0]; const e = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', e); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition cursor-pointer">Last Month</button>
                     </div>
                 </div>
+
+                {/* ── COLOR FILTER CHIPS ── */}
+                {colorOptions.length > 0 && (
+                  <div className="mt-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">🎨 Filter by Product Color:</span>
+                      {criteria.color && criteria.color.length > 0 && (
+                        <button type="button" onClick={() => handleInputChange('color', [])} className="text-[9px] font-bold text-rose-500 hover:text-rose-700 underline ml-auto">Clear</button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {colorOptions.map((col: string) => {
+                        const isSelected = (criteria.color || []).includes(col);
+                        const swatchMap: Record<string, string> = {
+                          white: '#ffffff', black: '#111111', grey: '#9ca3af', gray: '#9ca3af',
+                          red: '#ef4444', blue: '#3b82f6', green: '#22c55e', yellow: '#eab308',
+                          brown: '#92400e', beige: '#d6b89a', cream: '#fffdd0', ivory: '#fffff0',
+                          orange: '#f97316', pink: '#ec4899', purple: '#a855f7', silver: '#c0c0c0',
+                          gold: '#d4af37', charcoal: '#374151', navy: '#1e3a5f', teal: '#14b8a6',
+                        };
+                        const swatchColor = swatchMap[col.toLowerCase()] || '#94a3b8';
+                        return (
+                          <button key={col} type="button"
+                            onClick={() => { const curr = criteria.color || []; handleInputChange('color', isSelected ? curr.filter((c: string) => c !== col) : [...curr, col]); }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition cursor-pointer ${isSelected ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:border-primary hover:text-primary'}`}
+                          >
+                            <span className="inline-block w-3 h-3 rounded-full border border-black/20 flex-shrink-0" style={{ backgroundColor: swatchColor }} />
+                            {col}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {criteria.color && criteria.color.length > 0 && (
+                      <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Filtering by: <span className="text-primary font-black">{criteria.color.join(', ')}</span></div>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex flex-wrap items-center justify-end gap-2.5">
                     <button

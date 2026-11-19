@@ -1,4 +1,4 @@
-import { supabase } from '../../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../../Context/supabaseClient';
 import { ParsedVendor } from '../types/vendorImportTypes';
 import { normalizeVendorText } from '../utils/vendorTemplateGenerator';
 
@@ -10,9 +10,11 @@ export const parseVendorMatrixData = async (matrix: any[][]): Promise<ParsedVend
   // 1. Pre-fetch existing vendors from database for duplicate/update detection
   let existingDbVendors: any[] = [];
   try {
-    const { data: dbVendors, error: vendErr } = await supabase
-      .from('vendors')
-      .select('*');
+    const { data: dbVendors, error: vendErr } = await fetchAllPages(
+      supabase
+        .from('vendors')
+        .select('*')
+    );
     if (!vendErr && dbVendors) {
       existingDbVendors = dbVendors;
     }
@@ -305,7 +307,7 @@ export const executeVendorBatchImportAction = async (validRows: ParsedVendor[]) 
     // Query highest vendor code
     let maxCodeNum = 0;
     try {
-      const { data: codeData } = await supabase.from('vendors').select('vendor_code, vendorCode');
+      const { data: codeData } = await fetchAllPages(supabase.from('vendors').select('vendor_code, vendorCode'));
       (codeData || []).forEach((v: any) => {
         const codeStr = v.vendor_code || v.vendorCode || '';
         const match = String(codeStr).match(/2010-(\d+)/);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { logActivity } from '../../../../../service/auditLogger';
 import { SortConfig, InvoiceBalanceInfo } from '../types/salesHistoryTypes';
@@ -61,15 +61,17 @@ export const useSalesHistoryState = () => {
     try {
       setLoading(true);
 
-      const { data: invoicesData, error: invError } = await supabase
-        .from('sales_invoices')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data: invoicesData, error: invError } = await fetchAllPages(
+        supabase
+          .from('sales_invoices')
+          .select('*')
+          .order('created_at', { ascending: false })
+      );
 
       if (invError) throw invError;
 
-      const { data: vouchersData } = await supabase.from('financial_vouchers').select('*');
-      const { data: returnsData, error: retError } = await supabase.from('sales_returns').select('*');
+      const { data: vouchersData } = await fetchAllPages(supabase.from('financial_vouchers').select('*'));
+      const { data: returnsData, error: retError } = await fetchAllPages(supabase.from('sales_returns').select('*'));
 
       if (!retError && returnsData) {
         const cleanList = returnsData
@@ -78,7 +80,7 @@ export const useSalesHistoryState = () => {
         setReturnedInvoiceNos(cleanList);
       }
 
-      const { data: dcRows } = await supabase.from('delivery_challans').select('*');
+      const { data: dcRows } = await fetchAllPages(supabase.from('delivery_challans').select('*'));
 
       const dcMap: Record<string, any[]> = {};
       (dcRows || []).forEach((dc: any) => {

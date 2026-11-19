@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { fetchWorkflowSettings } from '../../../../service/workflowSettingsService';
 import { fetchStockDataset, getTotalAvailableStock } from '../../../../utils/stockCalculator';
@@ -35,12 +35,12 @@ export const usePurchaseReturnMetadata = (
         fetchWorkflowSettings().then(setWorkflowSettings).catch(() => {});
 
         const [vRes, locRes, prodRes, bankRes, purRes, pastPrRes] = await Promise.all([
-          supabase.from('vendors').select('*').order('vendor_name', { ascending: true }),
-          supabase.from('inventory_locations').select('*').order('name', { ascending: true }),
-          supabase.from('products').select('*').order('product_name', { ascending: true }),
-          supabase.from('banks').select('id, bankName, accountTitle, accountNumber'),
-          supabase.from('supplier_purchases').select('*').order('id', { ascending: false }),
-          supabase.from('purchase_returns').select('id, return_no, vendor_name, purchase_no, items, metadata')
+          fetchAllPages(supabase.from('vendors').select('*').order('vendor_name', { ascending: true })),
+          fetchAllPages(supabase.from('inventory_locations').select('*').order('name', { ascending: true })),
+          fetchAllPages(supabase.from('products').select('*').order('product_name', { ascending: true })),
+          fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle, accountNumber')),
+          fetchAllPages(supabase.from('supplier_purchases').select('*').order('id', { ascending: false })),
+          fetchAllPages(supabase.from('purchase_returns').select('id, return_no, vendor_name, purchase_no, items, metadata'))
         ]);
 
         const normalizedVendors = (vRes.data || []).map((v: any) => ({

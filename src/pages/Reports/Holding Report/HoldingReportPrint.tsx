@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../Context/Auth';
 import ReportPagination from '../../../components/ReportPagination';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import Spinner from '../../../ui/Spinner';
 
 import { HoldingItemRow } from './types/holdingReportTypes';
@@ -39,9 +39,11 @@ const HoldingReportPrint: React.FC = () => {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const { data, error } = await supabase
-          .from('customers')
-          .select('id, customerName, customer_code, customerCode, page_no, pageNo');
+        const { data, error } = await fetchAllPages(
+          supabase
+            .from('customers')
+            .select('id, customerName, customer_code, customerCode, page_no, pageNo')
+        );
         if (data && !error) {
           const map: Record<string, { code: string; pageNo: string }> = {};
           data.forEach((c: any) => {

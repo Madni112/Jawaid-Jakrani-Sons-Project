@@ -91,7 +91,7 @@ const ErpResetBackupsPage: React.FC = () => {
               </h1>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Every data wipe on AL Muhammadi generates an immutable snapshot stored here for developer recovery.
+              Every data wipe on Zohaib Ali and Company generates an immutable snapshot stored here for developer recovery.
             </p>
           </div>
         </div>

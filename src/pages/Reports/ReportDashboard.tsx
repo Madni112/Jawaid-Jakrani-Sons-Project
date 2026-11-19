@@ -28,6 +28,7 @@ import {
   MdCorporateFare,
   MdCardGiftcard,
   MdReceiptLong,
+  MdMenuBook,
   MdDragIndicator,
   MdRestartAlt,
   MdKeyboardArrowDown,
@@ -51,6 +52,7 @@ import {
   getSafeAccentTextColor,
   isDarkModeActive,
 } from '../../constant/themeConfig';
+import { fetchSystemMasterConfig, SystemMasterConfig } from '../../utils/systemPermissions';
 
 interface ReportItem {
   id: string;
@@ -77,11 +79,46 @@ export const shouldShowBadge = (report: { badge?: string; badgeType?: string; cr
   return true;
 };
 
+const BASIC_REPORTS: ReportItem[] = [
+  {
+    id: 'basic-sales-report',
+    title: 'Sales Report',
+    category: 'sales',
+    description: 'Basic commercial sales audit, invoice register, customer ledger summaries, and net turnover.',
+    path: '/basic-sales-report',
+    icon: MdTrendingUp
+  },
+  {
+    id: 'basic-purchase-report',
+    title: 'Purchase Report',
+    category: 'purchases',
+    description: 'Basic procurement register, supplier purchase bills, and vendor commitments.',
+    path: '/Reports/Purchase-Report',
+    icon: MdLocalMall
+  },
+  {
+    id: 'basic-stock-report',
+    title: 'Stock Report',
+    category: 'inventory',
+    description: 'Basic inventory balance, on-hand product stock quantities, and physical counts.',
+    path: '/Reports/Stock-Report',
+    icon: MdInventory
+  },
+  {
+    id: 'basic-account-report',
+    title: 'Accounts Report',
+    category: 'accounts',
+    description: 'Basic party ledgers, cash daybook, customer balances, and account summaries.',
+    path: '/Reports/Main-Reports',
+    icon: MdAccountBalanceWallet
+  }
+];
+
 const ALL_REPORTS: ReportItem[] = [
   // ── SALES REPORTS ──
   {
     id: 'category-wise-sales',
-    title: 'Category-Wise Sales & Volume Report',
+    title: 'Category-Wise Sales Report',
     category: 'sales',
     description: 'Header-wise category sales audit, product lines, net volumes, return credits, and revenue share.',
     badge: 'NEW',
@@ -117,7 +154,7 @@ const ALL_REPORTS: ReportItem[] = [
   },
   {
     id: 'commercial-sale-ledger',
-    title: 'Commercial Sales Audit Ledger',
+    title: 'Sale (Salesmen wise)',
     category: 'sales',
     description: 'Master commercial sales register linked with salesman, carrier fleet & customer accounts.',
     badge: 'AUDITED',
@@ -181,7 +218,7 @@ const ALL_REPORTS: ReportItem[] = [
   },
   {
     id: 'category-purchases',
-    title: 'Category-Wise Purchases & Volume Report',
+    title: 'Category-Wise Purchases Report',
     category: 'purchases',
     description: 'Header-wise category procurement spend, inward volume, return debits, and expenditure share.',
     badge: 'NEW',
@@ -339,102 +376,85 @@ const ALL_REPORTS: ReportItem[] = [
     icon: MdPauseCircleFilled
   },
 
-  // ── ACCOUNTS & FINANCIALS ──
-  {
-    id: 'customer-balance-detail',
-    title: 'Customer Balance Detail Report',
-    category: 'accounts',
-    description: 'Comprehensive breakdown of customer opening balances, period billing debits, recovery credits, and net closing balances filtered by customer category.',
-    badge: 'NEW',
-    badgeType: 'new',
-    createdAt: '2026-09-18',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 13 },
-    icon: MdAccountBalanceWallet
-  },
-  {
-    id: 'vendor-balance-detail',
-    title: 'Vendor Balance Detail & Account Ledger',
-    category: 'accounts',
-    description: 'Comprehensive breakdown of vendor opening balances, period procurement liabilities, supplier payments, and net payables.',
-    badge: 'NEW',
-    badgeType: 'new',
-    createdAt: '2026-09-18',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 3 },
-    icon: MdAccountBalanceWallet
-  },
+  // ── ACCOUNTS & FINANCIALS (Main / Classic Reports) ──
   {
     id: 'customer-ledger',
     title: 'Customer Account Ledger (General Ledger)',
     category: 'accounts',
-    description: 'Detailed chronological debit/credit ledger per customer account with running balances and invoices.',
+    description: 'Detailed chronological debit/credit ledger per customer account with running balances, invoices, returns, and receipts.',
     badge: 'ACCRUAL',
     badgeType: 'accrual',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 1 },
-    icon: MdAccountBalanceWallet
+    path: '/Reports/Main-Reports?tab=customer-ledger',
+    state: { tab: 'customer-ledger' },
+    icon: MdPeople
   },
   {
-    id: 'daybook-activity-report',
-    title: 'Daily Cash & Bank Daybook',
+    id: 'vendor-ledger',
+    title: 'Vendor Account Ledger & Supplier Statement',
     category: 'accounts',
-    description: 'Chronological daybook of daily cash inflows, customer receipts, vendor payments, and cash-drawer balances.',
-    badge: 'NEW',
-    badgeType: 'new',
-    createdAt: '2026-09-19',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 9 },
-    icon: MdReceiptLong
-  },
-  {
-    id: 'customer-aging-report',
-    title: 'Customer Receivables Aging Analysis',
-    category: 'accounts',
-    description: 'Categorized customer debt aging brackets across 0-30, 31-60, 61-90, and 90+ days overdue balances.',
-    badge: 'AUDITED',
-    badgeType: 'audited',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 12 },
-    icon: MdAccessTime
-  },
-  {
-    id: 'voucher-audit-register',
-    title: 'Financial Voucher Audit Register',
-    category: 'accounts',
-    description: 'Master chronological register of CPV, CRV, BPV, BRV, and Journal Vouchers (JV) with debit/credit balance trace.',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 8 },
-    icon: MdReceipt
-  },
-  {
-    id: 'trial-balance-statement',
-    title: 'Trial Balance Audit Statement',
-    category: 'accounts',
-    description: 'Authoritative Chart of Accounts trial balance verifying that total ledger debits equal total ledger credits.',
-    badge: 'AUDITED',
-    badgeType: 'audited',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 11 },
-    icon: MdBalance
-  },
-  {
-    id: 'vendor-outstanding-report',
-    title: 'Vendor Outstanding Payables Schedule',
-    category: 'accounts',
-    description: 'Unsettled supplier procurement bills and payment dues sorted by vendor account and invoice date.',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 6 },
+    description: 'Detailed chronological ledger per supplier account tracking purchases, payments, returns, and net payable balances.',
+    badge: 'ACCRUAL',
+    badgeType: 'accrual',
+    path: '/Reports/Main-Reports?tab=vendor-ledger',
+    state: { tab: 'vendor-ledger' },
     icon: MdCorporateFare
   },
   {
-    id: 'expense-ledger',
+    id: 'combined-ledger',
+    title: 'Combined Party Ledgers (Customers & Vendors)',
+    category: 'accounts',
+    description: 'Unified multi-party ledger statement auditing customer receivables and vendor payables in one view.',
+    badge: 'NEW',
+    badgeType: 'new',
+    createdAt: '2026-10-01',
+    path: '/Reports/Main-Reports?tab=combined-ledger',
+    state: { tab: 'combined-ledger' },
+    icon: MdCompareArrows
+  },
+  {
+    id: 'profit-loss',
+    title: 'Profit & Loss Financial Statement (P&L)',
+    category: 'accounts',
+    description: 'Audited financial profit and loss statement calculating gross margin, revenues, direct COGS, and net operating income.',
+    badge: 'AUDITED',
+    badgeType: 'audited',
+    path: '/Reports/Main-Reports?tab=profit-loss',
+    state: { tab: 'profit-loss' },
+    icon: MdTrendingUp
+  },
+  {
+    id: 'expense-report',
     title: 'Operational Expense Statement',
     category: 'accounts',
-    description: 'Operating expenditures aggregated across rent, utilities, fuel, and logistics fleets.',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 4 },
-    icon: MdAccountBalance
+    description: 'Operating expenditures aggregated across rent, utilities, fuel, staff, and logistics fleets.',
+    badge: 'AUDITED',
+    badgeType: 'audited',
+    path: '/Reports/Main-Reports?tab=expense-report',
+    state: { tab: 'expense-report' },
+    icon: MdReceiptLong
+  },
+  {
+    id: 'daily-book',
+    title: 'Daily Cash & Bank Daybook (Roznamcha)',
+    category: 'accounts',
+    description: 'Chronological daybook of daily cash inflows, customer receipts, vendor disbursements, and net cash-drawer balances.',
+    badge: 'NEW',
+    badgeType: 'new',
+    createdAt: '2026-10-01',
+    path: '/Reports/Main-Reports?tab=daily-book',
+    state: { tab: 'daily-book' },
+    icon: MdMenuBook
+  },
+  {
+    id: 'daily-activity',
+    title: 'Daily Activity Audit Trail Log',
+    category: 'accounts',
+    description: 'Real-time multi-dimensional audit log tracking Sales, Purchases, Receipts, Payments, Stock Movements & Expenses in one unified statement.',
+    badge: 'AUDITED',
+    badgeType: 'audited',
+    path: '/Reports/Main-Reports?tab=daily-activity',
+    state: { tab: 'daily-activity' },
+    icon: MdHistory
   },
 
   // ── BUSINESS OVERVIEW & EXECUTIVE ──
@@ -575,14 +595,16 @@ const getInitialRecentIds = (): string[] => {
   }
 };
 
+const COMBINED_ALL_REPORTS: ReportItem[] = [...BASIC_REPORTS, ...ALL_REPORTS];
+
 const getInitialReports = (): ReportItem[] => {
   try {
     const savedOrderJson = localStorage.getItem(STORAGE_KEY);
-    if (!savedOrderJson) return ALL_REPORTS;
+    if (!savedOrderJson) return COMBINED_ALL_REPORTS;
     const savedIds: string[] = JSON.parse(savedOrderJson);
-    if (!Array.isArray(savedIds)) return ALL_REPORTS;
+    if (!Array.isArray(savedIds)) return COMBINED_ALL_REPORTS;
 
-    const reportMap = new Map(ALL_REPORTS.map((r) => [r.id, r]));
+    const reportMap = new Map(COMBINED_ALL_REPORTS.map((r) => [r.id, r]));
     const ordered: ReportItem[] = [];
     savedIds.forEach((id) => {
       const item = reportMap.get(id);
@@ -594,7 +616,7 @@ const getInitialReports = (): ReportItem[] => {
     reportMap.forEach((item) => ordered.push(item));
     return ordered;
   } catch (e) {
-    return ALL_REPORTS;
+    return COMBINED_ALL_REPORTS;
   }
 };
 
@@ -664,6 +686,32 @@ const ReportDashboard: React.FC = () => {
   const [accentColor, setAccentColor] = useState<string>(getSavedAccentColor());
   const [sidebarColor, setSidebarColor] = useState<string>(getSavedSidebarColor());
 
+  const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(() => {
+    try {
+      const cached = localStorage.getItem('erp_system_master_permissions_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    fetchSystemMasterConfig().then(setSystemConfig);
+    const onSync = (e: any) => {
+      if (e.detail) setSystemConfig(e.detail);
+    };
+    window.addEventListener('erp_system_permissions_updated', onSync);
+    return () => window.removeEventListener('erp_system_permissions_updated', onSync);
+  }, []);
+
+  const hiddenIds = useMemo(() => {
+    return Array.isArray(systemConfig?.hidden_reports) ? systemConfig.hidden_reports : [];
+  }, [systemConfig?.hidden_reports]);
+
+  const activeReportsList = useMemo(() => {
+    return reportsList.filter((r) => !hiddenIds.includes(r.id));
+  }, [reportsList, hiddenIds]);
+
   useEffect(() => {
     const onThemeChange = () => setAccentColor(getSavedAccentColor());
     const onSidebarChange = () => setSidebarColor(getSavedSidebarColor());
@@ -712,15 +760,17 @@ const ReportDashboard: React.FC = () => {
 
   const pinnedReports = useMemo(() => {
     return pinnedIds
-      .map((id) => ALL_REPORTS.find((r) => r.id === id))
+      .filter((id) => !hiddenIds.includes(id))
+      .map((id) => COMBINED_ALL_REPORTS.find((r) => r.id === id))
       .filter((r): r is ReportItem => Boolean(r));
-  }, [pinnedIds]);
+  }, [pinnedIds, hiddenIds]);
 
   const recentReports = useMemo(() => {
     return recentIds
-      .map((id) => ALL_REPORTS.find((r) => r.id === id))
+      .filter((id) => !hiddenIds.includes(id))
+      .map((id) => COMBINED_ALL_REPORTS.find((r) => r.id === id))
       .filter((r): r is ReportItem => Boolean(r));
-  }, [recentIds]);
+  }, [recentIds, hiddenIds]);
 
   // Auto-scroll window when dragging near top or bottom screen edges
   useEffect(() => {
@@ -782,9 +832,9 @@ const ReportDashboard: React.FC = () => {
     }));
   };
 
-  // Filtered reports using reportsList order (filtered by search query across all categories)
+  // Filtered reports using reportsList order (filtered by search query across all categories, omitting hidden reports)
   const filteredReports = useMemo(() => {
-    return reportsList.filter((item) => {
+    return activeReportsList.filter((item) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = item.title.toLowerCase().includes(q);
@@ -794,15 +844,15 @@ const ReportDashboard: React.FC = () => {
       }
       return true;
     });
-  }, [reportsList, searchQuery]);
+  }, [activeReportsList, searchQuery]);
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: reportsList.length };
-    reportsList.forEach((r) => {
+    const counts: Record<string, number> = { all: activeReportsList.length };
+    activeReportsList.forEach((r) => {
       counts[r.category] = (counts[r.category] || 0) + 1;
     });
     return counts;
-  }, [reportsList]);
+  }, [activeReportsList]);
 
   // Reference to always read latest list order on drag end
   const reportsListRef = React.useRef(reportsList);
@@ -903,7 +953,7 @@ const ReportDashboard: React.FC = () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(STORAGE_CAT_KEY);
-      setReportsList(ALL_REPORTS);
+      setReportsList(COMBINED_ALL_REPORTS);
       setCategoriesList(CATEGORY_META);
       setCollapsedCats({});
       setSearchQuery('');
@@ -921,6 +971,12 @@ const ReportDashboard: React.FC = () => {
       localStorage.setItem(STORAGE_RECENT_KEY, JSON.stringify(updated));
       setRecentIds(updated);
     } catch {}
+
+    if (report.path && (report.path.includes('/Reports/Main-Reports') || report.path.includes('/basic-sales-report'))) {
+      const dest = `${tenantId ? `/${tenantId}` : ''}${report.path}`;
+      navigate(dest, { state: { ...(report.state || {}), fromModernHub: true } });
+      return;
+    }
 
     const dest = `${tenantId ? `/${tenantId}` : ''}/Reports/view/${report.id}`;
     navigate(dest, { state: report.state || {} });
@@ -973,7 +1029,7 @@ const ReportDashboard: React.FC = () => {
       {/* ── BREADCRUMB & METADATA BAR ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] font-mono text-slate-500 border-b border-slate-200 dark:border-slate-800 pb-3">
         <div className="flex items-center gap-2 uppercase tracking-wider">
-          <span className="font-extrabold text-slate-900 dark:text-white">Al Muhammadi Tile Emporium</span>
+          <span className="font-extrabold text-slate-900 dark:text-white">Zohaib Ali and Company</span>
           <span>&gt;</span>
           <span>Operational Ledger</span>
           <span>&gt;</span>
@@ -1003,7 +1059,7 @@ const ReportDashboard: React.FC = () => {
                 Reports Directory
               </h1>
               <span style={{ backgroundColor: `${accentColor}15`, borderColor: `${accentColor}35`, color: safeAccentText }} className="font-bold px-2 py-0.5 rounded-md text-[11px] border">
-                {reportsList.length} Available
+                {activeReportsList.length} Available
               </span>
             </div>
             <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
@@ -1192,6 +1248,17 @@ const ReportDashboard: React.FC = () => {
             </button>
           );
         })}
+
+        {/* Main Accounting Reports Shortcut Button (Placed next to Business Overview tab) */}
+        <button
+          type="button"
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Main-Reports`)}
+          title="Open Main Accounting & Financial Reports"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs whitespace-nowrap cursor-pointer transition border border-indigo-200/80 dark:border-indigo-800/80 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 shadow-xs shrink-0"
+        >
+          <MdReceiptLong size={15} />
+          <span>Main Reports</span>
+        </button>
       </div>
 
       {/* ── EXPAND & DRAG ANIMATION STYLES ── */}

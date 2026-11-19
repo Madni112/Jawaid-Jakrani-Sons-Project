@@ -46,7 +46,7 @@ export const isSlipMatch = (a?: string, b?: string): boolean => {
 
   // Only match if one is a bare number without prefix and the other is prefixed with that same number.
   // Example: "009" matches "MAIN-009".
-  // BUT if BOTH have prefixes (e.g. "GRN-01" vs "ALMUHAMMADITILESEMPORIUM-01", or "SHOP-001" vs "MAIN-001"),
+  // BUT if BOTH have prefixes (e.g. "GRN-01" vs "ZOHAIBALICOMPANY-01", or "SHOP-001" vs "MAIN-001"),
   // they are DIFFERENT series/warehouses and MUST NOT conflict!
   const hasDashA = normA.includes('-');
   const hasDashB = normB.includes('-');

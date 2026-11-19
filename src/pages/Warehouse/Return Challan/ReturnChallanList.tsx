@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdInbox, MdHistory } from 'react-icons/md';
@@ -50,11 +50,13 @@ const ReturnChallanList: React.FC<ReturnChallanListProps> = ({ locationFilter = 
   const fetchPendingReturns = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('sales_returns')
-        .select('*')
-        .in('inward_status', ['Pending Inward', 'Partially Received'])
-        .order('created_at', { ascending: false });
+      const { data, error } = await fetchAllPages(
+        supabase
+          .from('sales_returns')
+          .select('*')
+          .in('inward_status', ['Pending Inward', 'Partially Received'])
+          .order('created_at', { ascending: false })
+      );
 
       if (error) throw error;
       

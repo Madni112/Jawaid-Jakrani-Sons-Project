@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { FiEye, FiPrinter, FiTruck, FiArrowLeft, FiSearch, FiCheckCircle, FiClock, FiFileText, FiEdit2, FiSave } from 'react-icons/fi';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate } from 'react-router-dom';
@@ -94,7 +94,7 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
   };
 
   useEffect(() => {
-    supabase.from('products').select('*').then(({ data }) => {
+    fetchAllPages(supabase.from('products').select('*')).then(({ data }) => {
       if (data) setProductsMaster(data);
     });
   }, []);
@@ -134,7 +134,7 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
           query = query.or(`source_warehouse.eq.${locationFilter},warehouse_name.eq.${locationFilter}`);
         }
 
-        const { data, error } = await query;
+        const { data, error } = await fetchAllPages(query);
         if (error) throw error;
         const processed = (data || []).filter((r: any) => {
           return r.status === 'Dispatched' || r.status === 'Fully Dispatched' || r.status === 'Refunded' || r.status === 'Processed';
@@ -150,7 +150,7 @@ const DeliveryChallanProcessedHistory: React.FC<DeliveryChallanProcessedHistoryP
           .select('*')
           .order('created_at', { ascending: false });
 
-        const { data, error } = await query;
+        const { data, error } = await fetchAllPages(query);
         if (error) throw error;
 
         let allDc = data || [];

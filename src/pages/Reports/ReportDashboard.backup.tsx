@@ -78,7 +78,7 @@ const ALL_REPORTS: ReportItem[] = [
   // ── SALES REPORTS ──
   {
     id: 'category-wise-sales',
-    title: 'Category-Wise Sales & Volume Report',
+    title: 'Category-Wise Sales Report',
     category: 'sales',
     description: 'Header-wise category sales audit, product lines, net volumes, return credits, and revenue share.',
     badge: 'NEW',
@@ -114,7 +114,7 @@ const ALL_REPORTS: ReportItem[] = [
   },
   {
     id: 'commercial-sale-ledger',
-    title: 'Commercial Sales Audit Ledger',
+    title: 'Sale (Salesmen wise)',
     category: 'sales',
     description: 'Master commercial sales register linked with salesman, carrier fleet & customer accounts.',
     badge: 'AUDITED',
@@ -178,7 +178,7 @@ const ALL_REPORTS: ReportItem[] = [
   },
   {
     id: 'category-purchases',
-    title: 'Category-Wise Purchases & Volume Report',
+    title: 'Category-Wise Purchases Report',
     category: 'purchases',
     description: 'Header-wise category procurement spend, inward volume, return debits, and expenditure share.',
     badge: 'NEW',

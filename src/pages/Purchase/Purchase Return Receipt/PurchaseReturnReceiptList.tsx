@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import TablePagination from '../../../components/TablePagination';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -35,10 +35,12 @@ const PurchaseReturnReceiptList: React.FC = () => {
   const fetchReceiptLogs = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('purchase_return_receipts')
-        .select('*')
-        .order('id', { ascending: false });
+      const { data, error } = await fetchAllPages(
+        supabase
+          .from('purchase_return_receipts')
+          .select('*')
+          .order('id', { ascending: false })
+      );
 
       if (error) throw error;
       setReceipts(data || []);

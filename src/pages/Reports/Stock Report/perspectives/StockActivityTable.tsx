@@ -24,6 +24,7 @@ export const StockActivityTable: React.FC<StockActivityTableProps> = ({
                     <th rowSpan={2} className="p-2 border border-slate-300">Product Stock Asset Identifier</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-center w-16">Group (UOM)</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-center w-20">Brand</th>
+                    <th rowSpan={2} className="p-2 border border-slate-300 text-center w-24">Color / Shade</th>
                     <th colSpan={3} className="p-1.5 border border-slate-300 text-center bg-slate-100 font-extrabold tracking-wider">Category Classification</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-right pr-2">Opening Stock</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-right pr-2 text-emerald-700">Stock In</th>
@@ -44,6 +45,7 @@ export const StockActivityTable: React.FC<StockActivityTableProps> = ({
                         <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                         <td className="p-2 border border-slate-300 uppercase text-center">{row.uom || 'PC'}</td>
                         <td className="p-2 border border-slate-300 font-sans text-purple-700 font-bold text-center">{row.bin || '-'}</td>
+                        <td className="p-2 border border-slate-300 font-sans text-center text-slate-700 font-medium">{row.color || '-'}</td>
                         <td className="p-2 border border-slate-300 font-sans text-slate-800">{row.sub_sub_category || '-'}</td>
                         <td className="p-2 border border-slate-300 font-sans text-slate-700">{row.sub_category || '-'}</td>
                         <td className="p-2 border border-slate-300 font-sans text-slate-600">{row.category || '-'}</td>
@@ -60,7 +62,7 @@ export const StockActivityTable: React.FC<StockActivityTableProps> = ({
             <tfoot>
                 {!isPrinting && pageSize !== 'all' && (
                     <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
-                        <td colSpan={7} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
+                        <td colSpan={8} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
                         <td className="p-2 border border-slate-300 text-right pr-2 text-gray-700">{paginatedRows.reduce((s, r) => s + (r.computed_opening || 0), 0).toLocaleString()}</td>
                         <td className="p-2 border border-slate-300 text-right pr-2 text-emerald-700">+{paginatedRows.reduce((s, r) => s + (r.period_stock_in || 0), 0).toLocaleString()}</td>
                         <td className="p-2 border border-slate-300 text-right pr-2 text-red-700">-{paginatedRows.reduce((s, r) => s + (r.period_stock_out || 0), 0).toLocaleString()}</td>
@@ -69,7 +71,7 @@ export const StockActivityTable: React.FC<StockActivityTableProps> = ({
                     </tr>
                 )}
                 <tr className="bg-slate-100 border-t-2 border-slate-400 font-black font-mono text-xs">
-                    <td colSpan={7} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Summary (All {reportRows.length} Records):</td>
+                    <td colSpan={8} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Summary (All {reportRows.length} Records):</td>
                     <td className="p-2 border border-slate-300 text-right pr-2 text-gray-700">{reportRows.reduce((s, r) => s + (r.computed_opening || 0), 0).toLocaleString()}</td>
                     <td className="p-2 border border-slate-300 text-right pr-2 text-emerald-700">+{reportRows.reduce((s, r) => s + (r.period_stock_in || 0), 0).toLocaleString()}</td>
                     <td className="p-2 border border-slate-300 text-right pr-2 text-red-700">-{reportRows.reduce((s, r) => s + (r.period_stock_out || 0), 0).toLocaleString()}</td>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
 import { useAuth } from '../../Context/Auth';
@@ -102,7 +102,7 @@ const UomManager = () => {
 
       const [data, prodRes] = await Promise.all([
         fetchAllUomsSafe(tenantId),
-        supabase.from('products').select('uom')
+        fetchAllPages(supabase.from('products').select('uom'))
       ]);
 
       // Calculate usage counts across products

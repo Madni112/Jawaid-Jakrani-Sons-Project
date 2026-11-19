@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import TablePagination from '../../../components/TablePagination';
 import { getDetailedBreakdown } from '../../../utils/stockCalculator';
@@ -83,9 +83,11 @@ const ProductList: React.FC = () => {
           .limit(1);
 
         if (!probe.error && probe.data && probe.data.length > 0) {
-          const { data: rows } = await supabase
-            .from('stock_balances')
-            .select('product_name, warehouse_name, quantity');
+          const { data: rows } = await fetchAllPages(
+            supabase
+              .from('stock_balances')
+              .select('product_name, warehouse_name, quantity')
+          );
           if (rows && rows.length > 0) {
             const { data: locMaster } = await supabase.from('inventory_locations').select('name');
             if (locMaster) setMasterLocations(locMaster.map((l: any) => String(l.name).trim()));

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
 import { useTenant } from '../../Context/TenantContext';
@@ -95,7 +95,7 @@ const AddEmployee: React.FC = () => {
       const [desigRes, empRes, coaRes] = await Promise.all([
         supabase.from('hr_designations').select('id, name').order('name'),
         supabase.from('hr_employees').select('designation_name'),
-        supabase.from('chart_of_accounts').select('*')
+        fetchAllPages(supabase.from('chart_of_accounts').select('*'))
       ]);
 
       const baseList = desigRes.data || [];

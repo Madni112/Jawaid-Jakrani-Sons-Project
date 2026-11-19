@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 
@@ -77,11 +77,11 @@ function AddVoucher({ voucherTypePreset }: AddVoucherProps) {
         }
 
         const [coaRes, bankRes, vendRes, custRes, vchRes] = await Promise.all([
-          supabase.from('chart_of_accounts').select('*').order('account_code', { ascending: true }),
-          supabase.from('banks').select('*'),
-          supabase.from('vendors').select('*'),
-          supabase.from('customers').select('*'),
-          supabase.from('financial_vouchers').select('id, voucher_no, account_code, total_amount, debit, credit, items')
+          fetchAllPages(supabase.from('chart_of_accounts').select('*').order('account_code', { ascending: true })),
+          fetchAllPages(supabase.from('banks').select('*')),
+          fetchAllPages(supabase.from('vendors').select('*')),
+          fetchAllPages(supabase.from('customers').select('*')),
+          fetchAllPages(supabase.from('financial_vouchers').select('id, voucher_no, account_code, total_amount, debit, credit, items'))
         ]);
 
         const accountDetails: Record<string, any> = {};

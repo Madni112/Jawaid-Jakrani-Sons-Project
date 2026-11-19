@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -94,8 +94,8 @@ const AddVendor = () => {
       try {
         if (!isEditMode) {
           const [coaRes, vendRes] = await Promise.all([
-            supabase.from('chart_of_accounts').select('account_code, control_code'),
-            supabase.from('vendors').select('id, vendor_name').catch(() => ({ data: [] }))
+            fetchAllPages(supabase.from('chart_of_accounts').select('account_code, control_code')),
+            fetchAllPages(supabase.from('vendors').select('id, vendor_name')).catch(() => ({ data: [] }))
           ]);
 
           let maxNum = 0;

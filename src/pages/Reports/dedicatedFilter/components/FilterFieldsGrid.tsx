@@ -21,6 +21,7 @@ interface FilterFieldsGridProps {
   subCategoryOptions: string[];
   subSubCategoryOptions: string[];
   productOptions: string[];
+  colorOptions?: string[];
   binOptions: string[];
   uomOptions: string[];
   voucherTypeOptions: string[];
@@ -43,6 +44,7 @@ export const FilterFieldsGrid: React.FC<FilterFieldsGridProps> = ({
   subCategoryOptions,
   subSubCategoryOptions,
   productOptions,
+  colorOptions = [],
   binOptions,
   uomOptions,
   voucherTypeOptions
@@ -223,6 +225,19 @@ export const FilterFieldsGrid: React.FC<FilterFieldsGridProps> = ({
             options={productOptions}
             value={criteria.product}
             onChange={(val) => handleInputChange('product', val)}
+          />
+        </div>
+      )}
+
+      {/* Color / Shade Filter Field */}
+      {(f.includes('product') || f.includes('color')) && (
+        <div>
+          <SearchableMultiSelect
+            label="Color / Shade:"
+            placeholder="e.g. White, Chrome, Gold, Matte Black..."
+            options={colorOptions}
+            value={criteria.color || []}
+            onChange={(val) => handleInputChange('color', val)}
           />
         </div>
       )}

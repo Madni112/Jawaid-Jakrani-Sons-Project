@@ -1,4 +1,4 @@
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { fetchFinancialMetrics, FinancialSummary } from '../../../service/financialCalculations';
 import {
   ReceivableInvoice,
@@ -38,17 +38,17 @@ export const fetchCompleteDashboardOperationalData = async (): Promise<Dashboard
     vendorsRes
   ] = await Promise.all([
     fetchFinancialMetrics(),
-    supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }),
-    supabase.from('products').select('*'),
-    supabase.from('opening_stocks').select('*'),
-    supabase.from('supplier_purchases').select('*'),
-    supabase.from('sales_returns').select('*'),
-    supabase.from('purchase_returns').select('*'),
-    supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false }),
-    supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
-    supabase.from('customer_recoveries').select('*'),
-    supabase.from('customers').select('*').order('customerName', { ascending: true }),
-    supabase.from('vendors').select('*').order('vendor_name', { ascending: true })
+    fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })),
+    fetchAllPages(supabase.from('products').select('*')),
+    fetchAllPages(supabase.from('opening_stocks').select('*')),
+    fetchAllPages(supabase.from('supplier_purchases').select('*')),
+    fetchAllPages(supabase.from('sales_returns').select('*')),
+    fetchAllPages(supabase.from('purchase_returns').select('*')),
+    fetchAllPages(supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false })),
+    fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
+    fetchAllPages(supabase.from('customer_recoveries').select('*')),
+    fetchAllPages(supabase.from('customers').select('*').order('customerName', { ascending: true })),
+    fetchAllPages(supabase.from('vendors').select('*').order('vendor_name', { ascending: true }))
   ]);
 
   const invoices = invoicesRes.data || [];

@@ -138,7 +138,7 @@ export const SaleReportHeader: React.FC<SaleReportHeaderProps> = ({
                 WebkitPrintColorAdjust: 'exact',
                 printColorAdjust: 'exact',
               }}
-            >AM</span>
+            >ZAC</span>
           </div>
         </div>
 
@@ -175,7 +175,7 @@ export const SaleReportHeader: React.FC<SaleReportHeaderProps> = ({
                 : rType === 'customer-sales'
                 ? `Customer Sales & Volume Analysis (${activeViewMode.toUpperCase()} VIEW)`
                 : rType === 'sale'
-                ? `Commercial Sales Audit Ledger (${activeViewMode.toUpperCase()} VIEW)`
+                ? `Sale (Salesmen wise) (${activeViewMode.toUpperCase()} VIEW)`
                 : rType === 'return'
                 ? `Sales Return & Credit Ledger (${activeViewMode.toUpperCase()} VIEW)`
                 : rType === 'loyalty'

@@ -54,7 +54,7 @@ export const JobCardPrintModal: React.FC<JobCardPrintModalProps> = ({
           <div className="border-b-2 border-black pb-4 flex justify-between items-start">
             <div>
               <h1 className="text-xl font-black uppercase tracking-wider text-black">
-                {brand?.name || 'AL MUHAMMADI TILE EMPORIUM'}
+                {brand?.name || 'ZOHAIB ALI AND COMPANY'}
               </h1>
               <p className="text-xs text-gray-600 uppercase font-mono tracking-widest mt-0.5">
                 Industrial Manufacturing & Processing Division • Production Job Card

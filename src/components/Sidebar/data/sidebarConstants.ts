@@ -118,63 +118,73 @@ export const NHT2_ACCOUNTS_CHILDREN = [
   { path: '/Inventory/OpeningStock/List', label: 'Opening Stock' },
 ];
 
-export const NHT2_REPORTS_CHILDREN = [
+export interface SidebarReportSubChild {
+  path: string;
+  label: string;
+  reportId?: string;
+}
+
+export interface SidebarReportCategory {
+  path: string;
+  label: string;
+  categoryKey?: string;
+  children: SidebarReportSubChild[];
+}
+
+export const NHT2_REPORTS_CHILDREN: SidebarReportCategory[] = [
   {
     path: '/Reports/Main-Reports?tab=profit-loss',
     label: 'Main Reports',
+    categoryKey: 'main',
     children: [
       { path: '/Reports/Main-Reports?tab=profit-loss', label: 'Profit & Loss' },
-      { path: '/Reports/Main-Reports?tab=daily-book', label: 'DailyBook' },
+      { path: '/Reports/Main-Reports?tab=daily-book', label: 'DailyBook (Roznamcha)' },
+      { path: '/Reports/Main-Reports?tab=daily-activity', label: 'Daily Activity Log' },
     ],
   },
   {
-    path: '/Accounts/Ledgers?tab=customer-ledger',
-    label: 'Accounts',
+    path: '/basic-account-report',
+    label: 'Account Reports',
+    categoryKey: 'accounts',
     children: [
-      { path: '/Accounts/Ledgers?tab=customer-ledger', label: 'Customer Ledger' },
-      { path: '/Accounts/Ledgers?tab=vendor-ledger', label: 'Vendor Ledger' },
-      { path: '/Accounts/Ledgers?tab=combined-ledger', label: 'All Parties Ledger' },
-      { path: '/Accounts/Ledgers?tab=expense-report', label: 'Expense Report' },
-      { path: '/Reports/Account-Report', label: 'Account Auditing Center' },
+      { path: '/basic-account-report', label: 'Basic Accounts Report', reportId: 'basic-account-report' },
     ],
   },
   {
     path: '/Reports/Sales-Report?tab=category-sales',
     label: 'Sale Reports',
+    categoryKey: 'sales',
     children: [
-      { path: '/Reports/Sales-Report?tab=category-sales', label: 'Category-Wise Sales' },
-      { path: '/Reports/Sales-Report?tab=product-sales-history', label: 'Product Sales History' },
-      { path: '/Reports/Sales-Report?tab=sale', label: 'Commercial Sales (Salesman)' },
-      { path: '/Reports/Sales-Report?tab=sales-query', label: 'Parameter Register' },
-      { path: '/Reports/Sales-Report?tab=customer-sales', label: 'Customer Sales & Volume' },
-      { path: '/Reports/Sales-Report?tab=return', label: 'Sales Return & Credit' },
-      { path: '/Reports/Sales-Report?tab=invoice', label: 'Sale Invoice Report' },
+      { path: '/basic-sales-report', label: 'Basic Sales Report', reportId: 'basic-sales-report' },
+      { path: '/Reports/Sales-Report?tab=invoice', label: 'Sale Invoice Report', reportId: 'sale-inv-detail' },
+      { path: '/Reports/Sales-Report?tab=category-sales', label: 'Category-Wise Sales', reportId: 'category-wise-sales' },
+      { path: '/Reports/Sales-Report?tab=product-sales-history', label: 'Product Sales History', reportId: 'product-sales-history' },
+      { path: '/Reports/Sales-Report?tab=sale', label: 'Commercial Sales (Salesman)', reportId: 'commercial-sale-ledger' },
+      { path: '/Reports/Sales-Report?tab=sales-query', label: 'Parameter Register', reportId: 'sales-query-center' },
+      { path: '/Reports/Sales-Report?tab=customer-sales', label: 'Customer Sales & Volume', reportId: 'customer-sales-breakdown' },
+      { path: '/Reports/Sales-Report?tab=return', label: 'Sales Return & Credit', reportId: 'sales-return-ledger' },
     ],
   },
   {
-    path: '/Reports/Purchase-Report?tab=purchase',
+    path: '/basic-purchase-report',
     label: 'Purchase Reports',
+    categoryKey: 'purchases',
     children: [
-      { path: '/Reports/Purchase-Report?tab=purchase', label: 'General Purchase Detail' },
-      { path: '/Reports/Purchase-Report?tab=category-purchases', label: 'Category-Wise Volume' },
-      { path: '/Reports/Purchase-Report?tab=product-purchase-history', label: 'Product History & Trends' },
-      { path: '/Reports/Purchase-Report?tab=vendor-purchase-summary', label: 'Vendor Purchase Analysis' },
-      { path: '/Reports/Purchase-Report?tab=return', label: 'Purchase Return' },
-      { path: '/Reports/Purchase-Report?tab=invoice', label: 'Itemized Invoice Detail' },
+      { path: '/basic-purchase-report', label: 'Basic Purchase Report', reportId: 'basic-purchase-report' },
+      { path: '/Reports/Purchase-Report?tab=purchase', label: 'General Purchase Detail', reportId: 'purchase-ledger' },
+      { path: '/Reports/Purchase-Report?tab=category-purchases', label: 'Category-Wise Volume', reportId: 'category-purchases' },
+      { path: '/Reports/Purchase-Report?tab=product-purchase-history', label: 'Product History & Trends', reportId: 'product-purchase-history' },
+      { path: '/Reports/Purchase-Report?tab=vendor-purchase-summary', label: 'Vendor Purchase Analysis', reportId: 'purchase-query-center' },
+      { path: '/Reports/Purchase-Report?tab=return', label: 'Purchase Return', reportId: 'vendor-return-ledger' },
+      { path: '/Reports/Purchase-Report?tab=invoice', label: 'Itemized Invoice Detail', reportId: 'purchase-invoice-detail' },
     ],
   },
   {
-    path: '/Reports/Stock-Report?tab=1',
+    path: '/basic-stock-report',
     label: 'Stock Reports',
+    categoryKey: 'inventory',
     children: [
-      { path: '/Reports/Stock-Report?tab=1', label: 'Stock Activity' },
-      { path: '/Reports/Stock-Report?tab=2', label: 'Stock Balance' },
-      { path: '/Reports/Stock-Report?tab=3', label: 'Stock Status' },
-      { path: '/Reports/Stock-Report?tab=4', label: 'Stock Transfer' },
-      { path: '/Reports/Stock-Report?tab=5', label: 'Price Detail Ledger' },
-      { path: '/Reports/Stock-Report?tab=7', label: 'Category Valuation' },
-      { path: '/Reports/Stock-Report?tab=8', label: 'Location Stock' },
-      { path: '/Reports/Holding-Report', label: 'Holding Stock Queue' },
+      { path: '/basic-stock-report', label: 'Basic Stock Report', reportId: 'basic-stock-report' },
     ],
   },
 ];

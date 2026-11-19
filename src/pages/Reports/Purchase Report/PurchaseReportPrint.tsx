@@ -63,7 +63,7 @@ const PurchaseReportPrint: React.FC<PurchaseReportPrintProps> = ({
   useEffect(() => {
     const originalTitle = document.title;
     let titlePrefix = 'Purchase Invoice Register';
-    if (rType === 'category-purchases') titlePrefix = 'Category-Wise Purchases & Volume Report';
+    if (rType === 'category-purchases') titlePrefix = 'Category-Wise Purchases Report';
     else if (rType === 'product-purchase-history') titlePrefix = 'Product Purchase History & Price Trend';
     else if (rType === 'purchase-invoice-detail' || rType === 'invoice') titlePrefix = 'Purchase Invoice Itemized Detail Report';
     else if (rType === 'return') titlePrefix = 'Purchase Returns & Debit Ledger';

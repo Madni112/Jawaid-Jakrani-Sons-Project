@@ -1,4 +1,4 @@
-import { supabase } from '../../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../../Context/supabaseClient';
 
 // Helper: format qty with UOM label
 export const fmtQty = (qty: number, uom: string): string => {
@@ -21,7 +21,7 @@ export const getDynamicStock = async (productName: string): Promise<{ available:
   const uom = prodData?.uom || 'unit';
 
   // 1. Opening stock (product-level)
-  const { data: openStocks } = await supabase.from('opening_stocks').select('*');
+  const { data: openStocks } = await fetchAllPages(supabase.from('opening_stocks').select('*'));
   let opening = 0;
   (openStocks || []).forEach((os: any) => {
     const osName = String(os.product_name || os.item_name || '').trim().toLowerCase();
@@ -31,7 +31,7 @@ export const getDynamicStock = async (productName: string): Promise<{ available:
   });
 
   // 2. All GRN accepted qty INCLUDING this purchase's GRN
-  const { data: allGrnItems } = await supabase.from('grn_items').select('*, grn_receipts(status)');
+  const { data: allGrnItems } = await fetchAllPages(supabase.from('grn_items').select('*, grn_receipts(status)'));
   let totalPurchased = 0;
   (allGrnItems || []).forEach((gi: any) => {
     const grnStatus = gi.grn_receipts?.status || '';
@@ -43,7 +43,7 @@ export const getDynamicStock = async (productName: string): Promise<{ available:
   });
 
   // 3. Total sales (product-level, not warehouse-specific)
-  const { data: sales } = await supabase.from('sales_invoices').select('items, sale_status');
+  const { data: sales } = await fetchAllPages(supabase.from('sales_invoices').select('items, sale_status'));
   let totalSold = 0;
   (sales || []).forEach((s: any) => {
     if (['cancel', 'deleted'].includes(String(s.sale_status || '').toLowerCase())) return;
@@ -57,7 +57,7 @@ export const getDynamicStock = async (productName: string): Promise<{ available:
   });
 
   // 4. Sales returns
-  const { data: sReturns } = await supabase.from('sales_returns').select('items, status, inward_status, received_items');
+  const { data: sReturns } = await fetchAllPages(supabase.from('sales_returns').select('items, status, inward_status, received_items'));
   let totalSalesReturned = 0;
   (sReturns || []).forEach((sr: any) => {
     const statusLower = String(sr.status || '').toLowerCase();
@@ -87,7 +87,7 @@ export const getDynamicStock = async (productName: string): Promise<{ available:
   });
 
   // 5. Purchase returns
-  const { data: pReturns } = await supabase.from('purchase_returns').select('items, status');
+  const { data: pReturns } = await fetchAllPages(supabase.from('purchase_returns').select('items, status'));
   let totalPurchaseReturned = 0;
   (pReturns || []).forEach((pr: any) => {
     if (['cancel', 'deleted'].includes(String(pr.status || '').toLowerCase())) return;

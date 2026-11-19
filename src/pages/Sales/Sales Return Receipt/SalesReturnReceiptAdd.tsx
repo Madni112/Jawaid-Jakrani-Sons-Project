@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -113,11 +113,11 @@ const SalesReturnReceiptAdd: React.FC = () => {
         setMetadataLoading(true);
 
         const [cRes, invRes, rRes, bankRes, coaRes] = await Promise.all([
-          supabase.from('customers').select('*'),
-          supabase.from('sales_invoices').select('id, customer_name'),
-          supabase.from('sales_returns').select('*').order('id', { ascending: false }),
-          supabase.from('banks').select('id, bankName, accountTitle, accountNumber'),
-          supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code')
+          fetchAllPages(supabase.from('customers').select('*')),
+          fetchAllPages(supabase.from('sales_invoices').select('id, customer_name')),
+          fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: false })),
+          fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle, accountNumber')),
+          fetchAllPages(supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code'))
         ]);
 
         const cData = cRes.data || [];

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -22,16 +22,23 @@ const SaleReturnReceiptList: React.FC = () => {
   const fetchReceiptsLog = async () => {
     try {
       setLoading(true);
-      const { data: receiptRows, error: receiptError } = await supabase
-        .from('sales_return_receipts')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [receiptRes, returnsRes] = await Promise.all([
+        fetchAllPages(
+          supabase
+            .from('sales_return_receipts')
+            .select('*')
+            .order('created_at', { ascending: false })
+        ),
+        fetchAllPages(
+          supabase
+            .from('sales_returns')
+            .select('id, total_amount, payout_amount_paid, invoice_no, return_no')
+        )
+      ]);
 
-      if (receiptError) throw receiptError;
-
-      const { data: returnsData } = await supabase
-        .from('sales_returns')
-        .select('id, total_amount, payout_amount_paid, invoice_no, return_no');
+      if (receiptRes.error) throw receiptRes.error;
+      const receiptRows = receiptRes.data;
+      const returnsData = returnsRes.data;
 
       const returnsMap = new Map((returnsData || []).map((r: any) => [String(r.id), r]));
       const returnsInvoiceMap = new Map((returnsData || []).map((r: any) => [String(r.invoice_no).replace('INV-', ''), r]));

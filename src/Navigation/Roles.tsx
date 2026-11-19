@@ -95,6 +95,14 @@ import AccountReportPrint from '../pages/Reports/Account Report/AccountReportPri
 import BalanceSheet from '../pages/Reports/BalanceSheet';
 import DedicatedReportFilter from '../pages/Reports/DedicatedReportFilter';
 import MainReports from '../pages/Reports/MainReports';
+import BasicSalesReport from '../pages/Reports/BasicReports/BasicSalesReport';
+import BasicSalesReportPrint from '../pages/Reports/BasicReports/BasicSalesReportPrint';
+import BasicPurchaseReport from '../pages/Reports/BasicReports/BasicPurchaseReport';
+import BasicPurchaseReportPrint from '../pages/Reports/BasicReports/BasicPurchaseReportPrint';
+import BasicAccountReport from '../pages/Reports/BasicReports/BasicAccountReport';
+import BasicAccountReportPrint from '../pages/Reports/BasicReports/BasicAccountReportPrint';
+import BasicStockReport from '../pages/Reports/BasicReports/BasicStockReport';
+import BasicStockReportPrint from '../pages/Reports/BasicReports/BasicStockReportPrint';
 import { EmployeesPage } from '../pages/Human Resources/Employees';
 import AddEmployee from '../pages/Human Resources/AddEmployee';
 import { AttendanceSheetPage } from '../pages/Human Resources/AttendanceSheet';
@@ -503,6 +511,102 @@ export const adminRoutes = [
     path: '/Reports/view/:reportId',
     component: <DedicatedReportFilter />,
     label: 'Report Filter',
+    hideFromSidebar: true
+  },
+  {
+    path: '/basic-sales-report',
+    component: <BasicSalesReport />,
+    label: 'Basic Sales Report',
+    hideFromSidebar: true
+  },
+  {
+    path: '/basic-sales-report/print',
+    component: <BasicSalesReportPrint />,
+    label: 'Basic Sales Report Print',
+    hideFromSidebar: true
+  },
+  {
+    path: '/basic-purchase-report',
+    component: <BasicPurchaseReport />,
+    label: 'Basic Purchase Report',
+    hideFromSidebar: true
+  },
+  {
+    path: '/basic-purchase-report/print',
+    component: <BasicPurchaseReportPrint />,
+    label: 'Basic Purchase Report Print',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Basic-Purchase-Report',
+    component: <BasicPurchaseReport />,
+    label: 'Basic Purchase Report',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Basic-Purchase-Report/Print',
+    component: <BasicPurchaseReportPrint />,
+    label: 'Basic Purchase Report Print',
+    hideFromSidebar: true
+  },
+  {
+    path: '/basic-account-report',
+    component: <BasicAccountReport />,
+    label: 'Basic Accounts Report',
+    hideFromSidebar: true
+  },
+  {
+    path: '/basic-account-report/print',
+    component: <BasicAccountReportPrint />,
+    label: 'Basic Accounts Report Print',
+    hideFromSidebar: true
+  },
+  {
+    path: '/basic-stock-report',
+    component: <BasicStockReport />,
+    label: 'Basic Stock Report',
+    hideFromSidebar: true
+  },
+  {
+    path: '/basic-stock-report/print',
+    component: <BasicStockReportPrint />,
+    label: 'Basic Stock Report Print',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Basic-Stock-Report',
+    component: <BasicStockReport />,
+    label: 'Basic Stock Report',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Basic-Stock-Report/Print',
+    component: <BasicStockReportPrint />,
+    label: 'Basic Stock Report Print',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Basic-Account-Report',
+    component: <BasicAccountReport />,
+    label: 'Basic Accounts Report',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Basic-Account-Report/Print',
+    component: <BasicAccountReportPrint />,
+    label: 'Basic Accounts Report Print',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Basic-Sales-Report',
+    component: <BasicSalesReport />,
+    label: 'Basic Sales Report',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Basic-Sales-Report/Print',
+    component: <BasicSalesReportPrint />,
+    label: 'Basic Sales Report Print',
     hideFromSidebar: true
   },
   {

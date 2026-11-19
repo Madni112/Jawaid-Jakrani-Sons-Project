@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { AiOutlineUp, AiOutlineDown } from 'react-icons/ai';
@@ -6,6 +6,7 @@ import { FiChevronRight } from 'react-icons/fi';
 import SidebarLinkGroup from '../SidebarLinkGroup';
 import { useLanguage } from '../../../Context/LanguageContext';
 import { getReportLayoutMode, getEffectiveSidebarDesign } from '../../../constant/themeConfig';
+import { fetchSystemMasterConfig } from '../../../utils/systemPermissions';
 import {
   getSidebarLabel,
   getTheme2Icon,
@@ -58,13 +59,64 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   const reportMode = getReportLayoutMode();
   const isAccountsItem = depth === 0 && (rawItem?.label || '').toLowerCase().trim() === 'accounts';
   const isReportsItem = depth === 0 && (rawItem?.label || '').toLowerCase().trim() === 'reports';
+
+  // Real-time synchronization with system permissions hidden_reports
+  const [hiddenReports, setHiddenReports] = useState<string[]>(() => {
+    try {
+      const cached = localStorage.getItem('erp_system_master_permissions_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return Array.isArray(parsed?.hidden_reports) ? parsed.hidden_reports : [];
+      }
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    fetchSystemMasterConfig().then((cfg) => {
+      if (Array.isArray(cfg?.hidden_reports)) {
+        setHiddenReports(cfg.hidden_reports);
+      }
+    });
+    const onSync = (e: any) => {
+      if (e.detail && Array.isArray(e.detail.hidden_reports)) {
+        setHiddenReports(e.detail.hidden_reports);
+      }
+    };
+    window.addEventListener('erp_system_permissions_updated', onSync);
+    return () => window.removeEventListener('erp_system_permissions_updated', onSync);
+  }, []);
+
+  // Filter NHT2_REPORTS_CHILDREN so hidden reports are never shown on hover
+  const filteredReportsChildren = useMemo(() => {
+    return NHT2_REPORTS_CHILDREN.map((cat) => {
+      const visibleSubChildren = (cat.children || []).filter((sub) => {
+        if (!sub.reportId) return true;
+        return !hiddenReports.includes(sub.reportId);
+      });
+
+      if (visibleSubChildren.length === 0) {
+        if (cat.categoryKey === 'main') {
+          return cat;
+        }
+        return null;
+      }
+
+      return {
+        ...cat,
+        path: visibleSubChildren[0]?.path || cat.path,
+        children: visibleSubChildren,
+      };
+    }).filter(Boolean) as any[];
+  }, [hiddenReports]);
+
   const effectiveChildren = isAccountsItem
     ? NHT2_ACCOUNTS_CHILDREN
     : isReportsItem
       ? (reportMode === 'classic'
           ? (isTheme2
-              ? NHT2_REPORTS_CHILDREN
-              : NHT2_REPORTS_CHILDREN.map((c: any) => ({
+              ? filteredReportsChildren
+              : filteredReportsChildren.map((c: any) => ({
                   path: c.path,
                   label: c.label,
                   children: undefined
@@ -76,7 +128,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
     path: isAccountsItem
       ? '/Registration/Chart-of-Account/List'
       : isReportsItem
-        ? (reportMode === 'classic' ? '/Reports/Main-Reports?tab=profit-loss' : '/Reports/Reports-Dashboard')
+        ? (reportMode === 'classic' ? (filteredReportsChildren[0]?.path || '/Reports/Main-Reports?tab=profit-loss') : '/Reports/Reports-Dashboard')
         : rawItem?.path,
     children: effectiveChildren,
   };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
@@ -43,7 +43,7 @@ const AddDeliveryChallan = () => {
         setFetchingData(isEditMode);
 
         // 1. Load active customers directory lists
-        const { data: custData } = await supabase.from('customers').select('id, customerName, customer_code, customerCode');
+        const { data: custData } = await fetchAllPages(supabase.from('customers').select('id, customerName, customer_code, customerCode'));
         if (custData) setCustomers(custData);
 
         // 2. Hydrate form values with existing dataset properties if updating

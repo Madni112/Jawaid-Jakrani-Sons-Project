@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { parseItems, getRowDiscounts } from '../utils/purchaseReportHelpers';
+import { extractProductColor } from '../../../../utils/colorService';
 
 export const usePurchaseReportData = (rType: string, filters: any = {}) => {
   const [loading, setLoading] = useState(true);
@@ -16,11 +17,11 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
         setLoading(true);
 
         const [prodRes, purRes, retRes, catRes, venRes] = await Promise.all([
-          supabase.from('products').select('*'),
-          supabase.from('supplier_purchases').select('*').order('id', { ascending: true }),
-          supabase.from('purchase_returns').select('*').order('id', { ascending: true }),
+          fetchAllPages(supabase.from('products').select('*')),
+          fetchAllPages(supabase.from('supplier_purchases').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('purchase_returns').select('*').order('id', { ascending: true })),
           supabase.from('inventory_categories').select('id, name, parent_id'),
-          supabase.from('vendors').select('id, vendor_name, name, vendor_code, vendorCode, page_no, pageNo')
+          fetchAllPages(supabase.from('vendors').select('id, vendor_name, name, vendor_code, vendorCode, page_no, pageNo'))
         ]);
 
         const allProducts = prodRes.data || [];
@@ -119,7 +120,7 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
           );
           const uom = matched?.uom || (isTile ? 'BOX' : 'Nos');
           const brand = matched?.brand || matched?.bin || '-';
-          return { parentCategory: pCat, subCategory: sCat, category: lCat, sku, uom, brand };
+          return { parentCategory: pCat, subCategory: sCat, category: lCat, sku, uom, brand, color: extractProductColor(matched) };
         };
 
         const startTimestamp = filters.dateFrom ? new Date(filters.dateFrom + 'T00:00:00').getTime() : 0;
@@ -141,6 +142,7 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
         const prodList = normalizeFilterList(filters.product);
         const brandList = normalizeFilterList(filters.brand || filters.bin);
         const uomList = normalizeFilterList(filters.uom);
+        const colorList = normalizeFilterList(filters.color).map((c: string) => c.trim().toLowerCase()).filter((c: string) => c && c !== 'all');
         const pMode = String(filters.purchaseType || filters.saleType || '').trim().toLowerCase();
 
         const doesItemMatchCriteria = (it: any, purchaseHeader?: any) => {
@@ -194,6 +196,11 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
           }
           if (uomList.length > 0) {
             if (!uomList.includes(uom.toLowerCase())) return false;
+          }
+          if (colorList.length > 0) {
+            const { color } = getProductMeta(pName);
+            const itemColor = String(it.color || color || '').trim().toLowerCase();
+            if (!itemColor || !colorList.includes(itemColor)) return false;
           }
           return true;
         };
@@ -346,7 +353,7 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
                 if (!filters.product.includes(pName)) return;
               }
 
-              const { parentCategory: pCat, subCategory: sCat, category: lCat, sku, uom, brand } = getProductMeta(pName);
+              const { parentCategory: pCat, subCategory: sCat, category: lCat, sku, uom, brand, color } = getProductMeta(pName);
 
               if (parentCatList.length > 0) {
                 const matches = parentCatList.some(fc => pCat.toLowerCase() === fc || pCat.toLowerCase().includes(fc) || fc.includes(pCat.toLowerCase()));
@@ -367,6 +374,14 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
               if (uomList.length > 0) {
                 if (!uomList.includes(uom.toLowerCase())) return;
               }
+              if (colorList.length > 0) {
+                const itemColor = String(it.color || color || '').trim().toLowerCase();
+                if (!itemColor || !colorList.includes(itemColor)) return;
+              }
+              if (colorList.length > 0) {
+                const itemColor = String(it.color || color || '').trim().toLowerCase();
+                if (!itemColor || !colorList.includes(itemColor)) return;
+              }
 
               const { parentNode, subNode, leafNode } = getOrCreateNodes(pCat, sCat, lCat);
               const qty = Number(it.qty || it.quantity || 1);
@@ -380,6 +395,7 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
                   sku: it.sku || sku,
                   uom: it.uom || uom,
                   brand: it.brand || brand,
+                  color: it.color || color || '-',
                   bought_qty: 0,
                   returned_qty: 0,
                   net_qty: 0,
@@ -578,6 +594,10 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
               if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
                 if (!filters.bin.includes(brand)) return;
               }
+              if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                const cVal = String(it.color || color || '').trim().toLowerCase();
+                if (!filters.color.map((x: string) => String(x).toLowerCase()).includes(cVal)) return;
+              }
 
               const qty = Number(it.qty || it.quantity || 1);
               const rate = Number(it.purchase_price ?? it.cost_price ?? it.unit_price ?? it.rate ?? it.price ?? 0);
@@ -592,6 +612,7 @@ export const usePurchaseReportData = (rType: string, filters: any = {}) => {
                   sub_category: sCat,
                   category: lCat,
                   brand: it.brand || brand,
+                  color: it.color || color || '-',
                   uom: it.uom || uom,
                   total_purchased_qty: 0,
                   total_procurement_cost: 0,

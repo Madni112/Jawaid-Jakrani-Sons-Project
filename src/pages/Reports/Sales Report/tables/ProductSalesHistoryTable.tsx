@@ -38,6 +38,7 @@ export const ProductSalesHistoryTable: React.FC<ProductSalesHistoryTableProps> =
                     <th rowSpan={2} className="p-1.5 border border-black">Product / Item Name</th>
                     <th rowSpan={2} className="p-1.5 border border-black whitespace-nowrap">SKU / Code</th>
                     <th rowSpan={2} className="p-1.5 border border-black">Brand</th>
+                    <th rowSpan={2} className="p-1.5 border border-black text-center whitespace-nowrap">Color / Shade</th>
                     <th colSpan={3} className="p-1 border border-black text-center bg-gray-200">Category Classification</th>
                     <th rowSpan={2} className="p-1.5 border border-black text-center w-10">UOM</th>
                     <th rowSpan={2} className="p-1.5 border border-black text-right whitespace-nowrap">Sold Qty</th>
@@ -56,7 +57,7 @@ export const ProductSalesHistoryTable: React.FC<ProductSalesHistoryTableProps> =
                 <tbody>
                   {displayedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={14} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50/50">
+                      <td colSpan={15} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50/50">
                         No product sales history records discovered matching chosen selection criteria.
                       </td>
                     </tr>
@@ -69,6 +70,7 @@ export const ProductSalesHistoryTable: React.FC<ProductSalesHistoryTableProps> =
                           <td className="p-1.5 border border-black font-sans font-bold text-black">{row.product_name}</td>
                           <td className="p-1.5 border border-black text-gray-700 text-[11px] whitespace-nowrap">{row.sku || '-'}</td>
                           <td className="p-1.5 border border-black font-sans text-gray-600 text-[11px]">{row.brand || '-'}</td>
+                          <td className="p-1.5 border border-black font-sans text-center text-gray-700 text-[11px]">{row.color || '-'}</td>
                           <td className="p-1.5 border border-black font-sans text-gray-600 text-[11px]">{row.parentCategory || '-'}</td>
                           <td className="p-1.5 border border-black font-sans text-gray-600 text-[11px]">{row.subCategory || '-'}</td>
                           <td className="p-1.5 border border-black font-sans text-gray-600 text-[11px]">{row.category || '-'}</td>
@@ -100,7 +102,7 @@ export const ProductSalesHistoryTable: React.FC<ProductSalesHistoryTableProps> =
                   {/* 📄 Page Subtotal Row */}
                   {!isPrinting && pageSize !== 'all' && (
                     <tr className="bg-amber-50/80 border-t border-black font-bold font-mono text-xs text-amber-950">
-                      <td colSpan={8} className="p-2 border border-black text-right uppercase tracking-wider text-amber-900">
+                      <td colSpan={9} className="p-2 border border-black text-right uppercase tracking-wider text-amber-900">
                         Page {currentPage} Subtotal ({displayedRows.length} products):
                       </td>
                       <td className="p-2 border border-black text-right text-black font-bold">
@@ -121,7 +123,7 @@ export const ProductSalesHistoryTable: React.FC<ProductSalesHistoryTableProps> =
                   )}
                   {/* 📊 Overall Grand Totals Row */}
                   <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
-                    <td colSpan={8} className="p-2 border border-black text-right uppercase tracking-wider text-gray-900">
+                    <td colSpan={9} className="p-2 border border-black text-right uppercase tracking-wider text-gray-900">
                       Grand Total Summary (All {reportRows.length} Products):
                     </td>
                     <td className="p-2 border border-black text-right text-black">

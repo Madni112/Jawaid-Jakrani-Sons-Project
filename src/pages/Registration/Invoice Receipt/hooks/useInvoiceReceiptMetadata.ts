@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { CustomerItem, BankAccountItem, CoaAccountItem, SalesInvoiceItem, InvoiceAllocation } from '../types/invoiceReceiptTypes';
 import { calculateCustomerBalances } from '../services/invoiceReceiptService';
@@ -74,7 +74,7 @@ export function useInvoiceReceiptMetadata(isEditMode: boolean, editData: any) {
         setMetadataLoading(true);
 
         // 1. Fetch Customers
-        const { data: custData } = await supabase.from('customers').select('*');
+        const { data: custData } = await fetchAllPages(supabase.from('customers').select('*'));
         const normalizedCust: CustomerItem[] = (custData || []).map((c: any) => ({
           ...c,
           customer_name: c.customerName || c.customername || c.customer_name || c.name || 'Unnamed Customer',
@@ -87,17 +87,19 @@ export function useInvoiceReceiptMetadata(isEditMode: boolean, editData: any) {
         setCustomersList(normalizedCust);
 
         // 2. Fetch Banks & COA
-        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
-        const { data: coaData } = await supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code');
+        const { data: bankData } = await fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle, accountNumber'));
+        const { data: coaData } = await fetchAllPages(supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code'));
 
         if (bankData) setBankAccounts(bankData);
         if (coaData) setCoaAccounts(coaData);
 
         // 3. Fetch Sales Invoices
-        const { data: invData } = await supabase
-          .from('sales_invoices')
-          .select('*')
-          .order('id', { ascending: false });
+        const { data: invData } = await fetchAllPages(
+          supabase
+            .from('sales_invoices')
+            .select('*')
+            .order('id', { ascending: false })
+        );
 
         const safeInvoices: SalesInvoiceItem[] = invData || [];
         setSalesInvoicesList(safeInvoices);

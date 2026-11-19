@@ -1,5 +1,6 @@
 export interface StockReportFilter {
     bin?: string[];
+    color?: string[];
     parentCategory?: string[];
     subCategory?: string[];
     subSubCategory?: string[];
@@ -31,6 +32,7 @@ export interface StockProductRow {
     skuCode?: string;
     bin?: string;
     uom?: string;
+    color?: string;
     sub_sub_category?: string;
     parent_category?: string;
     sub_category?: string;

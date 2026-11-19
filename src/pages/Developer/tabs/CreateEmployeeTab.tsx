@@ -50,7 +50,7 @@ export const CreateEmployeeTab: React.FC<CreateEmployeeTabProps> = ({
             </p>
           </div>
           <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-semibold flex items-center gap-1.5">
-            <MdSecurity /> AL MUHAMMADI RBAC
+            <MdSecurity /> ZOHAIB ALI AND COMPANY RBAC
           </span>
         </div>
 
@@ -118,7 +118,7 @@ export const CreateEmployeeTab: React.FC<CreateEmployeeTabProps> = ({
                 <input
                   type="email"
                   required
-                  placeholder="e.g. employee@almuhammadi.com"
+                  placeholder="e.g. employee@zohaibalicompany.com"
                   value={newEmployee.email}
                   onChange={e => setNewEmployee({ ...newEmployee, email: e.target.value })}
                   className="w-full bg-white dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-lg p-2.5 text-black dark:text-white text-xs outline-none focus:border-emerald-500"

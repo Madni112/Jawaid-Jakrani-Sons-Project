@@ -20,6 +20,7 @@ import { BackupTab } from './tabs/BackupTab';
 import { SecurityDevicesTab } from './tabs/SecurityDevicesTab';
 import { FactoryResetTab } from './tabs/FactoryResetTab';
 import WorkflowSettingsTab from './WorkflowSettingsTab';
+import { ReportVisibilityTab } from './tabs/ReportVisibilityTab';
 
 const SettingsPage: React.FC = () => {
   const { userEmail, role, businessName, tenantId } = useAuth();
@@ -63,7 +64,7 @@ const SettingsPage: React.FC = () => {
 
   // Keyboard Shortcut: Shift + Left / Right Arrow to cycle between Settings Tabs
   useEffect(() => {
-    const tabOrder = ['profile', 'security_devices', 'theme', 'stock_control', 'credit_limits', 'sound_effects', 'backup'];
+    const tabOrder = ['profile', 'security_devices', 'theme', 'reports_visibility', 'stock_control', 'credit_limits', 'sound_effects', 'backup'];
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!e.shiftKey) return;
@@ -142,6 +143,7 @@ const SettingsPage: React.FC = () => {
               <span className="text-primary font-bold text-xl sm:text-2xl">
                 {activeTab === 'profile' && (isRTL ? 'پروفائل' : 'Profile')}
                 {activeTab === 'security_devices' && (isRTL ? 'لاگ ان ڈیوائسز اور سیکیورٹی' : 'Login Devices & Security')}
+                {activeTab === 'reports_visibility' && (isRTL ? 'رپورٹس اور پرنٹ لے آؤٹس' : 'Reports Visibility & Print Layouts')}
                 {activeTab === 'credit_limits' && (isRTL ? 'کسٹمر کریڈٹ لمٹس' : 'Customer Credit Limits')}
                 {(activeTab === 'sound_effects' || activeTab === 'pos_sound') && (isRTL ? 'آواز اور آڈیو اثرات' : 'Audio & Sound Effects')}
                 {activeTab === 'backup' && (isRTL ? 'ڈیٹا بیک اپ اور ایکسپورٹ' : 'Data Backup & Export')}
@@ -183,6 +185,8 @@ const SettingsPage: React.FC = () => {
             onNavigateToSecurityDevices={() => setActiveTab('security_devices')}
             getContrastTextColor={getContrastTextColor}
             isDarkModeActive={isDarkModeActive}
+            systemConfig={systemConfig}
+            onUpdateSystemConfig={setSystemConfig}
           />
         )}
 
@@ -237,10 +241,20 @@ const SettingsPage: React.FC = () => {
           <WorkflowSettingsTab isRTL={isRTL} />
         )}
 
-        {/* TAB 8: AL MUHAMMADI FACTORY RESET ERP */}
+        {/* TAB 8: ZOHAIB ALI AND COMPANY FACTORY RESET ERP */}
         {activeTab === 'alm_factory_reset' && (
           <FactoryResetTab
             userEmail={userEmail}
+            systemConfig={systemConfig}
+            isRTL={isRTL}
+          />
+        )}
+
+        {/* TAB 9: REPORTS VISIBILITY & PRINT LAYOUTS */}
+        {activeTab === 'reports_visibility' && (
+          <ReportVisibilityTab
+            userEmail={userEmail}
+            role={role}
             systemConfig={systemConfig}
             isRTL={isRTL}
           />

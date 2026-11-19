@@ -43,7 +43,7 @@ export const fetchResetBackups = async (): Promise<ResetBackupMetadata[]> => {
         id: details.backupId || String(row.id),
         timestamp: details.timestamp || row.created_at,
         performedBy: details.performedBy || row.performed_by || 'Super Admin',
-        sourcePortal: details.sourcePortal || 'AL MUHAMMADI',
+        sourcePortal: details.sourcePortal || 'ZOHAIB ALI AND COMPANY',
         summary: details.summary || {},
         archive: details.archive || {},
       };
@@ -144,7 +144,7 @@ export const executeErpFactoryReset = async (
         backupId,
         timestamp,
         performedBy,
-        sourcePortal: 'AL MUHAMMADI',
+        sourcePortal: 'ZOHAIB ALI AND COMPANY',
         summary,
         archive: archiveData,
       },
@@ -161,7 +161,7 @@ export const executeErpFactoryReset = async (
         {
           backupId,
           timestamp,
-          system: 'AL MUHAMMADI ENTERPRISE ERP',
+          system: 'ZOHAIB ALI AND COMPANY ENTERPRISE ERP',
           summary,
           data: archiveData,
         },

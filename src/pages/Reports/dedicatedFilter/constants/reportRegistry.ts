@@ -37,7 +37,7 @@ export const shouldShowBadge = (config: { badge?: string; badgeType?: string; cr
 export const REPORT_REGISTRY: Record<string, ReportConfig> = {
   'category-wise-sales': {
     id: 'category-wise-sales',
-    title: 'Category-Wise Sales & Volume Report',
+    title: 'Category-Wise Sales Report',
     categoryName: 'Sales & Distribution',
     subtitle: 'Header-wise category sales audit, product lines, net volumes, return credits, and revenue share.',
     badge: 'NEW',
@@ -46,7 +46,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdCategory,
     targetPrintPath: '/Reports/Sales-Report/Print',
     printType: 'category-sales',
-    fields: ['parentCategory', 'subCategory', 'subSubCategory', 'product', 'customer', 'salesman', 'location']
+    fields: ['parentCategory', 'subCategory', 'subSubCategory', 'product', 'customer', 'salesman', 'location', 'color']
   },
   'product-sales-history': {
     id: 'product-sales-history',
@@ -59,7 +59,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdInventory,
     targetPrintPath: '/Reports/Sales-Report/Print',
     printType: 'product-sales-history',
-    fields: ['product', 'customer', 'salesman', 'parentCategory', 'subCategory', 'brand', 'location']
+    fields: ['product', 'customer', 'salesman', 'parentCategory', 'subCategory', 'brand', 'location', 'color']
   },
   'sale-inv-detail': {
     id: 'sale-inv-detail',
@@ -72,11 +72,11 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdReceipt,
     targetPrintPath: '/Reports/Sales-Report/Print',
     printType: 'invoice',
-    fields: ['invoice', 'customer', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['invoice', 'customer', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
   'commercial-sale-ledger': {
     id: 'commercial-sale-ledger',
-    title: 'Commercial Sales Audit Ledger',
+    title: 'Sale (Salesmen wise)',
     categoryName: 'Sales & Distribution',
     subtitle: 'Master commercial sales register linked with salesman, carrier fleet & customer accounts.',
     badge: 'AUDITED',
@@ -94,7 +94,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdAssessment,
     targetPrintPath: '/Reports/Sales-Report/Print',
     printType: 'sales-query',
-    fields: ['customer', 'salesman', 'transport', 'parentCategory', 'subCategory', 'subSubCategory', 'product', 'brand', 'location', 'saleType', 'saleMethod']
+    fields: ['customer', 'salesman', 'transport', 'parentCategory', 'subCategory', 'subSubCategory', 'product', 'brand', 'location', 'saleType', 'saleMethod', 'color']
   },
   'sales-return-ledger': {
     id: 'sales-return-ledger',
@@ -104,7 +104,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdLayers,
     targetPrintPath: '/Reports/Sales-Report/Print',
     printType: 'return',
-    fields: ['customer', 'salesman', 'transport', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['customer', 'salesman', 'transport', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
   'customer-sales-breakdown': {
     id: 'customer-sales-breakdown',
@@ -146,7 +146,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
   },
   'category-purchases': {
     id: 'category-purchases',
-    title: 'Category-Wise Purchases & Volume Report',
+    title: 'Category-Wise Purchases Report',
     categoryName: 'Purchases & Payables',
     subtitle: 'Header-wise category procurement spend, inward volume, return debits, and expenditure share.',
     badge: 'NEW',
@@ -155,7 +155,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdCategory,
     targetPrintPath: '/Reports/Purchase-Report/Print',
     printType: 'category-purchases',
-    fields: ['parentCategory', 'subCategory', 'subSubCategory', 'product', 'brand', 'supplier']
+    fields: ['parentCategory', 'subCategory', 'subSubCategory', 'product', 'brand', 'supplier', 'color']
   },
   'product-purchase-history': {
     id: 'product-purchase-history',
@@ -168,7 +168,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdInventory,
     targetPrintPath: '/Reports/Purchase-Report/Print',
     printType: 'product-purchase-history',
-    fields: ['parentCategory', 'subCategory', 'subSubCategory', 'product', 'brand', 'supplier', 'location']
+    fields: ['parentCategory', 'subCategory', 'subSubCategory', 'product', 'brand', 'supplier', 'location', 'color']
   },
   'purchase-invoice-detail': {
     id: 'purchase-invoice-detail',
@@ -181,7 +181,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdReceiptLong,
     targetPrintPath: '/Reports/Purchase-Report/Print',
     printType: 'purchase-invoice-detail',
-    fields: ['invoice', 'supplier', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['invoice', 'supplier', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
   'purchase-query-center': {
     id: 'purchase-query-center',
@@ -191,7 +191,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdBarChart,
     targetPrintPath: '/Reports/Purchase-Report/Print',
     printType: 'purchase-query',
-    fields: ['supplier', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['supplier', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
   'vendor-return-ledger': {
     id: 'vendor-return-ledger',
@@ -201,7 +201,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     icon: MdCorporateFare,
     targetPrintPath: '/Reports/Purchase-Report/Print',
     printType: 'return',
-    fields: ['supplier', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['supplier', 'location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
 
   // ── INVENTORY & STOCK ──
@@ -216,7 +216,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     targetPrintPath: '/Reports/Stock-Report/Print',
     printType: 'stock',
     tab: 1,
-    fields: ['location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
   'current-stock-balance': {
     id: 'current-stock-balance',
@@ -230,7 +230,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     printType: 'stock',
     tab: 2,
     hideDateFilter: true,
-    fields: ['location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
   'as-of-date-stock-status': {
     id: 'as-of-date-stock-status',
@@ -245,7 +245,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     printType: 'stock',
     tab: 3,
     singleDateFilter: true,
-    fields: ['location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
   'inter-warehouse-transfers': {
     id: 'inter-warehouse-transfers',
@@ -259,7 +259,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     targetPrintPath: '/Reports/Stock-Report/Print',
     printType: 'stock',
     tab: 4,
-    fields: ['location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'salesman']
+    fields: ['location', 'parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'salesman', 'color']
   },
   'category-wise-stock': {
     id: 'category-wise-stock',
@@ -274,7 +274,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     printType: 'stock',
     tab: 7,
     hideDateFilter: true,
-    fields: ['parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product']
+    fields: ['parentCategory', 'subCategory', 'subSubCategory', 'brand', 'product', 'color']
   },
   'warehouse-location-report': {
     id: 'warehouse-location-report',
@@ -288,7 +288,7 @@ export const REPORT_REGISTRY: Record<string, ReportConfig> = {
     printType: 'stock',
     tab: 8,
     singleDateFilter: true,
-    fields: ['location', 'brand', 'product']
+    fields: ['location', 'brand', 'product', 'color']
   },
   'holding-stock-report': {
     id: 'holding-stock-report',

@@ -102,7 +102,7 @@ const SaleReportPrint: React.FC<SaleReportPrintProps> = ({
     const originalTitle = document.title;
     const bName = businessName || getBrandConfig().fullName;
     if (rType === 'category-sales') {
-      document.title = `Category-Wise Sales & Volume Report - ${bName}`;
+      document.title = `Category-Wise Sales Report - ${bName}`;
     } else if (rType === 'product-sales-history') {
       document.title = `Product Sales History Report - ${bName}`;
     } else if (rType === 'sales-query') {

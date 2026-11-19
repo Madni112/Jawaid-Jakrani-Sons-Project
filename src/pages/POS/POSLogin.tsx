@@ -267,7 +267,7 @@ export const POSLogin: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className={`font-extrabold text-sm sm:text-base tracking-tight leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                AL MUHAMMADI
+                ZOHAIB ALI AND COMPANY
               </h1>
               <span
                 className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-full border"
@@ -548,7 +548,7 @@ export const POSLogin: React.FC = () => {
       }`}>
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span>AL MUHAMMADI POS v1.4 • High-Velocity Counter Terminal</span>
+          <span>ZOHAIB ALI AND COMPANY POS v1.4 • High-Velocity Counter Terminal</span>
         </div>
         <div className={`font-mono text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
           Hardware Station: <strong className={isDark ? 'text-slate-200' : 'text-slate-900'}>{terminal.name}</strong> • Network: Online

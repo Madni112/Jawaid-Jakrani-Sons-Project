@@ -1,6 +1,7 @@
-import { supabase } from '../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { extractItemDetails } from './saleReportHelpers';
+import { extractProductColor } from '../../../../utils/colorService';
 
 export interface SaleReportFetchParams {
   rType: string;
@@ -32,16 +33,19 @@ export const fetchSaleReportDataset = async ({
 
         // Fetch products and customers lookup for UOM, codes & ledger page nos
         const [prodRes, custRes] = await Promise.all([
-          supabase.from('products').select('*'),
-          supabase.from('customers').select('id, customerName, customername, customer_code, customerCode, page_no, pageNo')
+          fetchAllPages(supabase.from('products').select('*')),
+          fetchAllPages(supabase.from('customers').select('id, customerName, customername, customer_code, customerCode, page_no, pageNo'))
         ]);
         const prodData = prodRes.data;
         const uomMapObj: Record<string, string> = {};
+        const productColorMapObj: Record<string, string> = {};
         if (prodData) {
           prodData.forEach((p: any) => {
             if (p.product_name) {
               const isTile = Boolean(String(p.category || '').toLowerCase().includes('tile'));
-              uomMapObj[p.product_name.trim().toLowerCase()] = p.uom || (isTile ? 'BOX' : 'Nos');
+              const pKey = p.product_name.trim().toLowerCase();
+              uomMapObj[pKey] = p.uom || (isTile ? 'BOX' : 'Nos');
+              productColorMapObj[pKey] = extractProductColor(p);
             }
           });
           setProductUomMap(uomMapObj);
@@ -65,8 +69,8 @@ export const fetchSaleReportDataset = async ({
         // ── 📂 REPORT TYPE: CATEGORY-WISE SALES & VOLUME REPORT ──
         if (rType === 'category-sales') {
           const [invRes, retRes, catRes, locRes] = await Promise.all([
-            supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
-            supabase.from('sales_returns').select('*').order('id', { ascending: true }),
+            fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
+            fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: true })),
             supabase.from('inventory_categories').select('id, name, parent_id'),
             supabase.from('inventory_locations').select('id, name, location_type').order('id', { ascending: true })
           ]);
@@ -294,6 +298,11 @@ export const fetchSaleReportDataset = async ({
               if (filters.subSubCategory && filters.subSubCategory.length > 0 && !filters.subSubCategory.includes('All')) {
                 if (!filters.subSubCategory.includes(lCat)) return;
               }
+              if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                const prodColor = String(p.color || productColorMapObj[String(p.product_name || '').trim().toLowerCase()] || extractProductColor(p) || '').trim().toLowerCase();
+                const normColors = filters.color.map((x: string) => String(x).trim().toLowerCase());
+                if (!prodColor || !normColors.includes(prodColor)) return;
+              }
 
               const { leafNode } = getOrCreateHierarchyNodes(pCat, sCat, lCat);
               const pName = (p.product_name || '').trim();
@@ -302,6 +311,7 @@ export const fetchSaleReportDataset = async ({
                 leafNode.products_map[pName.toLowerCase()] = {
                   product_name: pName,
                   sku: p.sku || p.item_sr_no || '-',
+                  color: p.color || productColorMapObj[pName.toLowerCase()] || extractProductColor(p) || '-',
                   uom: p.uom || (isTile ? 'BOX' : 'Nos'),
                   sold_qty: 0,
                   returned_qty: 0,
@@ -349,6 +359,12 @@ export const fetchSaleReportDataset = async ({
                 const matches = arr.some((fc: string) => fc.toLowerCase() === pCat.toLowerCase() || pCat.toLowerCase().includes(fc.toLowerCase()) || fc.toLowerCase().includes(pCat.toLowerCase()));
                 if (!matches) return;
               }
+              if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                const matchingP = productLookup[pName.toLowerCase()];
+                const prodColor = String(it.color || matchingP?.color || productColorMapObj[pName.toLowerCase()] || extractProductColor(matchingP) || '').trim().toLowerCase();
+                const normColors = filters.color.map((x: string) => String(x).trim().toLowerCase());
+                if (!prodColor || !normColors.includes(prodColor)) return;
+              }
               if (filters.subCategory && filters.subCategory.length > 0 && !filters.subCategory.includes('All')) {
                 const arr = Array.isArray(filters.subCategory) ? filters.subCategory : [filters.subCategory];
                 const matches = arr.some((sc: string) => sc.toLowerCase() === sCat.toLowerCase() || sCat.toLowerCase().includes(sc.toLowerCase()) || sc.toLowerCase().includes(sCat.toLowerCase()));
@@ -358,6 +374,12 @@ export const fetchSaleReportDataset = async ({
                 const arr = Array.isArray(filters.subSubCategory) ? filters.subSubCategory : [filters.subSubCategory];
                 const matches = arr.some((ssc: string) => ssc.toLowerCase() === lCat.toLowerCase() || lCat.toLowerCase().includes(ssc.toLowerCase()) || ssc.toLowerCase().includes(lCat.toLowerCase()));
                 if (!matches) return;
+              }
+              if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                const matchingP = productLookup[pName.toLowerCase()];
+                const prodColor = String(it.color || matchingP?.color || productColorMapObj[pName.toLowerCase()] || extractProductColor(matchingP) || '').trim().toLowerCase();
+                const normColors = filters.color.map((x: string) => String(x).trim().toLowerCase());
+                if (!prodColor || !normColors.includes(prodColor)) return;
               }
 
               const { parentNode, subNode, leafNode } = getOrCreateHierarchyNodes(pCat, sCat, lCat);
@@ -691,8 +713,8 @@ export const fetchSaleReportDataset = async ({
         // ── 📦 REPORT TYPE: PRODUCT SALES HISTORY REPORT ──
         else if (rType === 'product-sales-history') {
           const [invRes, retRes] = await Promise.all([
-            supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
-            supabase.from('sales_returns').select('*').order('id', { ascending: true })
+            fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
+            fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: true }))
           ]);
 
           if (invRes.error) throw invRes.error;
@@ -792,10 +814,15 @@ export const fetchSaleReportDataset = async ({
               if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
                 if (!filters.bin.includes(prodBrand)) return;
               }
+              if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                const prodColor = String(p?.color || productColorMapObj[key] || extractProductColor(p) || '').trim().toLowerCase();
+                if (!filters.color.map(x => String(x).toLowerCase()).includes(prodColor)) return;
+              }
 
               productSummaryMap[key] = {
                 product_name: pName,
                 sku: p.item_sr_no || p.sku || '-',
+                color: p.color || productColorMapObj[key] || extractProductColor(p) || '-',
                 parentCategory: prodParentCat || '-',
                 subCategory: prodSubCat || '-',
                 category: prodLeafCat || '-',
@@ -854,6 +881,10 @@ export const fetchSaleReportDataset = async ({
               if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
                 if (!filters.bin.includes(prodBrand)) return;
               }
+              if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                const prodColor = String(it.color || matchingProd?.color || productColorMapObj[key] || extractProductColor(matchingProd) || '').trim().toLowerCase();
+                if (!filters.color.map(x => String(x).toLowerCase()).includes(prodColor)) return;
+              }
 
               const qty = Number(it.qty || it.quantity || 1);
               const rate = Number(it.rp ?? it.rate ?? it.sale_price ?? it.price ?? matchingProd?.retail_price ?? 0);
@@ -866,6 +897,7 @@ export const fetchSaleReportDataset = async ({
                 productSummaryMap[key] = {
                   product_name: pName,
                   sku,
+                  color: it.color || matchingProd?.color || productColorMapObj[key] || extractProductColor(matchingProd) || '-',
                   parentCategory: prodParentCat || '-',
                   subCategory: prodSubCat || '-',
                   category: prodLeafCat || '-',
@@ -924,6 +956,13 @@ export const fetchSaleReportDataset = async ({
           });
 
           let finalRows = compiledRows;
+          if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+            const normColors = filters.color.map((x: string) => String(x).trim().toLowerCase());
+            finalRows = finalRows.filter(r => {
+              const c = String(r.color || '').trim().toLowerCase();
+              return c && normColors.includes(c);
+            });
+          }
           if (!filters.showZeroSales) {
             finalRows = finalRows.filter(r => r.sold_qty > 0 || r.returned_qty > 0);
           }
@@ -961,7 +1000,7 @@ export const fetchSaleReportDataset = async ({
           if (filters.transport && filters.transport.length > 0 && !filters.transport.includes('All')) retQuery = retQuery.in('transport_name', filters.transport);
           if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) retQuery = retQuery.in('dispatch_warehouse', filters.location);
 
-          const [invRes, retRes] = await Promise.all([invQuery, retQuery]);
+          const [invRes, retRes] = await Promise.all([fetchAllPages(invQuery), fetchAllPages(retQuery)]);
           if (invRes.error) throw invRes.error;
           if (retRes.error) throw retRes.error;
 
@@ -984,7 +1023,8 @@ export const fetchSaleReportDataset = async ({
           // Filter by product / brand / category if specified in filters
           if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
             (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) ||
+            (filters.color && filters.color.length > 0 && !filters.color.includes('All'))) {
             const filterItemMatch = (record: any) => {
               const items = extractItemDetails(record);
               return items.some(it => {
@@ -1000,6 +1040,10 @@ export const fetchSaleReportDataset = async ({
                 if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
                   const prodBrand = matchingProd?.brand || '';
                   if (!filters.bin.includes(prodBrand)) return false;
+                }
+                if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                  const prodColor = String(matchingProd?.color || productColorMapObj[String(matchingProd?.product_name || '').trim().toLowerCase()] || extractProductColor(matchingProd) || '').trim().toLowerCase();
+                  if (!filters.color.map(x => String(x).toLowerCase()).includes(prodColor)) return false;
                 }
                 return true;
               });
@@ -1136,12 +1180,14 @@ export const fetchSaleReportDataset = async ({
             else query = query.neq('dc_no', '');
           }
 
-          const { data: invData, error: invError } = await query;
+          const { data: invData, error: invError } = await fetchAllPages(query);
           if (invError) throw invError;
 
-          const { data: returnsData, error: retError } = await supabase
-            .from('sales_returns')
-            .select('original_invoice_no');
+          const { data: returnsData, error: retError } = await fetchAllPages(
+            supabase
+              .from('sales_returns')
+              .select('original_invoice_no')
+          );
           if (retError) throw retError;
 
           const returnedNosList = (returnsData || []).map(r =>
@@ -1173,7 +1219,8 @@ export const fetchSaleReportDataset = async ({
           // Filter by product / brand / category if specified in filters
           if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
             (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) ||
+            (filters.color && filters.color.length > 0 && !filters.color.includes('All'))) {
             pool = pool.filter((inv: any) => {
               const items = extractItemDetails(inv);
               return items.some(it => {
@@ -1189,6 +1236,10 @@ export const fetchSaleReportDataset = async ({
                 if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
                   const prodBrand = matchingProd?.brand || '';
                   if (!filters.bin.includes(prodBrand)) return false;
+                }
+                if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                  const prodColor = String(matchingProd?.color || productColorMapObj[String(matchingProd?.product_name || '').trim().toLowerCase()] || extractProductColor(matchingProd) || '').trim().toLowerCase();
+                  if (!filters.color.map(x => String(x).toLowerCase()).includes(prodColor)) return false;
                 }
                 return true;
               });
@@ -1236,7 +1287,7 @@ export const fetchSaleReportDataset = async ({
           if (filters.transport && filters.transport.length > 0 && !filters.transport.includes('All')) retQuery = retQuery.in('transport_name', filters.transport);
           if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) retQuery = retQuery.in('dispatch_warehouse', filters.location);
 
-          const [invRes, retRes] = await Promise.all([invQuery, retQuery]);
+          const [invRes, retRes] = await Promise.all([fetchAllPages(invQuery), fetchAllPages(retQuery)]);
           if (invRes.error) throw invRes.error;
           if (retRes.error) throw retRes.error;
 
@@ -1259,7 +1310,8 @@ export const fetchSaleReportDataset = async ({
           // Filter by product / brand / category if specified in filters
           if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
             (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) ||
+            (filters.color && filters.color.length > 0 && !filters.color.includes('All'))) {
             const filterItemMatch = (record: any) => {
               const items = extractItemDetails(record);
               return items.some(it => {
@@ -1275,6 +1327,10 @@ export const fetchSaleReportDataset = async ({
                 if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
                   const prodBrand = matchingProd?.brand || '';
                   if (!filters.bin.includes(prodBrand)) return false;
+                }
+                if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                  const prodColor = String(matchingProd?.color || productColorMapObj[String(matchingProd?.product_name || '').trim().toLowerCase()] || extractProductColor(matchingProd) || '').trim().toLowerCase();
+                  if (!filters.color.map(x => String(x).toLowerCase()).includes(prodColor)) return false;
                 }
                 return true;
               });
@@ -1398,10 +1454,39 @@ export const fetchSaleReportDataset = async ({
           if (filters.transport && filters.transport.length > 0 && !filters.transport.includes('All')) query = query.in('transport_name', filters.transport);
           if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) query = query.in('dispatch_warehouse', filters.location);
 
-          const { data, error } = await query;
+          const { data, error } = await fetchAllPages(query);
           if (error) throw error;
 
           let pool = data || [];
+          if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
+            (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) ||
+            (filters.color && filters.color.length > 0 && !filters.color.includes('All'))) {
+            pool = pool.filter((inv: any) => {
+              const items = extractItemDetails(inv);
+              return items.some(it => {
+                const pName = it.name;
+                const matchingProd = (prodData || []).find((p: any) => (p.product_name || '').trim().toLowerCase() === pName.trim().toLowerCase());
+                if (filters.product && filters.product.length > 0 && !filters.product.includes('All')) {
+                  if (!filters.product.includes(pName)) return false;
+                }
+                if (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) {
+                  const prodCat = matchingProd?.category || matchingProd?.parent_category || '';
+                  if (!filters.parentCategory.includes(prodCat)) return false;
+                }
+                if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
+                  const prodBrand = matchingProd?.brand || '';
+                  if (!filters.bin.includes(prodBrand)) return false;
+                }
+                if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                  const prodColor = String(it.color || matchingProd?.color || productColorMapObj[String(matchingProd?.product_name || '').trim().toLowerCase()] || extractProductColor(matchingProd) || '').trim().toLowerCase();
+                  const normColors = filters.color.map((x: string) => String(x).trim().toLowerCase());
+                  if (!prodColor || !normColors.includes(prodColor)) return false;
+                }
+                return true;
+              });
+            });
+          }
           if (filters.dateFrom && filters.dateTo) {
             const startStr = String(filters.dateFrom).split('T')[0];
             const endStr = String(filters.dateTo).split('T')[0];
@@ -1414,7 +1499,8 @@ export const fetchSaleReportDataset = async ({
           // Filter by product / brand / category if specified in filters
           if ((filters.product && filters.product.length > 0 && !filters.product.includes('All')) ||
             (filters.parentCategory && filters.parentCategory.length > 0 && !filters.parentCategory.includes('All')) ||
-            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All'))) {
+            (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) ||
+            (filters.color && filters.color.length > 0 && !filters.color.includes('All'))) {
             pool = pool.filter((ret: any) => {
               const items = extractItemDetails(ret);
               return items.some(it => {
@@ -1430,6 +1516,10 @@ export const fetchSaleReportDataset = async ({
                 if (filters.bin && filters.bin.length > 0 && !filters.bin.includes('All')) {
                   const prodBrand = matchingProd?.brand || '';
                   if (!filters.bin.includes(prodBrand)) return false;
+                }
+                if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                  const prodColor = String(matchingProd?.color || productColorMapObj[String(matchingProd?.product_name || '').trim().toLowerCase()] || extractProductColor(matchingProd) || '').trim().toLowerCase();
+                  if (!filters.color.map(x => String(x).toLowerCase()).includes(prodColor)) return false;
                 }
                 return true;
               });
@@ -1503,7 +1593,7 @@ export const fetchSaleReportDataset = async ({
           if (filters.location && filters.location.length > 0 && !filters.location.includes('All')) query = query.in('dispatch_warehouse', filters.location);
           if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) query = query.in('salesman', filters.salesman);
 
-          const { data, error } = await query;
+          const { data, error } = await fetchAllPages(query);
           if (error) throw error;
 
           let pool = data || [];
@@ -1539,7 +1629,7 @@ export const fetchSaleReportDataset = async ({
           if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) query = query.in('customer_name', filters.customer);
           if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) query = query.in('salesman', filters.salesman);
 
-          const { data: invData, error: invError } = await query;
+          const { data: invData, error: invError } = await fetchAllPages(query);
           if (invError) throw invError;
 
           let filteredInvs = invData || [];

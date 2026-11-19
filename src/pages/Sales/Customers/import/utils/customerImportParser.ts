@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { supabase } from '../../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../../Context/supabaseClient';
 import { ParsedCustomer } from '../types/customerImportTypes';
 
 export const parseExcelDate = (val: any): string => {
@@ -126,12 +126,14 @@ export const parseCustomerMatrix = async (
 
   try {
     const [custQuery, coaQuery] = await Promise.all([
-      supabase
-        .from('customers')
-        .select(
-          'id, customerName, customername, customer_name, city, province, address, balance, currentBalance, opening_balance, customer_code, customerCode, coa_code, account_code'
-        ),
-      supabase.from('chart_of_accounts').select('account_code'),
+      fetchAllPages(
+        supabase
+          .from('customers')
+          .select(
+            'id, customerName, customername, customer_name, city, province, address, balance, currentBalance, opening_balance, customer_code, customerCode, coa_code, account_code'
+          )
+      ),
+      fetchAllPages(supabase.from('chart_of_accounts').select('account_code')),
     ]);
 
     if (custQuery.data) {

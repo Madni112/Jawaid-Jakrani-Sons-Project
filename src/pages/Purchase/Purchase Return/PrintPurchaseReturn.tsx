@@ -267,7 +267,7 @@ const PrintPurchaseReturn: React.FC = () => {
         {/* Header matching Inward Challan */}
         <div className="border-b-2 border-[#800020] pb-4 mb-5 flex justify-between items-start">
           <div>
-            <div className="text-[22px] font-black text-[#800020] tracking-tight">AL-MUHAMMADI TILES EMPORIUM</div>
+            <div className="text-[22px] font-black text-[#800020] tracking-tight">ZOHAIB ALI AND COMPANY</div>
             <div className="text-[14px] font-extrabold uppercase tracking-wider text-[#0f172a] mt-1">OUTWARD RETURN CHALLAN / DEBIT NOTE</div>
           </div>
           <div className="text-right">

@@ -12,7 +12,7 @@ import { posService } from '../../../service/posService';
 const DEFAULT_DEMO_BANKS = [
   {
     bankName: 'Meezan Bank Ltd',
-    accountTitle: 'AL MUHAMMADI - Main Collection',
+    accountTitle: 'ZOHAIB ALI AND COMPANY - Main Collection',
     accountNumber: '0214-0104829101',
     branchName: 'Cloth Market Branch',
     branchCode: 'MEZN-0214',
@@ -26,7 +26,7 @@ const DEFAULT_DEMO_BANKS = [
   },
   {
     bankName: 'Habib Bank Limited (HBL)',
-    accountTitle: 'AL MUHAMMADI - Current Account',
+    accountTitle: 'ZOHAIB ALI AND COMPANY - Current Account',
     accountNumber: '0042-7901234503',
     branchName: 'Saddar Branch',
     branchCode: 'HBL-0042',
@@ -40,12 +40,12 @@ const DEFAULT_DEMO_BANKS = [
   },
   {
     bankName: 'JazzCash Business',
-    accountTitle: 'AL MUHAMMADI - Merchant Till',
+    accountTitle: 'ZOHAIB ALI AND COMPANY - Merchant Till',
     accountNumber: '0300-9876543',
     branchName: 'Digital Wallet Till',
     branchCode: 'JC-TILL',
     branchNumber: '01',
-    contactPerson: 'AL MUHAMMADI',
+    contactPerson: 'ZOHAIB ALI AND COMPANY',
     phoneNumber: '0300-9876543',
     address: 'Cloth Market, Hyderabad',
     openingBalance: 75000,
@@ -54,12 +54,12 @@ const DEFAULT_DEMO_BANKS = [
   },
   {
     bankName: 'Easypaisa / Raast',
-    accountTitle: 'AL MUHAMMADI - Raast P2M',
+    accountTitle: 'ZOHAIB ALI AND COMPANY - Raast P2M',
     accountNumber: '0312-8039911',
     branchName: 'Raast Instant Pay',
     branchCode: 'RAAST-PK',
     branchNumber: '01',
-    contactPerson: 'AL MUHAMMADI',
+    contactPerson: 'ZOHAIB ALI AND COMPANY',
     phoneNumber: '0312-8039911',
     address: 'Cloth Market, Hyderabad',
     openingBalance: 45000,

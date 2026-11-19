@@ -62,7 +62,7 @@ export const PurchaseReportHeaderBanner: React.FC<PurchaseReportHeaderBannerProp
               WebkitPrintColorAdjust: 'exact',
               printColorAdjust: 'exact'
             }}
-          >AM</span>
+          >ZAC</span>
         </div>
       </div>
 
@@ -77,7 +77,7 @@ export const PurchaseReportHeaderBanner: React.FC<PurchaseReportHeaderBannerProp
           Audit Sub-Categorization:{' '}
           <b className="text-black uppercase underline">
             {rType === 'category-purchases' &&
-              `Category-Wise Purchases & Volume Report${
+              `Category-Wise Purchases Report${
                 activeViewMode === 'detailed' ? ' (Hierarchical Tree Breakdown)' : ' (Summary Matrix)'
               }`}
             {rType === 'product-purchase-history' &&

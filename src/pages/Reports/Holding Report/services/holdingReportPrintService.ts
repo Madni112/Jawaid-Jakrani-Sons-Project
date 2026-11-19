@@ -1,4 +1,4 @@
-import { supabase } from '../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { HoldingItemRow } from '../types/holdingReportTypes';
 
 export const fetchHoldingPrintRows = async (
@@ -6,10 +6,10 @@ export const fetchHoldingPrintRows = async (
   setCustomerLookupMap: React.Dispatch<React.SetStateAction<Record<string, { code: string; pageNo: string }>>>
 ): Promise<HoldingItemRow[]> => {
   const [dcRes, invRes, smRes, custRes] = await Promise.all([
-    supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
-    supabase.from('sales_invoices').select('*'),
+    fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
+    fetchAllPages(supabase.from('sales_invoices').select('*')),
     supabase.from('salesmen').select('id, name'),
-    supabase.from('customers').select('id, customerName, customer_code, customerCode, page_no, pageNo'),
+    fetchAllPages(supabase.from('customers').select('id, customerName, customer_code, customerCode, page_no, pageNo')),
   ]);
 
   const dcs = dcRes.data || [];

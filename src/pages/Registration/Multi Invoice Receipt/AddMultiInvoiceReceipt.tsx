@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'react-hot-toast';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import Spinner from '../../../ui/Spinner';
 import { MdReceipt, MdArrowBack } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
@@ -44,9 +44,9 @@ const AddMultiInvoiceReceipt = () => {
         const fetchCoreMetadata = async () => {
             try {
                 setInitialLoading(true);
-                const { data: custData } = await supabase.from('customers').select('id, customerName, primaryPhone, customer_code, customerCode');
-                const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle');
-                const { data: coaData } = await supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code');
+                const { data: custData } = await fetchAllPages(supabase.from('customers').select('id, customerName, primaryPhone, customer_code, customerCode'));
+                const { data: bankData } = await fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle'));
+                const { data: coaData } = await fetchAllPages(supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code'));
                 if (custData) setCustomers(custData);
                 if (bankData) setBanks(bankData);
                 if (coaData) setCoaAccounts(coaData);
@@ -79,13 +79,15 @@ const AddMultiInvoiceReceipt = () => {
             setFetchingInvoices(true);
             const trimmedCustomer = chosenCustomer.trim();
 
-            const { data: openInvoices, error } = await supabase
-                .from('sales_invoices')
-                .select('id, customer_name, total_amount, cash_amount_paid, bank_amount, receipt_status, created_at')
-                .ilike('customer_name', `%${trimmedCustomer}%`)
-                .not('receipt_status', 'ilike', '%RETURNED%')
-                .not('receipt_status', 'ilike', '%PAID%')
-                .order('id', { ascending: true });
+            const { data: openInvoices, error } = await fetchAllPages(
+                supabase
+                    .from('sales_invoices')
+                    .select('id, customer_name, total_amount, cash_amount_paid, bank_amount, receipt_status, created_at')
+                    .ilike('customer_name', `%${trimmedCustomer}%`)
+                    .not('receipt_status', 'ilike', '%RETURNED%')
+                    .not('receipt_status', 'ilike', '%PAID%')
+                    .order('id', { ascending: true })
+            );
 
             if (error) throw error;
 

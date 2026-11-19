@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -18,18 +18,21 @@ import {
   MdSearch,
   MdFileDownload,
   MdPictureAsPdf,
-  MdPrint
+  MdPrint,
+  MdTrendingUp
 } from 'react-icons/md';
+import { fetchSystemMasterConfig, SystemMasterConfig } from '../../../utils/systemPermissions';
 
-export type PurchaseTabKey = 'purchase' | 'category-purchases' | 'product-purchase-history' | 'vendor-purchase-summary' | 'return' | 'invoice';
+export type PurchaseTabKey = 'basic-purchase' | 'purchase' | 'category-purchases' | 'product-purchase-history' | 'vendor-purchase-summary' | 'return' | 'invoice';
 
 const purchaseTabs = [
-  { key: 'purchase', label: 'General Purchase Detail', icon: MdLocalMall },
-  { key: 'category-purchases', label: 'Category-Wise Volume', icon: MdCategory },
-  { key: 'product-purchase-history', label: 'Product History & Trends', icon: MdHistory },
-  { key: 'vendor-purchase-summary', label: 'Vendor Purchase Analysis', icon: MdCorporateFare },
-  { key: 'return', label: 'Purchase Return', icon: MdLayers },
-  { key: 'invoice', label: 'Itemized Invoice Detail', icon: MdReceiptLong }
+  { key: 'basic-purchase', reportId: 'basic-purchase-report', label: 'Basic Purchase Report', icon: MdTrendingUp, path: '/basic-purchase-report', badge: 'BASIC' },
+  { key: 'purchase', reportId: 'purchase-ledger', label: 'Purchase Invoice Register', icon: MdLocalMall },
+  { key: 'category-purchases', reportId: 'category-purchases', label: 'Category-Wise Purchases Report', icon: MdCategory },
+  { key: 'product-purchase-history', reportId: 'product-purchase-history', label: 'Product Purchase History & Price Trend', icon: MdHistory },
+  { key: 'vendor-purchase-summary', reportId: 'purchase-query-center', label: 'Purchase Parameter Builder', icon: MdCorporateFare },
+  { key: 'return', reportId: 'vendor-return-ledger', label: 'Purchase Returns & Debit Ledger', icon: MdLayers },
+  { key: 'invoice', reportId: 'purchase-invoice-detail', label: 'Purchase Invoice Detail Report', icon: MdReceiptLong }
 ] as const;
 
 const PurchaseReport = () => {
@@ -41,17 +44,54 @@ const PurchaseReport = () => {
   const [hasGenerated, setHasGenerated] = useState(false);
   const [generatedPayload, setGeneratedPayload] = useState<{ type: string; filters: any } | null>(null);
 
+  const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(() => {
+    try {
+      const cached = localStorage.getItem('erp_system_master_permissions_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    fetchSystemMasterConfig().then(setSystemConfig);
+    const onSync = (e: any) => {
+      if (e.detail) setSystemConfig(e.detail);
+    };
+    window.addEventListener('erp_system_permissions_updated', onSync);
+    return () => window.removeEventListener('erp_system_permissions_updated', onSync);
+  }, []);
+
+  const hiddenReports = useMemo(() => {
+    return Array.isArray(systemConfig?.hidden_reports) ? systemConfig.hidden_reports : [];
+  }, [systemConfig?.hidden_reports]);
+
+  const visiblePurchaseTabs = useMemo(() => {
+    return purchaseTabs.filter(t => !hiddenReports.includes(t.reportId));
+  }, [hiddenReports]);
+
   const searchParams = new URLSearchParams(location.search);
   const queryTab = searchParams.get('tab') as PurchaseTabKey;
   const initialTab = (queryTab || location.state?.activeTab || location.state?.tab || 'purchase') as PurchaseTabKey;
   const [activeTab, setActiveTab] = useState<PurchaseTabKey>(initialTab);
 
+  // If active tab gets hidden, automatically fallback to first visible tab
+  useEffect(() => {
+    if (visiblePurchaseTabs.length > 0 && !visiblePurchaseTabs.some(t => t.key === activeTab)) {
+      handleTabChange(visiblePurchaseTabs[0].key as any);
+    }
+  }, [visiblePurchaseTabs, activeTab]);
+
   useEffect(() => {
     const tabParam = new URLSearchParams(location.search).get('tab') as PurchaseTabKey;
+    if (!tabParam) {
+      navigate(`${tenantId ? `/${tenantId}` : ''}/basic-purchase-report`, { replace: true });
+      return;
+    }
     if (tabParam && tabParam !== activeTab) {
       handleTabChange(tabParam);
     }
-  }, [location.search]);
+  }, [location.search, tenantId]);
 
   const [vendors, setVendors] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -106,11 +146,11 @@ const PurchaseReport = () => {
       try {
         setLoading(true);
         const [vendRes, catRes, prodRes, locRes, purInvRes, uomRes, binRes] = await Promise.all([
-          supabase.from('vendors').select('id, vendor_name'),
+          fetchAllPages(supabase.from('vendors').select('id, vendor_name')),
           supabase.from('inventory_categories').select('id, name, parent_id'),
-          supabase.from('products').select('id, product_name, category, bin, uom'),
+          fetchAllPages(supabase.from('products').select('id, product_name, category, bin, uom')),
           supabase.from('inventory_locations').select('id, name'),
-          supabase.from('supplier_purchases').select('id, total_amount, supplier_name, purchase_no').order('id', { ascending: false }),
+          fetchAllPages(supabase.from('supplier_purchases').select('id, total_amount, supplier_name, purchase_no').order('id', { ascending: false })),
           supabase.from('inventory_uom').select('id, short_code, full_name').eq('is_active', true),
           supabase.from('inventory_surface_finishes').select('id, name')
         ]);
@@ -186,6 +226,10 @@ const PurchaseReport = () => {
   const binOptions = useMemo(() => bins.map(b => b.name).filter(Boolean), [bins]);
 
   const handleTabChange = (tab: PurchaseTabKey) => {
+    if (tab === 'basic-purchase') {
+      navigate(`${tenantId ? `/${tenantId}` : ''}/basic-purchase-report`);
+      return;
+    }
     setActiveTab(tab);
     setCriteria(prev => ({
       vendor: [],
@@ -253,7 +297,7 @@ const PurchaseReport = () => {
 
   if (loading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
 
-  const currentTabObj = purchaseTabs.find(t => t.key === activeTab) || purchaseTabs[0];
+  const currentTabObj = visiblePurchaseTabs.find(t => t.key === activeTab) || visiblePurchaseTabs[0] || purchaseTabs[0];
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-5 text-black dark:text-bodydark text-xs antialiased font-sans relative pb-16 print:max-w-none print:p-0 print:m-0 print:space-y-0 print:pb-0">
@@ -265,7 +309,7 @@ const PurchaseReport = () => {
             <span>/</span>
             <span>Auditing Reports</span>
             <span>/</span>
-            <span className="text-primary font-bold">{currentTabObj.label}</span>
+            <span className="text-primary font-bold">{currentTabObj?.label || 'Purchase Report'}</span>
           </div>
           <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1 tracking-tight flex items-center gap-2">
             <span>Corporate Purchase Auditing Center</span>
@@ -279,14 +323,20 @@ const PurchaseReport = () => {
       {/* ── 1. HORIZONTAL TABS BAR ── */}
       <div className="bg-white dark:bg-boxdark p-1.5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs overflow-x-auto print:hidden">
         <div className="flex items-center gap-1.5 min-w-max">
-          {purchaseTabs.map(tab => {
+          {visiblePurchaseTabs.map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => handleTabChange(tab.key)}
+                onClick={() => {
+                  if ((tab as any).path) {
+                    navigate(`${tenantId ? `/${tenantId}` : ''}${(tab as any).path}`);
+                  } else {
+                    handleTabChange(tab.key);
+                  }
+                }}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap ${
                   isActive
                     ? 'bg-primary text-white shadow-sm'
@@ -295,6 +345,11 @@ const PurchaseReport = () => {
               >
                 <Icon size={16} className={isActive ? 'text-white' : 'text-slate-400'} />
                 <span>{tab.label}</span>
+                {(tab as any).badge && (
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-white/20 text-white ml-0.5">
+                    {(tab as any).badge}
+                  </span>
+                )}
               </button>
             );
           })}

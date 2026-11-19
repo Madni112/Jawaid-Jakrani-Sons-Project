@@ -25,6 +25,7 @@ export const StockStatusMultiLocationTable: React.FC<StockStatusMultiLocationTab
                     <th rowSpan={2} className="p-2 border border-slate-300 text-center w-12">Index</th>
                     <th rowSpan={2} className="p-2 border border-slate-300">Product Stock Asset Identifier</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-center w-20">Brand</th>
+                    <th rowSpan={2} className="p-2 border border-slate-300 text-center w-24">Color / Shade</th>
                     <th colSpan={3} className="p-1.5 border border-slate-300 text-center bg-slate-100 font-extrabold tracking-wider">Category Classification</th>
                     <th rowSpan={2} className="p-2 border border-slate-300">Warehouse Location</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-center">Stock Availability Status</th>
@@ -47,6 +48,7 @@ export const StockStatusMultiLocationTable: React.FC<StockStatusMultiLocationTab
                             <td className="p-2 border border-slate-300 text-center text-gray-400 align-middle">{startIndex + idx + 1}</td>
                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase align-middle">{row.product_name}</td>
                             <td className="p-2 border border-slate-300 font-sans text-purple-700 font-bold text-center align-middle">{row.bin || '-'}</td>
+                            <td className="p-2 border border-slate-300 font-sans text-center text-slate-700 font-medium align-middle">{row.color || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-800 align-middle">{row.sub_sub_category || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-700 align-middle">{row.sub_category || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-600 align-middle">{row.category || '-'}</td>

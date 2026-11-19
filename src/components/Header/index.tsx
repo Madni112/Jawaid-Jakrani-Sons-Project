@@ -93,16 +93,17 @@ const Header = (props: {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { userEmail, userLocationName, tenantId } = useAuth();
+  const { userEmail, userLocationName, tenantId, canAccessSetting } = useAuth();
 
   const isSettingsPage = /(^|\/)settings\/?$/i.test(location.pathname);
   const activeSettingsTab = searchParams.get('tab') || 'profile';
 
   const isAlmPortal = detectIsAlm();
-  const settingsNavTabs = useMemo(() => [
+  const allSettingsNavTabs = useMemo(() => [
     { id: 'profile', label: 'Profile', icon: LuUser },
     { id: 'security_devices', label: 'Login Devices & Security', icon: LuShieldCheck },
     { id: 'theme', label: 'Theme & Appearance', icon: LuPalette },
+    { id: 'reports_visibility', label: 'Reports & Print Layouts', icon: LuBarChart3 },
     { id: 'stock_control', label: 'Inventory & Stock Governance', icon: LuPackage },
     { id: 'credit_limits', label: 'Customer Credit Limits', icon: LuCreditCard },
     { id: 'sound_effects', label: 'Audio', icon: LuVolume2 },
@@ -111,6 +112,10 @@ const Header = (props: {
       ? [{ id: 'alm_factory_reset', label: 'Factory Reset ERP', icon: LuTrash2 }]
       : []),
   ], [isAlmPortal]);
+
+  const settingsNavTabs = useMemo(() => {
+    return allSettingsNavTabs.filter(t => !canAccessSetting || canAccessSetting(t.id));
+  }, [allSettingsNavTabs, canAccessSetting]);
 
   // Keyboard Navigation: Shift + ArrowRight / ArrowLeft to cycle tabs in Settings
   useEffect(() => {

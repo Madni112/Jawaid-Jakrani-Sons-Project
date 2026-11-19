@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { 
   FiEye, 
   FiPrinter, 
@@ -51,10 +51,10 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, onE
     setLoading(true);
     try {
       const [receiptsRes, itemsRes, purchasesRes, productsRes] = await Promise.all([
-        supabase.from('grn_receipts').select('*').order('created_at', { ascending: false }),
-        supabase.from('grn_items').select('*'),
-        supabase.from('supplier_purchases').select('id, purchase_no, bill_no, vendor_name, target_warehouse, metadata'),
-        supabase.from('products').select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name, uom, loose_conversion_ratio')
+        fetchAllPages(supabase.from('grn_receipts').select('*').order('created_at', { ascending: false })),
+        fetchAllPages(supabase.from('grn_items').select('*')),
+        fetchAllPages(supabase.from('supplier_purchases').select('id, purchase_no, bill_no, vendor_name, target_warehouse, metadata')),
+        fetchAllPages(supabase.from('products').select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name, uom, loose_conversion_ratio'))
       ]);
 
       if (receiptsRes.error) throw receiptsRes.error;
@@ -272,7 +272,7 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, onE
       .join('');
 
     const gpVal = rec.gatePasses?.[rec.warehouse] || rec.gatePasses?.['DEFAULT'] || '';
-    const safePrefix = String(rec.warehouse || 'AL-MUHAMMADI TILES EMPORIUM').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const safePrefix = String(rec.warehouse || 'ZOHAIB ALI AND COMPANY').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const fullGp = gpVal ? (gpVal.toUpperCase().startsWith(safePrefix) ? gpVal : `${safePrefix}-${gpVal}`) : '';
     const displayPurchaseRef = (rec.purchase_no && rec.purchase_no !== 'Unassigned' && rec.purchase_no !== rec.grn_no && rec.purchase_no !== 'Direct Inward')
       ? rec.purchase_no
@@ -306,7 +306,7 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, onE
         <body>
           <div class="header">
             <div>
-              <div class="company">AL-MUHAMMADI TILES EMPORIUM</div>
+              <div class="company">ZOHAIB ALI AND COMPANY</div>
               <div class="title">INWARD RECEIVING CHALLAN / GATE PASS</div>
             </div>
             <div style="text-align: right;">

@@ -1,4 +1,4 @@
-import { supabase } from '../../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../../Context/supabaseClient';
 import { CustomerRecord, COAAccount } from '../types/customerHistoryTypes';
 import { getCustomerDisplayName, getCustomerCOA } from '../utils/customerHistoryHelpers';
 
@@ -7,8 +7,8 @@ export const fetchCustomersAndCOAData = async (): Promise<{
   coaAccounts: COAAccount[];
 }> => {
   const [custRes, coaRes] = await Promise.all([
-    supabase.from('customers').select('*').order('customerName', { ascending: true }),
-    supabase.from('chart_of_accounts').select('*')
+    fetchAllPages(supabase.from('customers').select('*').order('customerName', { ascending: true })),
+    fetchAllPages(supabase.from('chart_of_accounts').select('*'))
   ]);
 
   if (custRes.error) throw custRes.error;
@@ -19,7 +19,7 @@ export const fetchCustomersAndCOAData = async (): Promise<{
 };
 
 export const autoAssign2020CustomerCodesAction = async (): Promise<number> => {
-  const { data: allCusts, error: custErr } = await supabase.from('customers').select('*');
+  const { data: allCusts, error: custErr } = await fetchAllPages(supabase.from('customers').select('*'));
   if (custErr) throw custErr;
   if (!allCusts || allCusts.length === 0) return 0;
 

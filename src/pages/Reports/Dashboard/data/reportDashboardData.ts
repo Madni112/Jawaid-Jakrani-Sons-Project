@@ -16,6 +16,7 @@ import {
   MdCorporateFare,
   MdCardGiftcard,
   MdReceiptLong,
+  MdMenuBook,
   MdTimeline,
   MdHistory,
   MdCompareArrows,
@@ -38,11 +39,48 @@ export const shouldShowBadge = (report: { badge?: string; badgeType?: string; cr
   return true;
 };
 
+export const BASIC_REPORTS: ReportItem[] = [
+  {
+    id: 'basic-sales-report',
+    title: 'Sales Report',
+    category: 'sales',
+    description: 'Basic commercial sales audit, invoice register, customer ledger summaries, and net turnover.',
+    path: '/basic-sales-report',
+    icon: MdTrendingUp
+  },
+  {
+    id: 'basic-purchase-report',
+    title: 'Purchase Report',
+    category: 'purchases',
+    description: 'Basic procurement register, supplier purchase bills, and vendor commitments.',
+    path: '/Reports/Purchase-Report',
+    icon: MdLocalMall
+  },
+  {
+    id: 'basic-stock-report',
+    title: 'Stock Report',
+    category: 'inventory',
+    description: 'Basic inventory balance, on-hand product stock quantities, and physical counts.',
+    path: '/Reports/Stock-Report',
+    icon: MdInventory
+  },
+  {
+    id: 'basic-account-report',
+    title: 'Accounts Report',
+    category: 'accounts',
+    description: 'Basic party ledgers, cash daybook, customer balances, and account summaries.',
+    path: '/Reports/Main-Reports',
+    icon: MdAccountBalanceWallet
+  }
+];
+
+export const BASIC_REPORT_IDS: string[] = BASIC_REPORTS.map((r) => r.id);
+
 export const ALL_REPORTS: ReportItem[] = [
   // ── SALES REPORTS ──
   {
     id: 'category-wise-sales',
-    title: 'Category-Wise Sales & Volume Report',
+    title: 'Category-Wise Sales Report',
     category: 'sales',
     description: 'Header-wise category sales audit, product lines, net volumes, return credits, and revenue share.',
     badge: 'NEW',
@@ -78,7 +116,7 @@ export const ALL_REPORTS: ReportItem[] = [
   },
   {
     id: 'commercial-sale-ledger',
-    title: 'Commercial Sales Audit Ledger',
+    title: 'Sale (Salesmen wise)',
     category: 'sales',
     description: 'Master commercial sales register linked with salesman, carrier fleet & customer accounts.',
     badge: 'AUDITED',
@@ -142,7 +180,7 @@ export const ALL_REPORTS: ReportItem[] = [
   },
   {
     id: 'category-purchases',
-    title: 'Category-Wise Purchases & Volume Report',
+    title: 'Category-Wise Purchases Report',
     category: 'purchases',
     description: 'Header-wise category procurement spend, inward volume, return debits, and expenditure share.',
     badge: 'NEW',
@@ -300,102 +338,85 @@ export const ALL_REPORTS: ReportItem[] = [
     icon: MdPauseCircleFilled
   },
 
-  // ── ACCOUNTS & FINANCIALS ──
-  {
-    id: 'customer-balance-detail',
-    title: 'Customer Balance Detail Report',
-    category: 'accounts',
-    description: 'Comprehensive breakdown of customer opening balances, period billing debits, recovery credits, and net closing balances filtered by customer category.',
-    badge: 'NEW',
-    badgeType: 'new',
-    createdAt: '2026-09-18',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 13 },
-    icon: MdAccountBalanceWallet
-  },
-  {
-    id: 'vendor-balance-detail',
-    title: 'Vendor Balance Detail & Account Ledger',
-    category: 'accounts',
-    description: 'Comprehensive breakdown of vendor opening balances, period procurement liabilities, supplier payments, and net payables.',
-    badge: 'NEW',
-    badgeType: 'new',
-    createdAt: '2026-09-18',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 3 },
-    icon: MdAccountBalanceWallet
-  },
+  // ── ACCOUNTS & FINANCIALS (Main / Classic Reports) ──
   {
     id: 'customer-ledger',
     title: 'Customer Account Ledger (General Ledger)',
     category: 'accounts',
-    description: 'Detailed chronological debit/credit ledger per customer account with running balances and invoices.',
+    description: 'Detailed chronological debit/credit ledger per customer account with running balances, invoices, returns, and receipts.',
     badge: 'ACCRUAL',
     badgeType: 'accrual',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 1 },
-    icon: MdAccountBalanceWallet
+    path: '/Reports/Main-Reports?tab=customer-ledger',
+    state: { tab: 'customer-ledger' },
+    icon: MdPeople
   },
   {
-    id: 'daybook-activity-report',
-    title: 'Daily Cash & Bank Daybook',
+    id: 'vendor-ledger',
+    title: 'Vendor Account Ledger & Supplier Statement',
     category: 'accounts',
-    description: 'Chronological daybook of daily cash inflows, customer receipts, vendor payments, and cash-drawer balances.',
-    badge: 'NEW',
-    badgeType: 'new',
-    createdAt: '2026-09-19',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 9 },
-    icon: MdReceiptLong
-  },
-  {
-    id: 'customer-aging-report',
-    title: 'Customer Receivables Aging Analysis',
-    category: 'accounts',
-    description: 'Categorized customer debt aging brackets across 0-30, 31-60, 61-90, and 90+ days overdue balances.',
-    badge: 'AUDITED',
-    badgeType: 'audited',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 12 },
-    icon: MdAccessTime
-  },
-  {
-    id: 'voucher-audit-register',
-    title: 'Financial Voucher Audit Register',
-    category: 'accounts',
-    description: 'Master chronological register of CPV, CRV, BPV, BRV, and Journal Vouchers (JV) with debit/credit balance trace.',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 8 },
-    icon: MdReceipt
-  },
-  {
-    id: 'trial-balance-statement',
-    title: 'Trial Balance Audit Statement',
-    category: 'accounts',
-    description: 'Authoritative Chart of Accounts trial balance verifying that total ledger debits equal total ledger credits.',
-    badge: 'AUDITED',
-    badgeType: 'audited',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 11 },
-    icon: MdBalance
-  },
-  {
-    id: 'vendor-outstanding-report',
-    title: 'Vendor Outstanding Payables Schedule',
-    category: 'accounts',
-    description: 'Unsettled supplier procurement bills and payment dues sorted by vendor account and invoice date.',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 6 },
+    description: 'Detailed chronological ledger per supplier account tracking purchases, payments, returns, and net payable balances.',
+    badge: 'ACCRUAL',
+    badgeType: 'accrual',
+    path: '/Reports/Main-Reports?tab=vendor-ledger',
+    state: { tab: 'vendor-ledger' },
     icon: MdCorporateFare
   },
   {
-    id: 'expense-ledger',
+    id: 'combined-ledger',
+    title: 'Combined Party Ledgers (Customers & Vendors)',
+    category: 'accounts',
+    description: 'Unified multi-party ledger statement auditing customer receivables and vendor payables in one view.',
+    badge: 'NEW',
+    badgeType: 'new',
+    createdAt: '2026-10-01',
+    path: '/Reports/Main-Reports?tab=combined-ledger',
+    state: { tab: 'combined-ledger' },
+    icon: MdCompareArrows
+  },
+  {
+    id: 'profit-loss',
+    title: 'Profit & Loss Financial Statement (P&L)',
+    category: 'accounts',
+    description: 'Audited financial profit and loss statement calculating gross margin, revenues, direct COGS, and net operating income.',
+    badge: 'AUDITED',
+    badgeType: 'audited',
+    path: '/Reports/Main-Reports?tab=profit-loss',
+    state: { tab: 'profit-loss' },
+    icon: MdTrendingUp
+  },
+  {
+    id: 'expense-report',
     title: 'Operational Expense Statement',
     category: 'accounts',
-    description: 'Operating expenditures aggregated across rent, utilities, fuel, and logistics fleets.',
-    path: '/Reports/Account-Report',
-    state: { activeTab: 4 },
-    icon: MdAccountBalance
+    description: 'Operating expenditures aggregated across rent, utilities, fuel, staff, and logistics fleets.',
+    badge: 'AUDITED',
+    badgeType: 'audited',
+    path: '/Reports/Main-Reports?tab=expense-report',
+    state: { tab: 'expense-report' },
+    icon: MdReceiptLong
+  },
+  {
+    id: 'daily-book',
+    title: 'Daily Cash & Bank Daybook (Roznamcha)',
+    category: 'accounts',
+    description: 'Chronological daybook of daily cash inflows, customer receipts, vendor disbursements, and net cash-drawer balances.',
+    badge: 'NEW',
+    badgeType: 'new',
+    createdAt: '2026-10-01',
+    path: '/Reports/Main-Reports?tab=daily-book',
+    state: { tab: 'daily-book' },
+    icon: MdMenuBook
+  },
+  {
+    id: 'daily-activity',
+    title: 'Daily Activity Audit Trail Log',
+    category: 'accounts',
+    description: 'Real-time multi-dimensional audit log tracking Sales, Purchases, Receipts, Payments, Stock Movements & Expenses in one unified statement.',
+    badge: 'AUDITED',
+    badgeType: 'audited',
+    path: '/Reports/Main-Reports?tab=daily-activity',
+    state: { tab: 'daily-activity' },
+    icon: MdHistory
   },
 
   // ── BUSINESS OVERVIEW & EXECUTIVE ──
@@ -460,14 +481,16 @@ export const CATEGORY_META: CategoryMeta[] = [
 export const STORAGE_KEY = 'erp_reports_custom_order';
 export const STORAGE_CAT_KEY = 'erp_reports_category_order';
 
+export const COMBINED_ALL_REPORTS: ReportItem[] = [...BASIC_REPORTS, ...ALL_REPORTS];
+
 export const getInitialReports = (): ReportItem[] => {
   try {
     const savedOrderJson = localStorage.getItem(STORAGE_KEY);
-    if (!savedOrderJson) return ALL_REPORTS;
+    if (!savedOrderJson) return COMBINED_ALL_REPORTS;
     const savedIds: string[] = JSON.parse(savedOrderJson);
-    if (!Array.isArray(savedIds)) return ALL_REPORTS;
+    if (!Array.isArray(savedIds)) return COMBINED_ALL_REPORTS;
 
-    const reportMap = new Map(ALL_REPORTS.map((r) => [r.id, r]));
+    const reportMap = new Map(COMBINED_ALL_REPORTS.map((r) => [r.id, r]));
     const ordered: ReportItem[] = [];
     savedIds.forEach((id) => {
       const item = reportMap.get(id);
@@ -479,7 +502,7 @@ export const getInitialReports = (): ReportItem[] => {
     reportMap.forEach((item) => ordered.push(item));
     return ordered;
   } catch (e) {
-    return ALL_REPORTS;
+    return COMBINED_ALL_REPORTS;
   }
 };
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { FiX } from 'react-icons/fi';
@@ -68,9 +68,9 @@ const AddChartOfAccount = () => {
       const { data: catData } = await supabase.from('coa_categories').select('name').order('name', { ascending: true });
       const { data: subCatData } = await supabase.from('coa_sub_categories').select('category_name, sub_category_name').order('sub_category_name', { ascending: true });
       const { data: ctrlData } = await supabase.from('coa_controls').select('category_name, sub_category_name, control_name').order('control_name', { ascending: true });
-      const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
+      const { data: bankData } = await fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle, accountNumber'));
       
-      const { data: legacyCOA } = await supabase.from('chart_of_accounts').select('category_code, sub_category_code, control_code');
+      const { data: legacyCOA } = await fetchAllPages(supabase.from('chart_of_accounts').select('category_code, sub_category_code, control_code'));
 
       // Merge Categories
       const mergedCats = new Set((catData || []).map(c => c.name));

@@ -784,15 +784,13 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
                                   style={{ backgroundColor: selectedAccentColor }}
                                   onClick={() => setSidebarPreviewMode(sidebarPreviewMode === 'opened' ? 'closed' : 'opened')}
                                   title="Toggle expanded/compact view"
-                                >
-                                  AM
-                                </div>
+                                >ZAC</div>
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs font-black tracking-wide truncate">
-                                    {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'AL MUHAMMADI'}
+                                    {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'ZOHAIB ALI AND COMPANY'}
                                   </div>
                                   <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
-                                    {brand.brandSuffix || 'TILE EMPORIUM'}
+                                    {brand.brandSuffix || 'COMPANY'}
                                   </div>
                                 </div>
                                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-bold border border-blue-500/20">
@@ -806,9 +804,7 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
                                   style={{ backgroundColor: selectedAccentColor }}
                                   onClick={() => setSidebarPreviewMode('opened')}
                                   title="Click to expand sidebar"
-                                >
-                                  AM
-                                </div>
+                                >ZAC</div>
                               </div>
                             )}
 
@@ -1309,7 +1305,7 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
                                   title="Portal Active indicator"
                                 />
                                 <span className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-100 hidden sm:inline">
-                                  {portalCode || 'AM'} • Portal Active
+                                  {portalCode || 'ZAC'} • Portal Active
                                 </span>
                                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                                   Theme Studio

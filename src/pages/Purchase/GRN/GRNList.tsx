@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import Spinner from '../../../ui/Spinner';
 import { MdInventory, MdEvent, MdBusiness, MdDelete, MdEdit, MdSearch, MdVisibility } from 'react-icons/md';
 import { useModal } from '../../../Context/Modal';
@@ -88,8 +88,8 @@ const GRNList = () => {
         try {
             setLoading(true);
             const [ receiptsRes, itemsRes ] = await Promise.all([
-                supabase.from('grn_receipts').select('*').order('created_at', { ascending: false }),
-                supabase.from('grn_items').select('*')
+                fetchAllPages(supabase.from('grn_receipts').select('*').order('created_at', { ascending: false })),
+                fetchAllPages(supabase.from('grn_items').select('*'))
             ]);
 
             if (receiptsRes.error) throw receiptsRes.error;

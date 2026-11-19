@@ -1,0 +1,1654 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { useAuth } from '../../../Context/Auth';
+import Spinner from '../../../ui/Spinner';
+import {
+  MdArrowBack,
+  MdPrint,
+  MdFileDownload,
+  MdViewModule,
+  MdFormatListBulleted,
+  MdAccountBalance,
+  MdPeople,
+  MdStore,
+  MdAccountBalanceWallet,
+  MdTrendingDown,
+  MdInfoOutline,
+  MdKeyboardArrowDown,
+  MdKeyboardArrowUp,
+  MdReceiptLong,
+  MdPayments,
+  MdAssignmentReturn,
+  MdAccountTree,
+  MdUnfoldMore,
+  MdUnfoldLess
+} from 'react-icons/md';
+import { BasicAccountFilterCriteria } from './BasicAccountReport';
+
+const STORAGE_CRITERIA_KEY = 'zac_basic_account_report_criteria_v2';
+
+export const BasicAccountReportPrint: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { tenantId } = useAuth();
+
+  // Active filter criteria
+  const [criteria, setCriteria] = useState<BasicAccountFilterCriteria | null>(() => {
+    if (location.state?.criteria) return location.state.criteria;
+    try {
+      const saved = localStorage.getItem(STORAGE_CRITERIA_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [businessName, setBusinessName] = useState<string>('Zohaib Ali & Company');
+  const [rawCustomers, setRawCustomers] = useState<any[]>([]);
+  const [rawVendors, setRawVendors] = useState<any[]>([]);
+  const [rawCoa, setRawCoa] = useState<any[]>([]);
+  const [rawBanks, setRawBanks] = useState<any[]>([]);
+  const [invoicesSummary, setInvoicesSummary] = useState<Record<string, { count: number; total: number; paid: number }>>({});
+  const [returnsSummary, setReturnsSummary] = useState<Record<string, number>>({});
+  const [purchasesSummary, setPurchasesSummary] = useState<Record<string, { count: number; total: number; paid: number }>>({});
+  const [purchaseReturnsSummary, setPurchaseReturnsSummary] = useState<Record<string, number>>({});
+
+  // Detailed transaction & voucher master sets
+  const [detailedInvoices, setDetailedInvoices] = useState<any[]>([]);
+  const [detailedPurchases, setDetailedPurchases] = useState<any[]>([]);
+  const [detailedSalesReturns, setDetailedSalesReturns] = useState<any[]>([]);
+  const [detailedPurchaseReturns, setDetailedPurchaseReturns] = useState<any[]>([]);
+  const [vouchersMaster, setVouchersMaster] = useState<any[]>([]);
+
+  // View Mode: 'default' | 'detailed'
+  const [viewMode, setViewMode] = useState<'default' | 'detailed'>('default');
+
+  // Detail transaction rows limit per party: 25 | 50 | 'all'
+  const [detailLimit, setDetailLimit] = useState<number | 'all'>(25);
+
+  // Expanded party cards in detailed view (party id -> boolean)
+  const [expandedParties, setExpandedParties] = useState<Record<string, boolean>>({});
+
+  // Layout Theme: 'modern' | 'classic'
+  const [layoutTheme, setLayoutTheme] = useState<'modern' | 'classic'>(() => {
+    try {
+      return localStorage.getItem('jakwani_reports_layout') === 'classic' ? 'classic' : 'modern';
+    } catch {}
+    return 'modern';
+  });
+
+  const toggleLayout = () => {
+    const next = layoutTheme === 'modern' ? 'classic' : 'modern';
+    setLayoutTheme(next);
+    try {
+      localStorage.setItem('jakwani_reports_layout', next);
+    } catch {}
+  };
+
+  const togglePartyExpand = (partyId: string) => {
+    setExpandedParties((prev) => ({
+      ...prev,
+      [partyId]: prev[partyId] !== undefined ? !prev[partyId] : false
+    }));
+  };
+
+  const expandAllParties = (allIds: string[]) => {
+    const next: Record<string, boolean> = {};
+    allIds.forEach((id) => {
+      next[id] = true;
+    });
+    setExpandedParties(next);
+  };
+
+  const collapseAllParties = () => {
+    setExpandedParties({});
+  };
+
+  // ── DATA FETCHING & LOCAL CACHE REUSE ──
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        setLoading(true);
+
+        // Fetch fresh data including vouchers, invoices, purchases, returns
+        const [
+          cRes,
+          vRes,
+          coaRes,
+          bRes,
+          invRes,
+          retRes,
+          purRes,
+          pretRes,
+          vouchRes
+        ] = await Promise.all([
+          fetchAllPages(supabase.from('customers').select('*').order('customer_name')),
+          fetchAllPages(supabase.from('vendors').select('*').order('name')),
+          fetchAllPages(supabase.from('chart_of_accounts').select('*').order('account_code')),
+          fetchAllPages(supabase.from('banks').select('*').order('bank_name')),
+          fetchAllPages(supabase.from('sales_invoices').select('id, invoice_no, customer_name, sale_date, total_amount, amount_paid, payment_term').order('sale_date', { ascending: true })),
+          fetchAllPages(supabase.from('sales_returns').select('id, return_no, customer_name, return_date, total_amount').order('return_date', { ascending: true })),
+          fetchAllPages(supabase.from('supplier_purchases').select('id, purchase_no, vendor_name, supplier_name, purchase_date, total_amount, amount_paid, paid_amount, remaining_balance, status, payment_term').order('purchase_date', { ascending: true })),
+          fetchAllPages(supabase.from('purchase_returns').select('id, return_no, vendor_name, return_date, total_amount').order('return_date', { ascending: true })),
+          fetchAllPages(supabase.from('financial_vouchers').select('id, voucher_no, voucher_type, voucher_date, customer_name, party_name, debit, credit, total_amount, original_invoice_no, metadata, description').order('voucher_date', { ascending: true }))
+        ]);
+
+        if (!isMounted) return;
+
+        // Build invoice & return balance maps for customers
+        const invSum: Record<string, { count: number; total: number; paid: number }> = {};
+        (invRes.data || []).forEach((inv: any) => {
+          const key = (inv.customer_name || '').trim().toLowerCase();
+          if (!key) return;
+          if (!invSum[key]) invSum[key] = { count: 0, total: 0, paid: 0 };
+          invSum[key].count += 1;
+          invSum[key].total += Number(inv.total_amount || 0);
+          invSum[key].paid += Number(inv.amount_paid || 0);
+        });
+
+        const retSum: Record<string, number> = {};
+        (retRes.data || []).forEach((ret: any) => {
+          const key = (ret.customer_name || '').trim().toLowerCase();
+          if (!key) return;
+          retSum[key] = (retSum[key] || 0) + Number(ret.total_amount || 0);
+        });
+
+        // Build live purchase & return balance maps for vendors
+        const purSum: Record<string, { count: number; total: number; paid: number }> = {};
+        (purRes.data || []).forEach((p: any) => {
+          const key = (p.vendor_name || p.supplier_name || '').trim().toLowerCase();
+          if (!key) return;
+          if (!purSum[key]) purSum[key] = { count: 0, total: 0, paid: 0 };
+          purSum[key].count += 1;
+          purSum[key].total += Number(p.total_amount || 0);
+          purSum[key].paid += Number(p.amount_paid || p.paid_amount || 0);
+        });
+
+        const pretSum: Record<string, number> = {};
+        (pretRes.data || []).forEach((r: any) => {
+          const key = (r.vendor_name || '').trim().toLowerCase();
+          if (!key) return;
+          pretSum[key] = (pretSum[key] || 0) + Number(r.total_amount || 0);
+        });
+
+        // Dynamic Customers (Opening + Invoiced - Paid - Returns)
+        const loadedCust = (cRes.data || []).map((c: any) => {
+          const k = (c.customer_name || c.customerName || c.name || '').trim().toLowerCase();
+          const invInfo = invSum[k] || { count: 0, total: 0, paid: 0 };
+          const retTotal = retSum[k] || 0;
+          const openBal = Math.abs(Number(c.opening_balance || 0));
+          const effectiveOpen = (c.balance_nature || '').toLowerCase().includes('credit') ? -openBal : openBal;
+          const dynamicNet = invInfo.total - invInfo.paid - retTotal;
+          const finalBal = effectiveOpen + dynamicNet;
+
+          return {
+            ...c,
+            balance: finalBal,
+            current_balance: finalBal,
+            computed_balance: finalBal
+          };
+        });
+
+        // Dynamic Vendors (Opening + Purchases - Paid - Returns)
+        const loadedVen = (vRes.data || []).map((v: any) => {
+          const k = (v.vendor_name || v.name || '').trim().toLowerCase();
+          const purInfo = purSum[k] || { count: 0, total: 0, paid: 0 };
+          const retTotal = pretSum[k] || 0;
+          const openBal = Math.abs(Number(v.opening_balance || 0));
+          const effectiveOpen = (v.balance_nature || '').toLowerCase().includes('debit') ? -openBal : openBal;
+          const dynamicNet = purInfo.total - purInfo.paid - retTotal;
+          const finalBal = effectiveOpen + dynamicNet;
+
+          return {
+            ...v,
+            balance: finalBal,
+            currentBalance: finalBal,
+            current_balance: finalBal,
+            computed_balance: finalBal
+          };
+        });
+
+        const loadedCoa = coaRes.data || [];
+        const loadedBanks = bRes.data || [];
+
+        setRawCustomers(loadedCust);
+        setRawVendors(loadedVen);
+        setRawCoa(loadedCoa);
+        setRawBanks(loadedBanks);
+        setInvoicesSummary(invSum);
+        setReturnsSummary(retSum);
+        setPurchasesSummary(purSum);
+        setPurchaseReturnsSummary(pretSum);
+
+        setDetailedInvoices(invRes.data || []);
+        setDetailedPurchases(purRes.data || []);
+        setDetailedSalesReturns(retRes.data || []);
+        setDetailedPurchaseReturns(pretRes.data || []);
+        setVouchersMaster(vouchRes.data || []);
+      } catch (err) {
+        console.error('Failed to load basic account print data:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // ── PARSE & FILTER ACCOUNT ROWS WITH NESTED TRANSACTION / VOUCHER TREE ──
+  const parsedAccountRows = useMemo(() => {
+    if (!criteria) return [];
+
+    // Helper map of vouchers indexed by invoice/reference number and party name
+    const vouchersByInvoiceNo: Record<string, any[]> = {};
+    const vouchersByParty: Record<string, any[]> = {};
+
+    vouchersMaster.forEach((v) => {
+      if (v.original_invoice_no) {
+        const invK = String(v.original_invoice_no).trim().toLowerCase();
+        if (!vouchersByInvoiceNo[invK]) vouchersByInvoiceNo[invK] = [];
+        vouchersByInvoiceNo[invK].push(v);
+      }
+      const pName = (v.party_name || v.customer_name || '').trim().toLowerCase();
+      if (pName) {
+        if (!vouchersByParty[pName]) vouchersByParty[pName] = [];
+        vouchersByParty[pName].push(v);
+      }
+    });
+
+    if (criteria.reportType === 'customer') {
+      let pool = rawCustomers;
+
+      // Filter by selected parties
+      if (criteria.partyIds && criteria.partyIds.length > 0) {
+        const idSet = new Set(criteria.partyIds);
+        pool = pool.filter((c) => idSet.has(String(c.id)) || idSet.has(String(c.customer_code || c.customerCode)));
+      }
+
+      // Filter by areas
+      if (criteria.areas && criteria.areas.length > 0) {
+        const arSet = new Set(criteria.areas.map((a) => a.toLowerCase().trim()));
+        pool = pool.filter((c) => {
+          const a = String(c.area || c.city || '').toLowerCase().trim();
+          return arSet.has(a);
+        });
+      }
+
+      // Hide zero balances
+      if (criteria.hideZeroBalances) {
+        pool = pool.filter((c) => Math.abs(Number(c.current_balance || c.balance || 0)) > 0);
+      }
+
+      return pool.map((c) => {
+        const cId = String(c.id);
+        const cName = String(c.customer_name || c.customerName || c.customername || c.name || '').trim().toLowerCase();
+        const openBal = Math.abs(Number(c.opening_balance || 0));
+        const effectiveOpen = (c.balance_nature || '').toLowerCase().includes('credit') ? -openBal : openBal;
+        const invInfo = invoicesSummary[cName] || invoicesSummary[cId] || { count: 0, total: 0, paid: 0 };
+        const retAmt = returnsSummary[cName] || 0;
+        const invoicedTotal = invInfo.total;
+        const receivedTotal = invInfo.paid;
+        const closeBal = effectiveOpen + invoicedTotal - receivedTotal - retAmt;
+
+        // Build party's transaction and voucher hierarchy
+        const partyInvoices = detailedInvoices.filter(
+          (inv) => (inv.customer_name || '').trim().toLowerCase() === cName
+        );
+        const partyReturns = detailedSalesReturns.filter(
+          (ret) => (ret.customer_name || '').trim().toLowerCase() === cName
+        );
+        const partyVouchers = vouchersByParty[cName] || [];
+
+        // 1. Bill Vouchers (SAV)
+        const bills = partyInvoices.map((inv) => {
+          const invKey = String(inv.invoice_no || '').trim().toLowerCase();
+          const matchedVoucher = (vouchersByInvoiceNo[invKey] || []).find(
+            (v) => (v.voucher_type || '').includes('Sale') || (v.voucher_no || '').startsWith('SAV')
+          );
+          const totalAmt = Number(inv.total_amount || 0);
+          const paidAmt = Number(inv.amount_paid || 0);
+          return {
+            id: String(inv.id),
+            billNo: inv.invoice_no || '—',
+            voucherNo: matchedVoucher?.voucher_no || `SAV-${inv.invoice_no || 'NA'}`,
+            voucherType: matchedVoucher?.voucher_type || 'Sale Amount Voucher',
+            date: inv.sale_date || matchedVoucher?.voucher_date || '—',
+            amount: totalAmt,
+            paid: paidAmt,
+            balance: Math.max(0, totalAmt - paidAmt)
+          };
+        });
+
+        // 2. Receipt / Payment Vouchers (CRV)
+        const receipts = partyVouchers
+          .filter(
+            (v) =>
+              (v.voucher_type || '').includes('Receive') ||
+              (v.voucher_no || '').startsWith('CRV') ||
+              (Number(v.credit || 0) > 0 && !(v.voucher_type || '').includes('Return'))
+          )
+          .map((v) => ({
+            id: String(v.id),
+            voucherNo: v.voucher_no,
+            voucherType: v.voucher_type || 'Customer Receive Voucher',
+            refNo: v.original_invoice_no || 'Receipt Slip',
+            date: v.voucher_date || '—',
+            amount: Number(v.credit || v.total_amount || 0),
+            mode: v.description || 'Cash / Bank Receipt'
+          }));
+
+        // 3. Return Vouchers (SRV)
+        const returns = partyReturns.map((ret) => {
+          const retKey = String(ret.return_no || '').trim().toLowerCase();
+          const matchedVoucher = (vouchersByInvoiceNo[retKey] || []).find(
+            (v) => (v.voucher_type || '').includes('Return') || (v.voucher_no || '').startsWith('SRV')
+          );
+          return {
+            id: String(ret.id),
+            returnNo: ret.return_no || '—',
+            voucherNo: matchedVoucher?.voucher_no || `SRV-${ret.return_no || 'NA'}`,
+            voucherType: matchedVoucher?.voucher_type || 'Sale Return Voucher',
+            date: ret.return_date || matchedVoucher?.voucher_date || '—',
+            amount: Number(ret.total_amount || 0)
+          };
+        });
+
+        return {
+          id: c.id,
+          code: c.customer_code || c.customerCode || c.account_code || '—',
+          name: c.customer_name || c.customerName || c.customername || c.name || 'Customer',
+          area: c.area || c.city || '—',
+          phone: c.phone || c.primaryPhone || c.primaryphone || '—',
+          openingBalance: effectiveOpen,
+          invoicedAmount: invoicedTotal,
+          receivedAmount: receivedTotal,
+          returnAmount: retAmt,
+          closingBalance: closeBal,
+          balanceNature: closeBal >= 0 ? 'Dr (Receivable)' : 'Cr (Advance)',
+          detailTree: {
+            bills,
+            receipts,
+            returns,
+            totalBills: invoicedTotal,
+            totalPayments: receivedTotal,
+            totalReturns: retAmt
+          }
+        };
+      });
+    }
+
+    if (criteria.reportType === 'vendor') {
+      let pool = rawVendors;
+
+      if (criteria.partyIds && criteria.partyIds.length > 0) {
+        const idSet = new Set(criteria.partyIds);
+        pool = pool.filter((v) => idSet.has(String(v.id)) || idSet.has(String(v.vendor_code || v.vendorCode)));
+      }
+
+      if (criteria.hideZeroBalances) {
+        pool = pool.filter((v) => Math.abs(Number(v.currentBalance || v.balance || v.current_balance || 0)) > 0);
+      }
+
+      return pool.map((v) => {
+        const vName = String(v.vendor_name || v.name || '').trim().toLowerCase();
+        const openBal = Math.abs(Number(v.opening_balance || 0));
+        const effectiveOpen = (v.balance_nature || '').toLowerCase().includes('debit') ? -openBal : openBal;
+        const purInfo = purchasesSummary[vName] || { count: 0, total: 0, paid: 0 };
+        const retAmt = purchaseReturnsSummary[vName] || 0;
+        const invoicedTotal = purInfo.total;
+        const paidTotal = purInfo.paid;
+        const closeBal = effectiveOpen + invoicedTotal - paidTotal - retAmt;
+
+        // Build vendor's transaction and voucher hierarchy
+        const partyPurchases = detailedPurchases.filter(
+          (p) =>
+            (p.vendor_name || '').trim().toLowerCase() === vName ||
+            (p.supplier_name || '').trim().toLowerCase() === vName
+        );
+        const partyReturns = detailedPurchaseReturns.filter(
+          (ret) => (ret.vendor_name || '').trim().toLowerCase() === vName
+        );
+        const partyVouchers = vouchersByParty[vName] || [];
+
+        // 1. Bill Vouchers (PAV)
+        const bills = partyPurchases.map((p) => {
+          const pKey = String(p.purchase_no || '').trim().toLowerCase();
+          const matchedVoucher = (vouchersByInvoiceNo[pKey] || []).find(
+            (v) => (v.voucher_type || '').includes('Purchase') || (v.voucher_no || '').startsWith('PAV')
+          );
+          return {
+            id: String(p.id),
+            billNo: p.purchase_no || '—',
+            voucherNo: matchedVoucher?.voucher_no || `PAV-${p.purchase_no || 'NA'}`,
+            voucherType: matchedVoucher?.voucher_type || 'Purchase Accrual Voucher',
+            date: p.purchase_date || matchedVoucher?.voucher_date || '—',
+            amount: Number(p.total_amount || 0),
+            paid: Number(p.amount_paid || p.paid_amount || 0),
+            balance: Number(p.remaining_balance || 0)
+          };
+        });
+
+        // 2. Payment Vouchers (CPV / VPV)
+        const receipts = partyVouchers
+          .filter(
+            (v) =>
+              (v.voucher_type || '').includes('Payment') ||
+              (v.voucher_no || '').startsWith('CPV') ||
+              (v.voucher_no || '').startsWith('VPV') ||
+              (Number(v.debit || 0) > 0 && !(v.voucher_type || '').includes('Return'))
+          )
+          .map((v) => ({
+            id: String(v.id),
+            voucherNo: v.voucher_no,
+            voucherType: v.voucher_type || 'Payment Voucher',
+            refNo: v.original_invoice_no || 'Payment Slip',
+            date: v.voucher_date || '—',
+            amount: Number(v.debit || v.total_amount || 0),
+            mode: v.description || 'Cash / Bank Payment'
+          }));
+
+        // 3. Return Vouchers (PRV)
+        const returns = partyReturns.map((ret) => {
+          const retKey = String(ret.return_no || '').trim().toLowerCase();
+          const matchedVoucher = (vouchersByInvoiceNo[retKey] || []).find(
+            (v) => (v.voucher_type || '').includes('Return') || (v.voucher_no || '').startsWith('PRV')
+          );
+          return {
+            id: String(ret.id),
+            returnNo: ret.return_no || '—',
+            voucherNo: matchedVoucher?.voucher_no || `PRV-${ret.return_no || 'NA'}`,
+            voucherType: matchedVoucher?.voucher_type || 'Purchase Return Voucher',
+            date: ret.return_date || matchedVoucher?.voucher_date || '—',
+            amount: Number(ret.total_amount || 0)
+          };
+        });
+
+        return {
+          id: v.id,
+          code: v.vendor_code || v.vendorCode || '—',
+          name: v.vendor_name || v.name || 'Vendor',
+          area: v.category || v.city || 'Supplier',
+          phone: v.phone || v.phone_no || v.cell_no || v.mobile || '—',
+          openingBalance: effectiveOpen,
+          invoicedAmount: invoicedTotal,
+          receivedAmount: paidTotal,
+          returnAmount: retAmt,
+          closingBalance: closeBal,
+          balanceNature: closeBal >= 0 ? 'Cr (Payable)' : 'Dr (Advance Paid)',
+          detailTree: {
+            bills,
+            receipts,
+            returns,
+            totalBills: invoicedTotal,
+            totalPayments: paidTotal,
+            totalReturns: retAmt
+          }
+        };
+      });
+    }
+
+    // Chart of Accounts / Cash & Bank / Expense
+    let pool = rawCoa;
+
+    if (criteria.accountHeads && criteria.accountHeads.length > 0) {
+      const headSet = new Set(criteria.accountHeads);
+      pool = pool.filter((acc) => headSet.has(String(acc.account_code || '').charAt(0)));
+    }
+
+    if (criteria.subHeads && criteria.subHeads.length > 0) {
+      const subSet = new Set(criteria.subHeads);
+      pool = pool.filter((acc) => subSet.has(String(acc.account_code || '').substring(0, 2)));
+    }
+
+    if (criteria.accountCodes && criteria.accountCodes.length > 0) {
+      const cSet = new Set(criteria.accountCodes);
+      pool = pool.filter((acc) => cSet.has(String(acc.account_code)));
+    }
+
+    if (criteria.reportType === 'expense') {
+      pool = pool.filter((acc) => String(acc.account_code || '').startsWith('5'));
+    } else if (criteria.reportType === 'cash_bank') {
+      pool = pool.filter(
+        (acc) =>
+          String(acc.account_code || '').startsWith('10') ||
+          String(acc.account_title || '').toLowerCase().includes('cash') ||
+          String(acc.account_title || '').toLowerCase().includes('bank')
+      );
+    }
+
+    if (criteria.hideZeroBalances) {
+      pool = pool.filter((acc) => Math.abs(Number(acc.opening_balance || 0)) > 0);
+    }
+
+    return pool.map((acc) => {
+      const openBal = Number(acc.opening_balance || 0);
+      const code = String(acc.account_code || '');
+      let headName = 'Assets';
+      if (code.startsWith('2')) headName = 'Liabilities';
+      else if (code.startsWith('3')) headName = 'Equity';
+      else if (code.startsWith('4')) headName = 'Revenue';
+      else if (code.startsWith('5')) headName = 'Expenses';
+
+      return {
+        id: acc.id,
+        code: acc.account_code,
+        name: acc.account_title,
+        area: headName,
+        phone: acc.account_type || acc.balance_nature || 'Debit',
+        openingBalance: openBal,
+        invoicedAmount: 0,
+        receivedAmount: 0,
+        returnAmount: 0,
+        closingBalance: openBal,
+        balanceNature: acc.balance_nature || (openBal >= 0 ? 'Debit' : 'Credit'),
+        detailTree: {
+          bills: [],
+          receipts: [],
+          returns: [],
+          totalBills: 0,
+          totalPayments: 0,
+          totalReturns: 0
+        }
+      };
+    });
+  }, [
+    criteria,
+    rawCustomers,
+    rawVendors,
+    rawCoa,
+    invoicesSummary,
+    returnsSummary,
+    purchasesSummary,
+    purchaseReturnsSummary,
+    detailedInvoices,
+    detailedPurchases,
+    detailedSalesReturns,
+    detailedPurchaseReturns,
+    vouchersMaster
+  ]);
+
+  // ── SORTING ──
+  const sortedAccountRows = useMemo(() => {
+    const list = [...parsedAccountRows];
+    if (!criteria?.sortBy) return list;
+
+    switch (criteria.sortBy) {
+      case 'balance_desc':
+        return list.sort((a, b) => Math.abs(b.closingBalance) - Math.abs(a.closingBalance));
+      case 'balance_asc':
+        return list.sort((a, b) => Math.abs(a.closingBalance) - Math.abs(b.closingBalance));
+      case 'name_asc':
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+      case 'name_desc':
+        return list.sort((a, b) => b.name.localeCompare(a.name));
+      case 'code_asc':
+        return list.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+      case 'code_desc':
+        return list.sort((a, b) => String(b.code).localeCompare(String(a.code)));
+      default:
+        return list;
+    }
+  }, [parsedAccountRows, criteria?.sortBy]);
+
+  // ── TAILORED KPI SUMMARY CALCULATIONS (ACCORDING TO REPORT TYPE) ──
+  const kpiTotals = useMemo(() => {
+    let totalReceivables = 0;
+    let totalAdvances = 0;
+    let totalPayables = 0;
+    let totalCashBank = 0;
+    let totalInflows = 0;
+    let totalOutflows = 0;
+    let totalReturns = 0;
+
+    // Receivables and advances from customers
+    rawCustomers.forEach((c) => {
+      const bal = Number(c.computed_balance ?? c.current_balance ?? c.balance ?? 0);
+      if (bal > 0) totalReceivables += bal;
+      else if (bal < 0) totalAdvances += Math.abs(bal);
+    });
+
+    // Payables from vendors
+    rawVendors.forEach((v) => {
+      const bal = Number(v.computed_balance ?? v.currentBalance ?? v.balance ?? 0);
+      if (bal > 0) totalPayables += bal;
+      else if (bal < 0) totalAdvances += Math.abs(bal);
+    });
+
+    // Liquid funds
+    rawBanks.forEach((b) => {
+      totalCashBank += Number(b.current_balance || 0);
+    });
+
+    // Inflows, Outflows and Returns from active filtered table rows
+    sortedAccountRows.forEach((r) => {
+      totalInflows += r.invoicedAmount;
+      totalOutflows += r.receivedAmount;
+      totalReturns += r.returnAmount;
+    });
+
+    return {
+      totalAccounts: sortedAccountRows.length,
+      totalReceivables,
+      totalAdvances,
+      totalPayables,
+      totalCashBank,
+      totalInflows,
+      totalOutflows,
+      totalReturns,
+      netFinancialFlow: totalReceivables - totalPayables
+    };
+  }, [rawCustomers, rawVendors, rawBanks, sortedAccountRows]);
+
+  // Dynamic KPI Card Config depending on whether Customer, Vendor or CoA report
+  const kpiCards = useMemo(() => {
+    if (criteria?.reportType === 'customer') {
+      return [
+        {
+          label: 'Total Receivables',
+          value: `Rs. ${Math.round(kpiTotals.totalReceivables).toLocaleString()}`,
+          note: 'Due from customers',
+          textColor: 'text-blue-600 dark:text-blue-400',
+          highlight: true
+        },
+        {
+          label: 'Customer Advances (Cr)',
+          value: `Rs. ${Math.round(kpiTotals.totalAdvances).toLocaleString()}`,
+          note: 'Advance credit balances',
+          textColor: 'text-amber-600 dark:text-amber-400'
+        },
+        {
+          label: 'Period Sales (Dr)',
+          value: kpiTotals.totalInflows > 0 ? `Rs. ${Math.round(kpiTotals.totalInflows).toLocaleString()}` : 'Rs. 0',
+          note: 'Invoiced turnover'
+        },
+        {
+          label: 'Collections (Cr)',
+          value: kpiTotals.totalOutflows > 0 ? `Rs. ${Math.round(kpiTotals.totalOutflows).toLocaleString()}` : 'Rs. 0',
+          note: 'Receipts collected',
+          textColor: 'text-emerald-600 dark:text-emerald-400'
+        },
+        {
+          label: 'Sales Returns (Cr)',
+          value: kpiTotals.totalReturns > 0 ? `Rs. ${Math.round(kpiTotals.totalReturns).toLocaleString()}` : 'Rs. 0',
+          note: 'Returns & deductions',
+          textColor: 'text-rose-600 dark:text-rose-400'
+        },
+        {
+          label: 'Net Receivables Due',
+          value: `Rs. ${Math.round(kpiTotals.totalReceivables - kpiTotals.totalAdvances).toLocaleString()}`,
+          note: 'Active Net Balance',
+          highlight: true
+        }
+      ];
+    }
+
+    if (criteria?.reportType === 'vendor') {
+      return [
+        {
+          label: 'Total Payables',
+          value: `Rs. ${Math.round(kpiTotals.totalPayables).toLocaleString()}`,
+          note: 'Outstanding to vendors',
+          textColor: 'text-red-600 dark:text-red-400',
+          highlight: true
+        },
+        {
+          label: 'Vendor Advances (Dr)',
+          value: `Rs. ${Math.round(kpiTotals.totalAdvances).toLocaleString()}`,
+          note: 'Prepayments to vendors',
+          textColor: 'text-amber-600 dark:text-amber-400'
+        },
+        {
+          label: 'Period Purchases (Cr)',
+          value: kpiTotals.totalInflows > 0 ? `Rs. ${Math.round(kpiTotals.totalInflows).toLocaleString()}` : 'Rs. 0',
+          note: 'Purchases turnover'
+        },
+        {
+          label: 'Payments Made (Dr)',
+          value: kpiTotals.totalOutflows > 0 ? `Rs. ${Math.round(kpiTotals.totalOutflows).toLocaleString()}` : 'Rs. 0',
+          note: 'Disbursements to vendors',
+          textColor: 'text-emerald-600 dark:text-emerald-400'
+        },
+        {
+          label: 'Purchase Returns (Dr)',
+          value: kpiTotals.totalReturns > 0 ? `Rs. ${Math.round(kpiTotals.totalReturns).toLocaleString()}` : 'Rs. 0',
+          note: 'Debit notes & returns',
+          textColor: 'text-rose-600 dark:text-rose-400'
+        },
+        {
+          label: 'Net Payables Due',
+          value: `Rs. ${Math.round(kpiTotals.totalPayables - kpiTotals.totalAdvances).toLocaleString()}`,
+          note: 'Active Net Balance',
+          highlight: true
+        }
+      ];
+    }
+
+    // Chart of Accounts / All / Cash & Bank
+    return [
+      {
+        label: 'Total Receivables',
+        value: `Rs. ${Math.round(kpiTotals.totalReceivables).toLocaleString()}`,
+        note: 'Customer balances',
+        textColor: 'text-blue-600 dark:text-blue-400'
+      },
+      {
+        label: 'Total Payables',
+        value: `Rs. ${Math.round(kpiTotals.totalPayables).toLocaleString()}`,
+        note: 'Vendor balances',
+        textColor: 'text-red-600 dark:text-red-400'
+      },
+      {
+        label: 'Liquid Funds',
+        value: `Rs. ${Math.round(kpiTotals.totalCashBank).toLocaleString()}`,
+        note: 'Bank & cash reserves'
+      },
+      {
+        label: 'Period Inflows',
+        value: kpiTotals.totalInflows > 0 ? `Rs. ${Math.round(kpiTotals.totalInflows).toLocaleString()}` : 'Rs. 0',
+        note: 'Sales & billing turnover'
+      },
+      {
+        label: 'Period Outflows',
+        value: kpiTotals.totalOutflows > 0 ? `Rs. ${Math.round(kpiTotals.totalOutflows).toLocaleString()}` : 'Rs. 0',
+        note: 'Collections & expenses'
+      },
+      {
+        label: 'Net Financial Position',
+        value: `Rs. ${Math.round(kpiTotals.netFinancialFlow).toLocaleString()}`,
+        note: 'Receivables vs Payables',
+        highlight: true
+      }
+    ];
+  }, [criteria?.reportType, kpiTotals]);
+
+  // Export CSV
+  const handleExportCSV = () => {
+    let csvContent = 'data:text/csv;charset=utf-8,';
+    csvContent += `Basic Accounts Report - ${businessName}\r\n`;
+    csvContent += `Report Type: ${criteria?.reportType?.toUpperCase()}\r\n`;
+    csvContent += `Generated: ${new Date().toLocaleString()}\r\n\r\n`;
+
+    csvContent +=
+      'S#,Code,Account Title / Party,Category / Area,Opening Balance,Invoiced / Purchased,Received / Paid,Returns / Refund,Closing Balance,Nature\r\n';
+    sortedAccountRows.forEach((r, idx) => {
+      csvContent += `${idx + 1},"${r.code}","${r.name}","${r.area}",${Math.round(r.openingBalance)},${Math.round(
+        r.invoicedAmount
+      )},${Math.round(r.receivedAmount)},${Math.round(r.returnAmount)},${Math.round(r.closingBalance)},"${
+        r.balanceNature
+      }"\r\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Accounts_Report_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const isClassic = layoutTheme === 'classic';
+
+  if (!criteria) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+        <MdInfoOutline size={36} className="text-amber-500" />
+        <h2 className="text-lg font-bold">No Accounts Filter Criteria Found</h2>
+        <p className="text-sm text-gray-500">
+          Please select your criteria on the Basic Accounts Report filter page first.
+        </p>
+        <button
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/basic-account-report`)}
+          className="mt-2 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold"
+        >
+          Return to Report Builder
+        </button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3">
+        <Spinner />
+        <p className="text-sm font-semibold text-gray-500 animate-pulse">
+          Generating Basic Accounts Statement...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`min-h-screen ${
+        isClassic ? 'bg-white text-black font-serif' : 'bg-gray-50 dark:bg-boxdark-2 text-black dark:text-white font-sans'
+      }`}
+    >
+      {/* ── EMBEDDED PRINT STYLESHEET TO GUARANTEE ZERO SCROLLBARS & CLEAN PRINT ── */}
+      <style>{`
+        @media print {
+          @page {
+            size: auto;
+            margin: 8mm 6mm 8mm 6mm;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background: white !important;
+            color: black !important;
+          }
+          * {
+            overflow: visible !important;
+            max-height: none !important;
+            box-shadow: none !important;
+          }
+          table {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          tbody {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          tr {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          tfoot {
+            display: table-row-group !important;
+          }
+          .master-row {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .print-hidden, .print\\:hidden {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {/* ── TOP ACTION BAR (HIDDEN IN PRINT) ── */}
+      <div className="print:hidden sticky top-0 z-40 bg-white/90 dark:bg-boxdark/90 backdrop-blur border-b border-stroke dark:border-strokedark px-4 py-3">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/basic-account-report`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer"
+          >
+            <MdArrowBack size={16} />
+            <span>Back to Filters</span>
+          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* View Mode Pill Selector: Default View vs Detail View */}
+            <div className="inline-flex items-center p-1 rounded-xl border border-stroke dark:border-strokedark bg-gray-100 dark:bg-meta-4/40 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setViewMode('default')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'default'
+                    ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+                title="Standard Ledger Summary Statement"
+              >
+                <MdFormatListBulleted size={14} />
+                <span>Default View</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('detailed');
+                  expandAllParties(sortedAccountRows.map((r) => String(r.id)));
+                }}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'detailed'
+                    ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+                title="Hierarchical Breakdown with all Bill, Transaction & Return Vouchers"
+              >
+                <MdAccountTree size={14} />
+                <span>Detail View</span>
+              </button>
+            </div>
+
+            {/* Expand / Collapse All & Rows Limit in Detail View */}
+            {viewMode === 'detailed' && (
+              <>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => expandAllParties(sortedAccountRows.map((r) => String(r.id)))}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer text-gray-700 dark:text-gray-300"
+                    title="Expand All Parties"
+                  >
+                    <MdUnfoldMore size={15} />
+                    <span>Expand All</span>
+                  </button>
+                  <button
+                    onClick={collapseAllParties}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer text-gray-700 dark:text-gray-300"
+                    title="Collapse All Parties"
+                  >
+                    <MdUnfoldLess size={15} />
+                    <span>Collapse</span>
+                  </button>
+                </div>
+
+                {/* Per-Party Detail Rows Limit Selector */}
+                <div className="inline-flex items-center p-0.5 rounded-xl border border-stroke dark:border-strokedark bg-gray-100 dark:bg-meta-4/40 text-xs font-bold">
+                  <span className="text-[10px] text-gray-500 uppercase px-2 font-black">Print Rows:</span>
+                  <button
+                    type="button"
+                    onClick={() => setDetailLimit(25)}
+                    className={`px-2 py-1 rounded-lg transition cursor-pointer text-xs ${
+                      detailLimit === 25
+                        ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
+                        : 'text-gray-500 hover:text-black dark:hover:text-white'
+                    }`}
+                    title="Print 25 most recent bills/receipts per party (keeps statement to 2-3 pages)"
+                  >
+                    Top 25
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailLimit(50)}
+                    className={`px-2 py-1 rounded-lg transition cursor-pointer text-xs ${
+                      detailLimit === 50
+                        ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
+                        : 'text-gray-500 hover:text-black dark:hover:text-white'
+                    }`}
+                    title="Print 50 bills/receipts per party"
+                  >
+                    Top 50
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailLimit('all')}
+                    className={`px-2 py-1 rounded-lg transition cursor-pointer text-xs ${
+                      detailLimit === 'all'
+                        ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
+                        : 'text-gray-500 hover:text-black dark:hover:text-white'
+                    }`}
+                    title="Print complete ledger history for all bills & vouchers"
+                  >
+                    All Rows
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Layout Theme Toggle */}
+            <button
+              onClick={toggleLayout}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer"
+              title="Toggle Modern / Classic Print Layout"
+            >
+              {isClassic ? <MdViewModule size={16} /> : <MdFormatListBulleted size={16} />}
+              <span>{isClassic ? 'Switch to Modern' : 'Switch to Classic'}</span>
+            </button>
+
+            {/* Export CSV */}
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer text-emerald-600"
+            >
+              <MdFileDownload size={16} />
+              <span>Export CSV</span>
+            </button>
+
+            {/* Print Button */}
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-xl bg-primary text-white hover:bg-primary/90 transition shadow-sm cursor-pointer"
+            >
+              <MdPrint size={16} />
+              <span>Print Statement</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── PRINT CONTENT WRAPPER ── */}
+      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 print:p-0 print:max-w-none">
+        {/* ── 1. REPORT HEADER ── */}
+        <div
+          className={`pb-4 border-b ${
+            isClassic
+              ? 'border-black text-center'
+              : 'border-stroke dark:border-strokedark flex flex-wrap items-center justify-between gap-4'
+          }`}
+        >
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded bg-primary/10 text-primary dark:text-white border border-primary/20">
+                BASIC ACCOUNTS DEPARTMENT
+              </span>
+              <span className="text-xs text-gray-400">•</span>
+              <span className="text-xs font-bold text-gray-500 uppercase">
+                {criteria.reportType.toUpperCase()} FINANCIAL STATEMENT
+              </span>
+              {viewMode === 'detailed' && (
+                <>
+                  <span className="text-xs text-gray-400">•</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
+                    HIERARCHICAL DETAIL VIEW
+                  </span>
+                </>
+              )}
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-black dark:text-white uppercase">
+              {businessName || 'Zohaib Ali & Company'}
+            </h1>
+          </div>
+
+          <div className={`text-xs ${isClassic ? 'mt-2' : 'text-right text-gray-500 dark:text-gray-400'}`}>
+            <p>
+              Period:{' '}
+              <strong className="text-black dark:text-white">
+                {criteria.dateMode === 'single'
+                  ? `As of ${criteria.singleDate}`
+                  : `${criteria.dateFrom} → ${criteria.dateTo}`}
+              </strong>
+            </p>
+            <p className="mt-0.5">
+              Print Date: {new Date().toLocaleDateString('en-GB')} • Mode:{' '}
+              <span className="font-semibold capitalize">{viewMode}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* ── 2. EXECUTIVE KPI CARDS (BALANCES & TURNOVER) ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+          {kpiCards.map((kpi, idx) => (
+            <div
+              key={idx}
+              className={`p-2.5 rounded-xl min-w-0 ${
+                isClassic
+                  ? 'border border-black bg-white'
+                  : kpi.highlight
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                  : 'bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark'
+              }`}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider block text-gray-500 dark:text-gray-400 truncate">
+                {kpi.label}
+              </span>
+              <span
+                className={`text-xs sm:text-sm lg:text-[15px] xl:text-base font-black block mt-0.5 leading-tight tracking-tight break-words ${
+                  kpi.textColor || ''
+                }`}
+              >
+                {kpi.value}
+              </span>
+              <span className="text-[9px] text-gray-400 block mt-0.5 truncate">{kpi.note}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* ── 3. MAIN ACCOUNTS / LEDGER TABLE WITH HIERARCHICAL DETAIL VIEW ── */}
+        <div className="overflow-x-visible print:overflow-visible">
+          <table className={`w-full text-left border-collapse ${isClassic ? 'border border-black text-xs' : 'text-xs'}`}>
+            <thead>
+              <tr
+                className={`${
+                  isClassic
+                    ? 'border-b-2 border-black bg-gray-100 font-bold'
+                    : 'border-b border-stroke dark:border-strokedark bg-gray-100/70 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 font-bold'
+                }`}
+              >
+                <th className="py-2.5 px-2 text-center w-10">S#</th>
+                <th className="py-2.5 px-2 w-24">Code</th>
+                <th className="py-2.5 px-2">Account Title / Party Name</th>
+                <th className="py-2.5 px-2">
+                  {criteria.reportType === 'customer'
+                    ? 'Area / City'
+                    : criteria.reportType === 'vendor'
+                    ? 'Category / City'
+                    : 'Account Head'}
+                </th>
+                <th className="py-2.5 px-2 text-right">Opening Bal</th>
+
+                {/* Customer Columns */}
+                {criteria.reportType === 'customer' && (
+                  <>
+                    <th className="py-2.5 px-2 text-right">Invoiced (Dr)</th>
+                    <th className="py-2.5 px-2 text-right">Received (Cr)</th>
+                    <th className="py-2.5 px-2 text-right text-rose-600 dark:text-rose-400">
+                      Returns / Refund (Cr)
+                    </th>
+                  </>
+                )}
+
+                {/* Vendor Columns */}
+                {criteria.reportType === 'vendor' && (
+                  <>
+                    <th className="py-2.5 px-2 text-right">Purchases (Cr)</th>
+                    <th className="py-2.5 px-2 text-right">Payments (Dr)</th>
+                    <th className="py-2.5 px-2 text-right text-rose-600 dark:text-rose-400">
+                      Returns / Debit (Dr)
+                    </th>
+                  </>
+                )}
+
+                <th className="py-2.5 px-2 text-right">Closing Balance</th>
+                <th className="py-2.5 px-2 text-center w-28">Nature</th>
+                {viewMode === 'detailed' && (
+                  <th className="py-2.5 px-2 text-center w-12 print:hidden">Tree</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stroke dark:divide-strokedark">
+              {sortedAccountRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={
+                      criteria.reportType === 'customer' || criteria.reportType === 'vendor'
+                        ? viewMode === 'detailed' ? 11 : 10
+                        : viewMode === 'detailed' ? 8 : 7
+                    }
+                    className="py-8 text-center text-gray-400"
+                  >
+                    No account records found matching the selected criteria.
+                  </td>
+                </tr>
+              ) : (
+                sortedAccountRows.map((r, idx) => {
+                  const partyIdStr = String(r.id);
+                  const isExpanded =
+                    expandedParties[partyIdStr] !== undefined
+                      ? expandedParties[partyIdStr]
+                      : viewMode === 'detailed';
+                  const hasDetails =
+                    r.detailTree &&
+                    (r.detailTree.bills.length > 0 ||
+                      r.detailTree.receipts.length > 0 ||
+                      r.detailTree.returns.length > 0);
+
+                  const colSpanTotal =
+                    criteria.reportType === 'customer' || criteria.reportType === 'vendor'
+                      ? viewMode === 'detailed' ? 11 : 10
+                      : viewMode === 'detailed' ? 8 : 7;
+
+                  return (
+                    <React.Fragment key={r.id}>
+                      {/* Master Row */}
+                      <tr
+                        className={`master-row hover:bg-gray-50/80 dark:hover:bg-meta-4/20 transition ${
+                          isClassic ? (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50') : ''
+                        } ${isExpanded && viewMode === 'detailed' ? 'bg-blue-50/20 dark:bg-meta-4/10' : ''}`}
+                      >
+                        <td className="py-2 px-2 text-center text-gray-400 font-mono text-[11px]">
+                          {idx + 1}
+                        </td>
+                        <td className="py-2 px-2 font-mono font-bold text-primary text-[11px]">
+                          {r.code}
+                        </td>
+                        <td className="py-2 px-2 font-semibold">
+                          <div className="flex items-center gap-1.5">
+                            {viewMode === 'detailed' && hasDetails && (
+                              <button
+                                type="button"
+                                onClick={() => togglePartyExpand(partyIdStr)}
+                                className="print:hidden text-gray-400 hover:text-primary transition cursor-pointer"
+                              >
+                                {isExpanded ? (
+                                  <MdKeyboardArrowDown size={16} />
+                                ) : (
+                                  <MdKeyboardArrowUp size={16} className="rotate-90" />
+                                )}
+                              </button>
+                            )}
+                            <span>{r.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-2 text-gray-500">{r.area}</td>
+                        <td className="py-2 px-2 text-right font-mono text-gray-500">
+                          {Math.round(r.openingBalance).toLocaleString()}
+                        </td>
+
+                        {/* Customer Dynamic Turnover Columns */}
+                        {criteria.reportType === 'customer' && (
+                          <>
+                            <td className="py-2 px-2 text-right font-mono font-medium text-black dark:text-white">
+                              {r.invoicedAmount > 0 ? Math.round(r.invoicedAmount).toLocaleString() : '—'}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono text-emerald-600 dark:text-emerald-400">
+                              {r.receivedAmount > 0 ? Math.round(r.receivedAmount).toLocaleString() : '—'}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono font-semibold text-rose-600 dark:text-rose-400">
+                              {r.returnAmount > 0 ? Math.round(r.returnAmount).toLocaleString() : '—'}
+                            </td>
+                          </>
+                        )}
+
+                        {/* Vendor Dynamic Turnover Columns */}
+                        {criteria.reportType === 'vendor' && (
+                          <>
+                            <td className="py-2 px-2 text-right font-mono font-medium text-black dark:text-white">
+                              {r.invoicedAmount > 0 ? Math.round(r.invoicedAmount).toLocaleString() : '—'}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono text-emerald-600 dark:text-emerald-400">
+                              {r.receivedAmount > 0 ? Math.round(r.receivedAmount).toLocaleString() : '—'}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono font-semibold text-rose-600 dark:text-rose-400">
+                              {r.returnAmount > 0 ? Math.round(r.returnAmount).toLocaleString() : '—'}
+                            </td>
+                          </>
+                        )}
+
+                        <td className="py-2 px-2 text-right font-mono font-bold text-black dark:text-white">
+                          Rs. {Math.round(r.closingBalance).toLocaleString()}
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              r.closingBalance > 0
+                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                : r.closingBalance < 0
+                                ? 'bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                : 'bg-gray-100 text-gray-500 dark:bg-meta-4'
+                            }`}
+                          >
+                            {r.balanceNature}
+                          </span>
+                        </td>
+                        {viewMode === 'detailed' && (
+                          <td className="py-2 px-2 text-center print:hidden">
+                            <button
+                              type="button"
+                              onClick={() => togglePartyExpand(partyIdStr)}
+                              className="text-gray-400 hover:text-primary transition p-1 cursor-pointer"
+                              title={isExpanded ? 'Collapse vouchers' : 'Expand vouchers'}
+                            >
+                              {isExpanded ? <MdKeyboardArrowUp size={16} /> : <MdKeyboardArrowDown size={16} />}
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+
+                      {/* ── DETAIL VIEW: NESTED TRANSACTION & VOUCHER HIERARCHY (NO SCROLLBARS, 100% PRINTABLE) ── */}
+                      {viewMode === 'detailed' && isExpanded && (() => {
+                        const displayedBills = detailLimit === 'all' ? r.detailTree.bills : r.detailTree.bills.slice(0, detailLimit);
+                        const displayedReceipts = detailLimit === 'all' ? r.detailTree.receipts : r.detailTree.receipts.slice(0, detailLimit);
+                        const displayedReturns = detailLimit === 'all' ? r.detailTree.returns : r.detailTree.returns.slice(0, detailLimit);
+
+                        return (
+                          <tr className="bg-gray-50/90 dark:bg-meta-4/20 border-b border-stroke dark:border-strokedark">
+                            <td colSpan={colSpanTotal} className="p-3 pl-8 sm:pl-12">
+                              <div className="bg-white dark:bg-boxdark rounded-xl border border-stroke dark:border-strokedark p-3.5 shadow-xs space-y-3 print:border-black print:p-2 print:shadow-none">
+                                {/* Party Header / Hierarchy Title */}
+                                <div className="flex flex-wrap items-center justify-between border-b border-stroke dark:border-strokedark pb-2 gap-2 print:border-black">
+                                  <div className="flex items-center gap-2">
+                                    <MdAccountTree className="text-primary" size={16} />
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-primary">
+                                      VOUCHER & TRANSACTION BREAKDOWN: {r.name} ({r.code})
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] font-mono text-gray-500 flex items-center gap-3">
+                                    <span>Opening: Rs. {Math.round(r.openingBalance).toLocaleString()}</span>
+                                    <span>•</span>
+                                    <span>Bills: {r.detailTree.bills.length}</span>
+                                    <span>•</span>
+                                    <span>Receipts/Payments: {r.detailTree.receipts.length}</span>
+                                    <span>•</span>
+                                    <span>Returns: {r.detailTree.returns.length}</span>
+                                  </div>
+                                </div>
+
+                                {/* 3-Column Hierarchy Grid (Unconstrained, flows naturally on paper and screen) */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 print:grid-cols-3 print:gap-2">
+                                  {/* 1. Bills & Invoices Section */}
+                                  <div className="rounded-lg border border-stroke dark:border-strokedark p-2.5 bg-gray-50/50 dark:bg-meta-4/10 print:border-black print:bg-white">
+                                    <div className="flex items-center justify-between mb-2 pb-1 border-b border-stroke/60 dark:border-strokedark/60 print:border-black">
+                                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200">
+                                        <MdReceiptLong className="text-blue-500" size={15} />
+                                        <span>
+                                          {criteria.reportType === 'vendor' ? 'Purchase Bills' : 'Sales Invoices'}
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 font-bold">
+                                        {r.detailTree.bills.length} Bills
+                                      </span>
+                                    </div>
+
+                                    {r.detailTree.bills.length === 0 ? (
+                                      <p className="text-[11px] text-gray-400 italic py-2 text-center">
+                                        No bill vouchers recorded
+                                      </p>
+                                    ) : (
+                                      <div className="space-y-1 overflow-visible">
+                                        {displayedBills.map((b: any, bIdx: number) => (
+                                          <div
+                                            key={bIdx}
+                                            className="p-1.5 rounded bg-white dark:bg-boxdark border border-stroke/60 dark:border-strokedark/60 text-[10.5px] flex items-center justify-between print:border-gray-300"
+                                          >
+                                            <div>
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="font-mono font-black text-primary text-[10px]">
+                                                  {b.voucherNo}
+                                                </span>
+                                                <span className="text-[10px] text-gray-500">• #{b.billNo}</span>
+                                              </div>
+                                              <span className="text-[9.5px] text-gray-400 block">{b.date}</span>
+                                            </div>
+                                            <div className="text-right font-mono">
+                                              <span className="font-bold block text-black dark:text-white">
+                                                Rs. {Math.round(b.amount).toLocaleString()}
+                                              </span>
+                                              {b.balance > 0 ? (
+                                                <span className="text-[9px] text-amber-600 block">
+                                                  Bal: {Math.round(b.balance).toLocaleString()}
+                                                </span>
+                                              ) : (
+                                                <span className="text-[9px] text-emerald-600 block">Paid</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+
+                                        {r.detailTree.bills.length > displayedBills.length && (
+                                          <div className="text-[9.5px] text-gray-500 font-mono text-center pt-1 border-t border-dashed border-stroke dark:border-strokedark print:border-black">
+                                            <span>Showing {displayedBills.length} of {r.detailTree.bills.length} bills</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => setDetailLimit('all')}
+                                              className="print:hidden ml-1 text-primary underline font-bold cursor-pointer"
+                                            >
+                                              (Show all)
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <div className="mt-2 pt-1.5 border-t border-stroke dark:border-strokedark flex justify-between text-[11px] font-bold print:border-black">
+                                      <span>Total Billed:</span>
+                                      <span className="font-mono text-primary">
+                                        Rs. {Math.round(r.detailTree.totalBills).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* 2. Receipts & Payments Section */}
+                                  <div className="rounded-lg border border-stroke dark:border-strokedark p-2.5 bg-gray-50/50 dark:bg-meta-4/10 print:border-black print:bg-white">
+                                    <div className="flex items-center justify-between mb-2 pb-1 border-b border-stroke/60 dark:border-strokedark/60 print:border-black">
+                                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200">
+                                        <MdPayments className="text-emerald-500" size={15} />
+                                        <span>
+                                          {criteria.reportType === 'vendor' ? 'Payments (Paid)' : 'Receipts (Received)'}
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 font-bold">
+                                        {r.detailTree.receipts.length} Slips
+                                      </span>
+                                    </div>
+
+                                    {r.detailTree.receipts.length === 0 ? (
+                                      <p className="text-[11px] text-gray-400 italic py-2 text-center">
+                                        No payment vouchers recorded
+                                      </p>
+                                    ) : (
+                                      <div className="space-y-1 overflow-visible">
+                                        {displayedReceipts.map((rc: any, rcIdx: number) => (
+                                          <div
+                                            key={rcIdx}
+                                            className="p-1.5 rounded bg-white dark:bg-boxdark border border-stroke/60 dark:border-strokedark/60 text-[10.5px] flex items-center justify-between print:border-gray-300"
+                                          >
+                                            <div>
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="font-mono font-black text-emerald-600 text-[10px]">
+                                                  {rc.voucherNo}
+                                                </span>
+                                                <span className="text-[10px] text-gray-500">• {rc.refNo}</span>
+                                              </div>
+                                              <span className="text-[9.5px] text-gray-400 block">{rc.date}</span>
+                                            </div>
+                                            <div className="text-right font-mono">
+                                              <span className="font-bold text-emerald-600 block">
+                                                Rs. {Math.round(rc.amount).toLocaleString()}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        ))}
+
+                                        {r.detailTree.receipts.length > displayedReceipts.length && (
+                                          <div className="text-[9.5px] text-gray-500 font-mono text-center pt-1 border-t border-dashed border-stroke dark:border-strokedark print:border-black">
+                                            <span>Showing {displayedReceipts.length} of {r.detailTree.receipts.length} slips</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => setDetailLimit('all')}
+                                              className="print:hidden ml-1 text-emerald-600 underline font-bold cursor-pointer"
+                                            >
+                                              (Show all)
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <div className="mt-2 pt-1.5 border-t border-stroke dark:border-strokedark flex justify-between text-[11px] font-bold print:border-black">
+                                      <span>
+                                        Total {criteria.reportType === 'vendor' ? 'Paid' : 'Received'}:
+                                      </span>
+                                      <span className="font-mono text-emerald-600">
+                                        Rs. {Math.round(r.detailTree.totalPayments).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* 3. Returns & Refunds Section */}
+                                  <div className="rounded-lg border border-stroke dark:border-strokedark p-2.5 bg-gray-50/50 dark:bg-meta-4/10 print:border-black print:bg-white">
+                                    <div className="flex items-center justify-between mb-2 pb-1 border-b border-stroke/60 dark:border-strokedark/60 print:border-black">
+                                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200">
+                                        <MdAssignmentReturn className="text-rose-500" size={15} />
+                                        <span>
+                                          {criteria.reportType === 'vendor' ? 'Purchase Returns' : 'Sale Returns'}
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200 font-bold">
+                                        {r.detailTree.returns.length} Returns
+                                      </span>
+                                    </div>
+
+                                    {r.detailTree.returns.length === 0 ? (
+                                      <p className="text-[11px] text-gray-400 italic py-2 text-center">
+                                        No return bill vouchers recorded
+                                      </p>
+                                    ) : (
+                                      <div className="space-y-1 overflow-visible">
+                                        {displayedReturns.map((ret: any, rtIdx: number) => (
+                                          <div
+                                            key={rtIdx}
+                                            className="p-1.5 rounded bg-white dark:bg-boxdark border border-stroke/60 dark:border-strokedark/60 text-[10.5px] flex items-center justify-between print:border-gray-300"
+                                          >
+                                            <div>
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="font-mono font-black text-rose-600 text-[10px]">
+                                                  {ret.voucherNo}
+                                                </span>
+                                                <span className="text-[10px] text-gray-500">• #{ret.returnNo}</span>
+                                              </div>
+                                              <span className="text-[9.5px] text-gray-400 block">{ret.date}</span>
+                                            </div>
+                                            <div className="text-right font-mono">
+                                              <span className="font-bold text-rose-600 block">
+                                                Rs. {Math.round(ret.amount).toLocaleString()}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        ))}
+
+                                        {r.detailTree.returns.length > displayedReturns.length && (
+                                          <div className="text-[9.5px] text-gray-500 font-mono text-center pt-1 border-t border-dashed border-stroke dark:border-strokedark print:border-black">
+                                            <span>Showing {displayedReturns.length} of {r.detailTree.returns.length} returns</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => setDetailLimit('all')}
+                                              className="print:hidden ml-1 text-rose-600 underline font-bold cursor-pointer"
+                                            >
+                                              (Show all)
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <div className="mt-2 pt-1.5 border-t border-stroke dark:border-strokedark flex justify-between text-[11px] font-bold print:border-black">
+                                      <span>Total Returns:</span>
+                                      <span className="font-mono text-rose-600">
+                                        Rs. {Math.round(r.detailTree.totalReturns).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Party Final Balance Summary Strip */}
+                                <div className="p-2 rounded-lg bg-gray-100 dark:bg-meta-4/40 flex flex-wrap items-center justify-between text-xs font-bold gap-2 print:border print:border-black print:bg-gray-100">
+                                  <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
+                                    <span>
+                                      Opening: <strong>Rs. {Math.round(r.openingBalance).toLocaleString()}</strong>
+                                    </span>
+                                    <span>+</span>
+                                    <span>
+                                      Bills: <strong>Rs. {Math.round(r.detailTree.totalBills).toLocaleString()}</strong>
+                                    </span>
+                                    <span>-</span>
+                                    <span>
+                                      Paid/Rec: <strong>Rs. {Math.round(r.detailTree.totalPayments).toLocaleString()}</strong>
+                                    </span>
+                                    <span>-</span>
+                                    <span>
+                                      Returns: <strong>Rs. {Math.round(r.detailTree.totalReturns).toLocaleString()}</strong>
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="uppercase text-[10px] text-gray-500">Closing Balance:</span>
+                                    <span className="text-sm font-black text-primary font-mono">
+                                      Rs. {Math.round(r.closingBalance).toLocaleString()}
+                                    </span>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white dark:bg-boxdark border border-stroke dark:border-strokedark print:border-black">
+                                      {r.balanceNature}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })()}
+                    </React.Fragment>
+                  );
+                })
+              )}
+            </tbody>
+            <tfoot>
+              <tr
+                className={`${
+                  isClassic
+                    ? 'border-t-2 border-b-4 border-double border-black font-black bg-gray-100'
+                    : 'border-t-2 border-stroke dark:border-strokedark font-black bg-gray-50 dark:bg-meta-4/40 text-black dark:text-white'
+                }`}
+              >
+                <td colSpan={4} className="py-3 px-2 text-right uppercase tracking-wider text-xs">
+                  Grand Total ({sortedAccountRows.length} Accounts):
+                </td>
+                <td className="py-3 px-2 text-right font-mono text-xs">
+                  Rs.{' '}
+                  {Math.round(
+                    sortedAccountRows.reduce((sum, r) => sum + r.openingBalance, 0)
+                  ).toLocaleString()}
+                </td>
+
+                {/* Customer Columns Grand Totals */}
+                {criteria.reportType === 'customer' && (
+                  <>
+                    <td className="py-3 px-2 text-right font-mono text-xs">
+                      Rs.{' '}
+                      {Math.round(
+                        sortedAccountRows.reduce((sum, r) => sum + r.invoicedAmount, 0)
+                      ).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-2 text-right font-mono text-xs text-emerald-600">
+                      Rs.{' '}
+                      {Math.round(
+                        sortedAccountRows.reduce((sum, r) => sum + r.receivedAmount, 0)
+                      ).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-2 text-right font-mono text-xs text-rose-600 font-bold">
+                      Rs.{' '}
+                      {Math.round(
+                        sortedAccountRows.reduce((sum, r) => sum + r.returnAmount, 0)
+                      ).toLocaleString()}
+                    </td>
+                  </>
+                )}
+
+                {/* Vendor Columns Grand Totals */}
+                {criteria.reportType === 'vendor' && (
+                  <>
+                    <td className="py-3 px-2 text-right font-mono text-xs">
+                      Rs.{' '}
+                      {Math.round(
+                        sortedAccountRows.reduce((sum, r) => sum + r.invoicedAmount, 0)
+                      ).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-2 text-right font-mono text-xs text-emerald-600">
+                      Rs.{' '}
+                      {Math.round(
+                        sortedAccountRows.reduce((sum, r) => sum + r.receivedAmount, 0)
+                      ).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-2 text-right font-mono text-xs text-rose-600 font-bold">
+                      Rs.{' '}
+                      {Math.round(
+                        sortedAccountRows.reduce((sum, r) => sum + r.returnAmount, 0)
+                      ).toLocaleString()}
+                    </td>
+                  </>
+                )}
+
+                <td className="py-3 px-2 text-right font-mono text-xs text-primary font-black">
+                  Rs.{' '}
+                  {Math.round(
+                    sortedAccountRows.reduce((sum, r) => sum + r.closingBalance, 0)
+                  ).toLocaleString()}
+                </td>
+                <td></td>
+                {viewMode === 'detailed' && <td className="print:hidden"></td>}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* ── 4. FORMAL REPORT SIGNATURE / AUDIT FOOTER ── */}
+        <div
+          className={`pt-6 mt-8 flex items-center justify-between text-[11px] text-gray-500 border-t ${
+            isClassic ? 'border-black' : 'border-stroke dark:border-strokedark'
+          }`}
+        >
+          <div>
+            <span>Audited Electronic Statement • System Master ID: {businessName || 'ZAC-ERP'}</span>
+          </div>
+          <div className="flex items-center gap-12 text-center">
+            <div>
+              <div className="w-28 border-b border-gray-400 mb-1"></div>
+              <span>Prepared By</span>
+            </div>
+            <div>
+              <div className="w-28 border-b border-gray-400 mb-1"></div>
+              <span>Verified / Approved</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default BasicAccountReportPrint;

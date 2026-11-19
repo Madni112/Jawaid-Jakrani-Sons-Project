@@ -68,7 +68,7 @@ class RootErrorBoundary extends React.Component<
                 letterSpacing: '-0.02em',
               }}
             >
-              AL MUHAMMADI ERP
+              ZOHAIB ALI AND COMPANY ERP
             </h2>
             <p
               style={{

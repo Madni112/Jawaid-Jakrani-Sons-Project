@@ -36,12 +36,12 @@ const Footer: React.FC = () => {
     };
   }, []);
 
-  const clientName = isRTL ? 'المحمّدی ٹائل ایمپوریم' : (businessName || 'AL MUHAMMADI TILE EMPORIUM');
+  const clientName = isRTL ? 'المحمّدی ٹائل ایمپوریم' : (businessName || 'ZOHAIB ALI AND COMPANY');
   const developerName = 'Abdul Sattar';
   const companyName = 'NHT ENTERPRISES';
   const phoneFormatted = '0312-8039911';
   const phoneIntl = '+923128039911';
-  const whatsappUrl = `https://wa.me/923128039911?text=${encodeURIComponent('Hello Abdul Sattar, reaching out from Al Muhammadi ERP Portal.')}`;
+  const whatsappUrl = `https://wa.me/923128039911?text=${encodeURIComponent('Hello Abdul Sattar, reaching out from Zohaib Ali and Company ERP Portal.')}`;
 
   const containerClasses = layoutMode === 'floating'
     ? 'mx-3 sm:mx-4.5 mb-3 rounded-2xl border border-slate-200/90 dark:border-white/10 shadow-lg shadow-slate-200/40 dark:shadow-black/50'
@@ -153,7 +153,7 @@ const Footer: React.FC = () => {
         <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 text-[11px]">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 text-emerald-400 font-mono text-[10px] font-bold border border-white/5">
             <LuTerminal size={11} />
-            <span>AM_PORTAL</span>
+            <span>ZAC_PORTAL</span>
           </span>
 
           <span className="font-extrabold text-white font-cinzel tracking-tight">

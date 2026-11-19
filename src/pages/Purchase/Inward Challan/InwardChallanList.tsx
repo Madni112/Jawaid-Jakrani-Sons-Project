@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdInbox, MdHistory, MdAssignmentReturn, MdAddCircle } from 'react-icons/md';
@@ -103,11 +103,11 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
     setLoading(true);
     try {
       const [ receiptsRes, itemsRes, { data: purchases }, { data: productsData }, returnsRes ] = await Promise.all([
-        supabase.from('grn_receipts').select('*').order('created_at', { ascending: false }),
-        supabase.from('grn_items').select('*'),
-        supabase.from('supplier_purchases').select('id, purchase_no, metadata'),
-        supabase.from('products').select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name, uom, loose_conversion_ratio, allow_loose_sales'),
-        supabase.from('sales_returns').select('*').or('inward_status.in.("Pending Inward","Partially Received"),inward_status.is.null').order('created_at', { ascending: false })
+        fetchAllPages(supabase.from('grn_receipts').select('*').order('created_at', { ascending: false })),
+        fetchAllPages(supabase.from('grn_items').select('*')),
+        fetchAllPages(supabase.from('supplier_purchases').select('id, purchase_no, metadata')),
+        fetchAllPages(supabase.from('products').select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name, uom, loose_conversion_ratio, allow_loose_sales')),
+        fetchAllPages(supabase.from('sales_returns').select('*').or('inward_status.in.("Pending Inward","Partially Received"),inward_status.is.null').order('created_at', { ascending: false }))
       ]);
 
       if (receiptsRes.error) throw receiptsRes.error;

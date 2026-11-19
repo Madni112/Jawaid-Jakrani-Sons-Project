@@ -248,7 +248,7 @@ const STORAGE_VISIBILITY = 'uj_pos_visibility_v1';
 
 export const DEFAULT_POS_SETTINGS: PosSettings = {
   terminal_name: 'Register 01',
-  store_title: 'AL MUHAMMADI',
+  store_title: 'ZOHAIB ALI AND COMPANY',
   store_address: 'Cloth Market, Hyderabad, Sindh',
   store_phone: '+92 300 1234567',
   tax_id: 'NTN-786110',

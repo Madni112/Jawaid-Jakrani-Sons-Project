@@ -27,6 +27,7 @@ export const LocationLedgerTable: React.FC<LocationLedgerTableProps> = ({
                     <th rowSpan={2} className="p-2 border border-slate-300">Product Stock Asset Name</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-center w-16">Group (UOM)</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-center w-20">Brand</th>
+                    <th rowSpan={2} className="p-2 border border-slate-300 text-center w-24">Color / Shade</th>
                     <th colSpan={3} className="p-1.5 border border-slate-300 text-center bg-slate-100 font-extrabold tracking-wider">Category Classification</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-center w-24">Available Stock</th>
                     <th rowSpan={2} className="p-2 border border-slate-300 text-right w-28">Unit Sale Rate</th>
@@ -72,6 +73,7 @@ export const LocationLedgerTable: React.FC<LocationLedgerTableProps> = ({
                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                             <td className="p-2 border border-slate-300 uppercase text-center">{row.uom || 'PC'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-purple-700 font-bold text-center">{row.bin || '-'}</td>
+                            <td className="p-2 border border-slate-300 font-sans text-center text-slate-700 font-medium">{row.color || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-800">{row.sub_sub_category || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-700">{row.sub_category || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-600">{row.category || '-'}</td>

@@ -146,8 +146,8 @@ export const FactoryResetTab: React.FC<FactoryResetTabProps> = ({
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {isRTL 
-                    ? 'یہ عمل AL Muhammadi کے لیے تمام انوینٹری، سیلز، خریداریاں اور لیجر بیلنس مکمل صفر کر دے گا۔'
-                    : 'This action will completely zero out all inventory, sales, purchases, and ledger balances for AL Muhammadi.'}
+                    ? 'یہ عمل Zohaib Ali and Company کے لیے تمام انوینٹری، سیلز، خریداریاں اور لیجر بیلنس مکمل صفر کر دے گا۔'
+                    : 'This action will completely zero out all inventory, sales, purchases, and ledger balances for Zohaib Ali and Company.'}
                 </p>
               </div>
             </div>

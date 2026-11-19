@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -25,10 +25,12 @@ const StockTransferList = () => {
   const fetchTransferHistory = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('stock_transfers')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await fetchAllPages(
+        supabase
+          .from('stock_transfers')
+          .select('*')
+          .order('created_at', { ascending: false })
+      );
 
       if (error) throw error;
       setTransfers(data || []);

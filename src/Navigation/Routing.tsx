@@ -10,6 +10,14 @@ import Dashboard from '../pages/Dashboard/Dashboard';
 import NotFound from '../pages/Error/NotFound';
 import SettingsPage from '../pages/Settings/SettingsPage';
 import MainReports from '../pages/Reports/MainReports';
+import BasicSalesReport from '../pages/Reports/BasicReports/BasicSalesReport';
+import BasicSalesReportPrint from '../pages/Reports/BasicReports/BasicSalesReportPrint';
+import BasicPurchaseReport from '../pages/Reports/BasicReports/BasicPurchaseReport';
+import BasicPurchaseReportPrint from '../pages/Reports/BasicReports/BasicPurchaseReportPrint';
+import BasicAccountReport from '../pages/Reports/BasicReports/BasicAccountReport';
+import BasicAccountReportPrint from '../pages/Reports/BasicReports/BasicAccountReportPrint';
+import BasicStockReport from '../pages/Reports/BasicReports/BasicStockReport';
+import BasicStockReportPrint from '../pages/Reports/BasicReports/BasicStockReportPrint';
 import POSTerminal from '../pages/POS/POSTerminal';
 import POSTerminalsManager from '../pages/POS/POSTerminalsManager';
 import POSLogin from '../pages/POS/POSLogin';
@@ -204,6 +212,102 @@ function Navigation() {
       <Route path="/accounts/ledgers" element={<Navigate to="/Accounts/Ledgers" replace />} />
       <Route path="/Accounts/Ledger-Dashboard" element={<Navigate to="/Accounts/Ledgers" replace />} />
       <Route path="/accounts/ledger-dashboard" element={<Navigate to="/Accounts/Ledgers" replace />} />
+
+      {/* 4.25. BASIC SALES REPORT & PRINT VIEW */}
+      <Route
+        path="/basic-sales-report"
+        element={
+          <AppRouteGuard>
+            <DefaultLayout>
+              <BasicSalesReport />
+            </DefaultLayout>
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/basic-sales-report/print"
+        element={
+          <AppRouteGuard>
+            <BasicSalesReportPrint />
+          </AppRouteGuard>
+        }
+      />
+      <Route path="/Reports/Basic-Sales-Report" element={<Navigate to="/basic-sales-report" replace />} />
+      <Route path="/Reports/Basic-Sales-Report/Print" element={<Navigate to="/basic-sales-report/print" replace />} />
+      <Route path="/Reports/view/basic-sales-report" element={<Navigate to="/basic-sales-report" replace />} />
+      <Route path="/Reports/view/basic-sales-report/print" element={<Navigate to="/basic-sales-report/print" replace />} />
+
+      {/* 4.26. BASIC PURCHASE REPORT & PRINT VIEW */}
+      <Route
+        path="/basic-purchase-report"
+        element={
+          <AppRouteGuard>
+            <DefaultLayout>
+              <BasicPurchaseReport />
+            </DefaultLayout>
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/basic-purchase-report/print"
+        element={
+          <AppRouteGuard>
+            <BasicPurchaseReportPrint />
+          </AppRouteGuard>
+        }
+      />
+      <Route path="/Reports/Basic-Purchase-Report" element={<Navigate to="/basic-purchase-report" replace />} />
+      <Route path="/Reports/Basic-Purchase-Report/Print" element={<Navigate to="/basic-purchase-report/print" replace />} />
+      <Route path="/Reports/view/basic-purchase-report" element={<Navigate to="/basic-purchase-report" replace />} />
+      <Route path="/Reports/view/basic-purchase-report/print" element={<Navigate to="/basic-purchase-report/print" replace />} />
+
+      {/* 4.27. BASIC ACCOUNTS REPORT & PRINT VIEW */}
+      <Route
+        path="/basic-account-report"
+        element={
+          <AppRouteGuard>
+            <DefaultLayout>
+              <BasicAccountReport />
+            </DefaultLayout>
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/basic-account-report/print"
+        element={
+          <AppRouteGuard>
+            <BasicAccountReportPrint />
+          </AppRouteGuard>
+        }
+      />
+      <Route path="/Reports/Basic-Account-Report" element={<Navigate to="/basic-account-report" replace />} />
+      <Route path="/Reports/Basic-Account-Report/Print" element={<Navigate to="/basic-account-report/print" replace />} />
+      <Route path="/Reports/view/basic-account-report" element={<Navigate to="/basic-account-report" replace />} />
+      <Route path="/Reports/view/basic-account-report/print" element={<Navigate to="/basic-account-report/print" replace />} />
+
+      {/* 4.28. BASIC STOCK REPORT & PRINT VIEW */}
+      <Route
+        path="/basic-stock-report"
+        element={
+          <AppRouteGuard>
+            <DefaultLayout>
+              <BasicStockReport />
+            </DefaultLayout>
+          </AppRouteGuard>
+        }
+      />
+      <Route
+        path="/basic-stock-report/print"
+        element={
+          <AppRouteGuard>
+            <BasicStockReportPrint />
+          </AppRouteGuard>
+        }
+      />
+      <Route path="/Reports/Basic-Stock-Report" element={<Navigate to="/basic-stock-report" replace />} />
+      <Route path="/Reports/Basic-Stock-Report/Print" element={<Navigate to="/basic-stock-report/print" replace />} />
+      <Route path="/Reports/view/basic-stock-report" element={<Navigate to="/basic-stock-report" replace />} />
+      <Route path="/Reports/view/basic-stock-report/print" element={<Navigate to="/basic-stock-report/print" replace />} />
 
       {/* 4. ALL DYNAMIC ROLE-BASED ERP MODULE ROUTES */}
       {renderRoutes(roleRoutes)}

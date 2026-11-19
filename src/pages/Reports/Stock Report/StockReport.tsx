@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -21,15 +21,17 @@ import {
   MdPictureAsPdf,
   MdPrint
 } from 'react-icons/md';
+import { fetchSystemMasterConfig, SystemMasterConfig } from '../../../utils/systemPermissions';
+import { fetchProductColors, extractProductColor } from '../../../utils/colorService';
 
 const stockTabs = [
-  { key: 1, label: 'Stock Activity', icon: MdTimeline },
-  { key: 2, label: 'Stock Balance', icon: MdInventory },
-  { key: 3, label: 'Stock Status', icon: MdAccessTime },
-  { key: 4, label: 'Stock Transfer', icon: MdCompareArrows },
-  { key: 5, label: 'Price Detail Ledger', icon: MdBarChart },
-  { key: 7, label: 'Category Valuation', icon: MdCategory },
-  { key: 8, label: 'Location Stock', icon: MdStorefront },
+  { key: 1, reportId: 'stock-activity-ledger', label: 'Stock Activity & Movement Ledger', icon: MdTimeline },
+  { key: 2, reportId: 'current-stock-balance', label: 'Stock Balances & Valuation Registry', icon: MdInventory },
+  { key: 3, reportId: 'as-of-date-stock-status', label: 'As-Of-Date Stock Status Report', icon: MdAccessTime },
+  { key: 4, reportId: 'inter-warehouse-transfers', label: 'Inter-Warehouse Transfer Statement', icon: MdCompareArrows },
+  { key: 5, reportId: 'price-detail-ledger', label: 'Price Detail Ledger', icon: MdBarChart },
+  { key: 7, reportId: 'category-wise-stock', label: 'Category-Wise Stock Valuation Ledger', icon: MdCategory },
+  { key: 8, reportId: 'warehouse-location-report', label: 'Warehouse Bin & Location Stock Breakdown', icon: MdStorefront },
 ] as const;
 
 const StockReport = () => {
@@ -41,10 +43,51 @@ const StockReport = () => {
   const [hasGenerated, setHasGenerated] = useState(false);
   const [generatedPayload, setGeneratedPayload] = useState<{ tab: number; filters: any } | null>(null);
 
+  const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(() => {
+    try {
+      const cached = localStorage.getItem('erp_system_master_permissions_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    fetchSystemMasterConfig().then(setSystemConfig);
+    const onSync = (e: any) => {
+      if (e.detail) setSystemConfig(e.detail);
+    };
+    window.addEventListener('erp_system_permissions_updated', onSync);
+    return () => window.removeEventListener('erp_system_permissions_updated', onSync);
+  }, []);
+
+  const hiddenReports = useMemo(() => {
+    return Array.isArray(systemConfig?.hidden_reports) ? systemConfig.hidden_reports : [];
+  }, [systemConfig?.hidden_reports]);
+
+  const visibleStockTabs = useMemo(() => {
+    return stockTabs.filter(t => !hiddenReports.includes(t.reportId));
+  }, [hiddenReports]);
+
   const searchParams = new URLSearchParams(location.search);
   const queryTab = searchParams.get('tab');
+
+  // If user navigates to base Stock-Report without specific tab query, redirect to the new Basic Stock Report
+  useEffect(() => {
+    if (!queryTab && !location.state?.tab && !location.state?.activeTab) {
+      navigate('/basic-stock-report', { replace: true });
+    }
+  }, [queryTab, location.state, navigate]);
+
   const initialTab = Number(queryTab || location.state?.activeTab || location.state?.tab || 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   const [activeTab, setActiveTab] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8>(initialTab);
+
+  // If active tab gets hidden, automatically fallback to first visible tab
+  useEffect(() => {
+    if (visibleStockTabs.length > 0 && !visibleStockTabs.some(t => t.key === activeTab)) {
+      handleTabChange(visibleStockTabs[0].key as any);
+    }
+  }, [visibleStockTabs, activeTab]);
 
   useEffect(() => {
     const tabParam = new URLSearchParams(location.search).get('tab');
@@ -59,6 +102,7 @@ const StockReport = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [uoms, setUoms] = useState<any[]>([]);
   const [bins, setBins] = useState<any[]>([]);
+  const [colorOptions, setColorOptions] = useState<string[]>([]);
 
   const [products, setProducts] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
@@ -71,6 +115,7 @@ const StockReport = () => {
     return {
       uom: location.state?.uom ? [location.state.uom] : parseCriteriaArray(base.uom),
       bin: location.state?.bin ? [location.state.bin] : parseCriteriaArray(base.bin),
+      color: parseCriteriaArray(base.color),
       product: location.state?.product ? [location.state.product] : parseCriteriaArray(base.product),
       location: location.state?.location ? [location.state.location] : parseCriteriaArray(base.location),
       employee: parseCriteriaArray(base.employee),
@@ -78,7 +123,6 @@ const StockReport = () => {
       subCategory: location.state?.subCategory ? [location.state.subCategory] : parseCriteriaArray(base.subCategory),
       subSubCategory: location.state?.subSubCategory ? [location.state.subSubCategory] : parseCriteriaArray(base.subSubCategory),
       stockValueTier: base.stockValueTier || 'All',
-      dateFrom: location.state?.dateFrom || base.dateFrom || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
       dateFrom: location.state?.dateFrom || base.dateFrom || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
       dateTo: location.state?.dateTo || base.dateTo || new Date().toISOString().split('T')[0],
       asOfDate: location.state?.asOfDate || base.asOfDate || new Date().toISOString().split('T')[0],
@@ -99,7 +143,7 @@ const StockReport = () => {
         setLoading(true);
         const [catRes, prodRes, locRes, empRes, uomRes, binRes] = await Promise.all([
           supabase.from('inventory_categories').select('id, name, parent_id'),
-          supabase.from('products').select('id, product_name, category, bin, uom'),
+          fetchAllPages(supabase.from('products').select('id, product_name, category, bin, uom, product_description')),
           supabase.from('inventory_locations').select('id, name'),
           supabase.from('salesmen').select('id, name'),
           supabase.from('inventory_uom').select('id, short_code, full_name').eq('is_active', true),
@@ -108,6 +152,13 @@ const StockReport = () => {
 
         if (catRes.data) setCategories(catRes.data);
         if (prodRes.data) setProducts(prodRes.data);
+
+        try {
+          const dbColors = await fetchProductColors();
+          const prodColors = (prodRes.data || []).map((p: any) => extractProductColor(p)).filter(Boolean);
+          const uniqueColors = Array.from(new Set([...dbColors, ...prodColors])).sort() as string[];
+          setColorOptions(uniqueColors);
+        } catch (_) {}
         if (locRes.data) setLocations(locRes.data);
         if (empRes.data) setEmployees(empRes.data);
         if (binRes.data) setBins(binRes.data);
@@ -180,7 +231,7 @@ const StockReport = () => {
   const handleTabChange = (tab: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8) => {
     setActiveTab(tab);
     setCriteria(prev => ({
-      uom: [], bin: [], product: [], location: [], employee: [],
+      uom: [], bin: [], color: [], product: [], location: [], employee: [],
       parentCategory: [], subCategory: [], subSubCategory: [], stockValueTier: 'All',
       dateFrom: prev.dateFrom,
       dateTo: prev.dateTo,
@@ -236,7 +287,7 @@ const StockReport = () => {
 
   if (loading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
 
-  const currentTabObj = stockTabs.find(t => t.key === activeTab) || stockTabs[0];
+  const currentTabObj = visibleStockTabs.find(t => t.key === activeTab) || visibleStockTabs[0] || stockTabs[0];
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-5 text-black dark:text-bodydark text-xs antialiased font-sans relative pb-16 print:max-w-none print:p-0 print:m-0 print:space-y-0 print:pb-0">
@@ -248,7 +299,7 @@ const StockReport = () => {
             <span>/</span>
             <span>Auditing Reports</span>
             <span>/</span>
-            <span className="text-primary font-bold">{currentTabObj.label}</span>
+            <span className="text-primary font-bold">{currentTabObj?.label || 'Stock Report'}</span>
           </div>
           <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1 tracking-tight flex items-center gap-2">
             <span>Enterprise Stock Auditing Center</span>
@@ -262,7 +313,18 @@ const StockReport = () => {
       {/* ── 1. HORIZONTAL TABS BAR ── */}
       <div className="bg-white dark:bg-boxdark p-1.5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs overflow-x-auto print:hidden">
         <div className="flex items-center gap-1.5 min-w-max">
-          {stockTabs.map(tab => {
+          <button
+            type="button"
+            onClick={() => navigate('/basic-stock-report')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 shadow-2xs"
+          >
+            <MdInventory size={16} className="text-primary" />
+            <span>Basic Stock Report</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider bg-primary text-white">
+              BASIC
+            </span>
+          </button>
+          {visibleStockTabs.map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
             return (
@@ -281,14 +343,16 @@ const StockReport = () => {
               </button>
             );
           })}
-          <button
-            type="button"
-            onClick={() => navigate('/Reports/Holding-Report')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-          >
-            <MdPauseCircleFilled size={16} className="text-amber-500" />
-            <span>Holding Stock Queue ↗</span>
-          </button>
+          {!hiddenReports.includes('holding-stock-report') && (
+            <button
+              type="button"
+              onClick={() => navigate('/Reports/Holding-Report')}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer whitespace-nowrap text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+            >
+              <MdPauseCircleFilled size={16} className="text-amber-500" />
+              <span>Holding Stock & Gatepass Queue ↗</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -384,6 +448,66 @@ const StockReport = () => {
             </>
           )}
         </div>
+
+        {/* ── COLOR FILTER CHIPS (shown for all tabs that deal with products) ── */}
+        {colorOptions.length > 0 && (activeTab === 1 || activeTab === 2 || activeTab === 3 || activeTab === 5 || activeTab === 7 || activeTab === 8) && (
+          <div className="mt-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">🎨 Filter by Product Color:</span>
+              {criteria.color && criteria.color.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('color', [])}
+                  className="text-[9px] font-bold text-rose-500 hover:text-rose-700 underline ml-auto"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {colorOptions.map((col) => {
+                const isSelected = (criteria.color || []).includes(col);
+                // Map color name to a CSS color for the swatch dot
+                const swatchMap: Record<string, string> = {
+                  white: '#ffffff', black: '#111111', grey: '#9ca3af', gray: '#9ca3af',
+                  red: '#ef4444', blue: '#3b82f6', green: '#22c55e', yellow: '#eab308',
+                  brown: '#92400e', beige: '#d6b89a', cream: '#fffdd0', ivory: '#fffff0',
+                  orange: '#f97316', pink: '#ec4899', purple: '#a855f7', silver: '#c0c0c0',
+                  gold: '#d4af37', charcoal: '#374151', navy: '#1e3a5f', teal: '#14b8a6',
+                };
+                const swatchColor = swatchMap[col.toLowerCase()] || '#94a3b8';
+                return (
+                  <button
+                    key={col}
+                    type="button"
+                    onClick={() => {
+                      const curr = criteria.color || [];
+                      handleInputChange('color',
+                        isSelected ? curr.filter((c: string) => c !== col) : [...curr, col]
+                      );
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary text-white border-primary shadow-sm'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:border-primary hover:text-primary'
+                    }`}
+                  >
+                    <span
+                      className="inline-block w-3 h-3 rounded-full border border-black/20 flex-shrink-0"
+                      style={{ backgroundColor: swatchColor }}
+                    />
+                    {col}
+                  </button>
+                );
+              })}
+            </div>
+            {criteria.color && criteria.color.length > 0 && (
+              <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+                Filtering by: <span className="text-primary font-black">{criteria.color.join(', ')}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex flex-wrap items-center justify-end gap-2.5">
           <button

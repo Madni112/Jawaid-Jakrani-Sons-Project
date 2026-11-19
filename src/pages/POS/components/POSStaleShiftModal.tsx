@@ -159,7 +159,7 @@ export const POSStaleShiftModal: React.FC<POSStaleShiftModalProps> = ({
             {/* Thermal Print Receipt */}
             <div className="bg-white text-black p-4 rounded-sm font-mono text-xs space-y-2 border border-slate-300 shadow-sm">
               <div className="text-center space-y-0.5 pb-2 border-b border-dashed border-black">
-                <h4 className="font-extrabold text-sm uppercase">{posConfig?.store_title || 'AL MUHAMMADI'}</h4>
+                <h4 className="font-extrabold text-sm uppercase">{posConfig?.store_title || 'ZOHAIB ALI AND COMPANY'}</h4>
                 <p className="text-[10px]">DAILY Z-REPORT • CASHIER CLOSE</p>
                 <p className="text-[10px]">Terminal: {selectedZReport.terminal_code}</p>
                 <p className="text-[10px]">Cashier: {selectedZReport.cashier_name}</p>

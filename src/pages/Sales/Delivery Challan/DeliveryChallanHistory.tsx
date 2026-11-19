@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../Context/Auth';
 import { useModal } from '../../../Context/Modal';
@@ -65,7 +65,7 @@ const DeliveryChallanHistory: React.FC = () => {
 
   const fetchProducts = async () => {
     try {
-      const { data } = await supabase.from('products').select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name');
+      const { data } = await fetchAllPages(supabase.from('products').select('product_name, category, pcs_per_box, pieces_per_box, pieces_per_packing, scenario_name'));
       setProductsMaster(data || []);
     } catch (_) { }
   };
@@ -86,7 +86,7 @@ const DeliveryChallanHistory: React.FC = () => {
         query = query.eq('dispatch_warehouse', userLocationName);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data, error } = await fetchAllPages(query.order('created_at', { ascending: false }));
       if (error) throw error;
 
       const warehouseOnly = (data || []).filter(dc => {
@@ -115,7 +115,7 @@ const DeliveryChallanHistory: React.FC = () => {
       if (userLocationName) {
         query = query.or(`source_warehouse.eq.${userLocationName},warehouse_name.eq.${userLocationName}`);
       }
-      const { data, error } = await query;
+      const { data, error } = await fetchAllPages(query);
       if (error) throw error;
       const normalized = (data || []).map((r: any) => ({
         ...r,

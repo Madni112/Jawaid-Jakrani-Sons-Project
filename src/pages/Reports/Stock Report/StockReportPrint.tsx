@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -32,6 +32,7 @@ import { StockDetailPriceTable } from './perspectives/StockDetailPriceTable';
 import { StockCategorySummaryTable } from './perspectives/StockCategorySummaryTable';
 import { StockHierarchyTreeTable } from './perspectives/StockHierarchyTreeTable';
 import { LocationLedgerTable } from './perspectives/LocationLedgerTable';
+import { extractProductColor } from '../../../utils/colorService';
 
 export interface StockReportPrintProps {
     embedded?: boolean;
@@ -125,7 +126,7 @@ const StockReportPrint: React.FC<StockReportPrintProps> = ({
                 // Handling Stock Transfer Statement (Tab 4) separately
                 if (activeTab === 4) {
                     const transferQuery = supabase.from('stock_transfers').select('*').order('created_at', { ascending: false });
-                    const { data: transfers, error: transferError } = await transferQuery;
+                    const { data: transfers, error: transferError } = await fetchAllPages(transferQuery);
                     if (transferError) throw transferError;
 
                     const dateFromClean = filters.dateFrom ? String(filters.dateFrom).trim() : '';
@@ -182,7 +183,7 @@ const StockReportPrint: React.FC<StockReportPrintProps> = ({
                     prodQuery = prodQuery.or(`category.in.(${leafList}),sub_sub_category.in.(${leafList})`);
                 }
 
-                const { data: baseProducts, error: prodError } = await prodQuery;
+                const { data: baseProducts, error: prodError } = await fetchAllPages(prodQuery);
                 if (prodError) throw prodError;
 
                 // 2. Fetch raw tables for Tab 3 (Multi-location Breakdown) and Tab 8 (Location Ledger)
@@ -196,13 +197,13 @@ const StockReportPrint: React.FC<StockReportPrintProps> = ({
 
                 if (activeTab === 8 || activeTab === 3) {
                     const [os, p, s, pr, sr, dbLocsRes, transRes] = await Promise.all([
-                        supabase.from('opening_stocks').select('*'),
-                        supabase.from('supplier_purchases').select('*'),
-                        supabase.from('sales_invoices').select('*'),
-                        supabase.from('purchase_returns').select('*'),
-                        supabase.from('sales_returns').select('*'),
+                        fetchAllPages(supabase.from('opening_stocks').select('*')),
+                        fetchAllPages(supabase.from('supplier_purchases').select('*')),
+                        fetchAllPages(supabase.from('sales_invoices').select('*')),
+                        fetchAllPages(supabase.from('purchase_returns').select('*')),
+                        fetchAllPages(supabase.from('sales_returns').select('*')),
                         supabase.from('inventory_locations').select('id, name, location_type'),
-                        supabase.from('stock_transfers').select('*')
+                        fetchAllPages(supabase.from('stock_transfers').select('*'))
                     ]);
                     openStocks = os.data || [];
                     purchases = p.data || [];
@@ -420,6 +421,7 @@ const StockReportPrint: React.FC<StockReportPrintProps> = ({
 
                     return {
                         ...product,
+                        color: product.color || extractProductColor(product),
                         computed_opening: computedOpening,
                         period_stock_in: Number(stock.period_in),
                         period_stock_out: Number(stock.period_out),
@@ -449,6 +451,7 @@ const StockReportPrint: React.FC<StockReportPrintProps> = ({
                             if (targetLocFilter.length === 0 || targetLocFilter.includes(locName.toLowerCase())) {
                                 locationRows.push({
                                     ...product,
+                                    color: product.color || extractProductColor(product),
                                     id: `${product.id}_${locName}`,
                                     warehouse_location: locName,
                                     computed_true_stock: qty,
@@ -462,6 +465,13 @@ const StockReportPrint: React.FC<StockReportPrintProps> = ({
                     if (filters.product && filters.product.length > 0) {
                         finalLocPool = finalLocPool.filter(p => filters.product?.includes(p.product_name));
                     }
+                    if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                        const normColors = filters.color.map((c: string) => c.trim().toLowerCase());
+                        finalLocPool = finalLocPool.filter(p => {
+                            const c = String(p.color || '').trim().toLowerCase();
+                            return Boolean(c && normColors.includes(c));
+                        });
+                    }
                     setReportRows(applyStockSort(finalLocPool, filters.sortBy));
                     setLoading(false);
                     return;
@@ -470,6 +480,13 @@ const StockReportPrint: React.FC<StockReportPrintProps> = ({
                 let finalFilteredPool = calculatedAggregatedRows;
                 if (filters.product && filters.product.length > 0) {
                     finalFilteredPool = finalFilteredPool.filter(p => filters.product?.includes(p.product_name));
+                }
+                if (filters.color && filters.color.length > 0 && !filters.color.includes('All')) {
+                    const normColors = filters.color.map((c: string) => c.trim().toLowerCase());
+                    finalFilteredPool = finalFilteredPool.filter(p => {
+                        const c = String(p.color || '').trim().toLowerCase();
+                        return Boolean(c && normColors.includes(c));
+                    });
                 }
 
                 setReportRows(applyStockSort(finalFilteredPool, filters.sortBy));

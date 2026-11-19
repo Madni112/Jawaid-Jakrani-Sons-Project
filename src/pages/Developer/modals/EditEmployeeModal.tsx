@@ -96,7 +96,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                 : 'bg-gray-100 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white'
             }`}
           >
-            <MdTune className="text-sm" /> Allowed Settings ({editAllowedSettings.length}/{SETTINGS_TAB_CONFIG.length})
+            <MdTune className="text-sm" /> Allowed Settings ({editAllowedSettings.filter(id => SETTINGS_TAB_CONFIG.some(s => s.id === id)).length}/{SETTINGS_TAB_CONFIG.length})
           </button>
         </div>
 
@@ -175,7 +175,11 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setEditAllowedSettings(SETTINGS_TAB_CONFIG.map(s => s.id))}
+                    onClick={() => setEditAllowedSettings([
+                      ...SETTINGS_TAB_CONFIG.map(s => s.id),
+                      'reports_visibility_basic',
+                      'reports_visibility_advance'
+                    ])}
                     className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 px-2 py-1 rounded-lg border border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition cursor-pointer"
                   >
                     Allow All ({SETTINGS_TAB_CONFIG.length})
@@ -193,15 +197,61 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-2">
               {SETTINGS_TAB_CONFIG.map((setting) => {
+                const isReports = setting.id === 'reports_visibility';
                 const isChecked = editAllowedSettings.includes(setting.id);
+                const hasBasic = editAllowedSettings.includes('reports_visibility_basic');
+                const hasAdvance = editAllowedSettings.includes('reports_visibility_advance');
+
+                let badgeText = isChecked ? 'Allowed' : 'Hidden';
+                let badgeClass = isChecked
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                  : 'bg-gray-100 text-gray-500 dark:bg-meta-4 dark:text-gray-400';
+
+                if (isReports && isChecked) {
+                  if (hasBasic && hasAdvance) {
+                    badgeText = 'Allowed (All)';
+                    badgeClass = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300';
+                  } else if (hasBasic) {
+                    badgeText = 'Allowed (Basic)';
+                    badgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300';
+                  } else if (hasAdvance) {
+                    badgeText = 'Allowed (Advance)';
+                    badgeClass = 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300';
+                  } else {
+                    badgeText = 'Allowed (None)';
+                    badgeClass = 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300';
+                  }
+                }
+
                 return (
                   <div
                     key={setting.id}
                     onClick={() => {
-                      if (isChecked) {
-                        setEditAllowedSettings(prev => prev.filter(id => id !== setting.id));
+                      if (isReports) {
+                        if (isChecked) {
+                          setEditAllowedSettings(prev => prev.filter(id =>
+                            id !== 'reports_visibility' &&
+                            id !== 'reports_visibility_basic' &&
+                            id !== 'reports_visibility_advance'
+                          ));
+                        } else {
+                          setEditAllowedSettings(prev => [
+                            ...prev.filter(id =>
+                              id !== 'reports_visibility' &&
+                              id !== 'reports_visibility_basic' &&
+                              id !== 'reports_visibility_advance'
+                            ),
+                            'reports_visibility',
+                            'reports_visibility_basic',
+                            'reports_visibility_advance'
+                          ]);
+                        }
                       } else {
-                        setEditAllowedSettings(prev => [...prev, setting.id]);
+                        if (isChecked) {
+                          setEditAllowedSettings(prev => prev.filter(id => id !== setting.id));
+                        } else {
+                          setEditAllowedSettings(prev => [...prev, setting.id]);
+                        }
                       }
                     }}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
@@ -223,18 +273,88 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                           <span>{setting.label}</span>
                         </span>
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
-                            isChecked
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
-                              : 'bg-gray-100 text-gray-500 dark:bg-meta-4 dark:text-gray-400'
-                          }`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${badgeClass}`}
                         >
-                          {isChecked ? 'Allowed' : 'Hidden'}
+                          {badgeText}
                         </span>
                       </div>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-snug">
                         {setting.desc}
                       </p>
+
+                      {/* GRANULAR SUB-OPTIONS FOR REPORTS VISIBILITY & PRINT LAYOUTS */}
+                      {isReports && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-3 pt-2.5 border-t border-emerald-200/60 dark:border-emerald-800/40 flex flex-wrap items-center gap-2"
+                        >
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mr-1">
+                            Tiers:
+                          </span>
+
+                          {/* Basic Reports Option */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditAllowedSettings(prev => {
+                                const currentlyHas = prev.includes('reports_visibility_basic');
+                                let next = currentlyHas
+                                  ? prev.filter(id => id !== 'reports_visibility_basic')
+                                  : [...prev, 'reports_visibility_basic'];
+                                if (!currentlyHas && !next.includes('reports_visibility')) {
+                                  next.push('reports_visibility');
+                                }
+                                return next;
+                              });
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition select-none ${
+                              hasBasic
+                                ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-bold shadow-2xs'
+                                : 'bg-white/80 dark:bg-boxdark/80 border-stroke dark:border-strokedark text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-black dark:hover:text-white'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={hasBasic}
+                              onChange={() => {}}
+                              className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600 pointer-events-none"
+                            />
+                            <span>📄 Basic Reports</span>
+                          </button>
+
+                          {/* Advance Reports Option */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditAllowedSettings(prev => {
+                                const currentlyHas = prev.includes('reports_visibility_advance');
+                                let next = currentlyHas
+                                  ? prev.filter(id => id !== 'reports_visibility_advance')
+                                  : [...prev, 'reports_visibility_advance'];
+                                if (!currentlyHas && !next.includes('reports_visibility')) {
+                                  next.push('reports_visibility');
+                                }
+                                return next;
+                              });
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition select-none ${
+                              hasAdvance
+                                ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-700 text-purple-700 dark:text-purple-300 font-bold shadow-2xs'
+                                : 'bg-white/80 dark:bg-boxdark/80 border-stroke dark:border-strokedark text-gray-500 dark:text-gray-400 hover:border-purple-400 hover:text-black dark:hover:text-white'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={hasAdvance}
+                              onChange={() => {}}
+                              className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600 pointer-events-none"
+                            />
+                            <span>⚡ Advance Reports (32)</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

@@ -185,7 +185,7 @@ export const printDeliveryChallanSlip = (challan: any, productsMaster: any[] = [
       <body>
         <div class="header">
           <div>
-            <div class="company">AL-MUHAMMADI TILES EMPORIUM</div>
+            <div class="company">ZOHAIB ALI AND COMPANY</div>
             <div class="title">${docTitle}</div>
           </div>
           <div style="text-align: right;">

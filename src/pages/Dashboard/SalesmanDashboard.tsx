@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import Spinner from '../../ui/Spinner';
 import GlassCard from '../../ui/GlassCard';
@@ -138,9 +138,11 @@ const SalesmanDashboard: React.FC = () => {
       setSalesmanList(uniqueSalesmen);
 
       // 2. Fetch Live Stock Balances
-      const { data: stockData, error: stockErr } = await supabase
-        .from('stock_balances')
-        .select('product_name, warehouse_name, quantity');
+      const { data: stockData, error: stockErr } = await fetchAllPages(
+        supabase
+          .from('stock_balances')
+          .select('product_name, warehouse_name, quantity')
+      );
 
       if (!stockErr && stockData) {
         const productMap: Record<string, { a39: number; shop: number }> = {};

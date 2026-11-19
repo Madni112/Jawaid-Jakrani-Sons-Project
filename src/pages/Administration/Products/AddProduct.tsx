@@ -8,6 +8,7 @@ import { useAuth } from '../../../Context/Auth';
 import { MdViewModule } from 'react-icons/md';
 import { logActivity } from '../../../service/auditLogger';
 import { fetchAllUomsSafe } from '../../../service/uomService';
+import { saveNewProductColor } from '../../../utils/colorService';
 
 // Extracted helpers & types
 import {
@@ -83,7 +84,7 @@ const AddProduct = () => {
     // Fallback to localStorage if table not yet created
     try {
       const saved =
-        localStorage.getItem('al_muhammadi_tile_prints') || localStorage.getItem('zac_tile_prints');
+        localStorage.getItem('zac_tile_prints') || localStorage.getItem('zac_tile_prints');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -133,7 +134,7 @@ const AddProduct = () => {
     const updated = [...tilePrints, insertedItem];
     setTilePrints(updated);
     try {
-      localStorage.setItem('al_muhammadi_tile_prints', JSON.stringify(updated));
+      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
       localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
     } catch (err) {}
 
@@ -181,7 +182,7 @@ const AddProduct = () => {
     const updated = tilePrints.map((p) => (p.name === oldItem.name ? { ...p, name: clean } : p));
     setTilePrints(updated);
     try {
-      localStorage.setItem('al_muhammadi_tile_prints', JSON.stringify(updated));
+      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
       localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
     } catch (err) {}
 
@@ -228,7 +229,7 @@ const AddProduct = () => {
     const updated = tilePrints.filter((p) => p.name !== itemToDelete.name);
     setTilePrints(updated);
     try {
-      localStorage.setItem('al_muhammadi_tile_prints', JSON.stringify(updated));
+      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
       localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
     } catch (err) {}
 
@@ -378,9 +379,9 @@ const AddProduct = () => {
                 4
               )} sq.m / box) | Finish: ${values.finishType}${
                 values.tilePrint ? ` | Print: ${values.tilePrint}` : ''
-              }${values.tileThickness ? ` | Thickness: ${values.tileThickness}` : ''}${
-                values.weightPerBox ? ` | Wt: ${values.weightPerBox}kg` : ''
-              }`;
+              }${values.color ? ` | Color: ${values.color.trim()}` : ''}${
+                values.tileThickness ? ` | Thickness: ${values.tileThickness}` : ''
+              }${values.weightPerBox ? ` | Wt: ${values.weightPerBox}kg` : ''}`;
               finalUom = values.uom || 'BOX';
               finalHsCode = values.hsCode?.trim() || '6907.2100';
               finalItemSrNo = values.itemSrNo?.trim() || tileSizeFormatted;
@@ -388,6 +389,10 @@ const AddProduct = () => {
               if (values.color && String(values.color).trim()) {
                 finalDescription = `Color: ${String(values.color).trim()}`;
               }
+            }
+
+            if (values.color && String(values.color).trim()) {
+              saveNewProductColor(String(values.color).trim()).catch(() => {});
             }
 
             const databasePayload = {

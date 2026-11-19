@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
 import { useAuth } from '../../Context/Auth';
@@ -26,6 +26,8 @@ import {
   MdLocationOn,
   MdCalendarToday,
   MdDateRange,
+  MdGridView,
+  MdArrowBack,
   MdArrowUpward,
   MdArrowDownward,
   MdSwapVert,
@@ -41,6 +43,7 @@ import { DailyBookTab } from './MainReports/tabs/DailyBookTab';
 import { DailyActivityLogTab, DailyActivityRow } from './MainReports/tabs/DailyActivityLogTab';
 import { MainReportsMetrics } from './MainReports/components/MainReportsMetrics';
 import { exportMainReportToExcel } from './MainReports/services/mainReportsExport';
+import { fetchSystemMasterConfig, SystemMasterConfig } from '../../utils/systemPermissions';
 
 
 type TabKey = 'customer-ledger' | 'vendor-ledger' | 'combined-ledger' | 'profit-loss' | 'expense-report' | 'daily-book' | 'daily-activity';
@@ -96,22 +99,45 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   const isAccountsRoute = location.pathname.toLowerCase().includes('/accounts') || propMode === 'accounts';
   const effectiveMode: 'accounts' | 'reports' = isAccountsRoute ? 'accounts' : 'reports';
 
-  // Dynamic tabs based on whether the view is accessed under Accounts or Reports
-  const visibleTabs = useMemo(() => {
-    if (effectiveMode === 'accounts') {
-      return [
-        { key: 'customer-ledger', label: 'Customer Ledger', icon: MdPeople, description: 'Debits, credits, returns & running balances per customer' },
-        { key: 'vendor-ledger', label: 'Vendor Ledger', icon: MdBusiness, description: 'Purchases, returns, payments & running balances per vendor' },
-        { key: 'combined-ledger', label: 'All Parties Ledger', icon: MdCompareArrows, description: 'Combined market balances & net receivables / payables' },
-        { key: 'expense-report', label: 'Expense Report', icon: MdReceiptLong, description: 'Itemized operational expenses categorized by Chart of Accounts' }
-      ] as TabConfig[];
+  const [systemConfig, setSystemConfig] = useState<SystemMasterConfig | null>(() => {
+    try {
+      const cached = localStorage.getItem('erp_system_master_permissions_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
     }
-    return [
-      { key: 'profit-loss', label: 'Profit & Loss', icon: MdTrendingUp, description: 'Gross revenue, COGS, operational expenses & net profit' },
-      { key: 'daily-book', label: 'DailyBook', icon: MdMenuBook, description: 'Roznamcha: chronological cash drawer & bank daily inflow/outflow' },
-      { key: 'daily-activity', label: 'Daily Activity Log', icon: MdHistory, description: 'Real-time audit log of all system activities, sales, purchases, payments & returns' }
-    ] as TabConfig[];
-  }, [effectiveMode]);
+  });
+
+  useEffect(() => {
+    fetchSystemMasterConfig().then(setSystemConfig);
+    const onSync = (e: any) => {
+      if (e.detail) setSystemConfig(e.detail);
+    };
+    window.addEventListener('erp_system_permissions_updated', onSync);
+    return () => window.removeEventListener('erp_system_permissions_updated', onSync);
+  }, []);
+
+  const hiddenReports = useMemo(() => {
+    return Array.isArray(systemConfig?.hidden_reports) ? systemConfig.hidden_reports : [];
+  }, [systemConfig?.hidden_reports]);
+
+  // Dynamic tabs based on whether the view is accessed under Accounts or Reports (filtered by hidden reports)
+  const visibleTabs = useMemo(() => {
+    const all = effectiveMode === 'accounts'
+      ? [
+          { key: 'customer-ledger', label: 'Customer Ledger', icon: MdPeople, description: 'Debits, credits, returns & running balances per customer' },
+          { key: 'vendor-ledger', label: 'Vendor Ledger', icon: MdBusiness, description: 'Purchases, returns, payments & running balances per vendor' },
+          { key: 'combined-ledger', label: 'All Parties Ledger', icon: MdCompareArrows, description: 'Combined market balances & net receivables / payables' },
+          { key: 'expense-report', label: 'Expense Report', icon: MdReceiptLong, description: 'Itemized operational expenses categorized by Chart of Accounts' }
+        ]
+      : [
+          { key: 'profit-loss', label: 'Profit & Loss', icon: MdTrendingUp, description: 'Gross revenue, COGS, operational expenses & net profit' },
+          { key: 'daily-book', label: 'DailyBook', icon: MdMenuBook, description: 'Roznamcha: chronological cash drawer & bank daily inflow/outflow' },
+          { key: 'daily-activity', label: 'Daily Activity Log', icon: MdHistory, description: 'Real-time audit log of all system activities, sales, purchases, payments & returns' }
+        ];
+
+    return (all as TabConfig[]).filter((t) => !hiddenReports.includes(t.key));
+  }, [effectiveMode, hiddenReports]);
 
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -177,6 +203,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   const [dailyActivityDateMode, setDailyActivityDateMode] = useState<'single' | 'range'>('single');
   const [dailyEntryTypeFilter, setDailyEntryTypeFilter] = useState<string>('ALL');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+  const isModernLayout = typeof window !== 'undefined' && localStorage.getItem('jakwani_reports_layout') !== 'classic';
   const reportPdfRef = useRef<HTMLDivElement>(null);
 
   // Generated datasets
@@ -233,9 +260,9 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       try {
         setLoadingLookups(true);
         const [custRes, vendRes, coaRes] = await Promise.all([
-          supabase.from('customers').select('*').order('id', { ascending: true }),
-          supabase.from('vendors').select('*').order('id', { ascending: true }),
-          supabase.from('chart_of_accounts').select('*').order('account_code', { ascending: true })
+          fetchAllPages(supabase.from('customers').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('vendors').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('chart_of_accounts').select('*').order('account_code', { ascending: true }))
         ]);
 
         if (custRes.error) console.error('Customer master load error:', custRes.error);
@@ -549,9 +576,9 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       // ── TAB 1: CUSTOMER LEDGER ──
       if (targetTab === 'customer-ledger') {
         const [vchRes, invRes, retRes] = await Promise.all([
-          supabase.from('financial_vouchers').select('*').order('id', { ascending: true }),
-          supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
-          supabase.from('sales_returns').select('*').order('id', { ascending: true })
+          fetchAllPages(supabase.from('financial_vouchers').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: true }))
         ]);
 
         const allVouchers = vchRes.data || [];
@@ -804,9 +831,9 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       // ── TAB 2: VENDOR LEDGER ──
       else if (targetTab === 'vendor-ledger') {
         const [vchRes, purRes, pretRes] = await Promise.all([
-          supabase.from('financial_vouchers').select('*').order('id', { ascending: true }),
-          supabase.from('supplier_purchases').select('*').order('id', { ascending: true }),
-          supabase.from('purchase_returns').select('*').order('id', { ascending: true })
+          fetchAllPages(supabase.from('financial_vouchers').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('supplier_purchases').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('purchase_returns').select('*').order('id', { ascending: true }))
         ]);
 
         const allVouchers = vchRes.data || [];
@@ -1024,11 +1051,11 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       // ── TAB 3: ALL PARTIES (FULL CONSOLIDATED TRANSACTION LEDGER) ──
       else if (targetTab === 'combined-ledger') {
         const [vchRes, invRes, retRes, purRes, pretRes] = await Promise.all([
-          supabase.from('financial_vouchers').select('*').order('id', { ascending: true }),
-          supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
-          supabase.from('sales_returns').select('*').order('id', { ascending: true }),
-          supabase.from('supplier_purchases').select('*').order('id', { ascending: true }),
-          supabase.from('purchase_returns').select('*').order('id', { ascending: true })
+          fetchAllPages(supabase.from('financial_vouchers').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('sales_returns').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('supplier_purchases').select('*').order('id', { ascending: true })),
+          fetchAllPages(supabase.from('purchase_returns').select('*').order('id', { ascending: true }))
         ]);
 
         const allVouchers = vchRes.data || [];
@@ -1450,10 +1477,10 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       // ── TAB 4: PROFIT & LOSS ──
       else if (targetTab === 'profit-loss') {
         const [invRes, retRes, purRes, expRes] = await Promise.all([
-          supabase.from('sales_invoices').select('total_amount, sale_date, created_at, cash_amount_paid, amount_paid'),
-          supabase.from('sales_returns').select('total_amount, return_date, created_at'),
-          supabase.from('supplier_purchases').select('total_amount, purchase_date, created_at, cash_amount_paid, amount_paid'),
-          supabase.from('financial_vouchers').select('total_amount, debit, credit, voucher_date, narration, account_code, account_title, voucher_type, voucher_no, metadata, items, created_at')
+          fetchAllPages(supabase.from('sales_invoices').select('total_amount, sale_date, created_at, cash_amount_paid, amount_paid')),
+          fetchAllPages(supabase.from('sales_returns').select('total_amount, return_date, created_at')),
+          fetchAllPages(supabase.from('supplier_purchases').select('total_amount, purchase_date, created_at, cash_amount_paid, amount_paid')),
+          fetchAllPages(supabase.from('financial_vouchers').select('total_amount, debit, credit, voucher_date, narration, account_code, account_title, voucher_type, voucher_no, metadata, items, created_at'))
         ]);
 
         const allVouchers = expRes.data || [];
@@ -1653,10 +1680,12 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
       // ── TAB 5: EXPENSE REPORT ──
       else if (targetTab === 'expense-report') {
-        const { data: vchList } = await supabase
-          .from('financial_vouchers')
-          .select('*')
-          .order('voucher_date', { ascending: false });
+        const { data: vchList } = await fetchAllPages(
+          supabase
+            .from('financial_vouchers')
+            .select('*')
+            .order('voucher_date', { ascending: false })
+        );
 
         const filtered = (vchList || []).filter(v => {
           const vNo = String(v.voucher_no || '').toUpperCase();
@@ -1722,10 +1751,12 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
       // ── TAB 6: DAILYBOOK (ROZNAMCHA) ──
       else if (targetTab === 'daily-book') {
-        const { data: vchList } = await supabase
-          .from('financial_vouchers')
-          .select('*')
-          .order('voucher_date', { ascending: true });
+        const { data: vchList } = await fetchAllPages(
+          supabase
+            .from('financial_vouchers')
+            .select('*')
+            .order('voucher_date', { ascending: true })
+        );
 
         const rows: any[] = [];
         let totalCashIn = 0;
@@ -1869,12 +1900,12 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       // ── TAB 7: DAILY ACTIVITY AUDIT TRAIL LOG ──
       else if (targetTab === 'daily-activity') {
         const [salesRes, dcRes, purchRes, vchRes, sRetRes, pRetRes] = await Promise.all([
-          supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }),
-          supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
-          supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false }),
-          supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false }),
-          supabase.from('sales_returns').select('*').order('created_at', { ascending: false }),
-          supabase.from('purchase_returns').select('*').order('created_at', { ascending: false }),
+          fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('sales_returns').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('purchase_returns').select('*').order('created_at', { ascending: false })),
         ]);
 
         const rows: DailyActivityRow[] = [];
@@ -2761,24 +2792,79 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
   return (
     <div className="mx-auto max-w-7xl text-xs space-y-5 pb-16 print:max-w-none print:p-0 print:m-0 print:space-y-0 print:pb-0">
+      {/* Dynamic Print CSS for Landscape A4 Orientation */}
+      <style>{`
+        @media print {
+          @page {
+            size: ${isLandscape ? 'A4 landscape' : 'A4 portrait'} !important;
+            margin: 6mm 6mm 6mm 6mm !important;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
       {/* ── TOP HEADER & BREADCRUMBS ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-boxdark p-5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs print:hidden">
-        <div>
-          <div className="flex items-center gap-2 text-slate-400 text-[11px] font-semibold tracking-wide uppercase">
-            <span>{effectiveMode === 'accounts' ? 'Financial Accounting' : 'Financial Statements'}</span>
-            <span>/</span>
-            <span>{effectiveMode === 'accounts' ? 'Party Ledgers' : 'Audit Statements'}</span>
-            <span>/</span>
-            <span className="text-primary font-bold">{visibleTabs.find(t => t.key === activeTab)?.label}</span>
+      {isModernLayout ? (
+        /* ── MODERN THEME HEADER (Matches Sales/Purchase Modern Reports Hub) ── */
+        <div className="bg-white dark:bg-boxdark p-5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs print:hidden space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-slate-400 text-[11px] font-semibold tracking-wide uppercase">
+                <button
+                  type="button"
+                  onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Reports-Dashboard`)}
+                  className="hover:text-primary transition flex items-center gap-1 font-bold text-slate-600 dark:text-slate-300 hover:underline cursor-pointer"
+                >
+                  <MdArrowBack size={13} />
+                  <span>Reports Directory</span>
+                </button>
+                <span>/</span>
+                <span>Accounts & Financials</span>
+                <span>/</span>
+                <span className="text-primary font-bold">{visibleTabs.find(t => t.key === activeTab)?.label}</span>
+              </div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1 tracking-tight flex items-center gap-2.5">
+                <span>{REPORT_TITLES[activeTab] || 'Accounting & Financial Statement'}</span>
+                <span className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-mono px-2.5 py-0.5 rounded-full font-bold">
+                  Audited Accrual
+                </span>
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Reports-Dashboard`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stroke dark:border-strokedark bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer shadow-2xs"
+              >
+                <MdGridView size={14} className="text-primary" />
+                <span>Modern Reports Hub</span>
+              </button>
+            </div>
           </div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1 tracking-tight flex items-center gap-2">
-            <span>{effectiveMode === 'accounts' ? 'Accounting & Party Ledgers' : 'Financial & Audit Statements'}</span>
-            <span className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-mono px-2 py-0.5 rounded-full font-bold">
-              Audited Accrual
-            </span>
-          </h2>
         </div>
-      </div>
+      ) : (
+        /* ── CLASSIC THEME HEADER (Untouched for Classic Layout) ── */
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-boxdark p-5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs print:hidden">
+          <div>
+            <div className="flex items-center gap-2 text-slate-400 text-[11px] font-semibold tracking-wide uppercase">
+              <span>{effectiveMode === 'accounts' ? 'Financial Accounting' : 'Financial Statements'}</span>
+              <span>/</span>
+              <span>{effectiveMode === 'accounts' ? 'Party Ledgers' : 'Audit Statements'}</span>
+              <span>/</span>
+              <span className="text-primary font-bold">{visibleTabs.find(t => t.key === activeTab)?.label}</span>
+            </div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1 tracking-tight flex items-center gap-2">
+              <span>{effectiveMode === 'accounts' ? 'Accounting & Party Ledgers' : 'Financial & Audit Statements'}</span>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-mono px-2 py-0.5 rounded-full font-bold">
+                Audited Accrual
+              </span>
+            </h2>
+          </div>
+        </div>
+      )}
 
       {/* ── 1. HORIZONTAL TABS BAR ── */}
       <div className="bg-white dark:bg-boxdark p-1.5 rounded-2xl border border-stroke dark:border-strokedark shadow-2xs overflow-x-auto print:hidden">
@@ -2799,10 +2885,15 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
               >
                 <Icon size={16} className={isActive ? 'text-white' : 'text-slate-400'} />
                 <span>{tab.label}</span>
+                {tab.key === 'daily-activity' && (
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black ${isActive ? 'bg-white/20 text-white' : 'bg-emerald-500 text-white'}`}>
+                    NEW
+                  </span>
+                )}
               </button>
             );
           })}
-          {effectiveMode === 'reports' && (
+          {effectiveMode === 'reports' && !isModernLayout && (
             <>
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
               <button
@@ -3543,7 +3634,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-xl font-black text-slate-950 uppercase tracking-tight">
-                    AL MUHAMMADI
+                    ZOHAIB ALI AND COMPANY
                   </h1>
                   <div className="text-[10px] text-slate-600 font-medium">
                     Cloth Retail & Wholesale Accounts Management

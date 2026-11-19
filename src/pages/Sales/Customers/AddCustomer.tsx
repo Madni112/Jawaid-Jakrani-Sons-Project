@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -198,8 +198,8 @@ const AddCustomer: React.FC = () => {
       try {
         const [compRes, coaRes, custRes] = await Promise.all([
           supabase.from('companies').select('id, name'),
-          supabase.from('chart_of_accounts').select('account_code, control_code'),
-          supabase.from('customers').select('customer_code, customerCode, coa_code')
+          fetchAllPages(supabase.from('chart_of_accounts').select('account_code, control_code')),
+          fetchAllPages(supabase.from('customers').select('customer_code, customerCode, coa_code'))
         ]);
 
         if (compRes.data) setCompanies(compRes.data);

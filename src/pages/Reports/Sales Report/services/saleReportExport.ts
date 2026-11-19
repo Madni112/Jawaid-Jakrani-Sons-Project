@@ -31,7 +31,7 @@ export const exportSaleReportToExcel = async ({
 
 
       const filterMeta = {
-        'Report Type': rType === 'category-sales' ? 'Category-Wise Sales & Volume Report' : rType === 'product-sales-history' ? 'Product Sales History Report' : rType === 'sales-query' ? 'Sales Parameter Transaction Register' : rType === 'customer-sales' ? 'Customer Sales & Volume Analysis' : rType === 'return' ? 'Sales Return & Credit Ledger' : String(rType).toUpperCase(),
+        'Report Type': rType === 'category-sales' ? 'Category-Wise Sales Report' : rType === 'product-sales-history' ? 'Product Sales History Report' : rType === 'sales-query' ? 'Sales Parameter Transaction Register' : rType === 'customer-sales' ? 'Customer Sales & Volume Analysis' : rType === 'return' ? 'Sales Return & Credit Ledger' : String(rType).toUpperCase(),
         'Presentation Mode': (rType === 'category-sales' || rType === 'product-sales-history' || rType === 'sale' || rType === 'customer-sales' || rType === 'return') ? (activeViewMode === 'summary' ? 'Summary View' : 'Detailed View') : 'Standard',
         'Customer': filters.customer?.length > 0 ? filters.customer.join(', ') : 'All',
         'Salesman': filters.salesman?.length > 0 ? filters.salesman.join(', ') : 'All',
@@ -765,7 +765,7 @@ export const exportSaleReportToExcel = async ({
           : rType === 'customer-sales'
             ? `Customer Sales & Volume Analysis Statement (${activeViewMode.toUpperCase()} VIEW)`
             : rType === 'sale'
-              ? `Commercial Sales Audit Ledger Statement (${activeViewMode.toUpperCase()} VIEW)`
+              ? `Sale (Salesmen wise) Statement (${activeViewMode.toUpperCase()} VIEW)`
               : rType === 'return'
                 ? `Sales Return & Credit Adjustment Ledger Statement (${activeViewMode.toUpperCase()} VIEW)`
                 : rType === 'loyalty'

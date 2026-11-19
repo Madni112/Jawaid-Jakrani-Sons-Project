@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 
 export const usePurchaseReturnReceiptMetadata = (isEditMode: boolean, editData: any) => {
@@ -16,7 +16,7 @@ export const usePurchaseReturnReceiptMetadata = (isEditMode: boolean, editData: 
         setMetadataLoading(true);
 
         // 1. Fetch Vendors
-        const { data: vData } = await supabase.from('vendors').select('*').order('vendor_name', { ascending: true });
+        const { data: vData } = await fetchAllPages(supabase.from('vendors').select('*').order('vendor_name', { ascending: true }));
         const normalizedVendors = (vData || []).map((v: any) => ({
           ...v,
           vendor_name: v.vendor_name || v.name || 'Unnamed Vendor',
@@ -24,18 +24,22 @@ export const usePurchaseReturnReceiptMetadata = (isEditMode: boolean, editData: 
         setVendorOptions(normalizedVendors);
 
         // 2. Fetch Banks & COA
-        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
-        const { data: coaData } = await supabase
-          .from('chart_of_accounts')
-          .select('account_code, account_title, control_code, category_code');
+        const { data: bankData } = await fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle, accountNumber'));
+        const { data: coaData } = await fetchAllPages(
+          supabase
+            .from('chart_of_accounts')
+            .select('account_code, account_title, control_code, category_code')
+        );
 
         if (bankData) setBankAccounts(bankData);
         if (coaData) setCoaAccounts(coaData);
 
         // 3. Fetch all Purchase Returns (group split dispatches into parent return & sort newest date first)
-        const { data: rData } = await supabase
-          .from('purchase_returns')
-          .select('*');
+        const { data: rData } = await fetchAllPages(
+          supabase
+            .from('purchase_returns')
+            .select('*')
+        );
 
         if (rData) {
           const parentMap: Record<string, any> = {};

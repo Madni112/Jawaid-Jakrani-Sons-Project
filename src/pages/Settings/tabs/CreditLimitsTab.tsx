@@ -8,7 +8,7 @@ import {
   LuSave
 } from 'react-icons/lu';
 import { toast } from 'react-hot-toast';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import {
   canUserEditCreditLimit,
   fetchSystemMasterConfig,
@@ -49,10 +49,10 @@ export const CreditLimitsTab: React.FC<CreditLimitsTabProps> = ({
     try {
       setLoadingCustomers(true);
       const [custRes, invRes, retRes, vchRes, limitsRes, sysCfg] = await Promise.all([
-        supabase.from('customers').select('*').order('customerName', { ascending: true }),
-        supabase.from('sales_invoices').select('customer_name, total_amount, cash_amount_paid, bank_amount'),
-        supabase.from('sales_returns').select('customer_name, total_amount'),
-        supabase.from('financial_vouchers').select('customer_name, total_amount'),
+        fetchAllPages(supabase.from('customers').select('*').order('customerName', { ascending: true })),
+        fetchAllPages(supabase.from('sales_invoices').select('customer_name, total_amount, cash_amount_paid, bank_amount')),
+        fetchAllPages(supabase.from('sales_returns').select('customer_name, total_amount')),
+        fetchAllPages(supabase.from('financial_vouchers').select('customer_name, total_amount')),
         fetchCustomerCreditLimits(),
         fetchSystemMasterConfig(),
       ]);

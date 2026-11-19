@@ -101,6 +101,7 @@ export const CategorySalesTable: React.FC<CategorySalesTableProps> = ({
                               <th className="p-1 border border-black text-center">S#</th>
                               <th className="p-1 border border-black text-left">Product / Item Name</th>
                               <th className="p-1 border border-black text-center">SKU / Code</th>
+                              <th className="p-1 border border-black text-center">Color / Shade</th>
                               <th className="p-1 border border-black text-center">UOM</th>
                               <th className="p-1 border border-black text-right">Gross Sold</th>
                               <th className="p-1 border border-black text-right">Ret Qty</th>
@@ -114,7 +115,7 @@ export const CategorySalesTable: React.FC<CategorySalesTableProps> = ({
                           <tbody>
                             {(cat.products || []).length === 0 ? (
                               <tr>
-                                <td colSpan={11} className="p-4 text-center italic text-gray-500 font-mono text-xs">
+                                <td colSpan={12} className="p-4 text-center italic text-gray-500 font-mono text-xs">
                                   No product items configured or sold under this category in selected period.
                                 </td>
                               </tr>
@@ -124,6 +125,7 @@ export const CategorySalesTable: React.FC<CategorySalesTableProps> = ({
                                   <td className="p-1.5 border border-gray-300 text-center text-gray-500">{pIdx + 1}</td>
                                   <td className="p-1.5 border border-gray-300 font-sans font-bold text-black">{p.product_name}</td>
                                   <td className="p-1.5 border border-gray-300 text-center text-gray-600 text-[10.5px] font-mono break-all">{p.sku || '-'}</td>
+                                  <td className="p-1.5 border border-gray-300 text-center text-gray-700 text-xs">{p.color || '-'}</td>
                                   <td className="p-1.5 border border-gray-300 text-center text-gray-700 font-bold">{p.uom}</td>
                                   <td className="p-1.5 border border-gray-300 text-right text-black font-bold overflow-hidden">
                                     <div>{Number(p.sold_qty || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>

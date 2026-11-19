@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { fetchWorkflowSettings } from '../../../../service/workflowSettingsService';
 import { fetchStockDataset, getTotalAvailableStock } from '../../../../utils/stockCalculator';
@@ -53,10 +53,10 @@ export const usePurchaseMetadata = (
         setMetadataLoading(true);
 
         const [vendorRes, countRes, locRes, bankRes] = await Promise.all([
-          supabase.from('vendors').select('*'),
+          fetchAllPages(supabase.from('vendors').select('*')),
           supabase.from('supplier_purchases').select('*', { count: 'exact', head: true }),
           supabase.from('inventory_locations').select('id, name').order('name', { ascending: true }),
-          supabase.from('banks').select('id, bankName, accountTitle, accountNumber')
+          fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle, accountNumber'))
         ]);
 
         if (countRes.count !== null && countRes.count !== undefined) {
@@ -76,13 +76,13 @@ export const usePurchaseMetadata = (
         if (locRes.data) setLocations(locRes.data);
         if (bankRes.data) setBankAccountsList(bankRes.data);
 
-        let { data: prodData, error: prodErr } = await supabase.from('products').select(
+        let { data: prodData, error: prodErr } = await fetchAllPages(supabase.from('products').select(
           'id, product_name, purchase_price, uom, current_stock, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price, loose_purchase_price'
-        );
+        ));
         if (prodErr && (prodErr.message?.includes('allow_loose_sales') || prodErr.code === '42703')) {
-          const fallbackRes = await supabase.from('products').select(
+          const fallbackRes = await fetchAllPages(supabase.from('products').select(
             'id, product_name, purchase_price, uom, current_stock, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description'
-          );
+          ));
           prodData = fallbackRes.data;
         }
         if (prodData) setProductList(prodData);
@@ -94,8 +94,8 @@ export const usePurchaseMetadata = (
 
         try {
           const [receiptsRes, itemsRes] = await Promise.all([
-            supabase.from('grn_receipts').select('*').in('status', ['Confirm', 'Partially Received']).order('created_at', { ascending: false }),
-            supabase.from('grn_items').select('*')
+            fetchAllPages(supabase.from('grn_receipts').select('*').in('status', ['Confirm', 'Partially Received']).order('created_at', { ascending: false })),
+            fetchAllPages(supabase.from('grn_items').select('*'))
           ]);
           const itemsByGrn: Record<string, any[]> = {};
           (itemsRes.data || []).forEach((it: any) => {

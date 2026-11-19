@@ -46,7 +46,7 @@ export const fetchInventoryProductsLegacy = async (setMasterLocations: (locs: st
     .select('*')
     .order('created_at', { ascending: false });
 
-  const { data: baseProducts, error } = await query;
+  const { data: baseProducts, error } = await fetchAllPages(query);
   if (error) throw error;
 
   if (!baseProducts || baseProducts.length === 0) {
@@ -392,7 +392,7 @@ export const loadServerPage = async (
   if (stockSort) {
     let allQ = supabase.from('products').select('id, product_name');
     allQ = applyFilters(allQ, term);
-    const { data: allRows } = await allQ;
+    const { data: allRows } = await fetchAllPages(allQ);
 
     const enriched = (allRows || []).map((p: any) => ({
       p,
@@ -407,7 +407,7 @@ export const loadServerPage = async (
 
     let detQ = supabase.from('products').select(PRODUCT_PAGE_COLS);
     detQ = applyFilters(detQ, term);
-    const { data: details } = await detQ;
+    const { data: details } = await fetchAllPages(detQ);
     const byId: Record<string, any> = {};
     (details || []).forEach((d: any) => {
       byId[d.id] = d;

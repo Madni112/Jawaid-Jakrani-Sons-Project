@@ -1,7 +1,7 @@
 /**
  * Human Resource Service with Supabase Backend & Resilient Offline/Local Fallback
  */
-import { supabase } from '../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../Context/supabaseClient';
 import { isoDay } from '../utils/dateRange';
 
 export type PayHeadKind = 'Earning' | 'Deduction';
@@ -561,7 +561,7 @@ export const checkEmployeeHasTransactions = async (
   try {
     // 1. Check financial vouchers
     if (code) {
-      const { data: vouchers } = await supabase.from('financial_vouchers').select('items');
+      const { data: vouchers } = await fetchAllPages(supabase.from('financial_vouchers').select('items'));
       if (vouchers && Array.isArray(vouchers)) {
         for (const v of vouchers) {
           if (Array.isArray(v.items)) {
@@ -627,7 +627,7 @@ export const syncEmployeeCOA = async (
   if (!cleanName || !cleanNewCode) return;
 
   try {
-    const { data: allAccounts } = await supabase.from('chart_of_accounts').select('*');
+    const { data: allAccounts } = await fetchAllPages(supabase.from('chart_of_accounts').select('*'));
     const list = (allAccounts || []).filter((a: any) => {
       const matchNew = cleanNewCode && String(a.account_code).trim().toLowerCase() === cleanNewCode.toLowerCase();
       const matchOld = cleanOldCode && String(a.account_code).trim().toLowerCase() === cleanOldCode.toLowerCase();
@@ -1838,15 +1838,15 @@ export const getLoans = async (_tenantSlug?: string, _branchId?: number) => {
   let banks: any[] = [];
   let cashAccounts: any[] = [];
   try {
-    const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
+    const { data: bankData } = await fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle, accountNumber'));
     if (bankData && bankData.length > 0) banks = bankData;
   } catch (e) {
     console.warn('Banks query skipped:', e);
   }
   if (banks.length === 0) {
     banks = [
-      { id: 1, bankName: 'Meezan Bank', accountTitle: 'AL MUHAMMADI', accountNumber: '0102030405' },
-      { id: 2, bankName: 'Habib Bank Limited (HBL)', accountTitle: 'AL MUHAMMADI', accountNumber: '9876543210' }
+      { id: 1, bankName: 'Meezan Bank', accountTitle: 'ZOHAIB ALI AND COMPANY', accountNumber: '0102030405' },
+      { id: 2, bankName: 'Habib Bank Limited (HBL)', accountTitle: 'ZOHAIB ALI AND COMPANY', accountNumber: '9876543210' }
     ];
   }
 

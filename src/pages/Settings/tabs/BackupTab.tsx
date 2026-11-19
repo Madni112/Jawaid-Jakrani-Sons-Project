@@ -12,7 +12,7 @@ import {
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { canUserBackup, SystemMasterConfig } from '../../../utils/systemPermissions';
 import { fetchCustomerCreditLimits } from '../../../utils/creditLimitUtils';
 import { triggerFeedbackSound } from '../../../utils/audioFeedback';
@@ -63,7 +63,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({
   const handleExportCustomers = async () => {
     try {
       setExportingType('customers');
-      const { data, error } = await supabase.from('customers').select('*').order('customerName', { ascending: true });
+      const { data, error } = await fetchAllPages(supabase.from('customers').select('*').order('customerName', { ascending: true }));
       if (error) throw error;
 
       const limits = await fetchCustomerCreditLimits();
@@ -96,7 +96,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({
   const handleExportProducts = async () => {
     try {
       setExportingType('products');
-      const { data, error } = await supabase.from('products').select('*').order('name', { ascending: true });
+      const { data, error } = await fetchAllPages(supabase.from('products').select('*').order('name', { ascending: true }));
       if (error) throw error;
 
       const rows = (data || []).map((p: any, index: number) => ({
@@ -128,7 +128,7 @@ export const BackupTab: React.FC<BackupTabProps> = ({
   const handleExportInvoices = async () => {
     try {
       setExportingType('invoices');
-      const { data, error } = await supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }).limit(2500);
+      const { data, error } = await fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }));
       if (error) throw error;
 
       const rows = (data || []).map((inv: any, index: number) => ({
@@ -162,9 +162,9 @@ export const BackupTab: React.FC<BackupTabProps> = ({
     try {
       setExportingType('full');
       const [custRes, prodRes, invRes] = await Promise.all([
-        supabase.from('customers').select('*').order('customerName', { ascending: true }),
-        supabase.from('products').select('*').order('name', { ascending: true }),
-        supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }).limit(3000),
+        fetchAllPages(supabase.from('customers').select('*').order('customerName', { ascending: true })),
+        fetchAllPages(supabase.from('products').select('*').order('name', { ascending: true })),
+        fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })),
       ]);
 
       const limits = await fetchCustomerCreditLimits();

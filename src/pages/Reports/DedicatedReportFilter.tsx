@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import Spinner from '../../ui/Spinner';
 import { DEFAULT_SUB_AREAS, DEFAULT_AREAS, DEFAULT_SUBAREA_AREAS_MAP } from '../../components/SubAreaAreaInput';
@@ -14,11 +14,18 @@ import SavePresetModal from './dedicatedFilter/components/SavePresetModal';
 import FilterFieldsGrid from './dedicatedFilter/components/FilterFieldsGrid';
 import FilterDateSortSection from './dedicatedFilter/components/FilterDateSortSection';
 import FilterReportFlags from './dedicatedFilter/components/FilterReportFlags';
+import { fetchProductColors, extractProductColor } from '../../utils/colorService';
 
 const DedicatedReportFilter: React.FC = () => {
   const { reportId } = useParams<{ reportId: string }>();
   const navigate = useNavigate();
   const { tenantId } = useAuth();
+
+  useEffect(() => {
+    if (reportId === 'basic-sales-report') {
+      navigate(`${tenantId ? `/${tenantId}` : ''}/basic-sales-report`, { replace: true });
+    }
+  }, [reportId, tenantId, navigate]);
 
   const activeConfig = REPORT_REGISTRY[reportId || 'sale-inv-detail'] || REPORT_REGISTRY['sale-inv-detail'];
 
@@ -33,6 +40,7 @@ const DedicatedReportFilter: React.FC = () => {
   const [uoms, setUoms] = useState<any[]>([]);
   const [bins, setBins] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [dbColorList, setDbColorList] = useState<string[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [availableInvoices, setAvailableInvoices] = useState<any[]>([]);
 
@@ -53,6 +61,7 @@ const DedicatedReportFilter: React.FC = () => {
     uom: [],
     bin: [],
     product: [],
+    color: [],
     location: [],
     saleType: 'All',
     saleMethod: 'All',
@@ -136,15 +145,15 @@ const DedicatedReportFilter: React.FC = () => {
           invRes,
           uomRes
         ] = await Promise.allSettled([
-          supabase.from('customers').select('id, customerName, registrationType, customer_code, customerCode, city, address, notes'),
-          supabase.from('vendors').select('id, vendor_name, name'),
+          fetchAllPages(supabase.from('customers').select('id, customerName, registrationType, customer_code, customerCode, city, address, notes')),
+          fetchAllPages(supabase.from('vendors').select('id, vendor_name, name')),
           supabase.from('salesmen').select('id, name'),
           supabase.from('logistics_transportation').select('id, name'),
           supabase.from('inventory_categories').select('id, name, parent_id'),
           supabase.from('inventory_surface_finishes').select('id, name'),
-          supabase.from('products').select('id, product_name'),
+          fetchAllPages(supabase.from('products').select('id, product_name, product_description, bin')),
           supabase.from('inventory_locations').select('id, name'),
-          supabase.from('sales_invoices').select('id, total_amount, customer_name, invoice_no').order('id', { ascending: false }),
+          fetchAllPages(supabase.from('sales_invoices').select('id, total_amount, customer_name, invoice_no').order('id', { ascending: false })),
           supabase.from('inventory_uom').select('id, short_code, full_name').eq('is_active', true)
         ]);
 
@@ -157,6 +166,9 @@ const DedicatedReportFilter: React.FC = () => {
         if (prodRes.status === 'fulfilled' && prodRes.value.data) setProducts(prodRes.value.data);
         if (locRes.status === 'fulfilled' && locRes.value.data) setLocations(locRes.value.data);
         if (invRes.status === 'fulfilled' && invRes.value.data) setAvailableInvoices(invRes.value.data);
+        fetchProductColors().then((cList) => {
+          if (cList && cList.length > 0) setDbColorList(cList);
+        }).catch(() => {});
         if (uomRes.status === 'fulfilled' && uomRes.value.data) {
           setUoms(uomRes.value.data.map((u: any) => ({ id: u.id, name: `${u.short_code} = ${u.full_name}` })));
         }
@@ -368,6 +380,10 @@ const DedicatedReportFilter: React.FC = () => {
   const binOptions = useMemo(() => bins.map((b) => b.name).filter(Boolean), [bins]);
   const productOptions = useMemo(() => products.map((p) => p.product_name).filter(Boolean), [products]);
   const locationOptions = useMemo(() => locations.map((l) => l.name).filter(Boolean), [locations]);
+  const colorOptions = useMemo(() => {
+    const fromProds = products.map((p: any) => extractProductColor(p)).filter(Boolean);
+    return Array.from(new Set([...dbColorList, ...fromProds])).sort();
+  }, [dbColorList, products]);
   const invoiceOptions = useMemo(
     () => availableInvoices.map((i) => i.invoice_no || `INV-${String(i.id).padStart(4, '0')}`),
     [availableInvoices]
@@ -477,6 +493,7 @@ const DedicatedReportFilter: React.FC = () => {
             subCategoryOptions={subCategoryOptions}
             subSubCategoryOptions={subSubCategoryOptions}
             productOptions={productOptions}
+            colorOptions={colorOptions}
             binOptions={binOptions}
             uomOptions={uomOptions}
             voucherTypeOptions={voucherTypeOptions}

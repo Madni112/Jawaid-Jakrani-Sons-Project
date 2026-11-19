@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import TablePagination from '../../../components/TablePagination';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -33,8 +33,8 @@ const VendorList = () => {
         try {
             setLoading(true);
             const [vendRes, coaRes] = await Promise.all([
-                supabase.from('vendors').select('*').order('id', { ascending: false }),
-                supabase.from('chart_of_accounts').select('*')
+                fetchAllPages(supabase.from('vendors').select('*').order('id', { ascending: false })),
+                fetchAllPages(supabase.from('chart_of_accounts').select('*'))
             ]);
 
             if (vendRes.error) throw vendRes.error;

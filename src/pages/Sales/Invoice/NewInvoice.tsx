@@ -8,7 +8,7 @@ import InvoiceSummaryFooter from './components/InvoiceSummaryFooter';
 import { getAvailableStock, getTotalAvailableStock, getWarehouseAvailableStock, fetchStockDataset, formatStockWithBoxesAndPcs } from '../../../utils/stockCalculator';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
@@ -706,18 +706,18 @@ const NewInvoice = () => {
     const fetchCompleteEnterpriseCatalog = async () => {
       try {
         setInitialLoading(true);
-        const { data: rawCust } = await supabase.from('customers').select('*');
-        let { data: prod, error: prodErr } = await supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price');
+        const { data: rawCust } = await fetchAllPages(supabase.from('customers').select('*'));
+        let { data: prod, error: prodErr } = await fetchAllPages(supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price'));
         if (prodErr && (prodErr.message?.includes('allow_loose_sales') || prodErr.code === '42703')) {
-          const fallbackRes = await supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges');
+          const fallbackRes = await fetchAllPages(supabase.from('products').select('id, product_name, current_stock, retail_price, purchase_price, item_sr_no, category, sub_category, sub_sub_category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges'));
           prod = fallbackRes.data;
         }
-        const { data: sm } = await supabase.from('salesmen').select('id, name, invoice_name, invoice_names');
-        const { data: trans } = await supabase.from('logistics_transportation').select('id, name, base_charges');
-        const { data: locMaster } = await supabase.from('inventory_locations').select('name');
-        const { data: wh } = await supabase.from('opening_stocks').select('location');
-        const { data: invWh } = await supabase.from('warehouse_inventory').select('warehouse_name');
-        const { data: rawBnk } = await supabase.from('banks').select('*');
+        const { data: sm } = await fetchAllPages(supabase.from('salesmen').select('id, name, invoice_name, invoice_names'));
+        const { data: trans } = await fetchAllPages(supabase.from('logistics_transportation').select('id, name, base_charges'));
+        const { data: locMaster } = await fetchAllPages(supabase.from('inventory_locations').select('name'));
+        const { data: wh } = await fetchAllPages(supabase.from('opening_stocks').select('location'));
+        const { data: invWh } = await fetchAllPages(supabase.from('warehouse_inventory').select('warehouse_name'));
+        const { data: rawBnk } = await fetchAllPages(supabase.from('banks').select('*'));
 
         const cust = (rawCust || []).map((c: any) => ({
           ...c,
@@ -1065,7 +1065,7 @@ const NewInvoice = () => {
       ),
     gatePasses: Yup.object().nullable().notRequired(),
     shippingAddress: Yup.string().nullable(),
-    saleDate: Yup.string().required('Required Field').test('valid-date', 'Date must be within last 3 days', function(value) {
+    saleDate: Yup.string().required('Required Field').test('valid-date', 'Date must be within last 7 days', function(value) {
       if (!value) return false;
       if (editData && (editData.sale_date || editData.date) && value === String(editData.sale_date || editData.date).split('T')[0]) {
         return true;
@@ -1076,7 +1076,7 @@ const NewInvoice = () => {
       const today = new Date(base);
       today.setHours(0,0,0,0);
       const minDate = new Date(today);
-      minDate.setDate(today.getDate() - 3);
+      minDate.setDate(today.getDate() - 7);
       return selected >= minDate && selected <= today;
     }),
     taxScenario: Yup.string().required('Required Field'),

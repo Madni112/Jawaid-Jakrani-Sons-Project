@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -85,10 +85,12 @@ const ChartOfAccountList = () => {
     const fetchGeneralLedgerAccounts = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('chart_of_accounts')
-                .select('*')
-                .order('account_code', { ascending: true });
+            const { data, error } = await fetchAllPages(
+                supabase
+                    .from('chart_of_accounts')
+                    .select('*')
+                    .order('account_code', { ascending: true })
+            );
 
             if (error) throw error;
             setAccounts(data || []);

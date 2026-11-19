@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { fetchWorkflowSettings } from '../../../../service/workflowSettingsService';
 import { fetchStockDataset } from '../../../../utils/stockCalculator';
@@ -84,12 +84,12 @@ export const useSalesReturnMetadata = (
         }
 
         const [cRes, invRes, rtnRes, locRes, prodRes, bankRes] = await Promise.all([
-          supabase.from('customers').select('*'),
-          supabase.from('sales_invoices').select('*').order('id', { ascending: false }),
-          supabase.from('sales_returns').select('id, return_no, customer_name, original_invoice_no, invoice_no, items, metadata'),
-          supabase.from('inventory_locations').select('*'),
-          supabase.from('products').select('*').order('product_name', { ascending: true }),
-          supabase.from('banks').select('id, bankName, accountTitle, accountNumber')
+          fetchAllPages(supabase.from('customers').select('*')),
+          fetchAllPages(supabase.from('sales_invoices').select('*').order('id', { ascending: false })),
+          fetchAllPages(supabase.from('sales_returns').select('id, return_no, customer_name, original_invoice_no, invoice_no, items, metadata')),
+          fetchAllPages(supabase.from('inventory_locations').select('*')),
+          fetchAllPages(supabase.from('products').select('*').order('product_name', { ascending: true })),
+          fetchAllPages(supabase.from('banks').select('id, bankName, accountTitle, accountNumber'))
         ]);
 
         if (invRes.data) setSalesInvoicesList(invRes.data);

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import TablePagination from '../../../components/TablePagination';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
@@ -223,13 +223,17 @@ const SalesReturnList = () => {
     try {
       setLoading(true);
       const [{ data: returnsData, error }, { data: prodsData }] = await Promise.all([
-        supabase
-          .from('sales_returns')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('products')
-          .select('id, product_name, item_sr_no, uom, category, loose_conversion_ratio, pieces_per_box, pcs_per_box, pieces_per_packing, product_description')
+        fetchAllPages(
+          supabase
+            .from('sales_returns')
+            .select('*')
+            .order('created_at', { ascending: false })
+        ),
+        fetchAllPages(
+          supabase
+            .from('products')
+            .select('id, product_name, item_sr_no, uom, category, loose_conversion_ratio, pieces_per_box, pcs_per_box, pieces_per_packing, product_description')
+        )
       ]);
 
       if (error) throw error;

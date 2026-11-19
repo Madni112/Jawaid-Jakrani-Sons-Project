@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import Spinner from '../../../ui/Spinner';
 import { 
   MdAddCircle, 
@@ -28,12 +28,14 @@ const ReceiveGrnModal: React.FC<ReceiveGrnModalProps> = ({ onClose, defaultLocat
     setLoading(true);
     try {
       const [receiptsRes, itemsRes] = await Promise.all([
-        supabase
-          .from('grn_receipts')
-          .select('*')
-          .neq('status', 'Billed')
-          .order('created_at', { ascending: false }),
-        supabase.from('grn_items').select('*')
+        fetchAllPages(
+          supabase
+            .from('grn_receipts')
+            .select('*')
+            .neq('status', 'Billed')
+            .order('created_at', { ascending: false })
+        ),
+        fetchAllPages(supabase.from('grn_items').select('*'))
       ]);
 
       if (receiptsRes.error) throw receiptsRes.error;

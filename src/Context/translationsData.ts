@@ -347,7 +347,7 @@ export const TH_TRANSLATIONS: Record<string, string> = {
   'collection channel': 'وصولی کا طریقہ',
   'commercial executive summary': 'کمرشل ایگزیکٹو سمری',
   'commercial sales (salesman-wise)': 'کمرشل سیلز (سیلزمین وار)',
-  'commercial sales audit ledger': 'کمرشل سیلز آڈٹ لیجر',
+  'sale (salesmen wise)': 'کمرشل سیلز آڈٹ لیجر',
   'commercial sales auditing center': 'کمرشل سیلز آڈٹ سینٹر',
   'company / business name': 'کمپنی / کاروباری نام',
   'company / organization name': 'کمپنی / ادارے کا نام',

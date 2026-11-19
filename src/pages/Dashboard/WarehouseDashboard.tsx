@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../Context/supabaseClient';
 import { useAuth } from '../../Context/Auth';
 import Spinner from '../../ui/Spinner';
 import GlassCard from '../../ui/GlassCard';
@@ -73,7 +73,7 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
       r.includes('admin') ||
       r.includes('owner') ||
       email === 'admin@zoaibalicompany.com' ||
-      email === 'admin@almuhammadi.com' ||
+      email === 'admin@zohaibalicompany.com' ||
       email === 'developer@noorhorizontechnologies.com'
     );
   }, [role, userEmail]);
@@ -147,9 +147,9 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
       setChallans(dcData || []);
 
       // 2. Fetch Stock Balances
-      const { data: stockData, error: stockErr } = await supabase
-        .from('stock_balances')
-        .select('*');
+      const { data: stockData, error: stockErr } = await fetchAllPages(
+        supabase.from('stock_balances').select('*')
+      );
 
       if (!stockErr && stockData) {
         setStockBalances(stockData || []);

@@ -26,6 +26,7 @@ export const PurchaseProductHistoryTable: React.FC<PurchaseProductHistoryTablePr
                   <th rowSpan={2} className="p-1.5 border border-black text-center w-12">S#</th>
                   <th rowSpan={2} className="p-1.5 border border-black">Target Product Description / SKU</th>
                   <th rowSpan={2} className="p-1.5 border border-black w-24">Brand</th>
+                  <th rowSpan={2} className="p-1.5 border border-black text-center w-24">Color / Shade</th>
                   <th colSpan={3} className="p-1 border border-black text-center bg-gray-200">Category Classification</th>
                   <th rowSpan={2} className="p-1.5 border border-black text-center w-16">UOM</th>
                   <th rowSpan={2} className="p-1.5 border border-black text-right w-24">Inward Qty</th>
@@ -43,7 +44,7 @@ export const PurchaseProductHistoryTable: React.FC<PurchaseProductHistoryTablePr
               <tbody>
                 {paginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50">
+                    <td colSpan={13} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50">
                       No product purchase history records found.
                     </td>
                   </tr>
@@ -60,6 +61,7 @@ export const PurchaseProductHistoryTable: React.FC<PurchaseProductHistoryTablePr
                             {prod.sku && prod.sku !== '-' && <span className="ml-2 text-[10px] text-slate-500 font-mono">[{prod.sku}]</span>}
                           </td>
                           <td className="p-1.5 border border-black font-sans text-slate-600">{prod.brand || '-'}</td>
+                          <td className="p-1.5 border border-black font-sans text-center text-slate-700">{prod.color || '-'}</td>
                           <td className="p-1.5 border border-black font-sans text-slate-700">{prod.parent_category || '-'}</td>
                           <td className="p-1.5 border border-black font-sans text-slate-700">{prod.sub_category || '-'}</td>
                           <td className="p-1.5 border border-black font-sans text-slate-700">{prod.category || '-'}</td>

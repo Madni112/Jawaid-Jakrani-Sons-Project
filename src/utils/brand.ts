@@ -1,10 +1,10 @@
 /**
- * Dynamic Enterprise Branding Configuration for AL MUHAMMADI
+ * Dynamic Enterprise Branding Configuration for ZOHAIB ALI AND COMPANY
  */
 
 export interface BrandConfig {
   isAlm: boolean;
-  code: 'AM' | 'ALM';
+  code: 'ZAC' | 'ALM';
   name: string;
   fullName: string;
   brandWord1: string;
@@ -25,15 +25,15 @@ export function detectIsAlm(): boolean {
 export function getBrandConfig(): BrandConfig {
   return {
     isAlm: true,
-    code: 'AM',
-    name: 'AL MUHAMMADI TILE EMPORIUM',
-    fullName: 'AL MUHAMMADI TILE EMPORIUM',
-    brandWord1: 'AL',
-    brandWord2: 'MUHAMMADI',
-    brandSuffix: 'TILE EMPORIUM',
-    shortName: 'AM',
-    portalName: 'Al Muhammadi Tile Emporium (AM)',
-    adminEmail: 'admin@almuhammadi.com',
+    code: 'ZAC',
+    name: 'Zohaib Ali Company',
+    fullName: 'Zohaib Ali Company',
+    brandWord1: 'ZOHAIB',
+    brandWord2: 'ALI',
+    brandSuffix: 'COMPANY',
+    shortName: 'ZAC',
+    portalName: 'Zohaib Ali Company (ZAC)',
+    adminEmail: 'admin@zohaibalicompany.com',
     supportPhone: '0312-8039911',
     address: 'Main Showroom & Warehouse, Pakistan',
     tagline: 'Tile Emporium & Sanitary Management Suite',

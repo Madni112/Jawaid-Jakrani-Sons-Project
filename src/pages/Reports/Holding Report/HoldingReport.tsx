@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../../Context/supabaseClient';
+import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
@@ -90,10 +90,10 @@ const HoldingReport: React.FC = () => {
       setLoading(true);
 
       const [dcRes, invRes, smRes, custRes] = await Promise.all([
-        supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
-        supabase.from('sales_invoices').select('*'),
-        supabase.from('salesmen').select('id, name'),
-        supabase.from('customers').select('id, customerName, customer_code, customerCode')
+        fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
+        fetchAllPages(supabase.from('sales_invoices').select('*')),
+        fetchAllPages(supabase.from('salesmen').select('id, name')),
+        fetchAllPages(supabase.from('customers').select('id, customerName, customer_code, customerCode'))
       ]);
 
       if (dcRes.error) throw dcRes.error;

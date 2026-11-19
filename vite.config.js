@@ -11,6 +11,6 @@ export default defineConfig({
     preserveSymlinks: true
   },
   server: {
-    port: 2500
+    port: 2501
   }
 });
