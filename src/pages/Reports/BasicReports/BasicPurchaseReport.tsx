@@ -529,24 +529,12 @@ export const BasicPurchaseReport: React.FC = () => {
     return Array.from(cSet).sort((a, b) => a.localeCompare(b));
   }, [productsMaster]);
 
-  // Base Products Pool dynamically filtered by selected Brands, Colors, and Target Bills
+  // Base Products Pool dynamically filtered by selected Brands, Colors, and Target Bills (Strictly Scoped by Mode)
   const baseFilteredProductsPool = useMemo(() => {
     let pool = productsMaster;
 
-    if (selectedBrands.length > 0) {
-      const bSet = new Set(selectedBrands.map((b) => b.toLowerCase().trim()));
-      pool = pool.filter((p) => p.brand && bSet.has(String(p.brand).toLowerCase().trim()));
-    }
-
-    if (selectedColors.length > 0) {
-      const cSet = new Set(selectedColors.map((c) => c.toLowerCase().trim()));
-      pool = pool.filter((p) => {
-        const col = extractProductColor(p);
-        return col && cSet.has(col.toLowerCase().trim());
-      });
-    }
-
-    if (selectedPurchaseBills.length > 0) {
+    // A. Target Bill constraint (only active in bill mode)
+    if (reportType === 'bill' && selectedPurchaseBills.length > 0) {
       const pickedBills = purchasesMaster.filter(
         (p) => selectedPurchaseBills.includes(String(p.id)) || selectedPurchaseBills.includes(p.purchase_no)
       );
@@ -570,8 +558,50 @@ export const BasicPurchaseReport: React.FC = () => {
       }
     }
 
+    // B. Vendor constraint (strictly active in vendor mode)
+    if (reportType === 'vendor' && selectedVendors.length > 0) {
+      const vSet = new Set(selectedVendors.map((v) => v.toLowerCase().trim()));
+      const vendorBills = purchasesMaster.filter((p) => {
+        const vName = String(p.supplier_name || p.vendor_name || '').toLowerCase().trim();
+        return vSet.has(vName);
+      });
+      const vendorItemNames = new Set<string>();
+      vendorBills.forEach((p) => {
+        let items: any[] = [];
+        if (Array.isArray(p.items)) items = p.items;
+        else if (typeof p.items === 'string') {
+          try {
+            items = JSON.parse(p.items);
+          } catch {}
+        }
+        items.forEach((it) => {
+          const name = it.product_name || it.itemName || it.name;
+          if (name) vendorItemNames.add(String(name).toLowerCase().trim());
+        });
+      });
+      if (vendorItemNames.size > 0) {
+        pool = pool.filter((p) => p.product_name && vendorItemNames.has(String(p.product_name).toLowerCase().trim()));
+      }
+    }
+
+    // C. Brand constraint (strictly active in brand mode)
+    if (reportType === 'brand' && selectedBrands.length > 0) {
+      const bSet = new Set(selectedBrands.map((b) => b.toLowerCase().trim()));
+      pool = pool.filter((p) => p.brand && bSet.has(String(p.brand).toLowerCase().trim()));
+    }
+
+    // D. Color constraint (strictly active in color mode)
+    if (reportType === 'color' && selectedColors.length > 0) {
+      const cSet = new Set(selectedColors.map((c) => c.toLowerCase().trim()));
+      pool = pool.filter((p) => {
+        const col = (extractProductColor(p) || '').toLowerCase().trim();
+        const pDesc = (p.product_description || p.product_name || '').toLowerCase();
+        return Array.from(cSet).some((c) => col.includes(c) || pDesc.includes(c));
+      });
+    }
+
     return pool;
-  }, [productsMaster, selectedBrands, selectedColors, selectedPurchaseBills, purchasesMaster]);
+  }, [productsMaster, reportType, selectedBrands, selectedColors, selectedVendors, selectedPurchaseBills, purchasesMaster]);
 
   // 1. Parent Categories
   const parentCategoryItems = useMemo<FacetItem[]>(() => {
@@ -736,6 +766,19 @@ export const BasicPurchaseReport: React.FC = () => {
     }));
   }, [availableColors]);
 
+  // Handle Report Type Change (Switches mode and resets mode-specific selections)
+  const handleReportTypeChange = (newType: BasicPurchaseReportType) => {
+    setReportType(newType);
+    setSelectedPurchaseBills([]);
+    setSelectedVendors([]);
+    setSelectedBrands([]);
+    setSelectedColors([]);
+    setSelectedParentCategories([]);
+    setSelectedSubCategories([]);
+    setSelectedLeafCategories([]);
+    setSelectedProducts([]);
+  };
+
   // Reset Filters Handler
   const handleResetFilters = () => {
     setReportType('bill');
@@ -864,7 +907,7 @@ export const BasicPurchaseReport: React.FC = () => {
           <div className="relative">
             <select
               value={reportType}
-              onChange={(e) => setReportType(e.target.value as BasicPurchaseReportType)}
+              onChange={(e) => handleReportTypeChange(e.target.value as BasicPurchaseReportType)}
               className="w-full appearance-none rounded-xl border border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/30 py-3.5 px-4 text-sm font-bold text-black dark:text-white transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
             >
               <option value="bill">📋 Purchase Bill wise Report (Audit bills & inward items)</option>

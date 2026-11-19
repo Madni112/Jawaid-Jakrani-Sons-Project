@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase, fetchAllPages } from '../../../Context/supabaseClient';
+import { supabase } from '../../../Context/supabaseClient';
 import { useAuth } from '../../../Context/Auth';
 import Spinner from '../../../ui/Spinner';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import {
   MdArrowBack,
   MdPrint,
   MdFileDownload,
-  MdViewModule,
-  MdFormatListBulleted,
-  MdClose,
-  MdStore,
-  MdReceipt,
-  MdCheckCircle,
+  MdTableChart,
+  MdUnfoldMore,
+  MdUnfoldLess,
   MdInfoOutline
 } from 'react-icons/md';
 import { BasicPurchaseFilterCriteria } from './BasicPurchaseReport';
 import { extractProductColor } from '../../../utils/colorService';
+import { fetchSystemMasterConfig } from '../../../utils/systemPermissions';
 
 const STORAGE_CRITERIA_KEY = 'zac_basic_purchase_report_criteria';
 
@@ -26,14 +26,14 @@ export const BasicPurchaseReportPrint: React.FC = () => {
   const { tenantId } = useAuth();
 
   // Active filter criteria
-  const [criteria, setCriteria] = useState<BasicPurchaseFilterCriteria | null>(() => {
+  const criteria: BasicPurchaseFilterCriteria | null = useMemo(() => {
     if (location.state?.criteria) return location.state.criteria;
     try {
       const saved = localStorage.getItem(STORAGE_CRITERIA_KEY);
       if (saved) return JSON.parse(saved);
     } catch {}
     return null;
-  });
+  }, [location.state]);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [businessName, setBusinessName] = useState<string>('Zohaib Ali & Company');
@@ -45,19 +45,59 @@ export const BasicPurchaseReportPrint: React.FC = () => {
   const [layoutTheme, setLayoutTheme] = useState<'modern' | 'classic'>(() => {
     try {
       return localStorage.getItem('jakwani_reports_layout') === 'classic' ? 'classic' : 'modern';
-    } catch {}
-    return 'modern';
+    } catch {
+      return 'modern';
+    }
   });
 
-  // Modal inspection of invoice items
-  const [inspectedBill, setInspectedBill] = useState<any | null>(null);
+  // Global & Per-Row Breakdown Expansion (High-Speed O(1) State)
+  const [expandAllBreakdown, setExpandAllBreakdown] = useState(false);
+  const [isTogglingExpand, setIsTogglingExpand] = useState(false);
+  const [individualToggledIds, setIndividualToggledIds] = useState<Set<string>>(new Set());
 
-  const toggleLayout = () => {
-    const next = layoutTheme === 'modern' ? 'classic' : 'modern';
-    setLayoutTheme(next);
+  // Check if a row is expanded: O(1) instant lookup
+  const isRowExpanded = (billId: string | number) => {
+    const idStr = String(billId);
+    if (expandAllBreakdown) {
+      return !individualToggledIds.has(idStr); // Expanded unless individually collapsed
+    }
+    return individualToggledIds.has(idStr); // Collapsed unless individually expanded
+  };
+
+  // Toggle layout theme and save to localStorage
+  const handleToggleLayoutTheme = (theme: 'modern' | 'classic') => {
+    setLayoutTheme(theme);
     try {
-      localStorage.setItem('jakwani_reports_layout', next);
+      localStorage.setItem('jakwani_reports_layout', theme);
     } catch {}
+  };
+
+  // Toggle breakdown for a specific purchase bill (instant O(1))
+  const toggleBillBreakdown = (billId: string) => {
+    setIndividualToggledIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(billId)) {
+        next.delete(billId);
+      } else {
+        next.add(billId);
+      }
+      return next;
+    });
+  };
+
+  // Toggle all breakdowns with asynchronous loader to prevent UI freeze
+  const handleToggleAllBreakdowns = () => {
+    if (isTogglingExpand) return;
+    setIsTogglingExpand(true);
+    // Yield execution to the browser thread so the spinner paints immediately
+    setTimeout(() => {
+      setExpandAllBreakdown((prev) => !prev);
+      setIndividualToggledIds(new Set()); // Reset individual overrides
+      // Allow browser to render the updated DOM before hiding the spinner
+      setTimeout(() => {
+        setIsTogglingExpand(false);
+      }, 120);
+    }, 50);
   };
 
   // ── DATA FETCHING & LOCAL CACHE REUSE ──
@@ -67,6 +107,11 @@ export const BasicPurchaseReportPrint: React.FC = () => {
     async function loadData() {
       try {
         setLoading(true);
+
+        const sysCfg = await fetchSystemMasterConfig();
+        if (sysCfg?.business_name && isMounted) {
+          setBusinessName(sysCfg.business_name);
+        }
 
         // 1. Try reading cached products & vendors for instant display
         let cachedVendors: any[] | null = null;
@@ -431,6 +476,156 @@ export const BasicPurchaseReportPrint: React.FC = () => {
     };
   }, [sortedPurchaseRows]);
 
+  // ── SMART PRINTING: ATOMIC BLOCKS, ADAPTIVE HEIGHT BUDGETS & GIANT PURCHASE SLICING ──
+  interface PurchasePageItem {
+    bill: any;
+    serialNum: number;
+    isExpanded: boolean;
+    itemsSlice?: {
+      items: any[];
+      partIndex: number;
+      totalParts: number;
+      isFirstPart: boolean;
+      isLastPart: boolean;
+    };
+  }
+
+  interface ChunkedPage {
+    pageIndex: number;
+    items: PurchasePageItem[];
+    pageGross: number;
+    pageFreight: number;
+    pageDiscounts: number;
+    pageNet: number;
+    billsCount: number;
+  }
+
+  // Calculate row height weight (units) for atomic block checking
+  const getBillUnits = (b: any, expanded: boolean): number => {
+    if (!expanded) return 1;
+    const itemsCount = b.parsedItems?.length || 1;
+    // 1 unit for master row + 1 unit for drawer header/padding + 0.65 units per item line
+    return 2 + Math.ceil(itemsCount * 0.65);
+  };
+
+  // Chunk parsed purchases into printable page sheets with per-page subtotal tracking
+  const chunkedPurchasePages = useMemo<ChunkedPage[]>(() => {
+    if (sortedPurchaseRows.length === 0) return [];
+
+    // Adaptive page capacity: Page 1 accommodates header + KPI cards (24 units); Page 2+ takes full capacity (28 units)
+    const firstCap = 24;
+    const subsequentCap = 28;
+
+    const pages: ChunkedPage[] = [];
+    let currentPageItems: PurchasePageItem[] = [];
+    let currentUsedUnits = 0;
+    let currentCap = firstCap;
+    let runningSerial = 1;
+
+    const commitPage = () => {
+      if (currentPageItems.length === 0) return;
+
+      let pageGross = 0;
+      let pageFreight = 0;
+      let pageDiscounts = 0;
+      let pageNet = 0;
+      const uniqueBillsOnPage = new Set<string>();
+
+      currentPageItems.forEach((item) => {
+        const b = item.bill;
+        uniqueBillsOnPage.add(String(b.id));
+
+        // Avoid double-counting financial sums if a giant bill spans multiple pages
+        if (item.itemsSlice && !item.itemsSlice.isFirstPart) {
+          return;
+        }
+
+        pageGross += Number(b.grossPurchaseAmount || 0);
+        pageFreight += Number(b.freightAmount || 0);
+        pageDiscounts += Number(b.discountAmount || 0);
+        pageNet += Number(b.netTotalAmount || 0);
+      });
+
+      pages.push({
+        pageIndex: pages.length,
+        items: currentPageItems,
+        pageGross,
+        pageFreight,
+        pageDiscounts,
+        pageNet,
+        billsCount: uniqueBillsOnPage.size
+      });
+
+      currentPageItems = [];
+      currentUsedUnits = 0;
+      currentCap = subsequentCap;
+    };
+
+    sortedPurchaseRows.forEach((bill) => {
+      const isExpanded = isRowExpanded(bill.id);
+      const billUnits = getBillUnits(bill, isExpanded);
+      const itemsList = bill.parsedItems || [];
+
+      // ── CASE 1: Standard Purchase Bill (Fits within single page capacity) ──
+      // Treats master row + items as an ATOMIC BLOCK
+      if (billUnits <= subsequentCap) {
+        // If it doesn't fit in remaining space on this page, push whole block to start fresh on next page
+        if (currentUsedUnits + billUnits > currentCap && currentPageItems.length > 0) {
+          commitPage();
+        }
+
+        currentPageItems.push({
+          bill,
+          serialNum: runningSerial++,
+          isExpanded
+        });
+        currentUsedUnits += billUnits;
+        return;
+      }
+
+      // ── CASE 2: Giant Purchase Bill (Exceeds an entire page's height by itself) ──
+      // Starts fresh at the top of a new page, then paginates item lines with continuation tags
+      if (currentPageItems.length > 0) {
+        commitPage();
+      }
+
+      const itemsPerPage = Math.max(8, Math.floor((currentCap - 2) / 0.65));
+      const totalParts = Math.ceil(itemsList.length / itemsPerPage);
+
+      for (let part = 0; part < totalParts; part++) {
+        const sliceStart = part * itemsPerPage;
+        const sliceItems = itemsList.slice(sliceStart, sliceStart + itemsPerPage);
+        const isFirstPart = part === 0;
+        const isLastPart = part === totalParts - 1;
+
+        if (part > 0) {
+          commitPage();
+        }
+
+        currentPageItems.push({
+          bill,
+          serialNum: isFirstPart ? runningSerial++ : runningSerial - 1,
+          isExpanded: true,
+          itemsSlice: {
+            items: sliceItems,
+            partIndex: part + 1,
+            totalParts,
+            isFirstPart,
+            isLastPart
+          }
+        });
+
+        currentUsedUnits += 2 + Math.ceil(sliceItems.length * 0.65);
+      }
+    });
+
+    if (currentPageItems.length > 0) {
+      commitPage();
+    }
+
+    return pages;
+  }, [sortedPurchaseRows, expandAllBreakdown, individualToggledIds]);
+
   // ── HIERARCHICAL GROUPING FOR VENDOR / PRODUCT / BRAND / COLOR ──
   const groupedHierarchyData = useMemo(() => {
     if (!criteria || criteria.reportType === 'bill') return null;
@@ -508,37 +703,222 @@ export const BasicPurchaseReportPrint: React.FC = () => {
     });
   }, [criteria, sortedPurchaseRows]);
 
-  // Export to Excel / CSV
-  const handleExportCSV = () => {
-    let csvContent = 'data:text/csv;charset=utf-8,';
-    csvContent += `Basic Purchase Report - ${businessName}\r\n`;
-    csvContent += `Report Type: ${criteria?.reportType?.toUpperCase()}\r\n`;
-    csvContent += `Generated: ${new Date().toLocaleString()}\r\n\r\n`;
+  // ── EXPORT TO EXCEL / CSV ──
+  const handleExportExcel = () => {
+    try {
+      const sheetRows: any[] = [];
 
-    if (criteria?.reportType === 'bill') {
-      csvContent += 'S#,Date,Bill #,Vendor,Warehouse,Items Count,Terms,Gross Amount,Freight,Discount,Net Total\r\n';
-      sortedPurchaseRows.forEach((r, idx) => {
-        csvContent += `${idx + 1},${r.date},"${r.purchase_no}","${r.vendor_name}","${r.warehouse}",${r.totalItemsCount},"${r.terms}",${Math.round(r.grossPurchaseAmount)},${Math.round(r.freightAmount)},${Math.round(r.discountAmount)},${Math.round(r.netTotalAmount)}\r\n`;
-      });
-    } else {
-      csvContent += 'Group,Date,Bill #,Vendor,Qty,Rate,Net Total\r\n';
-      groupedHierarchyData?.forEach((grp) => {
-        grp.rows.forEach((r) => {
-          csvContent += `"${grp.groupName}",${r.date},"${r.purchase_no}","${r.vendor_name}",${r.qty || r.totalItemQty || 0},${r.rate || 0},${Math.round(r.lineTotal || r.netTotalAmount || 0)}\r\n`;
+      if (criteria?.reportType === 'bill') {
+        sortedPurchaseRows.forEach((r, idx) => {
+          sheetRows.push({
+            'S.No': idx + 1,
+            'Date': r.date,
+            'Bill #': r.purchase_no,
+            'Vendor Name': r.vendor_name,
+            'Vendor Code': r.vendorCode,
+            'Warehouse': r.warehouse,
+            'Products Summary': `${r.totalItemsCount} items (${r.totalItemQty} qty)`,
+            'Payment Terms': r.terms,
+            'Gross Purchases (Rs)': r.grossPurchaseAmount,
+            'Freight Charges (Rs)': r.freightAmount,
+            'Discounts (Rs)': r.discountAmount,
+            'Net Procurement Cost (Rs)': r.netTotalAmount
+          });
         });
-      });
-    }
+      } else if (groupedHierarchyData) {
+        groupedHierarchyData.forEach((grp) => {
+          grp.rows.forEach((r, idx) => {
+            sheetRows.push({
+              'Group / Header': grp.groupName,
+              'S.No': idx + 1,
+              'Date': r.date,
+              'Bill #': r.purchase_no,
+              'Vendor': r.vendor_name,
+              'Qty': r.qty || r.totalItemQty || 0,
+              'Rate': r.rate || 0,
+              'Net Total (Rs)': r.lineTotal || r.netTotalAmount || 0
+            });
+          });
+        });
+      }
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Purchase_Report_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const worksheet = XLSX.utils.json_to_sheet(sheetRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Purchase_Report');
+
+      const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      saveAs(blob, `Purchase_Report_${Date.now()}.xlsx`);
+    } catch (err) {
+      console.error('Excel Export Failed:', err);
+    }
   };
 
   const isClassic = layoutTheme === 'classic';
+
+  // ── RENDER MAIN REPORT HEADER (PAGE 1) ──
+  const renderMainHeader = () => {
+    if (isClassic) {
+      return (
+        <div className="border-b-2 border-black pb-3 mb-4 text-center">
+          <h1 className="text-2xl font-black uppercase tracking-wider text-black">
+            {businessName || 'ZOHAIB ALI AND COMPANY'}
+          </h1>
+          <p className="text-xs font-bold uppercase tracking-widest text-black mt-1">
+            BASIC PURCHASE DEPARTMENT — {criteria?.reportType?.toUpperCase()} AUDIT REGISTER
+          </p>
+          <div className="flex items-center justify-between text-xs font-mono mt-2 pt-2 border-t border-black/40">
+            <span>Period: {criteria?.dateMode === 'single' ? criteria.singleDate : `${criteria?.dateFrom} to ${criteria?.dateTo}`}</span>
+            <span>Print Date: {new Date().toLocaleDateString('en-GB')}</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 print:pb-1.5 print:gap-2 border-b border-stroke dark:border-strokedark">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+              Basic Purchase Department
+            </span>
+            <span className="text-xs text-gray-400">•</span>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              {criteria?.reportType === 'bill'
+                ? 'Purchase Bill Wise Audit Register'
+                : criteria?.reportType === 'product'
+                ? 'Product Wise Procurement Hierarchy'
+                : criteria?.reportType === 'vendor'
+                ? 'Vendor / Supplier Procurement Summary'
+                : criteria?.reportType === 'brand'
+                ? 'Brand Wise Procurement'
+                : 'Color & Surface Shade Analysis'}
+            </span>
+          </div>
+          <h1 className="text-2xl print:text-lg font-black text-black dark:text-white tracking-tight mt-1">
+            {businessName || 'Zohaib Ali & Company'}
+          </h1>
+        </div>
+
+        <div className="text-right text-xs print:text-[10px] text-gray-500 dark:text-gray-400">
+          <p>Period: <strong className="text-black dark:text-white">{criteria?.dateMode === 'single' ? criteria.singleDate : `${criteria?.dateFrom} → ${criteria?.dateTo}`}</strong></p>
+          <p className="text-[11px] print:text-[9px] mt-0.5">Print Date: {new Date().toLocaleDateString('en-GB')}</p>
+        </div>
+      </div>
+    );
+  };
+
+  // ── RENDER COMPACT RUNNING HEADER ON SUBSEQUENT PAGES ──
+  const renderRunningHeader = (pageNum: number, totalPages: number) => {
+    if (isClassic) {
+      return (
+        <div className="border-b border-black pb-1.5 mb-3 print:pb-1 print:mb-1.5 flex items-center justify-between text-xs font-mono">
+          <span className="font-bold uppercase tracking-wider">{businessName || 'ZOHAIB ALI AND COMPANY'} — BASIC PURCHASE REPORT</span>
+          <span>Page {pageNum} of {totalPages}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-between pb-2 mb-3 print:pb-1 print:mb-1.5 border-b border-stroke dark:border-strokedark text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-black text-black dark:text-white uppercase tracking-wider">
+            {businessName || 'Zohaib Ali & Company'}
+          </span>
+          <span className="text-gray-400">•</span>
+          <span className="text-gray-500 dark:text-gray-400 font-semibold text-[11px]">
+            Basic Purchase Report (Procurement Register)
+          </span>
+          <span className="text-gray-400">•</span>
+          <span className="text-[11px] text-gray-500">
+            {criteria?.dateMode === 'single' ? criteria.singleDate : `${criteria?.dateFrom} → ${criteria?.dateTo}`}
+          </span>
+        </div>
+        <div className="font-mono text-gray-600 dark:text-gray-300 text-xs font-bold bg-gray-100 dark:bg-meta-4/40 px-2.5 py-0.5 rounded-md">
+          Page {pageNum} of {totalPages}
+        </div>
+      </div>
+    );
+  };
+
+  // ── RENDER TOP 6 KPI METRIC CARDS ──
+  const renderKpiCards = () => (
+    <div className={`grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 print:grid-cols-6 gap-2.5 print:gap-1.5 ${isClassic ? 'border-b border-black pb-3 mb-4 print:pb-1.5 print:mb-2 text-center' : 'mb-6 print:mb-2'}`}>
+      {[
+        {
+          label: 'Total Bills',
+          value: kpiTotals.totalBills.toLocaleString(),
+          note: `${kpiTotals.totalVendors} Unique Vendors`
+        },
+        {
+          label: 'Items Bought',
+          value: `${kpiTotals.totalItemsBought.toLocaleString()} Items`,
+          note: `Qty: ${Math.round(kpiTotals.totalQuantityBought).toLocaleString()} Total`
+        },
+        {
+          label: 'Gross Purchases',
+          value: `Rs. ${Math.round(kpiTotals.totalGrossPurchases).toLocaleString()}`,
+          note: 'Before adjustments'
+        },
+        {
+          label: 'Total Discounts',
+          value: kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : 'Rs. 0',
+          note: 'Vendor discounts',
+          textColor: 'text-red-600 dark:text-red-400'
+        },
+        {
+          label: 'Total Freight',
+          value: kpiTotals.totalFreight > 0 ? `Rs. ${Math.round(kpiTotals.totalFreight).toLocaleString()}` : 'Rs. 0',
+          note: 'Inward carriage',
+          textColor: 'text-blue-600 dark:text-blue-400'
+        },
+        {
+          label: 'Net Procurement Cost',
+          value: `Rs. ${Math.round(kpiTotals.totalNetCost).toLocaleString()}`,
+          note: 'Final audited spend',
+          highlight: true
+        }
+      ].map((kpi, idx) => (
+        <div
+          key={idx}
+          className={`p-2.5 print:p-1.5 rounded-xl min-w-0 ${
+            isClassic
+              ? 'border border-black bg-white'
+              : kpi.highlight
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+              : 'bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark'
+          }`}
+        >
+          <span className="text-[10px] print:text-[8px] font-bold uppercase tracking-wider block text-gray-500 dark:text-gray-400 truncate">
+            {kpi.label}
+          </span>
+          <span className={`text-xs sm:text-sm lg:text-[15px] xl:text-base print:text-[11px] font-black block mt-0.5 leading-tight tracking-tight break-words ${kpi.textColor || ''}`}>
+            {kpi.value}
+          </span>
+          <span className="text-[9px] print:text-[7px] text-gray-400 block mt-0.5 truncate">{kpi.note}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── RENDER FORMAL AUDIT SIGNATURES ──
+  const renderAuditFooter = () => (
+    <div className={`pt-6 mt-6 print:pt-2 print:mt-2 flex items-center justify-between text-[11px] print:text-[9px] text-gray-500 border-t ${isClassic ? 'border-black' : 'border-stroke dark:border-strokedark'}`}>
+      <div>
+        <span>Audited Electronic Statement • System Master ID: {businessName || 'ZAC-ERP'}</span>
+      </div>
+      <div className="flex items-center gap-12 text-center">
+        <div>
+          <div className="w-28 border-b border-gray-400 mb-1"></div>
+          <span>Prepared By</span>
+        </div>
+        <div>
+          <div className="w-28 border-b border-gray-400 mb-1"></div>
+          <span>Verified / Approved</span>
+        </div>
+      </div>
+    </div>
+  );
 
   if (!criteria) {
     return (
@@ -550,7 +930,7 @@ export const BasicPurchaseReportPrint: React.FC = () => {
         </p>
         <button
           onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/basic-purchase-report`)}
-          className="mt-2 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold"
+          className="mt-2 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold cursor-pointer"
         >
           Go to Purchase Filters
         </button>
@@ -570,536 +950,603 @@ export const BasicPurchaseReportPrint: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen ${isClassic ? 'bg-white text-black font-serif' : 'bg-gray-50 dark:bg-boxdark-2 text-black dark:text-white font-sans'}`}>
-      {/* ── TOP ACTION BAR (HIDDEN IN PRINT) ── */}
-      <div className="print:hidden sticky top-0 z-40 bg-white/90 dark:bg-boxdark/90 backdrop-blur border-b border-stroke dark:border-strokedark px-4 py-3">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+    <div className="w-full min-h-screen bg-slate-50 dark:bg-boxdark-2 py-4 px-2 md:px-6 print:bg-white print:p-0">
+      {/* ── EMBEDDED PRINT STYLESHEET TO GUARANTEE TRUE PAGE SUB-TOTALS & ZERO REPEATED FOOTERS ── */}
+      <style>{`
+        @media print {
+          @page {
+            size: auto;
+            margin: 6mm 6mm 6mm 6mm;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background: white !important;
+            color: black !important;
+          }
+          * {
+            overflow: visible !important;
+            max-height: none !important;
+            box-shadow: none !important;
+          }
+          .print-page-sheet {
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .print-page-sheet:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          table {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          tfoot {
+            display: table-row-group !important;
+          }
+          .print-hidden, .print\\:hidden {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {/* ── ON-SCREEN STICKY CONTROLS TOOLBAR (Hidden in Print) ── */}
+      <div className="print:hidden max-w-7xl mx-auto mb-5 p-3 rounded-2xl bg-white dark:bg-boxdark border border-stroke dark:border-strokedark shadow-md flex flex-wrap items-center justify-between gap-3 sticky top-2 z-50">
+        <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/basic-purchase-report`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stroke dark:border-strokedark text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-meta-4 transition cursor-pointer"
           >
             <MdArrowBack size={16} />
-            <span>Back to Filters</span>
+            <span>Edit Filters</span>
           </button>
 
-          <div className="flex items-center gap-2">
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleLayout}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer"
-              title="Toggle Modern / Classic Print Layout"
-            >
-              {isClassic ? <MdViewModule size={16} /> : <MdFormatListBulleted size={16} />}
-              <span>{isClassic ? 'Switch to Modern' : 'Switch to Classic'}</span>
-            </button>
+          <span className="text-gray-300 dark:text-gray-600">|</span>
 
-            {/* Export CSV */}
+          {/* Modern vs Classic Layout Switcher */}
+          <div className="inline-flex items-center p-0.5 rounded-xl bg-gray-100 dark:bg-meta-4 border border-stroke dark:border-strokedark">
             <button
-              onClick={handleExportCSV}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer text-emerald-600"
+              type="button"
+              onClick={() => handleToggleLayoutTheme('modern')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                !isClassic
+                  ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
+                  : 'text-gray-500 hover:text-black dark:hover:text-white'
+              }`}
             >
-              <MdFileDownload size={16} />
-              <span>Export CSV</span>
+              <span>✨ Modern</span>
             </button>
-
-            {/* Print Button */}
             <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-xl bg-primary text-white hover:bg-primary/90 transition shadow-sm cursor-pointer"
+              type="button"
+              onClick={() => handleToggleLayoutTheme('classic')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                isClassic
+                  ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
+                  : 'text-gray-500 hover:text-black dark:hover:text-white'
+              }`}
             >
-              <MdPrint size={16} />
-              <span>Print Report</span>
+              <span>📜 Classic Ledger</span>
             </button>
           </div>
+
+          {/* Breakdown Toggle (for Bill Wise Mode) with Animated Loader & Rich Hover/Active Design */}
+          {criteria.reportType === 'bill' && (
+            <button
+              type="button"
+              onClick={handleToggleAllBreakdowns}
+              disabled={isTogglingExpand}
+              className={`group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all duration-200 cursor-pointer select-none shadow-xs disabled:cursor-wait ${
+                isTogglingExpand
+                  ? 'bg-blue-50/80 dark:bg-blue-950/50 border-blue-400 text-blue-600 dark:text-blue-300 opacity-90'
+                  : expandAllBreakdown
+                  ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white border-blue-600 shadow-md shadow-blue-500/20 active:scale-95'
+                  : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark text-gray-700 dark:text-gray-200 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 dark:hover:bg-meta-4/60 dark:hover:border-blue-500 dark:hover:text-blue-300 active:bg-blue-100 active:scale-95'
+              }`}
+            >
+              {isTogglingExpand ? (
+                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+              ) : expandAllBreakdown ? (
+                <MdUnfoldLess size={16} className="shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:translate-y-0" />
+              ) : (
+                <MdUnfoldMore size={16} className="shrink-0 transition-transform duration-200 group-hover:translate-y-0.5 group-active:translate-y-0" />
+              )}
+              <span>
+                {isTogglingExpand
+                  ? (expandAllBreakdown ? 'Collapsing Items...' : 'Expanding Items...')
+                  : (expandAllBreakdown ? 'Collapse All Items' : 'Expand All Items')}
+              </span>
+            </button>
+          )}
+        </div>
+
+        {/* Print & Excel Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+          >
+            <MdFileDownload size={16} />
+            <span>Excel Export</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-black shadow-md transition cursor-pointer active:scale-98"
+          >
+            <MdPrint size={16} />
+            <span>Print Report</span>
+          </button>
         </div>
       </div>
 
-      {/* ── PRINT CONTENT WRAPPER ── */}
-      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 print:p-0 print:max-w-none">
-        {/* ── 1. REPORT HEADER ── */}
-        <div className={`pb-4 border-b ${isClassic ? 'border-black text-center' : 'border-stroke dark:border-strokedark flex flex-wrap items-center justify-between gap-4'}`}>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded bg-primary/10 text-primary dark:text-white border border-primary/20">
-                BASIC PURCHASE DEPARTMENT
-              </span>
-              <span className="text-xs text-gray-400">•</span>
-              <span className="text-xs font-bold text-gray-500 uppercase">
-                {criteria.reportType.toUpperCase()} WISE REGISTER
-              </span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-black dark:text-white uppercase">
-              {businessName || 'Zohaib Ali & Company'}
-            </h1>
-          </div>
-
-          <div className={`text-xs ${isClassic ? 'mt-2' : 'text-right text-gray-500 dark:text-gray-400'}`}>
-            <p>
-              Period:{' '}
-              <strong className="text-black dark:text-white">
-                {criteria.dateMode === 'single'
-                  ? criteria.singleDate
-                  : `${criteria.dateFrom} → ${criteria.dateTo}`}
-              </strong>
-            </p>
-            <p className="text-[11px] mt-0.5">Print Date: {new Date().toLocaleDateString('en-GB')}</p>
-          </div>
-        </div>
-
-        {/* ── 2. TOP KPI SUMMARY METRIC CARDS (ROUNDED WITH NO "..." CLIPPING) ── */}
-        <div className={`grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 ${isClassic ? 'border-b border-black pb-3 mb-4 text-center' : 'mb-6'}`}>
-          {[
-            {
-              label: 'Total Bills',
-              value: kpiTotals.totalBills.toLocaleString(),
-              note: `${kpiTotals.totalVendors} Unique Vendors`
-            },
-            {
-              label: 'Items Bought',
-              value: `${kpiTotals.totalItemsBought.toLocaleString()} Items`,
-              note: `Qty: ${Math.round(kpiTotals.totalQuantityBought).toLocaleString()} Total`
-            },
-            {
-              label: 'Gross Purchases',
-              value: `Rs. ${Math.round(kpiTotals.totalGrossPurchases).toLocaleString()}`,
-              note: 'Before adjustments'
-            },
-            {
-              label: 'Total Discounts',
-              value: kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : 'Rs. 0',
-              note: 'Vendor discounts',
-              textColor: 'text-red-600 dark:text-red-400'
-            },
-            {
-              label: 'Total Freight',
-              value: kpiTotals.totalFreight > 0 ? `Rs. ${Math.round(kpiTotals.totalFreight).toLocaleString()}` : 'Rs. 0',
-              note: 'Inward carriage',
-              textColor: 'text-blue-600 dark:text-blue-400'
-            },
-            {
-              label: 'Net Procurement Cost',
-              value: `Rs. ${Math.round(kpiTotals.totalNetCost).toLocaleString()}`,
-              note: 'Final audited spend',
-              highlight: true
-            }
-          ].map((kpi, idx) => (
-            <div
-              key={idx}
-              className={`p-2.5 rounded-xl min-w-0 ${
-                isClassic
-                  ? 'border border-black bg-white'
-                  : kpi.highlight
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
-                  : 'bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark'
-              }`}
-            >
-              <span className="text-[10px] font-bold uppercase tracking-wider block text-gray-500 dark:text-gray-400 truncate">
-                {kpi.label}
-              </span>
-              <span className={`text-xs sm:text-sm lg:text-[15px] xl:text-base font-black block mt-0.5 leading-tight tracking-tight break-words ${kpi.textColor || ''}`}>
-                {kpi.value}
-              </span>
-              <span className="text-[9px] text-gray-400 block mt-0.5 truncate">{kpi.note}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* ── 3. MODE 1: PURCHASE BILL WISE REPORT TABLE ── */}
-        {criteria.reportType === 'bill' && (
-          <div className="overflow-x-auto">
-            <table className={`w-full text-left border-collapse ${isClassic ? 'border border-black text-xs' : 'text-xs'}`}>
-              <thead>
-                <tr className={`${isClassic ? 'border-b-2 border-black bg-gray-100 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-100/70 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 font-bold'}`}>
-                  <th className="py-2.5 px-2 text-center w-10">S#</th>
-                  <th className="py-2.5 px-2">Date</th>
-                  <th className="py-2.5 px-2">Bill #</th>
-                  <th className="py-2.5 px-2">Vendor Name & Code</th>
-                  <th className="py-2.5 px-2">Warehouse</th>
-                  <th className="py-2.5 px-2">Products Summary</th>
-                  <th className="py-2.5 px-2">Terms</th>
-                  <th className="py-2.5 px-2 text-right">Gross Amount</th>
-                  <th className="py-2.5 px-2 text-right">Freight</th>
-                  <th className="py-2.5 px-2 text-right">Discount</th>
-                  <th className="py-2.5 px-2 text-right">Total Net</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stroke dark:divide-strokedark">
-                {sortedPurchaseRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={11} className="py-8 text-center text-gray-400">
-                      No purchase records found matching the selected criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  sortedPurchaseRows.map((r, idx) => (
-                    <tr
-                      key={r.id}
-                      className={`hover:bg-gray-50/80 dark:hover:bg-meta-4/20 transition ${
-                        isClassic ? (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50') : ''
-                      }`}
-                    >
-                      <td className="py-2 px-2 text-center text-gray-400 font-mono text-[11px]">
-                        {idx + 1}
-                      </td>
-                      <td className="py-2 px-2 whitespace-nowrap font-mono text-gray-600 dark:text-gray-300 text-[11px]">
-                        {r.date}
-                      </td>
-                      <td className="py-2 px-2 font-mono font-bold text-primary">
-                        {r.purchase_no}
-                      </td>
-                      <td className="py-2 px-2 font-medium">
-                        {r.vendor_name}{' '}
-                        <span className="text-[10px] text-gray-400 font-mono">({r.vendorCode})</span>
-                      </td>
-                      <td className="py-2 px-2 text-gray-500">
-                        {r.warehouse}
-                      </td>
-                      <td className="py-2 px-2">
-                        <button
-                          type="button"
-                          onClick={() => setInspectedBill(r)}
-                          className="text-left group cursor-pointer inline-flex items-center gap-1"
-                        >
-                          <span className="font-semibold text-black dark:text-white group-hover:text-primary transition">
-                            {r.totalItemsCount} {r.totalItemsCount === 1 ? 'item' : 'items'} ({r.totalItemQty} qty)
-                          </span>
-                          <span className="text-[10px] text-primary underline">▼ items</span>
-                        </button>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 dark:bg-meta-4 text-gray-700 dark:text-gray-300">
-                          {r.terms}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono font-semibold">
-                        {Math.round(r.grossPurchaseAmount).toLocaleString()}
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono text-gray-500">
-                        {r.freightAmount > 0 ? Math.round(r.freightAmount).toLocaleString() : '—'}
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono text-red-600">
-                        {r.discountAmount > 0 ? `-${Math.round(r.discountAmount).toLocaleString()}` : '—'}
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono font-bold text-black dark:text-white">
-                        {Math.round(r.netTotalAmount).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              <tfoot>
-                <tr className={`${isClassic ? 'border-t-2 border-b-4 border-double border-black font-black bg-gray-100' : 'border-t-2 border-stroke dark:border-strokedark font-black bg-gray-50 dark:bg-meta-4/40 text-black dark:text-white'}`}>
-                  <td colSpan={7} className="py-3 px-2 text-right uppercase tracking-wider text-xs">
-                    Grand Total ({kpiTotals.totalBills} Bills):
-                  </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs">
-                    Rs. {Math.round(kpiTotals.totalGrossPurchases).toLocaleString()}
-                  </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs text-gray-600 dark:text-gray-300">
-                    Rs. {Math.round(kpiTotals.totalFreight).toLocaleString()}
-                  </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs text-red-600">
-                    -Rs. {Math.round(kpiTotals.totalDiscounts).toLocaleString()}
-                  </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs text-primary font-black">
-                    Rs. {Math.round(kpiTotals.totalNetCost).toLocaleString()}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-
-        {/* ── 4. MODES 2, 3, 4, 5: HIERARCHICAL GROUPED TABLES (Vendor / Product / Brand / Color) ── */}
-        {criteria.reportType !== 'bill' && groupedHierarchyData && (
-          <div className="space-y-6">
-            {groupedHierarchyData.length === 0 ? (
-              <div className="py-8 text-center text-gray-400 border border-stroke dark:border-strokedark rounded-xl">
-                No purchase transactions found for this perspective.
+      {/* ── MODE 1: PURCHASE BILL WISE REPORT WITH PER-PAGE CHUNKS & SUB-TOTALS ── */}
+      {criteria.reportType === 'bill' ? (
+        <div className="max-w-7xl mx-auto space-y-6 print:space-y-0 print:m-0 print:w-full print:max-w-none">
+          {chunkedPurchasePages.length === 0 ? (
+            <div className={`print-page-sheet ${isClassic ? 'bg-white text-black p-4 border border-black' : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-8 text-black dark:text-white'}`}>
+              {renderMainHeader()}
+              {renderKpiCards()}
+              <div className="py-12 text-center text-gray-400">
+                No purchase records found matching selected criteria.
               </div>
-            ) : (
-              groupedHierarchyData.map((group, gIdx) => (
+              {renderAuditFooter()}
+            </div>
+          ) : (
+            chunkedPurchasePages.map((pageObj, pageIdx) => {
+              const isFirstPage = pageIdx === 0;
+              const isLastPage = pageIdx === chunkedPurchasePages.length - 1;
+
+              return (
                 <div
-                  key={gIdx}
-                  className={`overflow-hidden rounded-xl ${
+                  key={pageIdx}
+                  className={`print-page-sheet ${
                     isClassic
-                      ? 'border border-black'
-                      : 'border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xs'
+                      ? 'bg-white text-black p-4 border border-black shadow-none font-serif mb-6 print:mb-0 print:border-none print:p-0'
+                      : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-5 md:p-8 space-y-4 print:space-y-1.5 text-black dark:text-white font-sans mb-6 print:mb-0 print:p-0 print:border-none print:shadow-none print:rounded-none'
                   }`}
                 >
-                  {/* Group Header Banner */}
-                  <div
-                    className={`py-2 px-3 flex items-center justify-between font-bold text-xs ${
-                      isClassic
-                        ? 'bg-black text-white'
-                        : 'bg-gradient-to-r from-slate-100 to-gray-50 dark:from-meta-4 dark:to-boxdark border-b border-stroke dark:border-strokedark text-black dark:text-white'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2 text-sm uppercase tracking-wide">
-                      <span>
-                        {criteria.reportType === 'product' && '📦 PRODUCT: '}
-                        {criteria.reportType === 'vendor' && '🏢 VENDOR: '}
-                        {criteria.reportType === 'brand' && '🏷️ BRAND: '}
-                        {criteria.reportType === 'color' && '🎨 COLOR: '}
-                        <strong>{group.groupName}</strong>
-                      </span>
-                      <span className="text-[10px] font-normal opacity-80">
-                        ({group.rows.length} transactions)
-                      </span>
-                    </span>
-                    <span className="font-mono text-xs font-bold">
-                      Group Total: Rs. {Math.round(group.subTotal).toLocaleString()}
-                    </span>
+                  {/* Top Header: Full header + KPI cards on Page 1, Compact running header on Page 2+ */}
+                  {isFirstPage ? (
+                    <>
+                      {renderMainHeader()}
+                      {renderKpiCards()}
+                    </>
+                  ) : (
+                    renderRunningHeader(pageIdx + 1, chunkedPurchasePages.length)
+                  )}
+
+                  {/* Table for this Page Sheet */}
+                  <div className="overflow-x-auto print:overflow-visible">
+                    <table className={`w-full text-left border-collapse ${isClassic ? 'border border-black text-xs' : 'text-xs'}`}>
+                      <thead>
+                        <tr className={`${isClassic ? 'border-b-2 border-black bg-gray-100 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-100/70 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 font-bold'}`}>
+                          <th className="py-2.5 print:py-1 px-2 text-center w-10">S#</th>
+                          <th className="py-2.5 print:py-1 px-2">Date</th>
+                          <th className="py-2.5 print:py-1 px-2">Bill #</th>
+                          <th className="py-2.5 print:py-1 px-2">Vendor Name & Code</th>
+                          <th className="py-2.5 print:py-1 px-2">Warehouse</th>
+                          <th className="py-2.5 print:py-1 px-2">Products Summary</th>
+                          <th className="py-2.5 print:py-1 px-2">Terms</th>
+                          <th className="py-2.5 print:py-1 px-2 text-right">Gross Amount</th>
+                          <th className="py-2.5 print:py-1 px-2 text-right">Freight</th>
+                          <th className="py-2.5 print:py-1 px-2 text-right">Discount</th>
+                          <th className="py-2.5 print:py-1 px-2 text-right">Total Net</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                        {pageObj.items.map((pageItem) => {
+                          const bill = pageItem.bill;
+                          const serialNum = pageItem.serialNum;
+                          const isExpanded = pageItem.isExpanded;
+                          const isContinuation = !!(pageItem.itemsSlice && !pageItem.itemsSlice.isFirstPart);
+                          const displayItems = pageItem.itemsSlice ? pageItem.itemsSlice.items : bill.parsedItems;
+
+                          return (
+                            <React.Fragment key={`${bill.id}-${pageItem.itemsSlice?.partIndex || 0}`}>
+                              {/* Master Row */}
+                              <tr
+                                onClick={() => toggleBillBreakdown(String(bill.id))}
+                                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 38px' }}
+                                className={`cursor-pointer transition select-none ${
+                                  isClassic
+                                    ? 'hover:bg-gray-50 border-b border-black/40'
+                                    : 'hover:bg-blue-50/40 dark:hover:bg-meta-4/20'
+                                } ${isExpanded ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''}`}
+                              >
+                                <td className="py-2 print:py-1 px-2 text-center font-mono">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px]">—</span>
+                                  ) : (
+                                    serialNum
+                                  )}
+                                </td>
+                                <td className="py-2 print:py-1 px-2 whitespace-nowrap">
+                                  {bill.date || '—'}
+                                </td>
+                                <td className="py-2 print:py-1 px-2 font-bold whitespace-nowrap text-primary">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span>#{bill.purchase_no}</span>
+                                    {pageItem.itemsSlice && (
+                                      <span className="inline-block text-[9px] font-sans px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 border border-amber-300">
+                                        Part {pageItem.itemsSlice.partIndex}/{pageItem.itemsSlice.totalParts}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2 print:py-1 px-2">
+                                  <div className="font-bold leading-tight">{bill.vendor_name}</div>
+                                  <div className="text-[10px] text-gray-400 font-mono">
+                                    Code: {bill.vendorCode}
+                                  </div>
+                                </td>
+                                <td className="py-2 print:py-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                                  {bill.warehouse}
+                                </td>
+                                <td className="py-2 print:py-1 px-2 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300">
+                                    {pageItem.itemsSlice ? (
+                                      <span>
+                                        Showing {displayItems.length} items (Part {pageItem.itemsSlice.partIndex}/{pageItem.itemsSlice.totalParts})
+                                      </span>
+                                    ) : (
+                                      <span>{bill.totalItemsCount} item{bill.totalItemsCount !== 1 ? 's' : ''} ({bill.totalItemQty} qty)</span>
+                                    )}
+                                    <span className="text-[10px] text-primary underline print:hidden">
+                                      {isExpanded ? '▲ hide' : '▼ items'}
+                                    </span>
+                                  </span>
+                                </td>
+                                <td className="py-2 print:py-1 px-2 whitespace-nowrap">
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                    bill.terms === 'Cash'
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                      : 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                  }`}>
+                                    {bill.terms || 'Credit'}
+                                  </span>
+                                </td>
+                                <td className="py-2 print:py-1 px-2 text-right font-mono">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px]">—</span>
+                                  ) : (
+                                    Math.round(bill.grossPurchaseAmount).toLocaleString()
+                                  )}
+                                </td>
+                                <td className="py-2 print:py-1 px-2 text-right font-mono text-gray-500">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px]">—</span>
+                                  ) : bill.freightAmount > 0 ? (
+                                    Math.round(bill.freightAmount).toLocaleString()
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                                <td className="py-2 print:py-1 px-2 text-right font-mono text-red-500">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px]">—</span>
+                                  ) : bill.discountAmount > 0 ? (
+                                    `-${Math.round(bill.discountAmount).toLocaleString()}`
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                                <td className="py-2 print:py-1 px-2 text-right font-bold font-mono text-black dark:text-white">
+                                  {isContinuation ? (
+                                    <span className="text-gray-400 font-sans text-[11px] italic font-normal">Cont.</span>
+                                  ) : (
+                                    Math.round(bill.netTotalAmount).toLocaleString()
+                                  )}
+                                </td>
+                              </tr>
+
+                              {/* Breakdown Sub-Table Drawer */}
+                              {isExpanded && (
+                                <tr
+                                  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 90px' }}
+                                  className="bg-slate-50/80 dark:bg-meta-4/20 print:bg-transparent"
+                                >
+                                  <td colSpan={11} className="p-3 pl-8">
+                                    <div className={`p-3 rounded-xl ${isClassic ? 'border border-black bg-white' : 'border border-blue-200 dark:border-blue-900 bg-white dark:bg-boxdark shadow-xs'}`}>
+                                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 mb-2 flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                          <MdTableChart size={14} />
+                                          <span>
+                                            Purchase Bill Items Breakdown (#{bill.purchase_no})
+                                            {pageItem.itemsSlice && ` — Part ${pageItem.itemsSlice.partIndex} of ${pageItem.itemsSlice.totalParts}`}
+                                          </span>
+                                        </div>
+                                        {pageItem.itemsSlice && (
+                                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200">
+                                            Part {pageItem.itemsSlice.partIndex} of {pageItem.itemsSlice.totalParts} ({displayItems.length} lines)
+                                          </span>
+                                        )}
+                                      </h4>
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="border-b border-stroke dark:border-strokedark text-gray-500 text-[10px] font-bold uppercase">
+                                            <th className="py-1 px-1.5 text-left">Code / SKU</th>
+                                            <th className="py-1 px-1.5 text-left">Product Title</th>
+                                            <th className="py-1 px-1.5 text-left">Brand</th>
+                                            <th className="py-1 px-1.5 text-left">Color</th>
+                                            <th className="py-1 px-1.5 text-center">Qty (UOM)</th>
+                                            <th className="py-1 px-1.5 text-right">Unit Rate</th>
+                                            <th className="py-1 px-1.5 text-right">Line Total</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-stroke/60 dark:divide-strokedark/60 font-mono">
+                                          {displayItems.map((it: any, itemIdx: number) => (
+                                            <tr key={itemIdx} className="hover:bg-gray-50/50">
+                                              <td className="py-1 px-1.5 font-bold text-gray-600 dark:text-gray-300">{it.sku}</td>
+                                              <td className="py-1 px-1.5 font-sans font-medium">{it.product_name}</td>
+                                              <td className="py-1 px-1.5 font-sans text-gray-500">{it.brand}</td>
+                                              <td className="py-1 px-1.5 font-sans text-gray-500">{it.color}</td>
+                                              <td className="py-1 px-1.5 text-center font-bold">{it.qty} {it.uom}</td>
+                                              <td className="py-1 px-1.5 text-right">Rs. {it.rate.toLocaleString()}</td>
+                                              <td className="py-1 px-1.5 text-right font-bold text-black dark:text-white">
+                                                Rs. {it.total.toLocaleString()}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+
+                      {/* ── FOOTER: PAGE SUB-TOTAL ON EVERY PAGE, GRAND TOTAL ON LAST PAGE ONLY ── */}
+                      <tfoot>
+                        {/* 📄 1. PAGE SUB-TOTAL (Strictly for this page's rows) */}
+                        <tr className={`${isClassic ? 'border-t-2 border-b border-black font-bold bg-gray-100 text-black' : 'border-t-2 border-b border-stroke dark:border-strokedark font-bold bg-blue-50/60 dark:bg-meta-4/30 text-black dark:text-white'}`}>
+                          <td colSpan={7} className="py-2.5 print:py-1 px-2 text-right uppercase tracking-wider text-[11px] font-bold text-blue-900 dark:text-blue-300">
+                            Page {pageIdx + 1} Subtotal ({pageObj.billsCount} Bills):
+                          </td>
+                          <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs font-bold">
+                            Rs. {Math.round(pageObj.pageGross).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs text-gray-600 dark:text-gray-300">
+                            {pageObj.pageFreight > 0 ? `Rs. ${Math.round(pageObj.pageFreight).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs text-red-600">
+                            {pageObj.pageDiscounts > 0 ? `-Rs. ${Math.round(pageObj.pageDiscounts).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs text-primary font-black">
+                            Rs. {Math.round(pageObj.pageNet).toLocaleString()}
+                          </td>
+                        </tr>
+
+                        {/* 📊 2. LAST PAGE ONLY: GRAND TOTAL (Directly below Page Sub-total) */}
+                        {isLastPage && (
+                          <tr className={`${isClassic ? 'border-t-2 border-b-4 border-double border-black font-black bg-gray-200 text-black' : 'border-t-2 border-b-2 border-emerald-400 dark:border-emerald-600 font-black bg-emerald-50 dark:bg-emerald-950/40 text-black dark:text-white'}`}>
+                            <td colSpan={7} className="py-3 print:py-1.5 px-2 text-right uppercase tracking-wider text-xs font-black text-emerald-900 dark:text-emerald-300">
+                              Grand Total ({kpiTotals.totalBills} Bills):
+                            </td>
+                            <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs font-black">
+                              Rs. {Math.round(kpiTotals.totalGrossPurchases).toLocaleString()}
+                            </td>
+                            <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300 font-bold">
+                              {kpiTotals.totalFreight > 0 ? `Rs. ${Math.round(kpiTotals.totalFreight).toLocaleString()}` : '—'}
+                            </td>
+                            <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs text-red-600 font-bold">
+                              {kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : '—'}
+                            </td>
+                            <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs text-primary font-black">
+                              Rs. {Math.round(kpiTotals.totalNetCost).toLocaleString()}
+                            </td>
+                          </tr>
+                        )}
+                      </tfoot>
+                    </table>
                   </div>
 
-                  {/* Group Transactions Table */}
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className={`${isClassic ? 'border-b border-black bg-gray-50 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/20 text-gray-600 dark:text-gray-300 font-semibold'}`}>
-                        <th className="py-2 px-2 text-center w-10">S#</th>
-                        <th className="py-2 px-2">Date</th>
-                        <th className="py-2 px-2">Bill #</th>
-                        <th className="py-2 px-2">Vendor</th>
-                        {criteria.reportType === 'product' ? (
-                          <>
-                            <th className="py-2 px-2 text-center">Qty Bought</th>
-                            <th className="py-2 px-2 text-right">Unit Rate</th>
-                            <th className="py-2 px-2 text-right">Discounts</th>
-                            <th className="py-2 px-2 text-right">Line Total</th>
-                          </>
-                        ) : (
-                          <>
-                            <th className="py-2 px-2">Warehouse</th>
-                            <th className="py-2 px-2 text-right">Gross Amount</th>
-                            <th className="py-2 px-2 text-right">Discount</th>
-                            <th className="py-2 px-2 text-right">Freight</th>
-                            <th className="py-2 px-2 text-right">Net Total</th>
-                          </>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stroke dark:divide-strokedark">
-                      {group.rows.map((r, rIdx) => (
-                        <tr key={rIdx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/10">
-                          <td className="py-1.5 px-2 text-center text-gray-400 font-mono text-[11px]">
-                            {rIdx + 1}
-                          </td>
-                          <td className="py-1.5 px-2 font-mono text-[11px] whitespace-nowrap text-gray-600 dark:text-gray-300">
-                            {r.date}
-                          </td>
-                          <td className="py-1.5 px-2 font-mono font-bold text-primary">
-                            {r.purchase_no}
-                          </td>
-                          <td className="py-1.5 px-2">
-                            {r.vendor_name}{' '}
-                            <span className="text-[10px] text-gray-400 font-mono">({r.vendorCode})</span>
+                  {/* ── AUDIT FOOTER (LAST PAGE ONLY) ── */}
+                  {isLastPage && renderAuditFooter()}
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        /* ── MODES 2, 3, 4, 5: HIERARCHICAL GROUPED TABLES (Vendor / Product / Brand / Color) ── */
+        <div className={`max-w-7xl mx-auto ${isClassic ? 'bg-white text-black p-4 border border-black shadow-none font-serif' : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-5 md:p-8 space-y-6 text-black dark:text-white font-sans'} print:p-0 print:border-none print:shadow-none print:bg-white print:text-black`}>
+          {renderMainHeader()}
+          {renderKpiCards()}
+
+          {groupedHierarchyData && (
+            <div className="space-y-6">
+              {groupedHierarchyData.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 border border-dashed rounded-xl">
+                  No matching purchase transactions found for this grouping.
+                </div>
+              ) : (
+                groupedHierarchyData.map((group, gIdx) => (
+                  <div
+                    key={gIdx}
+                    className={`overflow-hidden rounded-xl ${
+                      isClassic
+                        ? 'border border-black'
+                        : 'border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xs'
+                    }`}
+                  >
+                    {/* Group Header Banner */}
+                    <div
+                      className={`py-2 px-3 flex items-center justify-between font-bold text-xs ${
+                        isClassic
+                          ? 'bg-black text-white'
+                          : 'bg-gradient-to-r from-slate-100 to-gray-50 dark:from-meta-4 dark:to-boxdark border-b border-stroke dark:border-strokedark text-black dark:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 text-sm uppercase tracking-wide">
+                        <span>
+                          {criteria.reportType === 'product' && '📦 PRODUCT: '}
+                          {criteria.reportType === 'vendor' && '🏢 VENDOR: '}
+                          {criteria.reportType === 'brand' && '🏷️ BRAND: '}
+                          {criteria.reportType === 'color' && '🎨 COLOR: '}
+                          <strong>{group.groupName}</strong>
+                        </span>
+                        <span className="text-[10px] font-normal opacity-80">
+                          ({group.rows.length} transactions)
+                        </span>
+                      </span>
+                      <span className="font-mono text-xs font-bold">
+                        Group Total: Rs. {Math.round(group.subTotal).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Group Transactions Table */}
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className={`${isClassic ? 'border-b border-black bg-gray-50 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/20 text-gray-600 dark:text-gray-300 font-semibold'}`}>
+                          <th className="py-2 px-2 text-center w-10">S#</th>
+                          <th className="py-2 px-2">Date</th>
+                          <th className="py-2 px-2">Bill #</th>
+                          <th className="py-2 px-2">Vendor</th>
+                          {criteria.reportType === 'product' ? (
+                            <>
+                              <th className="py-2 px-2 text-center">Qty Bought</th>
+                              <th className="py-2 px-2 text-right">Unit Rate</th>
+                              <th className="py-2 px-2 text-right">Discounts</th>
+                              <th className="py-2 px-2 text-right">Line Total</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="py-2 px-2">Warehouse</th>
+                              <th className="py-2 px-2 text-right">Gross Amount</th>
+                              <th className="py-2 px-2 text-right">Discount</th>
+                              <th className="py-2 px-2 text-right">Freight</th>
+                              <th className="py-2 px-2 text-right">Net Total</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                        {group.rows.map((r, rIdx) => (
+                          <tr key={rIdx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/10">
+                            <td className="py-1.5 px-2 text-center text-gray-400 font-mono text-[11px]">
+                              {rIdx + 1}
+                            </td>
+                            <td className="py-1.5 px-2 font-mono text-[11px] whitespace-nowrap text-gray-600 dark:text-gray-300">
+                              {r.date}
+                            </td>
+                            <td className="py-1.5 px-2 font-mono font-bold text-primary">
+                              {r.purchase_no}
+                            </td>
+                            <td className="py-1.5 px-2">
+                              {r.vendor_name}{' '}
+                              <span className="text-[10px] text-gray-400 font-mono">({r.vendorCode})</span>
+                            </td>
+                            {criteria.reportType === 'product' ? (
+                              <>
+                                <td className="py-1.5 px-2 text-center font-bold font-mono">
+                                  {r.qty} {r.uom}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono">
+                                  Rs. {Number(r.rate).toLocaleString()}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono text-red-600">
+                                  {r.discountAmount > 0 ? `-Rs. ${Math.round(r.discountAmount).toLocaleString()}` : '—'}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono font-bold text-black dark:text-white">
+                                  Rs. {Math.round(r.lineTotal).toLocaleString()}
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="py-1.5 px-2 text-gray-500">
+                                  {r.warehouse}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono font-semibold">
+                                  {Math.round(r.grossPurchaseAmount).toLocaleString()}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono text-red-600">
+                                  {r.discountAmount > 0 ? `-${Math.round(r.discountAmount).toLocaleString()}` : '—'}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono text-gray-500">
+                                  {r.freightAmount > 0 ? Math.round(r.freightAmount).toLocaleString() : '—'}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono font-bold text-black dark:text-white">
+                                  {Math.round(r.netTotalAmount).toLocaleString()}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+
+                      {/* Group Subtotal Row */}
+                      <tfoot>
+                        <tr className={`${isClassic ? 'border-t-2 border-black font-black bg-gray-100' : 'border-t border-stroke dark:border-strokedark bg-gray-50 dark:bg-meta-4/30 font-black text-black dark:text-white'}`}>
+                          <td colSpan={4} className="py-2 px-2 text-right uppercase tracking-wider text-[11px]">
+                            Subtotal ({group.groupName}):
                           </td>
                           {criteria.reportType === 'product' ? (
                             <>
-                              <td className="py-1.5 px-2 text-center font-bold font-mono">
-                                {r.qty} {r.uom}
+                              <td className="py-2 px-2 text-center font-mono text-[11px] font-black text-blue-600">
+                                {group.subQty?.toLocaleString()} {group.rows[0]?.uom}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono">
-                                Rs. {Number(r.rate).toLocaleString()}
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-400">
+                                Avg: Rs. {group.subQty > 0 ? Math.round(group.subGross / group.subQty).toLocaleString() : 0}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono text-red-600">
-                                {r.discountAmount > 0 ? `-Rs. ${Math.round(r.discountAmount).toLocaleString()}` : '—'}
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-red-600">
+                                {group.subDiscounts > 0 ? `-Rs. ${Math.round(group.subDiscounts).toLocaleString()}` : '—'}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono font-bold text-black dark:text-white">
-                                Rs. {Math.round(r.lineTotal).toLocaleString()}
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-primary font-black">
+                                Rs. {Math.round(group.subTotal).toLocaleString()}
                               </td>
                             </>
                           ) : (
                             <>
-                              <td className="py-1.5 px-2 text-gray-500">
-                                {r.warehouse}
+                              <td className="py-2 px-2 text-right font-mono text-[11px]">
+                                Rs. {Math.round(group.subGross).toLocaleString()}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono font-semibold">
-                                {Math.round(r.grossPurchaseAmount).toLocaleString()}
+                              <td className="py-2 px-2 text-right font-mono text-red-600">
+                                -Rs. {Math.round(group.subDiscounts).toLocaleString()}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono text-red-600">
-                                {r.discountAmount > 0 ? `-${Math.round(r.discountAmount).toLocaleString()}` : '—'}
+                              <td className="py-2 px-2 text-right font-mono text-gray-600">
+                                Rs. {Math.round(group.subFreight).toLocaleString()}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono text-gray-500">
-                                {r.freightAmount > 0 ? Math.round(r.freightAmount).toLocaleString() : '—'}
-                              </td>
-                              <td className="py-1.5 px-2 text-right font-mono font-bold text-black dark:text-white">
-                                {Math.round(r.netTotalAmount).toLocaleString()}
+                              <td className="py-2 px-2 text-right font-mono text-primary">
+                                Rs. {Math.round(group.subTotal).toLocaleString()}
                               </td>
                             </>
                           )}
                         </tr>
-                      ))}
-                    </tbody>
+                      </tfoot>
+                    </table>
+                  </div>
+                ))
+              )}
 
-                    {/* Group Subtotal Row */}
-                    <tfoot>
-                      <tr className={`${isClassic ? 'border-t-2 border-black font-black bg-gray-100' : 'border-t border-stroke dark:border-strokedark bg-gray-50 dark:bg-meta-4/30 font-black text-black dark:text-white'}`}>
-                        <td colSpan={4} className="py-2 px-2 text-right uppercase tracking-wider text-[11px]">
-                          Subtotal ({group.groupName}):
-                        </td>
-                        {criteria.reportType === 'product' ? (
-                          <>
-                            <td className="py-2 px-2 text-center font-mono text-[11px] font-black text-blue-600">
-                              {group.subQty?.toLocaleString()} {group.rows[0]?.uom}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-400">
-                              Avg: Rs. {group.subQty > 0 ? Math.round(group.subGross / group.subQty).toLocaleString() : 0}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-red-600">
-                              {group.subDiscounts > 0 ? `-Rs. ${Math.round(group.subDiscounts).toLocaleString()}` : '—'}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-primary font-black">
-                              Rs. {Math.round(group.subTotal).toLocaleString()}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="py-2 px-2 text-right font-mono text-[11px]">
-                              Rs. {Math.round(group.subGross).toLocaleString()}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-red-600">
-                              -Rs. {Math.round(group.subDiscounts).toLocaleString()}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-600">
-                              Rs. {Math.round(group.subFreight).toLocaleString()}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-primary">
-                              Rs. {Math.round(group.subTotal).toLocaleString()}
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              ))
-            )}
-
-            {/* Overall Grand Summary for Grouped Views */}
-            <div className={`p-4 rounded-xl flex items-center justify-between text-xs font-black ${
-              isClassic
-                ? 'border-t-2 border-b-4 border-double border-black bg-gray-100'
-                : 'bg-primary/10 border border-primary/20 text-primary dark:text-white'
-            }`}>
-              <span className="uppercase tracking-wider">
-                Grand Total ({kpiTotals.totalBills} Bills across {groupedHierarchyData.length} {criteria.reportType}s):
-              </span>
-              <span className="font-mono text-base">
-                Rs. {Math.round(kpiTotals.totalNetCost).toLocaleString()}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* ── 5. FORMAL REPORT SIGNATURE / AUDIT FOOTER ── */}
-        <div className={`pt-6 mt-8 flex items-center justify-between text-[11px] text-gray-500 border-t ${isClassic ? 'border-black' : 'border-stroke dark:border-strokedark'}`}>
-          <div>
-            <span>Audited Electronic Statement • System Master ID: {businessName || 'ZAC-ERP'}</span>
-          </div>
-          <div className="flex items-center gap-12 text-center">
-            <div>
-              <div className="w-28 border-b border-gray-400 mb-1"></div>
-              <span>Prepared By</span>
-            </div>
-            <div>
-              <div className="w-28 border-b border-gray-400 mb-1"></div>
-              <span>Verified / Approved</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── ITEM DETAILS INSPECTION DRAWER / MODAL ── */}
-      {inspectedBill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-boxdark rounded-2xl max-w-2xl w-full border border-stroke dark:border-strokedark shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between p-4 border-b border-stroke dark:border-strokedark bg-gray-50 dark:bg-meta-4/30">
-              <div className="flex items-center gap-2">
-                <MdReceipt className="text-primary" size={20} />
-                <div>
-                  <h3 className="text-sm font-black text-black dark:text-white">
-                    Bill Items Breakdown: {inspectedBill.purchase_no}
-                  </h3>
-                  <span className="text-[11px] text-gray-400">
-                    Vendor: {inspectedBill.vendor_name} • Date: {inspectedBill.date} • {inspectedBill.warehouse}
-                  </span>
-                </div>
+              {/* Overall Grand Summary for Grouped Views */}
+              <div className={`p-4 rounded-xl flex items-center justify-between text-xs font-black ${
+                isClassic
+                  ? 'border-t-2 border-b-4 border-double border-black bg-gray-100'
+                  : 'bg-primary/10 border border-primary/20 text-primary dark:text-white'
+              }`}>
+                <span className="uppercase tracking-wider">
+                  Grand Total ({kpiTotals.totalBills} Bills across {groupedHierarchyData.length} {criteria.reportType}s):
+                </span>
+                <span className="font-mono text-base">
+                  Rs. {Math.round(kpiTotals.totalNetCost).toLocaleString()}
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setInspectedBill(null)}
-                className="p-1 rounded-lg text-gray-400 hover:text-black dark:hover:text-white"
-              >
-                <MdClose size={20} />
-              </button>
-            </div>
 
-            <div className="p-4 max-h-[60vh] overflow-y-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-stroke dark:border-strokedark text-gray-500 font-bold">
-                    <th className="py-2 px-1 text-center w-8">#</th>
-                    <th className="py-2 px-2">Product Title</th>
-                    <th className="py-2 px-2">SKU</th>
-                    <th className="py-2 px-2 text-center">Qty</th>
-                    <th className="py-2 px-2 text-right">Unit Rate</th>
-                    <th className="py-2 px-2 text-right">Line Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stroke/60 dark:divide-strokedark/60">
-                  {inspectedBill.parsedItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-4 text-center text-gray-400">
-                        No product items stored on this bill.
-                      </td>
-                    </tr>
-                  ) : (
-                    inspectedBill.parsedItems.map((it: any, iIdx: number) => (
-                      <tr key={iIdx} className="hover:bg-gray-50 dark:hover:bg-meta-4/10">
-                        <td className="py-2 px-1 text-center font-mono text-gray-400">{iIdx + 1}</td>
-                        <td className="py-2 px-2 font-medium">{it.product_name}</td>
-                        <td className="py-2 px-2 font-mono text-gray-400">{it.sku}</td>
-                        <td className="py-2 px-2 text-center font-mono font-bold">
-                          {it.qty} {it.uom}
-                        </td>
-                        <td className="py-2 px-2 text-right font-mono">
-                          Rs. {it.rate.toLocaleString()}
-                        </td>
-                        <td className="py-2 px-2 text-right font-mono font-black text-black dark:text-white">
-                          Rs. {it.total.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-stroke dark:border-strokedark font-black text-black dark:text-white">
-                    <td colSpan={3} className="py-2 px-2 text-right uppercase text-[11px]">
-                      Bill Total:
-                    </td>
-                    <td className="py-2 px-2 text-center font-mono text-blue-600">
-                      {inspectedBill.totalItemQty} Total
-                    </td>
-                    <td className="py-2 px-2"></td>
-                    <td className="py-2 px-2 text-right font-mono text-primary">
-                      Rs. {Math.round(inspectedBill.netTotalAmount).toLocaleString()}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+              {/* Audit Signatures on Grouped View */}
+              {renderAuditFooter()}
             </div>
-
-            <div className="p-3 bg-gray-50 dark:bg-meta-4/20 border-t border-stroke dark:border-strokedark flex justify-end">
-              <button
-                type="button"
-                onClick={() => setInspectedBill(null)}
-                className="px-4 py-1.5 text-xs font-bold rounded-xl bg-gray-200 dark:bg-meta-4 text-black dark:text-white hover:bg-gray-300 transition"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>
