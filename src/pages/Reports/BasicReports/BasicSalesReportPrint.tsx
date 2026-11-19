@@ -27,7 +27,7 @@ const STORAGE_CRITERIA_KEY = 'zac_basic_sales_report_criteria';
 export const BasicSalesReportPrint: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { businessName } = useAuth();
+  const { businessName, tenantId } = useAuth();
 
   // Load Criteria from location.state or fallback to sessionStorage
   const criteria: BasicSalesFilterCriteria = useMemo(() => {
@@ -56,6 +56,9 @@ export const BasicSalesReportPrint: React.FC = () => {
       return 'modern';
     }
   });
+
+  // Print Density / Rows per Page: 'standard' (18 / 22) | 'compact' (22 / 26) | 'relaxed' (14 / 18)
+  const [printDensity, setPrintDensity] = useState<'standard' | 'compact' | 'relaxed'>('standard');
 
   // Global & Per-Row Breakdown Expansion (High-Speed O(1) State)
   const [expandAllBreakdown, setExpandAllBreakdown] = useState(false);
@@ -467,6 +470,51 @@ export const BasicSalesReportPrint: React.FC = () => {
     };
   }, [parsedInvoiceRows]);
 
+  // Chunk parsed invoices into printable page sheets with per-page subtotal tracking
+  const chunkedInvoicePages = useMemo(() => {
+    if (parsedInvoiceRows.length === 0) return [];
+
+    let firstCap = 18;
+    let subsequentCap = 22;
+
+    if (printDensity === 'compact') {
+      firstCap = 22;
+      subsequentCap = 26;
+    } else if (printDensity === 'relaxed') {
+      firstCap = 14;
+      subsequentCap = 18;
+    }
+
+    const pages: { rows: any[]; startIndex: number }[] = [];
+    let currentRows: any[] = [];
+    let currentUsedUnits = 0;
+    let currentCap = firstCap;
+    let pageStartIndex = 0;
+
+    parsedInvoiceRows.forEach((inv, idx) => {
+      const isExpanded = isRowExpanded(inv.id);
+      const itemsCount = inv.parsedItems?.length || 1;
+      const rowUnits = isExpanded ? Math.max(3, 1 + Math.ceil(itemsCount * 0.7)) : 1;
+
+      if (currentUsedUnits + rowUnits > currentCap && currentRows.length > 0) {
+        pages.push({ rows: currentRows, startIndex: pageStartIndex });
+        currentRows = [inv];
+        pageStartIndex = idx;
+        currentUsedUnits = rowUnits;
+        currentCap = subsequentCap;
+      } else {
+        currentRows.push(inv);
+        currentUsedUnits += rowUnits;
+      }
+    });
+
+    if (currentRows.length > 0) {
+      pages.push({ rows: currentRows, startIndex: pageStartIndex });
+    }
+
+    return pages;
+  }, [parsedInvoiceRows, printDensity, expandAllBreakdown, individualToggledIds]);
+
   // Grouped Hierarchies for Modes 2, 3, 4, 5 (Salesmen / Brand / Color / Product)
   const groupedHierarchyData = useMemo(() => {
     if (criteria.reportType === 'invoice') return null;
@@ -653,9 +701,213 @@ export const BasicSalesReportPrint: React.FC = () => {
 
   const isClassic = layoutTheme === 'classic';
 
+  // Render Formal Main Header (Classic or Modern)
+  const renderMainHeader = () => {
+    if (isClassic) {
+      return (
+        <div className="border-b-2 border-black pb-3 mb-4 text-center">
+          <h1 className="text-xl font-black uppercase tracking-wider">{businessName || 'ZOHAIB ALI AND COMPANY'}</h1>
+          <h2 className="text-sm font-bold uppercase underline mt-0.5">
+            BASIC SALES REPORT — {criteria.reportType.toUpperCase()} REGISTER
+          </h2>
+          <div className="flex items-center justify-between text-[11px] font-mono mt-2 pt-1 border-t border-black">
+            <span>Date Window: {criteria.dateMode === 'single' ? criteria.singleDate : `${criteria.dateFrom || 'Start'} to ${criteria.dateTo || 'End'}`}</span>
+            <span>Sorted: {criteria.sortBy.replace('_', ' ').toUpperCase()}</span>
+            <span>Generated: {new Date().toLocaleString('en-PK')}</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-stroke dark:border-strokedark">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+              Basic Sales Department
+            </span>
+            <span className="text-xs text-gray-400">•</span>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              {criteria.reportType === 'invoice'
+                ? 'Invoice Wise Audit Register'
+                : criteria.reportType === 'product'
+                ? 'Product Wise Turnover & SKU Hierarchy'
+                : criteria.reportType === 'salesmen'
+                ? 'Salesmen Sales Performance'
+                : criteria.reportType === 'brand'
+                ? 'Brand Wise Turnover'
+                : 'Color & Surface Shade Analysis'}
+            </span>
+          </div>
+          <h1 className="text-2xl font-black text-black dark:text-white tracking-tight mt-1">
+            {businessName || 'Zohaib Ali & Company'}
+          </h1>
+        </div>
+
+        <div className="text-right text-xs text-gray-500 dark:text-gray-400">
+          <p>Period: <strong className="text-black dark:text-white">{criteria.dateMode === 'single' ? criteria.singleDate : `${criteria.dateFrom} → ${criteria.dateTo}`}</strong></p>
+          <p className="text-[11px] mt-0.5">Print Date: {new Date().toLocaleDateString('en-GB')}</p>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Compact Running Header on Subsequent Pages
+  const renderRunningHeader = (pageNum: number, totalPages: number) => {
+    if (isClassic) {
+      return (
+        <div className="border-b border-black pb-1.5 mb-3 flex items-center justify-between text-xs font-mono">
+          <span className="font-bold uppercase tracking-wider">{businessName || 'ZOHAIB ALI AND COMPANY'} — BASIC SALES REPORT</span>
+          <span>Page {pageNum} of {totalPages}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-between pb-2 mb-3 border-b border-stroke dark:border-strokedark text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-black text-black dark:text-white uppercase tracking-wider">
+            {businessName || 'Zohaib Ali & Company'}
+          </span>
+          <span className="text-gray-400">•</span>
+          <span className="text-gray-500 dark:text-gray-400 font-semibold text-[11px]">
+            Basic Sales Report (Invoice Audit Register)
+          </span>
+          <span className="text-gray-400">•</span>
+          <span className="text-[11px] text-gray-500">
+            {criteria.dateMode === 'single' ? criteria.singleDate : `${criteria.dateFrom} → ${criteria.dateTo}`}
+          </span>
+        </div>
+        <div className="font-mono text-gray-600 dark:text-gray-300 text-xs font-bold bg-gray-100 dark:bg-meta-4/40 px-2.5 py-0.5 rounded-md">
+          Page {pageNum} of {totalPages}
+        </div>
+      </div>
+    );
+  };
+
+  // Render Top 6 KPI Metric Cards
+  const renderKpiCards = () => (
+    <div className={`grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 ${isClassic ? 'border-b border-black pb-3 mb-4 text-center' : 'mb-6'}`}>
+      {[
+        {
+          label: 'Total Invoices',
+          value: kpiTotals.totalInvoices.toLocaleString(),
+          note: `${kpiTotals.totalCustomers} Unique Customers`
+        },
+        {
+          label: 'Items Sold',
+          value: `${kpiTotals.totalItemsSold.toLocaleString()} Items`,
+          note: `Qty: ${Math.round(kpiTotals.totalQuantitySold).toLocaleString()} Total`
+        },
+        {
+          label: 'Gross Sale Amount',
+          value: `Rs. ${Math.round(kpiTotals.totalGrossSales).toLocaleString()}`,
+          note: 'Before adjustments'
+        },
+        {
+          label: 'Total Discounts',
+          value: kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : 'Rs. 0',
+          note: 'Trade & invoice discounts',
+          textColor: 'text-red-600 dark:text-red-400'
+        },
+        {
+          label: 'Total Freight',
+          value: kpiTotals.totalFreight > 0 ? `Rs. ${Math.round(kpiTotals.totalFreight).toLocaleString()}` : 'Rs. 0',
+          note: 'Transport & carriage',
+          textColor: 'text-blue-600 dark:text-blue-400'
+        },
+        {
+          label: 'Net Sales Revenue',
+          value: `Rs. ${Math.round(kpiTotals.totalNetRevenue).toLocaleString()}`,
+          note: 'Final audited turnover',
+          highlight: true
+        }
+      ].map((kpi, idx) => (
+        <div
+          key={idx}
+          className={`p-2.5 rounded-xl min-w-0 ${
+            isClassic
+              ? 'border border-black bg-white'
+              : kpi.highlight
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+              : 'bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark'
+          }`}
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider block text-gray-500 dark:text-gray-400 truncate">
+            {kpi.label}
+          </span>
+          <span className={`text-xs sm:text-sm lg:text-[15px] xl:text-base font-black block mt-0.5 leading-tight tracking-tight break-words ${kpi.textColor || ''}`}>
+            {kpi.value}
+          </span>
+          <span className="text-[9px] text-gray-400 block mt-0.5 truncate">{kpi.note}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  // Render Formal Audit Signatures
+  const renderAuditFooter = () => (
+    <div className={`pt-6 mt-6 flex items-center justify-between text-[11px] text-gray-500 border-t ${isClassic ? 'border-black' : 'border-stroke dark:border-strokedark'}`}>
+      <div>
+        <span>Audited Electronic Statement • System Master ID: {businessName || 'ZAC-ERP'}</span>
+      </div>
+      <div className="flex items-center gap-12 text-center">
+        <div>
+          <div className="w-28 border-b border-gray-400 mb-1"></div>
+          <span>Prepared By</span>
+        </div>
+        <div>
+          <div className="w-28 border-b border-gray-400 mb-1"></div>
+          <span>Verified / Approved</span>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="w-full min-h-screen bg-slate-50 dark:bg-boxdark-2 py-4 px-2 md:px-6 print:bg-white print:p-0">
       
+      {/* ── EMBEDDED PRINT STYLESHEET TO GUARANTEE PAGE SUB-TOTALS & ZERO REPEATED FOOTERS ── */}
+      <style>{`
+        @media print {
+          @page {
+            size: auto;
+            margin: 8mm 6mm 8mm 6mm;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background: white !important;
+            color: black !important;
+          }
+          * {
+            overflow: visible !important;
+            max-height: none !important;
+            box-shadow: none !important;
+          }
+          .print-page-sheet {
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .print-page-sheet:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          table {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          tfoot {
+            display: table-row-group !important;
+          }
+          .print-hidden, .print\\:hidden {
+            display: none !important;
+          }
+        }
+      `}</style>
+
       {/* ── ON-SCREEN STICKY CONTROLS TOOLBAR (Hidden in Print) ── */}
       <div className="print:hidden max-w-7xl mx-auto mb-5 p-3 rounded-2xl bg-white dark:bg-boxdark border border-stroke dark:border-strokedark shadow-md flex flex-wrap items-center justify-between gap-3 sticky top-2 z-50">
         <div className="flex items-center gap-2">
@@ -696,6 +948,22 @@ export const BasicSalesReportPrint: React.FC = () => {
             </button>
           </div>
 
+          {/* Print Density Selector for Invoice-Wise Mode */}
+          {criteria.reportType === 'invoice' && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-meta-4 border border-stroke dark:border-strokedark text-xs">
+              <span className="text-gray-500 dark:text-gray-400 font-semibold text-[11px]">Rows / Page:</span>
+              <select
+                value={printDensity}
+                onChange={(e) => setPrintDensity(e.target.value as any)}
+                className="bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-lg px-2 py-0.5 text-xs font-bold text-gray-800 dark:text-gray-200 cursor-pointer focus:outline-hidden"
+              >
+                <option value="standard">Standard (18 / 22)</option>
+                <option value="compact">Compact (22 / 26)</option>
+                <option value="relaxed">Relaxed (14 / 18)</option>
+              </select>
+            </div>
+          )}
+
           {/* Breakdown Toggle (for Invoice Wise) */}
           {criteria.reportType === 'invoice' && (
             <button
@@ -734,463 +1002,407 @@ export const BasicSalesReportPrint: React.FC = () => {
         </div>
       </div>
 
-      {/* ── REPORT CANVAS SHEET ── */}
-      <div className={`max-w-7xl mx-auto ${isClassic ? 'bg-white text-black p-4 border border-black shadow-none font-serif' : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-5 md:p-8 space-y-6 text-black dark:text-white font-sans'} print:p-0 print:border-none print:shadow-none print:bg-white print:text-black`}>
-
-        {/* ── 1. REPORT HEADER BLOCK ── */}
-        {isClassic ? (
-          /* CLASSIC FORMAL ACCOUNTING HEADER */
-          <div className="border-b-2 border-black pb-3 mb-4 text-center">
-            <h1 className="text-xl font-black uppercase tracking-wider">{businessName || 'ZOHAIB ALI AND COMPANY'}</h1>
-            <h2 className="text-sm font-bold uppercase underline mt-0.5">
-              BASIC SALES REPORT — {criteria.reportType.toUpperCase()} REGISTER
-            </h2>
-            <div className="flex items-center justify-between text-[11px] font-mono mt-2 pt-1 border-t border-black">
-              <span>Date Window: {criteria.dateMode === 'single' ? criteria.singleDate : `${criteria.dateFrom || 'Start'} to ${criteria.dateTo || 'End'}`}</span>
-              <span>Sorted: {criteria.sortBy.replace('_', ' ').toUpperCase()}</span>
-              <span>Generated: {new Date().toLocaleString('en-PK')}</span>
-            </div>
-          </div>
-        ) : (
-          /* MODERN BRANDED HEADER WITH GLASS BADGE */
-          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-stroke dark:border-strokedark">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
-                  Basic Sales Department
-                </span>
-                <span className="text-xs text-gray-400">•</span>
-                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                  {criteria.reportType === 'invoice'
-                    ? 'Invoice Wise Audit Register'
-                    : criteria.reportType === 'product'
-                    ? 'Product Wise Turnover & SKU Hierarchy'
-                    : criteria.reportType === 'salesmen'
-                    ? 'Salesmen Sales Performance'
-                    : criteria.reportType === 'brand'
-                    ? 'Brand Wise Turnover'
-                    : 'Color & Surface Shade Analysis'}
-                </span>
+      {/* ── MODE 1: INVOICE WISE REPORT WITH PER-PAGE CHUNKS & SUB-TOTALS ── */}
+      {criteria.reportType === 'invoice' ? (
+        <div className="max-w-7xl mx-auto space-y-6 print:space-y-0 print:m-0 print:w-full print:max-w-none">
+          {chunkedInvoicePages.length === 0 ? (
+            <div className={`print-page-sheet ${isClassic ? 'bg-white text-black p-4 border border-black' : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-8 text-black dark:text-white'}`}>
+              {renderMainHeader()}
+              {renderKpiCards()}
+              <div className="py-12 text-center text-gray-400">
+                No invoices found matching selected criteria.
               </div>
-              <h1 className="text-2xl font-black text-black dark:text-white tracking-tight mt-1">
-                {businessName || 'Zohaib Ali & Company'}
-              </h1>
+              {renderAuditFooter()}
             </div>
+          ) : (
+            chunkedInvoicePages.map((pageObj, pageIdx) => {
+              const isFirstPage = pageIdx === 0;
+              const isLastPage = pageIdx === chunkedInvoicePages.length - 1;
+              const pageRows = pageObj.rows;
 
-            <div className="text-right text-xs text-gray-500 dark:text-gray-400">
-              <p>Period: <strong className="text-black dark:text-white">{criteria.dateMode === 'single' ? criteria.singleDate : `${criteria.dateFrom} → ${criteria.dateTo}`}</strong></p>
-              <p className="text-[11px] mt-0.5">Print Date: {new Date().toLocaleDateString('en-GB')}</p>
-            </div>
-          </div>
-        )}
+              const pageGross = pageRows.reduce((s, r) => s + Number(r.grossSaleAmount || 0), 0);
+              const pageFreight = pageRows.reduce((s, r) => s + Number(r.freightAmount || 0), 0);
+              const pageDiscounts = pageRows.reduce((s, r) => s + Number(r.discountAmount || 0), 0);
+              const pageNet = pageRows.reduce((s, r) => s + Number(r.netTotalAmount || 0), 0);
 
-        {/* ── 2. TOP KPI SUMMARY METRIC CARDS ── */}
-        <div className={`grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 ${isClassic ? 'border-b border-black pb-3 mb-4 text-center' : 'mb-6'}`}>
-          {[
-            {
-              label: 'Total Invoices',
-              value: kpiTotals.totalInvoices.toLocaleString(),
-              note: `${kpiTotals.totalCustomers} Unique Customers`
-            },
-            {
-              label: 'Items Sold',
-              value: `${kpiTotals.totalItemsSold.toLocaleString()} Items`,
-              note: `Qty: ${Math.round(kpiTotals.totalQuantitySold).toLocaleString()} Total`
-            },
-            {
-              label: 'Gross Sale Amount',
-              value: `Rs. ${Math.round(kpiTotals.totalGrossSales).toLocaleString()}`,
-              note: 'Before adjustments'
-            },
-            {
-              label: 'Total Discounts',
-              value: kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : 'Rs. 0',
-              note: 'Trade & invoice discounts',
-              textColor: 'text-red-600 dark:text-red-400'
-            },
-            {
-              label: 'Total Freight',
-              value: kpiTotals.totalFreight > 0 ? `Rs. ${Math.round(kpiTotals.totalFreight).toLocaleString()}` : 'Rs. 0',
-              note: 'Transport & carriage',
-              textColor: 'text-blue-600 dark:text-blue-400'
-            },
-            {
-              label: 'Net Sales Revenue',
-              value: `Rs. ${Math.round(kpiTotals.totalNetRevenue).toLocaleString()}`,
-              note: 'Final audited turnover',
-              highlight: true
-            }
-          ].map((kpi, idx) => (
-            <div
-              key={idx}
-              className={`p-2.5 rounded-xl min-w-0 ${
-                isClassic
-                  ? 'border border-black bg-white'
-                  : kpi.highlight
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
-                  : 'bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark'
-              }`}
-            >
-              <span className="text-[10px] font-bold uppercase tracking-wider block text-gray-500 dark:text-gray-400 truncate">
-                {kpi.label}
-              </span>
-              <span className={`text-xs sm:text-sm lg:text-[15px] xl:text-base font-black block mt-0.5 leading-tight tracking-tight break-words ${kpi.textColor || ''}`}>
-                {kpi.value}
-              </span>
-              <span className="text-[9px] text-gray-400 block mt-0.5 truncate">{kpi.note}</span>
-            </div>
-          ))}
-        </div>
+              return (
+                <div
+                  key={pageIdx}
+                  className={`print-page-sheet ${
+                    isClassic
+                      ? 'bg-white text-black p-4 border border-black shadow-none font-serif mb-6 print:mb-0 print:border-none print:p-0'
+                      : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-5 md:p-8 space-y-4 text-black dark:text-white font-sans mb-6 print:mb-0 print:p-0 print:border-none print:shadow-none print:rounded-none'
+                  }`}
+                >
+                  {/* Top Header: Full header + KPI cards on Page 1, Compact running header on Page 2+ */}
+                  {isFirstPage ? (
+                    <>
+                      {renderMainHeader()}
+                      {renderKpiCards()}
+                    </>
+                  ) : (
+                    renderRunningHeader(pageIdx + 1, chunkedInvoicePages.length)
+                  )}
 
-        {/* ── 3. MODE 1: INVOICE WISE REPORT TABLE ── */}
-        {criteria.reportType === 'invoice' && (
-          <div className="overflow-x-auto">
-            <table className={`w-full text-left border-collapse ${isClassic ? 'border border-black text-xs' : 'text-xs'}`}>
-              <thead>
-                <tr className={`${isClassic ? 'border-b-2 border-black bg-gray-100 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-100/70 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 font-bold'}`}>
-                  <th className="py-2.5 px-2 text-center w-10">S#</th>
-                  <th className="py-2.5 px-2">Date</th>
-                  <th className="py-2.5 px-2">Invoice #</th>
-                  <th className="py-2.5 px-2">Customer Name & Code</th>
-                  <th className="py-2.5 px-2">Products Summary</th>
-                  <th className="py-2.5 px-2">Terms</th>
-                  <th className="py-2.5 px-2 text-right">Sale Amount</th>
-                  <th className="py-2.5 px-2 text-right">Freight</th>
-                  <th className="py-2.5 px-2 text-right">Discount</th>
-                  <th className="py-2.5 px-2 text-right">Total Net</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stroke dark:divide-strokedark">
-                {parsedInvoiceRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="py-8 text-center text-gray-400">
-                      No invoices found matching selected criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  parsedInvoiceRows.map((inv, idx) => {
-                    const isExpanded = isRowExpanded(inv.id);
+                  {/* Table for this Page Sheet */}
+                  <div className="overflow-x-auto print:overflow-visible">
+                    <table className={`w-full text-left border-collapse ${isClassic ? 'border border-black text-xs' : 'text-xs'}`}>
+                      <thead>
+                        <tr className={`${isClassic ? 'border-b-2 border-black bg-gray-100 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-100/70 dark:bg-meta-4/40 text-gray-600 dark:text-gray-300 font-bold'}`}>
+                          <th className="py-2.5 px-2 text-center w-10">S#</th>
+                          <th className="py-2.5 px-2">Date</th>
+                          <th className="py-2.5 px-2">Invoice #</th>
+                          <th className="py-2.5 px-2">Customer Name & Code</th>
+                          <th className="py-2.5 px-2">Products Summary</th>
+                          <th className="py-2.5 px-2">Terms</th>
+                          <th className="py-2.5 px-2 text-right">Sale Amount</th>
+                          <th className="py-2.5 px-2 text-right">Freight</th>
+                          <th className="py-2.5 px-2 text-right">Discount</th>
+                          <th className="py-2.5 px-2 text-right">Total Net</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                        {pageRows.map((inv, rowIdx) => {
+                          const serialNum = pageObj.startIndex + rowIdx + 1;
+                          const isExpanded = isRowExpanded(inv.id);
 
-                    return (
-                      <React.Fragment key={inv.id}>
-                        {/* Master Row with content-visibility for ultra-fast rendering */}
-                        <tr
-                          onClick={() => toggleInvoiceBreakdown(String(inv.id))}
-                          style={{ contentVisibility: 'auto', containIntrinsicSize: '0 38px' }}
-                          className={`cursor-pointer transition select-none ${
-                            isClassic
-                              ? 'hover:bg-gray-50 border-b border-black/40'
-                              : 'hover:bg-blue-50/40 dark:hover:bg-meta-4/20'
-                          } ${isExpanded ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''}`}
-                        >
-                          <td className="py-2 px-2 text-center font-mono">{idx + 1}</td>
-                          <td className="py-2 px-2 whitespace-nowrap">
-                            {inv.sale_date || inv.created_at?.split('T')[0] || '—'}
+                          return (
+                            <React.Fragment key={inv.id}>
+                              {/* Master Row */}
+                              <tr
+                                onClick={() => toggleInvoiceBreakdown(String(inv.id))}
+                                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 38px' }}
+                                className={`cursor-pointer transition select-none ${
+                                  isClassic
+                                    ? 'hover:bg-gray-50 border-b border-black/40'
+                                    : 'hover:bg-blue-50/40 dark:hover:bg-meta-4/20'
+                                } ${isExpanded ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''}`}
+                              >
+                                <td className="py-2 px-2 text-center font-mono">{serialNum}</td>
+                                <td className="py-2 px-2 whitespace-nowrap">
+                                  {inv.sale_date || inv.created_at?.split('T')[0] || '—'}
+                                </td>
+                                <td className="py-2 px-2 font-bold whitespace-nowrap text-primary">
+                                  #{inv.invoice_no || inv.id}
+                                </td>
+                                <td className="py-2 px-2">
+                                  <div className="font-bold leading-tight">{inv.customer_name || 'Cash Customer'}</div>
+                                  <div className="text-[10px] text-gray-400 font-mono">
+                                    Code: {inv.customerCode} {inv.customerAddress ? `• ${inv.customerAddress}` : ''}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300">
+                                    <span>{inv.totalItemsCount} item{inv.totalItemsCount !== 1 ? 's' : ''} ({inv.totalItemQty} qty)</span>
+                                    <span className="text-[10px] text-primary underline print:hidden">
+                                      {isExpanded ? '▲ hide' : '▼ items'}
+                                    </span>
+                                  </span>
+                                </td>
+                                <td className="py-2 px-2 whitespace-nowrap">
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                    inv.payment_term === 'Cash'
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                      : 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                  }`}>
+                                    {inv.payment_term || 'Cash'}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-2 text-right font-mono">
+                                  {inv.grossSaleAmount.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-2 text-right font-mono text-gray-500">
+                                  {inv.freightAmount > 0 ? inv.freightAmount.toLocaleString() : '—'}
+                                </td>
+                                <td className="py-2 px-2 text-right font-mono text-red-500">
+                                  {inv.discountAmount > 0 ? `-${inv.discountAmount.toLocaleString()}` : '—'}
+                                </td>
+                                <td className="py-2 px-2 text-right font-bold font-mono text-black dark:text-white">
+                                  {inv.netTotalAmount.toLocaleString()}
+                                </td>
+                              </tr>
+
+                              {/* Breakdown Sub-Table Drawer */}
+                              {isExpanded && (
+                                <tr
+                                  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 90px' }}
+                                  className="bg-slate-50/80 dark:bg-meta-4/20 print:bg-transparent"
+                                >
+                                  <td colSpan={10} className="p-3 pl-8">
+                                    <div className={`p-3 rounded-xl ${isClassic ? 'border border-black bg-white' : 'border border-blue-200 dark:border-blue-900 bg-white dark:bg-boxdark shadow-xs'}`}>
+                                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-1.5">
+                                        <MdTableChart size={14} />
+                                        <span>Invoice Line Items Breakdown (#{inv.invoice_no || inv.id})</span>
+                                      </h4>
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="border-b border-stroke dark:border-strokedark text-gray-500 text-[10px] font-bold uppercase">
+                                            <th className="py-1 px-1.5 text-left">Code / SKU</th>
+                                            <th className="py-1 px-1.5 text-left">Product Description</th>
+                                            <th className="py-1 px-1.5 text-center">Qty (UOM)</th>
+                                            <th className="py-1 px-1.5 text-right">Unit Rate</th>
+                                            <th className="py-1 px-1.5 text-right">Discount</th>
+                                            <th className="py-1 px-1.5 text-right">Line Total</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-stroke/60 dark:divide-strokedark/60 font-mono">
+                                          {inv.parsedItems.map((it: any, itemIdx: number) => (
+                                            <tr key={itemIdx} className="hover:bg-gray-50/50">
+                                              <td className="py-1 px-1.5 font-bold text-gray-600 dark:text-gray-300">{it.code}</td>
+                                              <td className="py-1 px-1.5 font-sans font-medium">{it.name}</td>
+                                              <td className="py-1 px-1.5 text-center font-bold">{it.qty} {it.uom}</td>
+                                              <td className="py-1 px-1.5 text-right">Rs. {it.rate.toLocaleString()}</td>
+                                              <td className="py-1 px-1.5 text-right text-red-500">
+                                                {it.discount > 0 ? `-Rs. ${it.discount.toLocaleString()}` : '—'}
+                                              </td>
+                                              <td className="py-1 px-1.5 text-right font-bold text-black dark:text-white">
+                                                Rs. {it.lineTotal.toLocaleString()}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+
+                      {/* ── FOOTER: PAGE SUB-TOTAL ON EVERY PAGE, GRAND TOTAL ON LAST PAGE ONLY ── */}
+                      <tfoot>
+                        {/* 📄 1. PAGE SUB-TOTAL (Strictly for this page's rows) */}
+                        <tr className={`${isClassic ? 'border-t-2 border-b border-black font-bold bg-gray-100 text-black' : 'border-t-2 border-b border-stroke dark:border-strokedark font-bold bg-blue-50/60 dark:bg-meta-4/30 text-black dark:text-white'}`}>
+                          <td colSpan={6} className="py-2.5 px-2 text-right uppercase tracking-wider text-[11px] font-bold text-blue-900 dark:text-blue-300">
+                            Page {pageIdx + 1} Subtotal ({pageRows.length} Invoices):
                           </td>
-                          <td className="py-2 px-2 font-bold whitespace-nowrap text-primary">
-                            #{inv.invoice_no || inv.id}
+                          <td className="py-2.5 px-2 text-right font-mono text-xs font-bold">
+                            Rs. {Math.round(pageGross).toLocaleString()}
                           </td>
-                          <td className="py-2 px-2">
-                            <div className="font-bold leading-tight">{inv.customer_name || 'Cash Customer'}</div>
-                            <div className="text-[10px] text-gray-400 font-mono">
-                              Code: {inv.customerCode} {inv.customerAddress ? `• ${inv.customerAddress}` : ''}
-                            </div>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-gray-600 dark:text-gray-300">
+                            {pageFreight > 0 ? `Rs. ${Math.round(pageFreight).toLocaleString()}` : '—'}
                           </td>
-                          <td className="py-2 px-2 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300">
-                              <span>{inv.totalItemsCount} item{inv.totalItemsCount !== 1 ? 's' : ''} ({inv.totalItemQty} qty)</span>
-                              <span className="text-[10px] text-primary underline">
-                                {isExpanded ? '▲ hide' : '▼ items'}
-                              </span>
-                            </span>
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-red-600">
+                            {pageDiscounts > 0 ? `-Rs. ${Math.round(pageDiscounts).toLocaleString()}` : '—'}
                           </td>
-                          <td className="py-2 px-2 whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                              inv.payment_term === 'Cash'
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                : 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                            }`}>
-                              {inv.payment_term || 'Cash'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono">
-                            {inv.grossSaleAmount.toLocaleString()}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono text-gray-500">
-                            {inv.freightAmount > 0 ? inv.freightAmount.toLocaleString() : '—'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono text-red-500">
-                            {inv.discountAmount > 0 ? `-${inv.discountAmount.toLocaleString()}` : '—'}
-                          </td>
-                          <td className="py-2 px-2 text-right font-bold font-mono text-black dark:text-white">
-                            {inv.netTotalAmount.toLocaleString()}
+                          <td className="py-2.5 px-2 text-right font-mono text-xs text-primary font-black">
+                            Rs. {Math.round(pageNet).toLocaleString()}
                           </td>
                         </tr>
 
-                        {/* Breakdown Sub-Table Drawer */}
-                        {isExpanded && (
-                          <tr
-                            style={{ contentVisibility: 'auto', containIntrinsicSize: '0 90px' }}
-                            className="bg-slate-50/80 dark:bg-meta-4/20 print:bg-transparent"
-                          >
-                            <td colSpan={10} className="p-3 pl-8">
-                              <div className={`p-3 rounded-xl ${isClassic ? 'border border-black bg-white' : 'border border-blue-200 dark:border-blue-900 bg-white dark:bg-boxdark shadow-xs'}`}>
-                                <h4 className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-1.5">
-                                  <MdTableChart size={14} />
-                                  <span>Invoice Line Items Breakdown (#{inv.invoice_no || inv.id})</span>
-                                </h4>
-                                <table className="w-full text-xs">
-                                  <thead>
-                                    <tr className="border-b border-stroke dark:border-strokedark text-gray-500 text-[10px] font-bold uppercase">
-                                      <th className="py-1 px-1.5 text-left">Code / SKU</th>
-                                      <th className="py-1 px-1.5 text-left">Product Description</th>
-                                      <th className="py-1 px-1.5 text-center">Qty (UOM)</th>
-                                      <th className="py-1 px-1.5 text-right">Unit Rate</th>
-                                      <th className="py-1 px-1.5 text-right">Discount</th>
-                                      <th className="py-1 px-1.5 text-right">Line Total</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-stroke/60 dark:divide-strokedark/60 font-mono">
-                                    {inv.parsedItems.map((it: any, itemIdx: number) => (
-                                      <tr key={itemIdx} className="hover:bg-gray-50/50">
-                                        <td className="py-1 px-1.5 font-bold text-gray-600 dark:text-gray-300">{it.code}</td>
-                                        <td className="py-1 px-1.5 font-sans font-medium">{it.name}</td>
-                                        <td className="py-1 px-1.5 text-center font-bold">{it.qty} {it.uom}</td>
-                                        <td className="py-1 px-1.5 text-right">Rs. {it.rate.toLocaleString()}</td>
-                                        <td className="py-1 px-1.5 text-right text-red-500">
-                                          {it.discount > 0 ? `-Rs. ${it.discount.toLocaleString()}` : '—'}
-                                        </td>
-                                        <td className="py-1 px-1.5 text-right font-bold text-black dark:text-white">
-                                          Rs. {it.lineTotal.toLocaleString()}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                        {/* 📊 2. LAST PAGE ONLY: GRAND TOTAL (Directly below Page Sub-total) */}
+                        {isLastPage && (
+                          <tr className={`${isClassic ? 'border-t-2 border-b-4 border-double border-black font-black bg-gray-200 text-black' : 'border-t-2 border-b-2 border-emerald-400 dark:border-emerald-600 font-black bg-emerald-50 dark:bg-emerald-950/40 text-black dark:text-white'}`}>
+                            <td colSpan={6} className="py-3 px-2 text-right uppercase tracking-wider text-xs font-black text-emerald-900 dark:text-emerald-300">
+                              Grand Total ({kpiTotals.totalInvoices} Invoices):
+                            </td>
+                            <td className="py-3 px-2 text-right font-mono text-xs font-black">
+                              Rs. {Math.round(kpiTotals.totalGrossSales).toLocaleString()}
+                            </td>
+                            <td className="py-3 px-2 text-right font-mono text-xs text-gray-700 dark:text-gray-300 font-bold">
+                              {kpiTotals.totalFreight > 0 ? `Rs. ${Math.round(kpiTotals.totalFreight).toLocaleString()}` : '—'}
+                            </td>
+                            <td className="py-3 px-2 text-right font-mono text-xs text-red-600 font-bold">
+                              {kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : '—'}
+                            </td>
+                            <td className="py-3 px-2 text-right font-mono text-xs text-primary font-black">
+                              Rs. {Math.round(kpiTotals.totalNetRevenue).toLocaleString()}
                             </td>
                           </tr>
                         )}
-                      </React.Fragment>
-                    );
-                  })
-                )}
-              </tbody>
-
-              {/* Grand Total Footer */}
-              <tfoot>
-                <tr className={`${isClassic ? 'border-t-2 border-b-4 border-double border-black font-black bg-gray-100' : 'border-t-2 border-stroke dark:border-strokedark font-black bg-gray-50 dark:bg-meta-4/40 text-black dark:text-white'}`}>
-                  <td colSpan={6} className="py-3 px-2 text-right uppercase tracking-wider text-xs">
-                    Grand Total ({kpiTotals.totalInvoices} Invoices):
-                  </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs">
-                    Rs. {Math.round(kpiTotals.totalGrossSales).toLocaleString()}
-                  </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs text-gray-600 dark:text-gray-300">
-                    Rs. {Math.round(kpiTotals.totalFreight).toLocaleString()}
-                  </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs text-red-600">
-                    -Rs. {Math.round(kpiTotals.totalDiscounts).toLocaleString()}
-                  </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs text-primary font-black">
-                    Rs. {Math.round(kpiTotals.totalNetRevenue).toLocaleString()}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-
-        {/* ── 4. MODES 2, 3, 4: HIERARCHICAL GROUPED TABLES (Salesmen / Brand / Color) ── */}
-        {criteria.reportType !== 'invoice' && groupedHierarchyData && (
-          <div className="space-y-6">
-            {groupedHierarchyData.length === 0 ? (
-              <div className="p-8 text-center text-gray-400 border border-dashed rounded-xl">
-                No matching transactions found for this grouping.
-              </div>
-            ) : (
-              groupedHierarchyData.map((group, grpIdx) => (
-                <div
-                  key={grpIdx}
-                  className={`overflow-hidden rounded-xl ${
-                    isClassic
-                      ? 'border border-black mb-4'
-                      : 'border border-stroke dark:border-strokedark mb-5 bg-white dark:bg-boxdark shadow-2xs'
-                  }`}
-                >
-                  {/* Group Header Banner */}
-                  <div
-                    className={`py-2 px-3 flex items-center justify-between font-bold text-xs ${
-                      isClassic
-                        ? 'bg-black text-white'
-                        : 'bg-gradient-to-r from-slate-100 to-gray-50 dark:from-meta-4 dark:to-boxdark border-b border-stroke dark:border-strokedark text-black dark:text-white'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2 text-sm uppercase tracking-wide">
-                      <span>
-                        {criteria.reportType === 'product' ? '📦 PRODUCT' : `🏷️ ${criteria.reportType.toUpperCase()}`}:{' '}
-                        <strong>{group.groupName}</strong>
-                      </span>
-                      {group.groupMeta && (
-                        <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold normal-case">
-                          {group.groupMeta}
-                        </span>
-                      )}
-                      <span className="text-[10px] font-normal opacity-80">
-                        ({group.rows.length} {criteria.reportType === 'product' ? 'sales lines' : 'transactions'})
-                      </span>
-                    </span>
-                    <span className="font-mono text-xs font-bold">
-                      Group Total: Rs. {group.subTotal.toLocaleString()}
-                    </span>
+                      </tfoot>
+                    </table>
                   </div>
 
-                  {/* Group Transactions Table */}
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className={`${isClassic ? 'border-b border-black bg-gray-50 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/20 text-gray-600 dark:text-gray-300 font-semibold'}`}>
-                        <th className="py-2 px-2 text-center w-10">S#</th>
-                        <th className="py-2 px-2">Date</th>
-                        <th className="py-2 px-2">Invoice #</th>
-                        <th className="py-2 px-2">Customer</th>
-                        {criteria.reportType === 'product' ? (
-                          <>
-                            <th className="py-2 px-2 text-center">Qty Sold</th>
-                            <th className="py-2 px-2 text-right">Unit Rate</th>
-                            <th className="py-2 px-2 text-right">Discounts</th>
-                            <th className="py-2 px-2 text-right">Line Total</th>
-                          </>
-                        ) : (
-                          <>
-                            <th className="py-2 px-2 text-right">Sale Amount</th>
-                            <th className="py-2 px-2 text-right">Discounts</th>
-                            <th className="py-2 px-2 text-right">Freight</th>
-                            <th className="py-2 px-2 text-right">Total Net</th>
-                          </>
+                  {/* ── AUDIT FOOTER (LAST PAGE ONLY) ── */}
+                  {isLastPage && renderAuditFooter()}
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        /* ── MODES 2, 3, 4: HIERARCHICAL GROUPED TABLES (Salesmen / Brand / Color / Product) ── */
+        <div className={`max-w-7xl mx-auto ${isClassic ? 'bg-white text-black p-4 border border-black shadow-none font-serif' : 'bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-sm p-5 md:p-8 space-y-6 text-black dark:text-white font-sans'} print:p-0 print:border-none print:shadow-none print:bg-white print:text-black`}>
+          {renderMainHeader()}
+          {renderKpiCards()}
+
+          {groupedHierarchyData && (
+            <div className="space-y-6">
+              {groupedHierarchyData.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 border border-dashed rounded-xl">
+                  No matching transactions found for this grouping.
+                </div>
+              ) : (
+                groupedHierarchyData.map((group, grpIdx) => (
+                  <div
+                    key={grpIdx}
+                    className={`overflow-hidden rounded-xl ${
+                      isClassic
+                        ? 'border border-black mb-4'
+                        : 'border border-stroke dark:border-strokedark mb-5 bg-white dark:bg-boxdark shadow-2xs'
+                    }`}
+                  >
+                    {/* Group Header Banner */}
+                    <div
+                      className={`py-2 px-3 flex items-center justify-between font-bold text-xs ${
+                        isClassic
+                          ? 'bg-black text-white'
+                          : 'bg-gradient-to-r from-slate-100 to-gray-50 dark:from-meta-4 dark:to-boxdark border-b border-stroke dark:border-strokedark text-black dark:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 text-sm uppercase tracking-wide">
+                        <span>
+                          {criteria.reportType === 'product' ? '📦 PRODUCT' : `🏷️ ${criteria.reportType.toUpperCase()}`}:{' '}
+                          <strong>{group.groupName}</strong>
+                        </span>
+                        {group.groupMeta && (
+                          <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold normal-case">
+                            {group.groupMeta}
+                          </span>
                         )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stroke/70 dark:divide-strokedark/70">
-                      {group.rows.map((r, rIdx) => (
-                        <tr
-                          key={r.id}
-                          className={isClassic ? 'hover:bg-gray-50' : 'hover:bg-blue-50/30 dark:hover:bg-meta-4/20'}
-                        >
-                          <td className="py-1.5 px-2 text-center font-mono">{rIdx + 1}</td>
-                          <td className="py-1.5 px-2 whitespace-nowrap">{r.sale_date || r.created_at?.split('T')[0] || '—'}</td>
-                          <td className="py-1.5 px-2 font-bold font-mono text-primary">#{r.invoice_no || r.id}</td>
-                          <td className="py-1.5 px-2 font-semibold">
-                            {r.customer_name} <span className="text-[10px] text-gray-400 font-mono">({r.customerCode})</span>
+                        <span className="text-[10px] font-normal opacity-80">
+                          ({group.rows.length} {criteria.reportType === 'product' ? 'sales lines' : 'transactions'})
+                        </span>
+                      </span>
+                      <span className="font-mono text-xs font-bold">
+                        Group Total: Rs. {group.subTotal.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Group Transactions Table */}
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className={`${isClassic ? 'border-b border-black bg-gray-50 font-bold' : 'border-b border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/20 text-gray-600 dark:text-gray-300 font-semibold'}`}>
+                          <th className="py-2 px-2 text-center w-10">S#</th>
+                          <th className="py-2 px-2">Date</th>
+                          <th className="py-2 px-2">Invoice #</th>
+                          <th className="py-2 px-2">Customer</th>
+                          {criteria.reportType === 'product' ? (
+                            <>
+                              <th className="py-2 px-2 text-center">Qty Sold</th>
+                              <th className="py-2 px-2 text-right">Unit Rate</th>
+                              <th className="py-2 px-2 text-right">Discounts</th>
+                              <th className="py-2 px-2 text-right">Line Total</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="py-2 px-2 text-right">Sale Amount</th>
+                              <th className="py-2 px-2 text-right">Discounts</th>
+                              <th className="py-2 px-2 text-right">Freight</th>
+                              <th className="py-2 px-2 text-right">Total Net</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stroke/70 dark:divide-strokedark/70">
+                        {group.rows.map((r, rIdx) => (
+                          <tr
+                            key={r.id}
+                            className={isClassic ? 'hover:bg-gray-50' : 'hover:bg-blue-50/30 dark:hover:bg-meta-4/20'}
+                          >
+                            <td className="py-1.5 px-2 text-center font-mono">{rIdx + 1}</td>
+                            <td className="py-1.5 px-2 whitespace-nowrap">{r.sale_date || r.created_at?.split('T')[0] || '—'}</td>
+                            <td className="py-1.5 px-2 font-bold font-mono text-primary">#{r.invoice_no || r.id}</td>
+                            <td className="py-1.5 px-2 font-semibold">
+                              {r.customer_name} <span className="text-[10px] text-gray-400 font-mono">({r.customerCode})</span>
+                            </td>
+                            {criteria.reportType === 'product' ? (
+                              <>
+                                <td className="py-1.5 px-2 text-center font-bold font-mono">
+                                  {r.qty} {r.uom}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono">Rs. {Number(r.rate).toLocaleString()}</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-red-500">
+                                  {r.discountAmount > 0 ? `-Rs. ${r.discountAmount.toLocaleString()}` : '—'}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono font-bold text-black dark:text-white">
+                                  Rs. {r.netTotalAmount.toLocaleString()}
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="py-1.5 px-2 text-right font-mono">{r.grossSaleAmount.toLocaleString()}</td>
+                                <td className="py-1.5 px-2 text-right font-mono text-red-500">
+                                  {r.discountAmount > 0 ? `-${r.discountAmount.toLocaleString()}` : '—'}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono text-gray-500">
+                                  {r.freightAmount > 0 ? r.freightAmount.toLocaleString() : '—'}
+                                </td>
+                                <td className="py-1.5 px-2 text-right font-mono font-bold text-black dark:text-white">
+                                  {r.netTotalAmount.toLocaleString()}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+
+                      {/* Group Subtotal Row */}
+                      <tfoot>
+                        <tr className={`${isClassic ? 'border-t-2 border-black font-black bg-gray-100' : 'border-t border-stroke dark:border-strokedark bg-gray-50 dark:bg-meta-4/30 font-black text-black dark:text-white'}`}>
+                          <td colSpan={4} className="py-2 px-2 text-right uppercase tracking-wider text-[11px]">
+                            Subtotal ({group.groupName}):
                           </td>
                           {criteria.reportType === 'product' ? (
                             <>
-                              <td className="py-1.5 px-2 text-center font-bold font-mono">
-                                {r.qty} {r.uom}
+                              <td className="py-2 px-2 text-center font-mono text-[11px] font-black text-blue-600">
+                                {group.subQty?.toLocaleString()} {group.rows[0]?.uom}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono">Rs. {Number(r.rate).toLocaleString()}</td>
-                              <td className="py-1.5 px-2 text-right font-mono text-red-500">
-                                {r.discountAmount > 0 ? `-Rs. ${r.discountAmount.toLocaleString()}` : '—'}
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-400">
+                                Avg: Rs. {group.subQty > 0 ? Math.round(group.subGross / group.subQty).toLocaleString() : 0}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono font-bold text-black dark:text-white">
-                                Rs. {r.netTotalAmount.toLocaleString()}
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-red-600">
+                                {group.subDiscounts > 0 ? `-Rs. ${Math.round(group.subDiscounts).toLocaleString()}` : '—'}
+                              </td>
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-primary font-black">
+                                Rs. {Math.round(group.subTotal).toLocaleString()}
                               </td>
                             </>
                           ) : (
                             <>
-                              <td className="py-1.5 px-2 text-right font-mono">{r.grossSaleAmount.toLocaleString()}</td>
-                              <td className="py-1.5 px-2 text-right font-mono text-red-500">
-                                {r.discountAmount > 0 ? `-${r.discountAmount.toLocaleString()}` : '—'}
+                              <td className="py-2 px-2 text-right font-mono text-[11px]">
+                                Rs. {Math.round(group.subGross).toLocaleString()}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono text-gray-500">
-                                {r.freightAmount > 0 ? r.freightAmount.toLocaleString() : '—'}
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-red-600">
+                                -Rs. {Math.round(group.subDiscounts).toLocaleString()}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono font-bold text-black dark:text-white">
-                                {r.netTotalAmount.toLocaleString()}
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-600">
+                                Rs. {Math.round(group.subFreight).toLocaleString()}
+                              </td>
+                              <td className="py-2 px-2 text-right font-mono text-[11px] text-primary">
+                                Rs. {Math.round(group.subTotal).toLocaleString()}
                               </td>
                             </>
                           )}
                         </tr>
-                      ))}
-                    </tbody>
+                      </tfoot>
+                    </table>
+                  </div>
+                ))
+              )}
 
-                    {/* Group Subtotal Row */}
-                    <tfoot>
-                      <tr className={`${isClassic ? 'border-t-2 border-black font-black bg-gray-100' : 'border-t border-stroke dark:border-strokedark bg-gray-50 dark:bg-meta-4/30 font-black text-black dark:text-white'}`}>
-                        <td colSpan={4} className="py-2 px-2 text-right uppercase tracking-wider text-[11px]">
-                          Subtotal ({group.groupName}):
-                        </td>
-                        {criteria.reportType === 'product' ? (
-                          <>
-                            <td className="py-2 px-2 text-center font-mono text-[11px] font-black text-blue-600">
-                              {group.subQty?.toLocaleString()} {group.rows[0]?.uom}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-400">
-                              Avg: Rs. {group.subQty > 0 ? Math.round(group.subGross / group.subQty).toLocaleString() : 0}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-red-600">
-                              {group.subDiscounts > 0 ? `-Rs. ${Math.round(group.subDiscounts).toLocaleString()}` : '—'}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-primary font-black">
-                              Rs. {Math.round(group.subTotal).toLocaleString()}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="py-2 px-2 text-right font-mono text-[11px]">
-                              Rs. {Math.round(group.subGross).toLocaleString()}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-red-600">
-                              -Rs. {Math.round(group.subDiscounts).toLocaleString()}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-600">
-                              Rs. {Math.round(group.subFreight).toLocaleString()}
-                            </td>
-                            <td className="py-2 px-2 text-right font-mono text-[11px] text-primary">
-                              Rs. {Math.round(group.subTotal).toLocaleString()}
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              ))
-            )}
+              {/* Overall Grand Summary for Grouped Views */}
+              <div className={`p-4 rounded-xl flex items-center justify-between text-xs font-black ${
+                isClassic
+                  ? 'border-t-2 border-b-4 border-double border-black bg-gray-100'
+                  : 'bg-primary/10 border border-primary/20 text-primary dark:text-white'
+              }`}>
+                <span className="uppercase tracking-wider">
+                  Grand Total ({kpiTotals.totalInvoices} Invoices across {groupedHierarchyData.length} {criteria.reportType}s):
+                </span>
+                <span className="font-mono text-base">
+                  Rs. {Math.round(kpiTotals.totalNetRevenue).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          )}
 
-            {/* Overall Grand Summary for Grouped Views */}
-            <div className={`p-4 rounded-xl flex items-center justify-between text-xs font-black ${
-              isClassic
-                ? 'border-t-2 border-b-4 border-double border-black bg-gray-100'
-                : 'bg-primary/10 border border-primary/20 text-primary dark:text-white'
-            }`}>
-              <span className="uppercase tracking-wider">
-                Grand Total ({kpiTotals.totalInvoices} Invoices across {groupedHierarchyData.length} {criteria.reportType}s):
-              </span>
-              <span className="font-mono text-base">
-                Rs. {Math.round(kpiTotals.totalNetRevenue).toLocaleString()}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* ── 5. FORMAL REPORT SIGNATURE / AUDIT FOOTER ── */}
-        <div className={`pt-6 mt-8 flex items-center justify-between text-[11px] text-gray-500 border-t ${isClassic ? 'border-black' : 'border-stroke dark:border-strokedark'}`}>
-          <div>
-            <span>Audited Electronic Statement • System Master ID: {businessName || 'ZAC-ERP'}</span>
-          </div>
-          <div className="flex items-center gap-12 text-center">
-            <div>
-              <div className="w-28 border-b border-gray-400 mb-1"></div>
-              <span>Prepared By</span>
-            </div>
-            <div>
-              <div className="w-28 border-b border-gray-400 mb-1"></div>
-              <span>Verified / Approved</span>
-            </div>
-          </div>
+          {renderAuditFooter()}
         </div>
-
-      </div>
+      )}
     </div>
   );
 };
