@@ -90,7 +90,7 @@ export function useSidebarTheme() {
   useEffect(() => {
     const updateColors = () => {
       const inDark = isDarkModeActive();
-      const raw = localStorage.getItem('uzair_jibran_sidebar_raw_color') || getSavedSidebarColor(inDark);
+      const raw = getSavedSidebarColor(inDark);
       const res = getSafeSidebarColor(raw, inDark);
       setCurrentSidebarColor(res.safeColor);
       setWasContrastAdjusted(res.wasAdjusted);

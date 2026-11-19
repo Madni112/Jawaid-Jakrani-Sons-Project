@@ -274,15 +274,15 @@ export const BasicSalesReportPrint: React.FC = () => {
     }
 
     // 4. Item-Level Constraints (Categories, Products, Brand, Color - Supports Multi-Select)
-    const activeBrands = criteria.brands && criteria.brands.length > 0
+    const activeBrands = criteria.reportType === 'brand' && criteria.brands && criteria.brands.length > 0
       ? criteria.brands.filter((b) => b && b !== 'All').map((b) => b.trim().toLowerCase())
-      : criteria.brand && criteria.brand !== 'All'
+      : criteria.reportType === 'brand' && criteria.brand && criteria.brand !== 'All'
       ? [criteria.brand.trim().toLowerCase()]
       : [];
 
-    const activeColors = criteria.colors && criteria.colors.length > 0
+    const activeColors = criteria.reportType === 'color' && criteria.colors && criteria.colors.length > 0
       ? criteria.colors.filter((c) => c && c !== 'All').map((c) => c.trim().toLowerCase())
-      : criteria.color && criteria.color !== 'All'
+      : criteria.reportType === 'color' && criteria.color && criteria.color !== 'All'
       ? [criteria.color.trim().toLowerCase()]
       : [];
 

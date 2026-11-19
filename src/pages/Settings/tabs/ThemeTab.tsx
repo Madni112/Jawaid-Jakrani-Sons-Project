@@ -34,6 +34,7 @@ import {
   applySidebarColor,
   getSavedSidebarColor,
   getSafeSidebarColor,
+  isSidebarBackgroundLight,
   getContrastTextColor,
   isDarkModeActive,
   SidebarLayoutMode,
@@ -325,7 +326,18 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
     markAsCustom();
     setSidebarCustomBg(bgCss);
     localStorage.setItem('jakwani_sidebar_custom_bg', bgCss);
+
+    // Auto evaluate text color based on background luminance
+    const isLightBg = isSidebarBackgroundLight();
+    const targetColor = isLightBg ? '#0F172A' : '#FFFFFF';
+    const safe = getSafeSidebarColor(targetColor);
+    applySidebarColor(safe.safeColor);
+    setSelectedSidebarColor(safe.safeColor);
+    setAppliedSidebarColor(safe.safeColor);
+    setCustomSidebarHex(safe.safeColor.replace('#', ''));
+
     window.dispatchEvent(new Event('jakwani_sidebar_theme_changed'));
+    window.dispatchEvent(new Event('uzair_jibran_sidebar_color_changed'));
     triggerFeedbackSound('success');
     if (themeName) {
       toast.success(
@@ -411,11 +423,16 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
     localStorage.removeItem('jakwani_sidebar_custom_bg');
     setSidebarThemeMode(mode);
     setSidebarThemeModeState(mode);
-    const safe = getSafeSidebarColor(selectedSidebarColor);
+
+    // If switching to light preset (Clean White), switch text color to #0F172A
+    // If switching to dark preset (Warm Charcoal, Executive Navy, Rich Emerald, Classic Dark), switch text color back to #FFFFFF!
+    const targetColor = mode === 'light' ? '#0F172A' : '#FFFFFF';
+    const safe = getSafeSidebarColor(targetColor);
     applySidebarColor(safe.safeColor);
     setSelectedSidebarColor(safe.safeColor);
     setAppliedSidebarColor(safe.safeColor);
     setCustomSidebarHex(safe.safeColor.replace('#', ''));
+
     triggerFeedbackSound('success');
     toast.success(
       isRTL ? 'سائیڈبار کا پس منظر تبدیل کر دیا گیا' : `Sidebar background set to ${mode.toUpperCase()}!`,
@@ -642,10 +659,7 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
 
       const isDark = isDarkModeActive();
       const currentSidebar = getSavedSidebarColor(isDark);
-      const safeCheck = getSafeSidebarColor(
-        localStorage.getItem('uzair_jibran_sidebar_raw_color') || currentSidebar,
-        isDark
-      );
+      const safeCheck = getSafeSidebarColor(currentSidebar, isDark);
       setAppliedSidebarColor(safeCheck.safeColor);
       setSelectedSidebarColor(safeCheck.safeColor);
       setCustomSidebarHex(safeCheck.safeColor.replace('#', ''));
@@ -655,11 +669,15 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
     syncColors();
     window.addEventListener('uzair_jibran_theme_color_changed', syncColors);
     window.addEventListener('uzair_jibran_sidebar_color_changed', syncColors);
+    window.addEventListener('jakwani_sidebar_theme_changed', syncColors);
+    window.addEventListener('jakwani_theme_suite_changed', syncColors);
     window.addEventListener('color-mode-changed', syncColors);
 
     return () => {
       window.removeEventListener('uzair_jibran_theme_color_changed', syncColors);
       window.removeEventListener('uzair_jibran_sidebar_color_changed', syncColors);
+      window.removeEventListener('jakwani_sidebar_theme_changed', syncColors);
+      window.removeEventListener('jakwani_theme_suite_changed', syncColors);
       window.removeEventListener('color-mode-changed', syncColors);
     };
   }, [colorMode]);
@@ -730,7 +748,7 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
 
                   {/* Interactive Canvas Workspace */}
                   {(() => {
-                    const isLight = !sidebarCustomBg && sidebarThemeMode === 'light';
+                    const isLight = isSidebarBackgroundLight();
                     const sidebarBg = sidebarCustomBg || (
                       sidebarThemeMode === 'light' ? '#FFFFFF' :
                       sidebarThemeMode === 'navy' ? '#0F172A' :

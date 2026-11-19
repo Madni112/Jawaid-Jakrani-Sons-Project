@@ -173,15 +173,33 @@ export function setSidebarThemeMode(mode: SidebarThemeMode) {
   }
 }
 
+export function isBackgroundLight(bgCss?: string): boolean {
+  if (!bgCss) return false;
+  const lower = bgCss.toLowerCase().trim();
+  if (lower === '#ffffff' || lower === '#fff' || lower === 'white' || lower.includes('rgb(255, 255, 255)')) {
+    return true;
+  }
+  if (lower.startsWith('#')) {
+    let cleanHex = lower.replace('#', '').trim();
+    if (cleanHex.length === 3) {
+      cleanHex = cleanHex.split('').map(c => c + c).join('');
+    }
+    if (cleanHex.length === 6 && /^[0-9a-f]{6}$/.test(cleanHex)) {
+      const r = parseInt(cleanHex.substring(0, 2), 16);
+      const g = parseInt(cleanHex.substring(2, 4), 16);
+      const b = parseInt(cleanHex.substring(4, 6), 16);
+      const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return lum >= 0.55;
+    }
+  }
+  return false;
+}
+
 export function isSidebarBackgroundLight(isDarkMode?: boolean): boolean {
   if (typeof window !== 'undefined') {
     const customBg = localStorage.getItem('jakwani_sidebar_custom_bg');
     if (customBg) {
-      const lower = customBg.toLowerCase().trim();
-      if (lower === '#ffffff' || lower === '#fff' || lower === 'white' || lower.includes('rgb(255, 255, 255)')) {
-        return true;
-      }
-      return false;
+      return isBackgroundLight(customBg);
     }
   }
   const mode = getSidebarThemeMode();
@@ -801,8 +819,8 @@ export function getSafeSidebarColor(hexColor: string, isDarkMode?: boolean): { s
     return { safeColor: defaultFallback, wasAdjusted: false };
   }
 
-  // If sidebar is NOT light (it's dark, navy, charcoal, or a custom gradient):
-  // White (#FFFFFF) and light colors are ALWAYS valid and readable! Never block white!
+  // If sidebar is NOT light (it's dark, navy, charcoal, or a dark custom bg/gradient):
+  // White (#FFFFFF) and light colors are ALWAYS valid and readable!
   if (!isLightBg) {
     if (cleanHex.toUpperCase() === 'FFFFFF') {
       return { safeColor: '#FFFFFF', wasAdjusted: false };
@@ -811,15 +829,15 @@ export function getSafeSidebarColor(hexColor: string, isDarkMode?: boolean): { s
     const g = parseInt(cleanHex.substring(2, 4), 16);
     const b = parseInt(cleanHex.substring(4, 6), 16);
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    // Block only pure pitch black or completely dark unreadable font colors on dark background
-    if (luminance <= 0.08) {
+    // Block dark/black unreadable font colors on dark background (including #0F172A lum 0.089, #1E293B lum 0.16)
+    if (luminance < 0.45) {
       return { safeColor: '#FFFFFF', wasAdjusted: true };
     }
     return { safeColor: `#${cleanHex}`, wasAdjusted: false };
   }
 
-  // If sidebar is LIGHT background (#FFFFFF):
-  // Block white-on-white text:
+  // If sidebar is LIGHT background (#FFFFFF or light):
+  // Block white-on-white and light text:
   if (cleanHex.toUpperCase() === 'FFFFFF') {
     return { safeColor: '#0F172A', wasAdjusted: true };
   }
@@ -829,7 +847,7 @@ export function getSafeSidebarColor(hexColor: string, isDarkMode?: boolean): { s
   const b = parseInt(cleanHex.substring(4, 6), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
-  if (luminance >= 0.85) {
+  if (luminance >= 0.55) {
     return { safeColor: '#0F172A', wasAdjusted: true };
   }
 
@@ -860,15 +878,14 @@ export function applySidebarColor(hexColor: string, isDarkMode?: boolean): { saf
   if (!hexColor) return { safeColor: DEFAULT_SIDEBAR_COLOR, wasAdjusted: false };
   const prevColor = typeof window !== 'undefined' ? localStorage.getItem('uzair_jibran_sidebar_color') : null;
 
-  try {
-    localStorage.setItem('uzair_jibran_sidebar_raw_color', hexColor);
-  } catch (_) {}
-
   const { safeColor, wasAdjusted } = getSafeSidebarColor(hexColor, isDarkMode);
   try {
+    localStorage.setItem('uzair_jibran_sidebar_raw_color', safeColor);
     localStorage.setItem('uzair_jibran_sidebar_color', safeColor);
-    if (typeof window !== 'undefined' && prevColor !== safeColor) {
+    if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('uzair_jibran_sidebar_color_changed'));
+      window.dispatchEvent(new Event('zoaib_ali_sidebar_color_changed'));
+      window.dispatchEvent(new Event('jakwani_sidebar_color_changed'));
     }
   } catch (_) {}
 

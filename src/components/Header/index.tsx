@@ -208,7 +208,15 @@ const Header = (props: {
       setSidebarColor(getSavedSidebarColor());
     };
     window.addEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
-    return () => window.removeEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
+    window.addEventListener('uzair_jibran_sidebar_color_changed', handleSidebarColorChange);
+    window.addEventListener('jakwani_sidebar_theme_changed', handleSidebarColorChange);
+    window.addEventListener('storage', handleSidebarColorChange);
+    return () => {
+      window.removeEventListener('zoaib_ali_sidebar_color_changed', handleSidebarColorChange);
+      window.removeEventListener('uzair_jibran_sidebar_color_changed', handleSidebarColorChange);
+      window.removeEventListener('jakwani_sidebar_theme_changed', handleSidebarColorChange);
+      window.removeEventListener('storage', handleSidebarColorChange);
+    };
   }, []);
 
   // 4. Navbar Layout Mode & Design Style (Theme 1 vs Theme 2)

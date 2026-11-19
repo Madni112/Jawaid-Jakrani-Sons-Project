@@ -628,46 +628,52 @@ const BasicSalesReport: React.FC = () => {
   const baseFilteredProductsPool = useMemo(() => {
     let pool = productsMaster;
 
-    // A. Target Invoice constraint (if specific invoices selected)
+    // A. Target Invoice constraint (only in invoice mode if specific invoices selected)
     if (reportType === 'invoice' && invoiceProductNames && invoiceProductNames.size > 0) {
       pool = pool.filter((p) => invoiceProductNames.has((p.product_name || '').trim().toLowerCase()));
     }
 
-    // B. Color constraint (if color mode or colors selected)
-    const activeColors = selectedColors.filter((c) => c && c !== 'All');
-    if (activeColors.length > 0) {
-      const selectedColSet = new Set(activeColors.map((c) => c.toLowerCase().trim()));
-      pool = pool.filter((p) => {
-        const prodColor = (extractProductColor(p) || '').toLowerCase().trim();
-        const prodDesc = (p.product_description || p.product_name || '').toLowerCase();
-        return Array.from(selectedColSet).some(
-          (c) => prodColor.includes(c) || prodDesc.includes(c)
-        );
-      });
+    // B. Color constraint (strictly active in color mode)
+    if (reportType === 'color') {
+      const activeColors = selectedColors.filter((c) => c && c !== 'All');
+      if (activeColors.length > 0) {
+        const selectedColSet = new Set(activeColors.map((c) => c.toLowerCase().trim()));
+        pool = pool.filter((p) => {
+          const prodColor = (extractProductColor(p) || '').toLowerCase().trim();
+          const prodDesc = (p.product_description || p.product_name || '').toLowerCase();
+          return Array.from(selectedColSet).some(
+            (c) => prodColor.includes(c) || prodDesc.includes(c)
+          );
+        });
+      }
     }
 
-    // C. Brand constraint (if brand mode or brands selected)
-    const activeBrands = selectedBrands.filter((b) => b && b !== 'All');
-    if (activeBrands.length > 0) {
-      const selectedBrandSet = new Set(activeBrands.map((b) => b.toLowerCase().trim()));
-      pool = pool.filter((p) => {
-        const b1 = (p.brand || '').toLowerCase().trim();
-        const b2 = (p.sub_category || '').toLowerCase().trim();
-        const b3 = (p.sub_sub_category || '').toLowerCase().trim();
-        return (
-          selectedBrandSet.has(b1) ||
-          selectedBrandSet.has(b2) ||
-          selectedBrandSet.has(b3)
-        );
-      });
+    // C. Brand constraint (strictly active in brand mode)
+    if (reportType === 'brand') {
+      const activeBrands = selectedBrands.filter((b) => b && b !== 'All');
+      if (activeBrands.length > 0) {
+        const selectedBrandSet = new Set(activeBrands.map((b) => b.toLowerCase().trim()));
+        pool = pool.filter((p) => {
+          const b1 = (p.brand || '').toLowerCase().trim();
+          const b2 = (p.sub_category || '').toLowerCase().trim();
+          const b3 = (p.sub_sub_category || '').toLowerCase().trim();
+          return (
+            selectedBrandSet.has(b1) ||
+            selectedBrandSet.has(b2) ||
+            selectedBrandSet.has(b3)
+          );
+        });
+      }
     }
 
-    // D. Salesman constraint (if salesmen mode or salesmen selected)
-    const activeSalesmen = selectedSalesmen.filter((s) => s && s !== 'All');
-    if (activeSalesmen.length > 0 && salesmanProductNames) {
-      pool = pool.filter((p) =>
-        salesmanProductNames.has((p.product_name || '').trim().toLowerCase())
-      );
+    // D. Salesman constraint (strictly active in salesmen mode)
+    if (reportType === 'salesmen') {
+      const activeSalesmen = selectedSalesmen.filter((s) => s && s !== 'All');
+      if (activeSalesmen.length > 0 && salesmanProductNames) {
+        pool = pool.filter((p) =>
+          salesmanProductNames.has((p.product_name || '').trim().toLowerCase())
+        );
+      }
     }
 
     return pool;
@@ -903,21 +909,34 @@ const BasicSalesReport: React.FC = () => {
     toast.success('Filters reset to default values.');
   };
 
+  // Handle primary report type switch - clears mode-specific filters so they don't leak across tabs
+  const handleReportTypeChange = (newType: BasicSalesReportType) => {
+    setReportType(newType);
+    setSelectedInvoiceIds([]);
+    setSelectedSalesmen([]);
+    setSelectedBrands([]);
+    setSelectedColors([]);
+    setSelectedParentCategories([]);
+    setSelectedSubCategories([]);
+    setSelectedLeafCategories([]);
+    setSelectedProducts([]);
+  };
+
   // Handle Form Submission -> Navigate to Print View
   const handleGenerateReport = () => {
     const singleInv = activeSelectedInvoices[0];
 
     const criteria: BasicSalesFilterCriteria = {
       reportType,
-      invoiceIds: selectedInvoiceIds.length > 0 ? selectedInvoiceIds : undefined,
-      invoiceId: selectedInvoiceIds.length === 1 ? selectedInvoiceIds[0] : undefined,
+      invoiceIds: reportType === 'invoice' && selectedInvoiceIds.length > 0 ? selectedInvoiceIds : undefined,
+      invoiceId: reportType === 'invoice' && selectedInvoiceIds.length === 1 ? selectedInvoiceIds[0] : undefined,
       invoiceNo: singleInv?.invoice_no || undefined,
-      salesmen: selectedSalesmen.length > 0 && !selectedSalesmen.includes('All') ? selectedSalesmen : undefined,
-      salesman: selectedSalesmen.length === 1 && selectedSalesmen[0] !== 'All' ? selectedSalesmen[0] : undefined,
-      brands: selectedBrands.length > 0 && !selectedBrands.includes('All') ? selectedBrands : undefined,
-      brand: selectedBrands.length === 1 && selectedBrands[0] !== 'All' ? selectedBrands[0] : undefined,
-      colors: selectedColors.length > 0 && !selectedColors.includes('All') ? selectedColors : undefined,
-      color: selectedColors.length === 1 && selectedColors[0] !== 'All' ? selectedColors[0] : undefined,
+      salesmen: reportType === 'salesmen' && selectedSalesmen.length > 0 && !selectedSalesmen.includes('All') ? selectedSalesmen : undefined,
+      salesman: reportType === 'salesmen' && selectedSalesmen.length === 1 && selectedSalesmen[0] !== 'All' ? selectedSalesmen[0] : undefined,
+      brands: reportType === 'brand' && selectedBrands.length > 0 && !selectedBrands.includes('All') ? selectedBrands : undefined,
+      brand: reportType === 'brand' && selectedBrands.length === 1 && selectedBrands[0] !== 'All' ? selectedBrands[0] : undefined,
+      colors: reportType === 'color' && selectedColors.length > 0 && !selectedColors.includes('All') ? selectedColors : undefined,
+      color: reportType === 'color' && selectedColors.length === 1 && selectedColors[0] !== 'All' ? selectedColors[0] : undefined,
       customers: selectedCustomers.length > 0 && !selectedCustomers.includes('All') ? selectedCustomers : undefined,
       customer: selectedCustomers.length === 1 && selectedCustomers[0] !== 'All' ? selectedCustomers[0] : undefined,
       parentCategories: selectedParentCategories.length > 0 ? selectedParentCategories : undefined,
@@ -1031,10 +1050,7 @@ const BasicSalesReport: React.FC = () => {
           <div className="relative">
             <select
               value={reportType}
-              onChange={(e) => {
-                setReportType(e.target.value as BasicSalesReportType);
-                setSelectedInvoiceIds([]);
-              }}
+              onChange={(e) => handleReportTypeChange(e.target.value as BasicSalesReportType)}
               className="w-full px-4 py-3 rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-meta-4/20 text-black dark:text-white text-xs md:text-sm font-semibold focus:border-primary focus:bg-white dark:focus:bg-boxdark outline-hidden transition cursor-pointer"
             >
               <option value="invoice">📑 Invoice wise Report (Audit invoices &amp; item lines)</option>
