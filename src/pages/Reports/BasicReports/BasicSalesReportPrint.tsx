@@ -1008,7 +1008,7 @@ export const BasicSalesReportPrint: React.FC = () => {
         @media print {
           @page {
             size: auto;
-            margin: 8mm 6mm 8mm 6mm;
+            margin: 6mm 6mm 6mm 6mm;
           }
           body {
             -webkit-print-color-adjust: exact !important;
@@ -1035,8 +1035,16 @@ export const BasicSalesReportPrint: React.FC = () => {
             page-break-inside: auto !important;
             break-inside: auto !important;
           }
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
           tfoot {
             display: table-row-group !important;
+          }
+          .print-grand-total-block {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .print-hidden, .print\\:hidden {
             display: none !important;
@@ -1644,23 +1652,25 @@ export const BasicSalesReportPrint: React.FC = () => {
                 ))
               )}
 
-              {/* Overall Grand Summary for Grouped Views */}
-              <div className={`p-4 rounded-xl flex items-center justify-between text-xs font-black ${
-                isClassic
-                  ? 'border-t-2 border-b-4 border-double border-black bg-gray-100'
-                  : 'bg-primary/10 border border-primary/20 text-primary dark:text-white'
-              }`}>
-                <span className="uppercase tracking-wider">
-                  Grand Total ({kpiTotals.totalInvoices} Invoices across {groupedHierarchyData.length} {criteria.reportType}s):
-                </span>
-                <span className="font-mono text-base">
-                  Rs. {Math.round(kpiTotals.totalNetRevenue).toLocaleString()}
-                </span>
+              {/* Overall Grand Summary & Signatures for Grouped Views */}
+              <div className="print-grand-total-block print:break-inside-avoid print:page-break-inside-avoid print:mt-1">
+                <div className={`p-3.5 print:p-2 print:my-0.5 rounded-xl flex items-center justify-between text-xs font-black ${
+                  isClassic
+                    ? 'border-t-2 border-b-4 border-double border-black bg-gray-100'
+                    : 'bg-primary/10 border border-primary/20 text-primary dark:text-white'
+                }`}>
+                  <span className="uppercase tracking-wider">
+                    Grand Total ({kpiTotals.totalInvoices} Invoices across {groupedHierarchyData.length} {criteria.reportType}s):
+                  </span>
+                  <span className="font-mono text-base">
+                    Rs. {Math.round(kpiTotals.totalNetRevenue).toLocaleString()}
+                  </span>
+                </div>
+
+                {renderAuditFooter()}
               </div>
             </div>
           )}
-
-          {renderAuditFooter()}
         </div>
       )}
     </div>

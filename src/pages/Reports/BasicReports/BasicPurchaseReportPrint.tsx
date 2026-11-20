@@ -994,6 +994,10 @@ export const BasicPurchaseReportPrint: React.FC = () => {
           tfoot {
             display: table-row-group !important;
           }
+          .print-grand-total-block {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
           .print-hidden, .print\\:hidden {
             display: none !important;
           }
@@ -1615,22 +1619,24 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                 ))
               )}
 
-              {/* Overall Grand Summary for Grouped Views */}
-              <div className={`p-4 rounded-xl flex items-center justify-between text-xs font-black ${
-                isClassic
-                  ? 'border-t-2 border-b-4 border-double border-black bg-gray-100'
-                  : 'bg-primary/10 border border-primary/20 text-primary dark:text-white'
-              }`}>
-                <span className="uppercase tracking-wider">
-                  Grand Total ({kpiTotals.totalBills} Bills across {groupedHierarchyData.length} {criteria.reportType}s):
-                </span>
-                <span className="font-mono text-base">
-                  Rs. {Math.round(kpiTotals.totalNetCost).toLocaleString()}
-                </span>
-              </div>
+              {/* Overall Grand Summary & Signatures on Grouped View */}
+              <div className="print-grand-total-block print:break-inside-avoid print:page-break-inside-avoid print:mt-1">
+                <div className={`p-3.5 print:p-2 print:my-0.5 rounded-xl flex items-center justify-between text-xs font-black ${
+                  isClassic
+                    ? 'border-t-2 border-b-4 border-double border-black bg-gray-100'
+                    : 'bg-primary/10 border border-primary/20 text-primary dark:text-white'
+                }`}>
+                  <span className="uppercase tracking-wider">
+                    Grand Total ({kpiTotals.totalBills} Bills across {groupedHierarchyData.length} {criteria.reportType}s):
+                  </span>
+                  <span className="font-mono text-base">
+                    Rs. {Math.round(kpiTotals.totalNetCost).toLocaleString()}
+                  </span>
+                </div>
 
-              {/* Audit Signatures on Grouped View */}
-              {renderAuditFooter()}
+                {/* Audit Signatures on Grouped View */}
+                {renderAuditFooter()}
+              </div>
             </div>
           )}
         </div>
