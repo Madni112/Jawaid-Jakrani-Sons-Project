@@ -698,19 +698,271 @@ export const BasicAccountReportPrint: React.FC = () => {
       );
     }
 
-    if (criteria.hideZeroBalances) {
-      pool = pool.filter((acc) => Math.abs(Number(acc.opening_balance || 0)) > 0);
-    }
+    // Helper lookups to connect COA party accounts to dynamic ledger transactions
+    const hasDateRange = criteria.dateMode === 'multi' && Boolean(criteria.dateFrom) && Boolean(criteria.dateTo);
+    const hasSingleDate = criteria.dateMode === 'single' && Boolean(criteria.singleDate);
+    const dFrom = criteria.dateFrom;
+    const dTo = criteria.dateTo;
+    const sDate = criteria.singleDate;
 
-    return pool.map((acc) => {
-      const openBal = Number(acc.opening_balance || 0);
+    const custByCode = new Map<string, any>();
+    const custByName = new Map<string, any>();
+    rawCustomers.forEach((c) => {
+      if (c.customer_code) custByCode.set(String(c.customer_code).trim().toLowerCase(), c);
+      if (c.customerCode) custByCode.set(String(c.customerCode).trim().toLowerCase(), c);
+      if (c.account_code) custByCode.set(String(c.account_code).trim().toLowerCase(), c);
+      const n = (c.customer_name || c.customerName || c.name || '').trim().toLowerCase();
+      if (n) custByName.set(n, c);
+    });
+
+    const venByCode = new Map<string, any>();
+    const venByName = new Map<string, any>();
+    rawVendors.forEach((v) => {
+      if (v.vendor_code) venByCode.set(String(v.vendor_code).trim().toLowerCase(), v);
+      if (v.vendorCode) venByCode.set(String(v.vendorCode).trim().toLowerCase(), v);
+      const n = (v.vendor_name || v.name || '').trim().toLowerCase();
+      if (n) venByName.set(n, v);
+    });
+
+    const rows = pool.map((acc) => {
       const code = String(acc.account_code || '');
+      const codeLower = code.trim().toLowerCase();
+      const titleLower = String(acc.account_title || '').trim().toLowerCase();
+      const openBal = Number(acc.opening_balance || 0);
+
       let headName = 'Assets';
       if (code.startsWith('2')) headName = 'Liabilities';
       else if (code.startsWith('3')) headName = 'Equity';
       else if (code.startsWith('4')) headName = 'Revenue';
       else if (code.startsWith('5')) headName = 'Expenses';
 
+      // 1. Check if matching customer
+      const matchedCust = custByCode.get(codeLower) || custByName.get(titleLower);
+      if (matchedCust) {
+        const cName = String(matchedCust.customer_name || matchedCust.customerName || matchedCust.name || '').trim().toLowerCase();
+        const initialOpen = (matchedCust.balance_nature || acc.balance_nature || '').toLowerCase().includes('credit')
+          ? -Math.abs(Number(matchedCust.opening_balance || openBal))
+          : Math.abs(Number(matchedCust.opening_balance || openBal));
+
+        const partyInvoices = detailedInvoices.filter((inv) => (inv.customer_name || '').trim().toLowerCase() === cName);
+        const partyReturns = detailedSalesReturns.filter((ret) => (ret.customer_name || '').trim().toLowerCase() === cName);
+        const partyVouchers = (vouchersByParty[cName] || []).filter(
+          (v) =>
+            (v.voucher_type || '').includes('Receive') ||
+            (v.voucher_no || '').startsWith('CRV') ||
+            (Number(v.credit || 0) > 0 && !(v.voucher_type || '').includes('Return') && !(v.voucher_type || '').includes('Accrual'))
+        );
+
+        let preInvoiced = 0;
+        let preReceived = 0;
+        let preReturns = 0;
+        let activeInvoices = partyInvoices;
+        let activeVouchers = partyVouchers;
+        let activeReturns = partyReturns;
+
+        if (hasDateRange && dFrom && dTo) {
+          partyInvoices.forEach((inv) => { if (inv.sale_date && inv.sale_date < dFrom) preInvoiced += Number(inv.total_amount || 0); });
+          partyVouchers.forEach((v) => { if (v.voucher_date && v.voucher_date < dFrom) preReceived += Number(v.credit || v.total_amount || 0); });
+          partyReturns.forEach((ret) => { if (ret.return_date && ret.return_date < dFrom) preReturns += Number(ret.total_amount || 0); });
+          activeInvoices = partyInvoices.filter((inv) => !inv.sale_date || (inv.sale_date >= dFrom && inv.sale_date <= dTo));
+          activeVouchers = partyVouchers.filter((v) => !v.voucher_date || (v.voucher_date >= dFrom && v.voucher_date <= dTo));
+          activeReturns = partyReturns.filter((ret) => !ret.return_date || (ret.return_date >= dFrom && ret.return_date <= dTo));
+        } else if (hasSingleDate && sDate) {
+          activeInvoices = partyInvoices.filter((inv) => !inv.sale_date || inv.sale_date <= sDate);
+          activeVouchers = partyVouchers.filter((v) => !v.voucher_date || v.voucher_date <= sDate);
+          activeReturns = partyReturns.filter((ret) => !ret.return_date || ret.return_date <= sDate);
+        }
+
+        const periodOpeningBal = initialOpen + preInvoiced - preReceived - preReturns;
+
+        const bills = activeInvoices.map((inv) => {
+          const invKey = String(inv.invoice_no || '').trim().toLowerCase();
+          const matchedVoucher = (vouchersByInvoiceNo[invKey] || []).find(
+            (v) => (v.voucher_type || '').includes('Sale') || (v.voucher_no || '').startsWith('SAV')
+          );
+          const totalAmt = Number(inv.total_amount || 0);
+          const paidAmt = Number(inv.amount_paid || 0);
+          return {
+            id: String(inv.id),
+            billNo: inv.invoice_no || '—',
+            voucherNo: matchedVoucher?.voucher_no || `SAV-${inv.invoice_no || 'NA'}`,
+            voucherType: matchedVoucher?.voucher_type || 'Sale Amount Voucher',
+            date: inv.sale_date || matchedVoucher?.voucher_date || '—',
+            amount: totalAmt,
+            paid: paidAmt,
+            balance: Math.max(0, totalAmt - paidAmt)
+          };
+        });
+
+        const receipts = activeVouchers.map((v) => ({
+          id: String(v.id),
+          voucherNo: v.voucher_no,
+          voucherType: v.voucher_type || 'Customer Receive Voucher',
+          refNo: v.original_invoice_no || 'Receipt Slip',
+          date: v.voucher_date || '—',
+          amount: Number(v.credit || v.total_amount || 0),
+          mode: v.description || 'Cash / Bank Receipt'
+        }));
+
+        const returns = activeReturns.map((ret) => {
+          const retKey = String(ret.return_no || '').trim().toLowerCase();
+          const matchedVoucher = (vouchersByInvoiceNo[retKey] || []).find(
+            (v) => (v.voucher_type || '').includes('Return') || (v.voucher_no || '').startsWith('SRV')
+          );
+          return {
+            id: String(ret.id),
+            returnNo: ret.return_no || '—',
+            voucherNo: matchedVoucher?.voucher_no || `SRV-${ret.return_no || 'NA'}`,
+            voucherType: matchedVoucher?.voucher_type || 'Sale Return Voucher',
+            date: ret.return_date || matchedVoucher?.voucher_date || '—',
+            amount: Number(ret.total_amount || 0)
+          };
+        });
+
+        const invoicedTotal = bills.reduce((sum, b) => sum + b.amount, 0);
+        const voucherReceived = receipts.reduce((sum, rc) => sum + rc.amount, 0);
+        const invoicePaidSum = bills.reduce((sum, b) => sum + b.paid, 0);
+        const receivedTotal = Math.max(invoicePaidSum, voucherReceived);
+        const retAmt = returns.reduce((sum, r) => sum + r.amount, 0);
+        const closeBal = periodOpeningBal + invoicedTotal - receivedTotal - retAmt;
+
+        return {
+          id: acc.id,
+          code: acc.account_code,
+          name: acc.account_title,
+          area: headName,
+          phone: acc.account_type || acc.balance_nature || 'Debit',
+          openingBalance: periodOpeningBal,
+          invoicedAmount: invoicedTotal,
+          receivedAmount: receivedTotal,
+          returnAmount: retAmt,
+          closingBalance: closeBal,
+          balanceNature: closeBal >= 0 ? 'Debit' : 'Credit',
+          detailTree: {
+            bills,
+            receipts,
+            returns,
+            totalBills: invoicedTotal,
+            totalPayments: receivedTotal,
+            totalReturns: retAmt
+          }
+        };
+      }
+
+      // 2. Check if matching vendor
+      const matchedVen = venByCode.get(codeLower) || venByName.get(titleLower);
+      if (matchedVen) {
+        const vName = String(matchedVen.vendor_name || matchedVen.name || '').trim().toLowerCase();
+        const initialOpen = (matchedVen.balance_nature || acc.balance_nature || '').toLowerCase().includes('debit')
+          ? -Math.abs(Number(matchedVen.opening_balance || openBal))
+          : Math.abs(Number(matchedVen.opening_balance || openBal));
+
+        const partyPurchases = detailedPurchases.filter((p) => (p.vendor_name || p.supplier_name || '').trim().toLowerCase() === vName);
+        const partyReturns = detailedPurchaseReturns.filter((r) => (r.vendor_name || '').trim().toLowerCase() === vName);
+        const partyVouchers = (vouchersByParty[vName] || []).filter(
+          (v) =>
+            (v.voucher_type || '').includes('Payment') ||
+            (v.voucher_no || '').startsWith('CPV') ||
+            (v.voucher_no || '').startsWith('VPV') ||
+            (v.voucher_no || '').startsWith('BPV') ||
+            (Number(v.debit || 0) > 0 && !(v.voucher_type || '').includes('Return') && !(v.voucher_type || '').includes('Accrual') && !(v.voucher_type || '').includes('Sale'))
+        );
+
+        let prePurchased = 0;
+        let prePaid = 0;
+        let preReturns = 0;
+        let activePurchases = partyPurchases;
+        let activeVouchers = partyVouchers;
+        let activeReturns = partyReturns;
+
+        if (hasDateRange && dFrom && dTo) {
+          partyPurchases.forEach((p) => { if (p.purchase_date && p.purchase_date < dFrom) prePurchased += Number(p.total_amount || 0); });
+          partyVouchers.forEach((v) => { if (v.voucher_date && v.voucher_date < dFrom) prePaid += Number(v.debit || v.total_amount || 0); });
+          partyReturns.forEach((ret) => { if (ret.return_date && ret.return_date < dFrom) preReturns += Number(ret.total_amount || 0); });
+          activePurchases = partyPurchases.filter((p) => !p.purchase_date || (p.purchase_date >= dFrom && p.purchase_date <= dTo));
+          activeVouchers = partyVouchers.filter((v) => !v.voucher_date || (v.voucher_date >= dFrom && v.voucher_date <= dTo));
+          activeReturns = partyReturns.filter((ret) => !ret.return_date || (ret.return_date >= dFrom && ret.return_date <= dTo));
+        } else if (hasSingleDate && sDate) {
+          activePurchases = partyPurchases.filter((p) => !p.purchase_date || p.purchase_date <= sDate);
+          activeVouchers = partyVouchers.filter((v) => !v.voucher_date || v.voucher_date <= sDate);
+          activeReturns = partyReturns.filter((ret) => !ret.return_date || ret.return_date <= sDate);
+        }
+
+        const periodOpeningBal = initialOpen + prePurchased - prePaid - preReturns;
+
+        const bills = activePurchases.map((p) => {
+          const pKey = String(p.purchase_no || '').trim().toLowerCase();
+          const matchedVoucher = (vouchersByInvoiceNo[pKey] || []).find(
+            (v) => (v.voucher_type || '').includes('Purchase') || (v.voucher_no || '').startsWith('PAV')
+          );
+          return {
+            id: String(p.id),
+            billNo: p.purchase_no || '—',
+            voucherNo: matchedVoucher?.voucher_no || `PAV-${p.purchase_no || 'NA'}`,
+            voucherType: matchedVoucher?.voucher_type || 'Purchase Accrual Voucher',
+            date: p.purchase_date || matchedVoucher?.voucher_date || '—',
+            amount: Number(p.total_amount || 0),
+            paid: Number(p.amount_paid || p.paid_amount || 0),
+            balance: Number(p.remaining_balance || 0)
+          };
+        });
+
+        const receipts = activeVouchers.map((v) => ({
+          id: String(v.id),
+          voucherNo: v.voucher_no,
+          voucherType: v.voucher_type || 'Payment Voucher',
+          refNo: v.original_invoice_no || 'Payment Slip',
+          date: v.voucher_date || '—',
+          amount: Number(v.debit || v.total_amount || 0),
+          mode: v.description || 'Cash / Bank Payment'
+        }));
+
+        const returns = activeReturns.map((ret) => {
+          const retKey = String(ret.return_no || '').trim().toLowerCase();
+          const matchedVoucher = (vouchersByInvoiceNo[retKey] || []).find(
+            (v) => (v.voucher_type || '').includes('Return') || (v.voucher_no || '').startsWith('PRV')
+          );
+          return {
+            id: String(ret.id),
+            returnNo: ret.return_no || '—',
+            voucherNo: matchedVoucher?.voucher_no || `PRV-${ret.return_no || 'NA'}`,
+            voucherType: matchedVoucher?.voucher_type || 'Purchase Return Voucher',
+            date: ret.return_date || matchedVoucher?.voucher_date || '—',
+            amount: Number(ret.total_amount || 0)
+          };
+        });
+
+        const invoicedTotal = bills.reduce((sum, b) => sum + b.amount, 0);
+        const voucherPaid = receipts.reduce((sum, rc) => sum + rc.amount, 0);
+        const purPaidSum = bills.reduce((sum, b) => sum + b.paid, 0);
+        const paidTotal = Math.max(purPaidSum, voucherPaid);
+        const retAmt = returns.reduce((sum, r) => sum + r.amount, 0);
+        const closeBal = periodOpeningBal + invoicedTotal - paidTotal - retAmt;
+
+        return {
+          id: acc.id,
+          code: acc.account_code,
+          name: acc.account_title,
+          area: headName,
+          phone: acc.account_type || acc.balance_nature || 'Debit',
+          openingBalance: periodOpeningBal,
+          invoicedAmount: invoicedTotal,
+          receivedAmount: paidTotal,
+          returnAmount: retAmt,
+          closingBalance: closeBal,
+          balanceNature: closeBal >= 0 ? 'Credit' : 'Debit',
+          detailTree: {
+            bills,
+            receipts,
+            returns,
+            totalBills: invoicedTotal,
+            totalPayments: paidTotal,
+            totalReturns: retAmt
+          }
+        };
+      }
+
+      // 3. General Ledger / Control Account fallback
       return {
         id: acc.id,
         code: acc.account_code,
@@ -733,6 +985,11 @@ export const BasicAccountReportPrint: React.FC = () => {
         }
       };
     });
+
+    if (criteria.hideZeroBalances) {
+      return rows.filter((r) => Math.abs(r.closingBalance) > 0.01);
+    }
+    return rows;
   }, [
     criteria,
     rawCustomers,
