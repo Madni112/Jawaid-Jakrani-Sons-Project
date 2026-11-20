@@ -93,7 +93,7 @@ const BASIC_REPORTS: ReportItem[] = [
     title: 'Purchase Report',
     category: 'purchases',
     description: 'Basic procurement register, supplier purchase bills, and vendor commitments.',
-    path: '/Reports/Purchase-Report',
+    path: '/basic-purchase-report',
     icon: MdLocalMall
   },
   {
@@ -101,7 +101,7 @@ const BASIC_REPORTS: ReportItem[] = [
     title: 'Stock Report',
     category: 'inventory',
     description: 'Basic inventory balance, on-hand product stock quantities, and physical counts.',
-    path: '/Reports/Stock-Report',
+    path: '/basic-stock-report',
     icon: MdInventory
   },
   {
@@ -109,7 +109,7 @@ const BASIC_REPORTS: ReportItem[] = [
     title: 'Accounts Report',
     category: 'accounts',
     description: 'Basic party ledgers, cash daybook, customer balances, and account summaries.',
-    path: '/Reports/Main-Reports',
+    path: '/basic-account-report',
     icon: MdAccountBalanceWallet
   }
 ];
@@ -972,7 +972,7 @@ const ReportDashboard: React.FC = () => {
       setRecentIds(updated);
     } catch {}
 
-    if (report.path && (report.path.includes('/Reports/Main-Reports') || report.path.includes('/basic-sales-report'))) {
+    if (report.path) {
       const dest = `${tenantId ? `/${tenantId}` : ''}${report.path}`;
       navigate(dest, { state: { ...(report.state || {}), fromModernHub: true } });
       return;
