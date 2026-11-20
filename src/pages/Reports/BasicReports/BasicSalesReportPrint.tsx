@@ -1404,6 +1404,87 @@ export const BasicSalesReportPrint: React.FC = () => {
           {renderMainHeader()}
           {renderKpiCards()}
 
+          {/* Location-Wise Sales Summary Matrix */}
+          {criteria.reportType === 'location' && groupedHierarchyData.length > 0 && (
+            <div className={`p-4 rounded-xl mb-6 ${
+              isClassic 
+                ? 'border-2 border-black bg-gray-50' 
+                : 'border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between pb-2 mb-3 border-b border-stroke dark:border-strokedark">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-black dark:text-white">
+                    Location Sales Breakdown Summary
+                  </span>
+                  <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                    (Which location generated how much turnover and business share)
+                  </span>
+                </div>
+                <span className="text-xs font-bold text-gray-500">
+                  {groupedHierarchyData.length} Locations Active
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className={`border-b ${isClassic ? 'border-black font-bold' : 'border-stroke dark:border-strokedark text-gray-500 dark:text-gray-400 font-semibold'}`}>
+                      <th className="py-2 px-2 text-left">Location / Branch</th>
+                      <th className="py-2 px-2 text-center">Invoices</th>
+                      <th className="py-2 px-2 text-right">Gross Sales</th>
+                      <th className="py-2 px-2 text-right">Discounts</th>
+                      <th className="py-2 px-2 text-right">Freight</th>
+                      <th className="py-2 px-2 text-right font-bold">Net Sales Turnover</th>
+                      <th className="py-2 px-2 text-right font-bold">% Share</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stroke/60 dark:divide-strokedark/60 font-mono">
+                    {groupedHierarchyData.map((locGroup, idx) => {
+                      const share = kpiTotals.netSalesRevenue > 0 
+                        ? ((locGroup.subTotal / kpiTotals.netSalesRevenue) * 100).toFixed(1) 
+                        : '0.0';
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/20">
+                          <td className="py-2 px-2 font-sans font-bold text-black dark:text-white">
+                            {locGroup.groupName}
+                          </td>
+                          <td className="py-2 px-2 text-center text-gray-600 dark:text-gray-300">
+                            {locGroup.rows.length}
+                          </td>
+                          <td className="py-2 px-2 text-right text-gray-600 dark:text-gray-300">
+                            Rs. {Math.round(locGroup.subGross).toLocaleString()}
+                          </td>
+                          <td className="py-2 px-2 text-right text-red-600">
+                            {locGroup.subDiscounts > 0 ? `-Rs. ${Math.round(locGroup.subDiscounts).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-2 px-2 text-right text-gray-600 dark:text-gray-300">
+                            Rs. {Math.round(locGroup.subFreight).toLocaleString()}
+                          </td>
+                          <td className="py-2 px-2 text-right font-bold text-primary dark:text-white">
+                            Rs. {Math.round(locGroup.subTotal).toLocaleString()}
+                          </td>
+                          <td className="py-2 px-2 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                            {share}%
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="border-t-2 border-black font-bold font-mono">
+                    <tr className="bg-gray-50 dark:bg-meta-4/40">
+                      <td className="py-2 px-2 font-sans">Total All Locations</td>
+                      <td className="py-2 px-2 text-center">{kpiTotals.totalInvoices}</td>
+                      <td className="py-2 px-2 text-right">Rs. {Math.round(kpiTotals.totalGrossSales).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-red-600">{kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : '—'}</td>
+                      <td className="py-2 px-2 text-right">Rs. {Math.round(kpiTotals.totalFreight).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-primary dark:text-white font-black">Rs. {Math.round(kpiTotals.netSalesRevenue).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-emerald-600 font-black">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
           {groupedHierarchyData && (
             <div className="space-y-6">
               {groupedHierarchyData.length === 0 ? (

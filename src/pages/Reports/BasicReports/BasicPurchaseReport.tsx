@@ -370,6 +370,7 @@ export const BasicPurchaseReport: React.FC = () => {
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [selectedWarehouses, setSelectedWarehouses] = useState<string[]>([]);
+  const [dbLocations, setDbLocations] = useState<string[]>([]);
 
   // 4-Tier Cascading Category & Product Filter
   const [selectedParentCategories, setSelectedParentCategories] = useState<string[]>([]);
@@ -404,16 +405,22 @@ export const BasicPurchaseReport: React.FC = () => {
           setBusinessName(sysCfg.business_name);
         }
 
-        const [p1, p2, pr1, pr2, catRes, venRes] = await Promise.all([
+        const [p1, p2, pr1, pr2, catRes, venRes, locRes] = await Promise.all([
           supabase.from('supplier_purchases').select('id, purchase_no, bill_no, supplier_name, vendor_name, target_warehouse, purchase_date, payment_term, total_amount, items, created_at').order('id', { ascending: false }).range(0, 999),
           supabase.from('supplier_purchases').select('id, purchase_no, bill_no, supplier_name, vendor_name, target_warehouse, purchase_date, payment_term, total_amount, items, created_at').order('id', { ascending: false }).range(1000, 2999),
           supabase.from('products').select('id, product_name, sku, parent_category, sub_category, category, brand, cost_price, purchase_price, uom').order('id', { ascending: true }).range(0, 999),
           supabase.from('products').select('id, product_name, sku, parent_category, sub_category, category, brand, cost_price, purchase_price, uom').order('id', { ascending: true }).range(1000, 2999),
           supabase.from('inventory_categories').select('id, name, parent_id').order('name'),
-          supabase.from('vendors').select('id, name, vendor_name, vendor_code, vendorCode').order('name')
+          supabase.from('vendors').select('id, name, vendor_name, vendor_code, vendorCode').order('name'),
+          supabase.from('inventory_locations').select('name')
         ]);
 
         if (!isMounted) return;
+
+        if (locRes?.data && Array.isArray(locRes.data)) {
+          const names = locRes.data.map((l: any) => String(l.name || '').trim()).filter(Boolean);
+          if (names.length > 0) setDbLocations(names);
+        }
 
         const combinedPurchases = [...(p1.data || []), ...(p2.data || [])];
         const combinedProducts = [...(pr1.data || []), ...(pr2.data || [])];
@@ -760,8 +767,14 @@ export const BasicPurchaseReport: React.FC = () => {
   }, [availableBrands]);
 
   const warehouseOptions = useMemo<SearchableOption[]>(() => {
-    return availableWarehouses.map((w) => ({ value: w, label: w }));
-  }, [availableWarehouses]);
+    const s = new Set<string>(availableWarehouses);
+    dbLocations.forEach((l) => s.add(l));
+    if (s.size === 0) {
+      s.add('A-39');
+      s.add('SHOP');
+    }
+    return Array.from(s).sort().map((w) => ({ value: w, label: w }));
+  }, [availableWarehouses, dbLocations]);
 
   const colorOptions = useMemo<SearchableOption[]>(() => {
     return availableColors.map((c) => ({
@@ -925,7 +938,7 @@ export const BasicPurchaseReport: React.FC = () => {
               <option value="product">Product wise Report (Items & SKU procurement turnover)</option>
               <option value="brand">Brand wise Report (Factory & manufacturer procurement)</option>
               <option value="color">Color Wise Purchases (Tile & surface shade analytics)</option>
-              <option value="location">Location / Warehouse Wise Purchases (Procurement by warehouse)</option>
+              <option value="location">Location Wise Purchases (Procurement by location)</option>
             </select>
           </div>
           <p className="text-[11px] text-gray-400">
@@ -934,7 +947,7 @@ export const BasicPurchaseReport: React.FC = () => {
             {reportType === 'product' && 'Product purchase register grouped by item, displaying individual line items, rate, quantity, and product totals.'}
             {reportType === 'brand' && 'Aggregates procurement turnover by manufacturer & product brand.'}
             {reportType === 'color' && 'Analyzes shade procurement, tile finishes, and inward color volumes.'}
-            {reportType === 'location' && 'Breaks down procurement inward spend grouped by destination warehouse (A-39 vs SHOP).'}
+            {reportType === 'location' && 'Breaks down procurement spend grouped by receiving store or warehouse location.'}
           </p>
         </div>
 
@@ -1052,21 +1065,18 @@ export const BasicPurchaseReport: React.FC = () => {
               </label>
               <SearchableSelect
                 multiple={true}
-                options={warehouseOptions.length > 0 ? warehouseOptions : [
-                  { value: 'A-39', label: 'A-39 (Main Storage Godown)' },
-                  { value: 'SHOP', label: 'SHOP (Saddar Bouri Bazar)' }
-                ]}
+                options={warehouseOptions}
                 value={selectedWarehouses}
                 onChange={(val) => {
                   if (Array.isArray(val)) setSelectedWarehouses(val);
                   else setSelectedWarehouses(val ? [val] : []);
                 }}
-                placeholder="All Warehouses (A-39 & SHOP)"
-                searchPlaceholder="Search warehouse location..."
+                placeholder="All Locations / Warehouses"
+                searchPlaceholder="Search location or warehouse..."
               />
               {selectedWarehouses.length > 0 && (
                 <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                  Procurement filtered to warehouse: {selectedWarehouses.join(', ')}
+                  Procurement filtered to location: {selectedWarehouses.join(', ')}
                 </p>
               )}
             </div>

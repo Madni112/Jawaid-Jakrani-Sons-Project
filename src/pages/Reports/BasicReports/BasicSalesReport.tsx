@@ -361,6 +361,7 @@ const BasicSalesReport: React.FC = () => {
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [dbLocations, setDbLocations] = useState<string[]>([]);
 
   // 3. Shared Cascading Filters (Parent -> Sub -> Leaf -> Product)
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
@@ -390,15 +391,15 @@ const BasicSalesReport: React.FC = () => {
 
     const loadAllMetadata = async () => {
       try {
-        const [invRes1, invRes2, custRes, smRes, prodRes1, prodRes2] = await Promise.all([
+        const [invRes1, invRes2, custRes, smRes, prodRes1, prodRes2, locRes] = await Promise.all([
           supabase
             .from('sales_invoices')
-            .select('id, invoice_no, customer_name, sale_date, total_amount, salesman, created_at')
+            .select('id, invoice_no, customer_name, sale_date, total_amount, salesman, dispatch_warehouse, created_at')
             .order('id', { ascending: false })
             .range(0, 999),
           supabase
             .from('sales_invoices')
-            .select('id, invoice_no, customer_name, sale_date, total_amount, salesman, created_at')
+            .select('id, invoice_no, customer_name, sale_date, total_amount, salesman, dispatch_warehouse, created_at')
             .order('id', { ascending: false })
             .range(1000, 2999),
           supabase
@@ -418,10 +419,18 @@ const BasicSalesReport: React.FC = () => {
             .from('products')
             .select('id, product_name, category, sub_category, sub_sub_category, brand, item_sr_no, retail_price, uom, product_description')
             .order('product_name', { ascending: true })
-            .range(1000, 2999)
+            .range(1000, 2999),
+          supabase
+            .from('inventory_locations')
+            .select('name')
         ]);
 
         if (!isMounted) return;
+
+        if (locRes && locRes.data && Array.isArray(locRes.data)) {
+          const names = locRes.data.map((l: any) => String(l.name || '').trim()).filter(Boolean);
+          if (names.length > 0) setDbLocations(names);
+        }
 
         const invs = (invRes1.data || []).concat(invRes2.data || []);
         const prods = (prodRes1.data || []).concat(prodRes2.data || []);
@@ -846,11 +855,28 @@ const BasicSalesReport: React.FC = () => {
     return list;
   }, [colorOptions]);
 
-  const locationOptions: SearchableOption[] = useMemo(() => [
-    { id: 'All', label: 'All Locations (SHOP & A-39)', subLabel: 'Turnover across all warehouses' },
-    { id: 'SHOP', label: 'SHOP', subLabel: 'Saddar Bouri Bazar Sale Point' },
-    { id: 'A-39', label: 'A-39', subLabel: 'Main Storage Godown (Near Boulevard Mall)' }
-  ], []);
+  const locationOptions: SearchableOption[] = useMemo(() => {
+    const locSet = new Set<string>();
+    dbLocations.forEach((l) => locSet.add(l));
+    rawInvoices.forEach((inv) => {
+      if (inv.dispatch_warehouse && String(inv.dispatch_warehouse).trim()) {
+        locSet.add(String(inv.dispatch_warehouse).trim());
+      }
+    });
+    if (locSet.size === 0) {
+      locSet.add('SHOP');
+      locSet.add('A-39');
+    }
+    const sorted = Array.from(locSet).sort();
+    return [
+      { id: 'All', label: 'All Locations / Warehouses', subLabel: 'Turnover across all locations' },
+      ...sorted.map((loc) => ({
+        id: loc,
+        label: loc,
+        subLabel: `Location / Warehouse: ${loc}`
+      }))
+    ];
+  }, [dbLocations, rawInvoices]);
 
   const customerOptions: SearchableOption[] = useMemo(() => {
     const list: SearchableOption[] = [
@@ -1072,7 +1098,7 @@ const BasicSalesReport: React.FC = () => {
               <option value="salesmen">Salesmen wise Report (Sales representative performance)</option>
               <option value="brand">Brand wise Sales (Turnover grouped by brand)</option>
               <option value="color">Color Wise Sales (Tile &amp; surface shade analytics)</option>
-              <option value="location">Location / Warehouse Wise Sales (SHOP vs A-39)</option>
+              <option value="location">Location Wise Sales (Branch &amp; warehouse turnover)</option>
             </select>
           </div>
           <p className="text-[11px] text-gray-400">
@@ -1081,7 +1107,7 @@ const BasicSalesReport: React.FC = () => {
             {reportType === 'salesmen' && 'Breaks down sales performance grouped by sales representative.'}
             {reportType === 'brand' && 'Aggregates turnover by manufacturer & product brand.'}
             {reportType === 'color' && 'Analyzes shade popularity, tile finishes, and color volumes.'}
-            {reportType === 'location' && 'Groups and compares sales revenue by store or warehouse dispatch point (SHOP vs A-39).'}
+            {reportType === 'location' && 'Groups and compares sales revenue by store or warehouse dispatch location.'}
           </p>
         </div>
 
@@ -1187,8 +1213,8 @@ const BasicSalesReport: React.FC = () => {
                 options={locationOptions}
                 value={selectedLocations}
                 onChange={setSelectedLocations}
-                placeholder="All Locations (SHOP & A-39)"
-                searchPlaceholder="Search location..."
+                placeholder="All Locations / Warehouses"
+                searchPlaceholder="Search location or warehouse..."
               />
               {selectedLocations.length > 0 && !selectedLocations.includes('All') && (
                 <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
