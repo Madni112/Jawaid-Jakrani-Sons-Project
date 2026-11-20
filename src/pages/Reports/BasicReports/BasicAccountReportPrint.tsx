@@ -105,12 +105,14 @@ export const BasicAccountReportPrint: React.FC = () => {
     setExpandedParties({});
   };
 
-  const handleHeaderSort = (col: 'code' | 'name' | 'opening' | 'invoiced' | 'received' | 'return' | 'balance') => {
+  const handleHeaderSort = (col: 'code' | 'name' | 'opening' | 'invoiced' | 'received' | 'return' | 'balance' | 'expense') => {
     setCriteria((prev) => {
       if (!prev) return null;
       let nextSort: BasicAccountSortBy = 'balance_desc';
       if (col === 'balance') {
         nextSort = prev.sortBy === 'balance_desc' ? 'balance_asc' : 'balance_desc';
+      } else if (col === 'expense') {
+        nextSort = prev.sortBy === 'expense_desc' ? 'expense_asc' : 'expense_desc';
       } else if (col === 'opening') {
         nextSort = prev.sortBy === 'opening_desc' ? 'opening_asc' : 'opening_desc';
       } else if (col === 'invoiced') {
@@ -1036,6 +1038,34 @@ export const BasicAccountReportPrint: React.FC = () => {
         return list.sort((a, b) => b.returnAmount - a.returnAmount);
       case 'return_asc':
         return list.sort((a, b) => a.returnAmount - b.returnAmount);
+      case 'expense_desc':
+        return list.sort((a, b) => {
+          const isExpA = a.area === 'Expenses' || String(a.code).startsWith('5');
+          const isExpB = b.area === 'Expenses' || String(b.code).startsWith('5');
+          const valA = isExpA
+            ? Math.abs(a.closingBalance || a.receivedAmount || a.invoicedAmount || 0)
+            : Math.abs(a.receivedAmount || a.closingBalance || 0);
+          const valB = isExpB
+            ? Math.abs(b.closingBalance || b.receivedAmount || b.invoicedAmount || 0)
+            : Math.abs(b.receivedAmount || b.closingBalance || 0);
+          if (isExpA !== isExpB) return isExpA ? -1 : 1;
+          if (valB !== valA) return valB - valA;
+          return a.name.localeCompare(b.name);
+        });
+      case 'expense_asc':
+        return list.sort((a, b) => {
+          const isExpA = a.area === 'Expenses' || String(a.code).startsWith('5');
+          const isExpB = b.area === 'Expenses' || String(b.code).startsWith('5');
+          const valA = isExpA
+            ? Math.abs(a.closingBalance || a.receivedAmount || a.invoicedAmount || 0)
+            : Math.abs(a.receivedAmount || a.closingBalance || 0);
+          const valB = isExpB
+            ? Math.abs(b.closingBalance || b.receivedAmount || b.invoicedAmount || 0)
+            : Math.abs(b.receivedAmount || b.closingBalance || 0);
+          if (isExpA !== isExpB) return isExpA ? -1 : 1;
+          if (valA !== valB) return valA - valB;
+          return a.name.localeCompare(b.name);
+        });
       case 'name_asc':
         return list.sort((a, b) => a.name.localeCompare(b.name));
       case 'name_desc':
@@ -1444,6 +1474,10 @@ export const BasicAccountReportPrint: React.FC = () => {
                 <optgroup label="Returns & Deductions">
                   <option value="return_desc">return (highest - lowest)</option>
                   <option value="return_asc">return (lowest - highest)</option>
+                </optgroup>
+                <optgroup label="Operating Expenses">
+                  <option value="expense_desc">expense (highest - lowest)</option>
+                  <option value="expense_asc">expense (lowest - highest)</option>
                 </optgroup>
                 <optgroup label="Alphabetical & Code">
                   <option value="name_asc">Party Name (A to Z)</option>

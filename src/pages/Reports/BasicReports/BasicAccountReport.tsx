@@ -32,6 +32,8 @@ export type BasicAccountSortBy =
   | 'opening_asc'
   | 'return_desc'
   | 'return_asc'
+  | 'expense_desc'
+  | 'expense_asc'
   | 'name_asc'
   | 'name_desc'
   | 'code_asc'
@@ -1112,6 +1114,10 @@ export const BasicAccountReport: React.FC = () => {
               <optgroup label="Returns & Deductions">
                 <option value="return_desc">return (highest - lowest)</option>
                 <option value="return_asc">return (lowest - highest)</option>
+              </optgroup>
+              <optgroup label="Operating Expenses">
+                <option value="expense_desc">expense (highest - lowest)</option>
+                <option value="expense_asc">expense (lowest - highest)</option>
               </optgroup>
               <optgroup label="Alphabetical & Code">
                 <option value="name_asc">Account / Party Name (A to Z)</option>
