@@ -425,11 +425,13 @@ export const BasicSalesReportPrint: React.FC = () => {
         lineDiscounts += disc;
 
         const prodMeta = productsMap[(it.itemName || it.product_name || '').trim().toLowerCase()];
+        const itemWh = (it.warehouse || it.dispatch_warehouse || inv.dispatch_warehouse || '').replace(/[`'"]/g, '').trim().toUpperCase();
 
         return {
           code: it.skuCode || it.sku || prodMeta?.item_sr_no || '—',
           name: it.itemName || it.product_name || 'Standard Item',
           uom: it.uom || prodMeta?.uom || 'Box',
+          warehouse: itemWh,
           qty,
           rate,
           discount: disc,
@@ -443,9 +445,11 @@ export const BasicSalesReportPrint: React.FC = () => {
 
       const custDetails = customersMap[(inv.customer_name || '').trim().toLowerCase()];
       const customerCode = custDetails?.customer_code || custDetails?.customerCode || '—';
+      const invWh = (inv.dispatch_warehouse || detailedItems.find((it: any) => it.warehouse)?.warehouse || 'SHOP').replace(/[`'"]/g, '').trim().toUpperCase();
 
       return {
         ...inv,
+        warehouse: invWh,
         parsedItems: detailedItems,
         totalItemsCount: detailedItems.length,
         totalItemQty,
@@ -723,8 +727,8 @@ export const BasicSalesReportPrint: React.FC = () => {
         const prod = firstItem ? productsMap[firstItem.name.trim().toLowerCase()] : null;
         groupKey = extractProductColor(prod || { product_description: firstItem?.name || '' }) || criteria.colors?.join(', ') || criteria.color || 'Standard';
       } else if (criteria.reportType === 'location') {
-        const firstItem = inv.parsedItems[0];
-        groupKey = (inv.dispatch_warehouse || firstItem?.warehouse || 'A-39').trim();
+        const itemWh = inv.parsedItems?.find((it: any) => it.warehouse)?.warehouse;
+        groupKey = (inv.warehouse || inv.dispatch_warehouse || itemWh || 'SHOP').replace(/[`'"]/g, '').trim().toUpperCase();
       }
 
       if (!groupMap[groupKey]) groupMap[groupKey] = [];
@@ -1439,8 +1443,8 @@ export const BasicSalesReportPrint: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-stroke/60 dark:divide-strokedark/60 font-mono">
                     {groupedHierarchyData.map((locGroup, idx) => {
-                      const share = kpiTotals.netSalesRevenue > 0 
-                        ? ((locGroup.subTotal / kpiTotals.netSalesRevenue) * 100).toFixed(1) 
+                      const share = kpiTotals.totalNetRevenue > 0 
+                        ? ((locGroup.subTotal / kpiTotals.totalNetRevenue) * 100).toFixed(1) 
                         : '0.0';
                       return (
                         <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/20">
@@ -1476,7 +1480,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                       <td className="py-2 px-2 text-right">Rs. {Math.round(kpiTotals.totalGrossSales).toLocaleString()}</td>
                       <td className="py-2 px-2 text-right text-red-600">{kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : '—'}</td>
                       <td className="py-2 px-2 text-right">Rs. {Math.round(kpiTotals.totalFreight).toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-primary dark:text-white font-black">Rs. {Math.round(kpiTotals.netSalesRevenue).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-primary dark:text-white font-black">Rs. {Math.round(kpiTotals.totalNetRevenue).toLocaleString()}</td>
                       <td className="py-2 px-2 text-right text-emerald-600 font-black">100%</td>
                     </tr>
                   </tfoot>

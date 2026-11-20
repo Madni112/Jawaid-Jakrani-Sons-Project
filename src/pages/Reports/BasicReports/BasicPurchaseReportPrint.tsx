@@ -1403,8 +1403,8 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-stroke/60 dark:divide-strokedark/60 font-mono">
                     {groupedHierarchyData.map((locGroup, idx) => {
-                      const share = kpiTotals.netSpend > 0 
-                        ? ((locGroup.subTotal / kpiTotals.netSpend) * 100).toFixed(1) 
+                      const share = kpiTotals.totalNetCost > 0 
+                        ? ((locGroup.subTotal / kpiTotals.totalNetCost) * 100).toFixed(1) 
                         : '0.0';
                       return (
                         <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/20">
@@ -1437,10 +1437,10 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                     <tr className="bg-gray-50 dark:bg-meta-4/40">
                       <td className="py-2 px-2 font-sans">Total All Locations</td>
                       <td className="py-2 px-2 text-center">{kpiTotals.totalBills}</td>
-                      <td className="py-2 px-2 text-right">Rs. {Math.round(kpiTotals.totalGross).toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-red-600">{kpiTotals.totalDiscount > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscount).toLocaleString()}` : '—'}</td>
+                      <td className="py-2 px-2 text-right">Rs. {Math.round(kpiTotals.totalGrossPurchases).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-red-600">{kpiTotals.totalDiscounts > 0 ? `-Rs. ${Math.round(kpiTotals.totalDiscounts).toLocaleString()}` : '—'}</td>
                       <td className="py-2 px-2 text-right">Rs. {Math.round(kpiTotals.totalFreight).toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-primary dark:text-white font-black">Rs. {Math.round(kpiTotals.netSpend).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-primary dark:text-white font-black">Rs. {Math.round(kpiTotals.totalNetCost).toLocaleString()}</td>
                       <td className="py-2 px-2 text-right text-emerald-600 font-black">100%</td>
                     </tr>
                   </tfoot>
