@@ -24,7 +24,7 @@ import {
   MdUnfoldMore,
   MdUnfoldLess
 } from 'react-icons/md';
-import { BasicAccountFilterCriteria } from './BasicAccountReport';
+import { BasicAccountFilterCriteria, BasicAccountSortBy } from './BasicAccountReport';
 
 const STORAGE_CRITERIA_KEY = 'zac_basic_account_report_criteria_v2';
 
@@ -103,6 +103,29 @@ export const BasicAccountReportPrint: React.FC = () => {
 
   const collapseAllParties = () => {
     setExpandedParties({});
+  };
+
+  const handleHeaderSort = (col: 'code' | 'name' | 'opening' | 'invoiced' | 'received' | 'return' | 'balance') => {
+    setCriteria((prev) => {
+      if (!prev) return null;
+      let nextSort: BasicAccountSortBy = 'balance_desc';
+      if (col === 'balance') {
+        nextSort = prev.sortBy === 'balance_desc' ? 'balance_asc' : 'balance_desc';
+      } else if (col === 'opening') {
+        nextSort = prev.sortBy === 'opening_desc' ? 'opening_asc' : 'opening_desc';
+      } else if (col === 'invoiced') {
+        nextSort = prev.sortBy === 'invoiced_desc' ? 'invoiced_asc' : 'invoiced_desc';
+      } else if (col === 'received') {
+        nextSort = prev.sortBy === 'received_desc' ? 'received_asc' : 'received_desc';
+      } else if (col === 'return') {
+        nextSort = prev.sortBy === 'return_desc' ? 'return_asc' : 'return_desc';
+      } else if (col === 'name') {
+        nextSort = prev.sortBy === 'name_asc' ? 'name_desc' : 'name_asc';
+      } else if (col === 'code') {
+        nextSort = prev.sortBy === 'code_asc' ? 'code_desc' : 'code_asc';
+      }
+      return { ...prev, sortBy: nextSort };
+    });
   };
 
   // ── DATA FETCHING & LOCAL CACHE REUSE ──
@@ -733,9 +756,29 @@ export const BasicAccountReportPrint: React.FC = () => {
 
     switch (criteria.sortBy) {
       case 'balance_desc':
-        return list.sort((a, b) => Math.abs(b.closingBalance) - Math.abs(a.closingBalance));
+        return list.sort((a, b) => b.closingBalance - a.closingBalance);
       case 'balance_asc':
-        return list.sort((a, b) => Math.abs(a.closingBalance) - Math.abs(b.closingBalance));
+        return list.sort((a, b) => a.closingBalance - b.closingBalance);
+      case 'receivables_desc':
+        return list.sort((a, b) => Math.max(0, b.closingBalance) - Math.max(0, a.closingBalance));
+      case 'receivables_asc':
+        return list.sort((a, b) => Math.max(0, a.closingBalance) - Math.max(0, b.closingBalance));
+      case 'received_desc':
+        return list.sort((a, b) => b.receivedAmount - a.receivedAmount);
+      case 'received_asc':
+        return list.sort((a, b) => a.receivedAmount - b.receivedAmount);
+      case 'invoiced_desc':
+        return list.sort((a, b) => b.invoicedAmount - a.invoicedAmount);
+      case 'invoiced_asc':
+        return list.sort((a, b) => a.invoicedAmount - b.invoicedAmount);
+      case 'opening_desc':
+        return list.sort((a, b) => b.openingBalance - a.openingBalance);
+      case 'opening_asc':
+        return list.sort((a, b) => a.openingBalance - b.openingBalance);
+      case 'return_desc':
+        return list.sort((a, b) => b.returnAmount - a.returnAmount);
+      case 'return_asc':
+        return list.sort((a, b) => a.returnAmount - b.returnAmount);
       case 'name_asc':
         return list.sort((a, b) => a.name.localeCompare(b.name));
       case 'name_desc':
@@ -1118,6 +1161,47 @@ export const BasicAccountReportPrint: React.FC = () => {
               </button>
             </div>
 
+            {/* Quick Sort Order Selector */}
+            <div className="inline-flex items-center gap-1.5 p-1 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-xs">
+              <span className="text-[10px] text-gray-400 font-bold uppercase pl-1">Sort:</span>
+              <select
+                value={criteria.sortBy}
+                onChange={(e) => setCriteria((prev) => prev ? { ...prev, sortBy: e.target.value as BasicAccountSortBy } : null)}
+                className="bg-transparent text-xs font-bold text-black dark:text-white focus:outline-none cursor-pointer pr-1"
+              >
+                <optgroup label="Closing Balance">
+                  <option value="balance_desc">Closing Bal (highest - lowest)</option>
+                  <option value="balance_asc">Closing Bal (lowest - highest)</option>
+                </optgroup>
+                <optgroup label="Receivables Due">
+                  <option value="receivables_desc">receivables (highest - lowest)</option>
+                  <option value="receivables_asc">receivables (lowest - highest)</option>
+                </optgroup>
+                <optgroup label="Invoiced Turnover">
+                  <option value="invoiced_desc">invoiced (highest - lowest)</option>
+                  <option value="invoiced_asc">invoiced (lowest - highest)</option>
+                </optgroup>
+                <optgroup label="Received / Collections">
+                  <option value="received_desc">Received (highest - lowest)</option>
+                  <option value="received_asc">Received (lowest - highest)</option>
+                </optgroup>
+                <optgroup label="Opening Balance">
+                  <option value="opening_desc">Opening Bal (highest - lowest)</option>
+                  <option value="opening_asc">Opening Bal (lowest - highest)</option>
+                </optgroup>
+                <optgroup label="Returns & Deductions">
+                  <option value="return_desc">return (highest - lowest)</option>
+                  <option value="return_asc">return (lowest - highest)</option>
+                </optgroup>
+                <optgroup label="Alphabetical & Code">
+                  <option value="name_asc">Party Name (A to Z)</option>
+                  <option value="name_desc">Party Name (Z to A)</option>
+                  <option value="code_asc">Party Code (Ascending)</option>
+                  <option value="code_desc">Party Code (Descending)</option>
+                </optgroup>
+              </select>
+            </div>
+
             {/* Expand / Collapse All & Rows Limit in Detail View */}
             {viewMode === 'detailed' && (
               <>
@@ -1305,8 +1389,28 @@ export const BasicAccountReportPrint: React.FC = () => {
                 }`}
               >
                 <th className="py-2.5 px-2 text-center w-10">S#</th>
-                <th className="py-2.5 px-2 w-24">Code</th>
-                <th className="py-2.5 px-2">Account Title / Party Name</th>
+                <th
+                  onClick={() => handleHeaderSort('code')}
+                  className="py-2.5 px-2 w-24 cursor-pointer hover:text-primary transition select-none print:cursor-default"
+                  title="Click to sort by Code"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Code</span>
+                    {criteria.sortBy === 'code_asc' && <span className="print:hidden text-[10px] text-primary">▲</span>}
+                    {criteria.sortBy === 'code_desc' && <span className="print:hidden text-[10px] text-primary">▼</span>}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleHeaderSort('name')}
+                  className="py-2.5 px-2 cursor-pointer hover:text-primary transition select-none print:cursor-default"
+                  title="Click to sort by Account / Party Name"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Account Title / Party Name</span>
+                    {criteria.sortBy === 'name_asc' && <span className="print:hidden text-[10px] text-primary">▲</span>}
+                    {criteria.sortBy === 'name_desc' && <span className="print:hidden text-[10px] text-primary">▼</span>}
+                  </div>
+                </th>
                 <th className="py-2.5 px-2">
                   {criteria.reportType === 'customer'
                     ? 'Area / City'
@@ -1314,15 +1418,53 @@ export const BasicAccountReportPrint: React.FC = () => {
                     ? 'Category / City'
                     : 'Account Head'}
                 </th>
-                <th className="py-2.5 px-2 text-right">Opening Bal</th>
+                <th
+                  onClick={() => handleHeaderSort('opening')}
+                  className="py-2.5 px-2 text-right cursor-pointer hover:text-primary transition select-none print:cursor-default"
+                  title="Click to sort by Opening Balance"
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Opening Bal</span>
+                    {criteria.sortBy === 'opening_asc' && <span className="print:hidden text-[10px] text-primary">▲</span>}
+                    {criteria.sortBy === 'opening_desc' && <span className="print:hidden text-[10px] text-primary">▼</span>}
+                  </div>
+                </th>
 
                 {/* Customer Columns */}
                 {criteria.reportType === 'customer' && (
                   <>
-                    <th className="py-2.5 px-2 text-right">Invoiced (Dr)</th>
-                    <th className="py-2.5 px-2 text-right">Received (Cr)</th>
-                    <th className="py-2.5 px-2 text-right text-rose-600 dark:text-rose-400">
-                      Returns / Refund (Cr)
+                    <th
+                      onClick={() => handleHeaderSort('invoiced')}
+                      className="py-2.5 px-2 text-right cursor-pointer hover:text-primary transition select-none print:cursor-default"
+                      title="Click to sort by Invoiced Turnover"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Invoiced (Dr)</span>
+                        {criteria.sortBy === 'invoiced_asc' && <span className="print:hidden text-[10px] text-primary">▲</span>}
+                        {criteria.sortBy === 'invoiced_desc' && <span className="print:hidden text-[10px] text-primary">▼</span>}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleHeaderSort('received')}
+                      className="py-2.5 px-2 text-right cursor-pointer hover:text-primary transition select-none print:cursor-default"
+                      title="Click to sort by Collections / Received"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Received (Cr)</span>
+                        {criteria.sortBy === 'received_asc' && <span className="print:hidden text-[10px] text-primary">▲</span>}
+                        {criteria.sortBy === 'received_desc' && <span className="print:hidden text-[10px] text-primary">▼</span>}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleHeaderSort('return')}
+                      className="py-2.5 px-2 text-right text-rose-600 dark:text-rose-400 cursor-pointer hover:underline transition select-none print:cursor-default"
+                      title="Click to sort by Returns"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Returns / Refund (Cr)</span>
+                        {criteria.sortBy === 'return_asc' && <span className="print:hidden text-[10px]">▲</span>}
+                        {criteria.sortBy === 'return_desc' && <span className="print:hidden text-[10px]">▼</span>}
+                      </div>
                     </th>
                   </>
                 )}
@@ -1330,15 +1472,53 @@ export const BasicAccountReportPrint: React.FC = () => {
                 {/* Vendor Columns */}
                 {criteria.reportType === 'vendor' && (
                   <>
-                    <th className="py-2.5 px-2 text-right">Purchases (Cr)</th>
-                    <th className="py-2.5 px-2 text-right">Payments (Dr)</th>
-                    <th className="py-2.5 px-2 text-right text-rose-600 dark:text-rose-400">
-                      Returns / Debit (Dr)
+                    <th
+                      onClick={() => handleHeaderSort('invoiced')}
+                      className="py-2.5 px-2 text-right cursor-pointer hover:text-primary transition select-none print:cursor-default"
+                      title="Click to sort by Purchases"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Purchases (Cr)</span>
+                        {criteria.sortBy === 'invoiced_asc' && <span className="print:hidden text-[10px] text-primary">▲</span>}
+                        {criteria.sortBy === 'invoiced_desc' && <span className="print:hidden text-[10px] text-primary">▼</span>}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleHeaderSort('received')}
+                      className="py-2.5 px-2 text-right cursor-pointer hover:text-primary transition select-none print:cursor-default"
+                      title="Click to sort by Payments"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Payments (Dr)</span>
+                        {criteria.sortBy === 'received_asc' && <span className="print:hidden text-[10px] text-primary">▲</span>}
+                        {criteria.sortBy === 'received_desc' && <span className="print:hidden text-[10px] text-primary">▼</span>}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleHeaderSort('return')}
+                      className="py-2.5 px-2 text-right text-rose-600 dark:text-rose-400 cursor-pointer hover:underline transition select-none print:cursor-default"
+                      title="Click to sort by Purchase Returns"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Returns / Debit (Dr)</span>
+                        {criteria.sortBy === 'return_asc' && <span className="print:hidden text-[10px]">▲</span>}
+                        {criteria.sortBy === 'return_desc' && <span className="print:hidden text-[10px]">▼</span>}
+                      </div>
                     </th>
                   </>
                 )}
 
-                <th className="py-2.5 px-2 text-right">Closing Balance</th>
+                <th
+                  onClick={() => handleHeaderSort('balance')}
+                  className="py-2.5 px-2 text-right cursor-pointer hover:text-primary transition select-none print:cursor-default"
+                  title="Click to sort by Closing Balance"
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Closing Balance</span>
+                    {(criteria.sortBy === 'balance_asc' || criteria.sortBy === 'receivables_asc') && <span className="print:hidden text-[10px] text-primary">▲</span>}
+                    {(criteria.sortBy === 'balance_desc' || criteria.sortBy === 'receivables_desc') && <span className="print:hidden text-[10px] text-primary">▼</span>}
+                  </div>
+                </th>
                 <th className="py-2.5 px-2 text-center w-28">Nature</th>
                 {viewMode === 'detailed' && (
                   <th className="py-2.5 px-2 text-center w-12 print:hidden">Tree</th>

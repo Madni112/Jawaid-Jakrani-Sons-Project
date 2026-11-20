@@ -19,6 +19,24 @@ import { fetchSystemMasterConfig } from '../../../utils/systemPermissions';
 
 export type BasicAccountReportType = 'customer' | 'vendor' | 'coa' | 'cash_bank' | 'expense';
 
+export type BasicAccountSortBy =
+  | 'balance_desc'
+  | 'balance_asc'
+  | 'receivables_desc'
+  | 'receivables_asc'
+  | 'received_desc'
+  | 'received_asc'
+  | 'invoiced_desc'
+  | 'invoiced_asc'
+  | 'opening_desc'
+  | 'opening_asc'
+  | 'return_desc'
+  | 'return_asc'
+  | 'name_asc'
+  | 'name_desc'
+  | 'code_asc'
+  | 'code_desc';
+
 export interface BasicAccountFilterCriteria {
   reportType: BasicAccountReportType;
   partyIds?: string[];
@@ -33,7 +51,7 @@ export interface BasicAccountFilterCriteria {
   singleDate?: string;
   dateFrom?: string;
   dateTo?: string;
-  sortBy: 'balance_desc' | 'balance_asc' | 'name_asc' | 'name_desc' | 'code_asc' | 'code_desc';
+  sortBy: BasicAccountSortBy;
 }
 
 const STORAGE_CRITERIA_KEY = 'zac_basic_account_report_criteria_v2';
@@ -1068,15 +1086,39 @@ export const BasicAccountReport: React.FC = () => {
             </label>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as BasicAccountFilterCriteria['sortBy'])}
+              onChange={(e) => setSortBy(e.target.value as BasicAccountSortBy)}
               className="w-full rounded-xl border border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/20 py-2.5 px-3 text-xs font-medium text-black dark:text-white focus:border-primary focus:outline-none cursor-pointer"
             >
-              <option value="balance_desc">Closing Balance (Highest First)</option>
-              <option value="balance_asc">Closing Balance (Lowest First)</option>
-              <option value="name_asc">Account / Party Name (A to Z)</option>
-              <option value="name_desc">Account / Party Name (Z to A)</option>
-              <option value="code_asc">Account Code (Ascending)</option>
-              <option value="code_desc">Account Code (Descending)</option>
+              <optgroup label="Closing Balance">
+                <option value="balance_desc">Closing Bal (highest - lowest)</option>
+                <option value="balance_asc">Closing Bal (lowest - highest)</option>
+              </optgroup>
+              <optgroup label="Receivables Due">
+                <option value="receivables_desc">receivables (highest - lowest)</option>
+                <option value="receivables_asc">receivables (lowest - highest)</option>
+              </optgroup>
+              <optgroup label="Invoiced Turnover">
+                <option value="invoiced_desc">invoiced (highest - lowest)</option>
+                <option value="invoiced_asc">invoiced (lowest - highest)</option>
+              </optgroup>
+              <optgroup label="Received / Collections">
+                <option value="received_desc">Received / Collections (highest - lowest)</option>
+                <option value="received_asc">Received / Collections (lowest - highest)</option>
+              </optgroup>
+              <optgroup label="Opening Balance">
+                <option value="opening_desc">Opening Bal (highest - lowest)</option>
+                <option value="opening_asc">Opening Bal (lowest - highest)</option>
+              </optgroup>
+              <optgroup label="Returns & Deductions">
+                <option value="return_desc">return (highest - lowest)</option>
+                <option value="return_asc">return (lowest - highest)</option>
+              </optgroup>
+              <optgroup label="Alphabetical & Code">
+                <option value="name_asc">Account / Party Name (A to Z)</option>
+                <option value="name_desc">Account / Party Name (Z to A)</option>
+                <option value="code_asc">Account Code (Ascending)</option>
+                <option value="code_desc">Account Code (Descending)</option>
+              </optgroup>
             </select>
           </div>
         </div>
