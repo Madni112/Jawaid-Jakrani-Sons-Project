@@ -986,7 +986,7 @@ const BasicSalesReport: React.FC = () => {
               </span>
             </div>
             <h1 className="text-xl md:text-2xl font-black text-black dark:text-white tracking-tight flex items-center gap-2">
-              <span>📊 Basic Sales Report</span>
+              <span>Basic Sales Report</span>
             </h1>
           </div>
         </div>
@@ -1053,11 +1053,11 @@ const BasicSalesReport: React.FC = () => {
               onChange={(e) => handleReportTypeChange(e.target.value as BasicSalesReportType)}
               className="w-full px-4 py-3 rounded-xl border border-stroke dark:border-strokedark bg-slate-50/50 dark:bg-meta-4/20 text-black dark:text-white text-xs md:text-sm font-semibold focus:border-primary focus:bg-white dark:focus:bg-boxdark outline-hidden transition cursor-pointer"
             >
-              <option value="invoice">📑 Invoice wise Report (Audit invoices &amp; item lines)</option>
-              <option value="product">📦 Product wise Report (Items &amp; SKU turnover hierarchy)</option>
-              <option value="salesmen">👤 Salesmen wise Report (Sales representative performance)</option>
-              <option value="brand">🏷️ Brand wise Sales (Turnover grouped by brand)</option>
-              <option value="color">🎨 Color Wise Sales (Tile &amp; surface shade analytics)</option>
+              <option value="invoice">Invoice wise Report (Audit invoices &amp; item lines)</option>
+              <option value="product">Product wise Report (Items &amp; SKU turnover hierarchy)</option>
+              <option value="salesmen">Salesmen wise Report (Sales representative performance)</option>
+              <option value="brand">Brand wise Sales (Turnover grouped by brand)</option>
+              <option value="color">Color Wise Sales (Tile &amp; surface shade analytics)</option>
             </select>
           </div>
           <p className="text-[11px] text-gray-400">

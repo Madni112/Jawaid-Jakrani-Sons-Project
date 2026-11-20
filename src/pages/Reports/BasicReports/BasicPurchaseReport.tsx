@@ -874,7 +874,7 @@ export const BasicPurchaseReport: React.FC = () => {
               </span>
             </div>
             <h1 className="text-xl md:text-2xl font-black text-black dark:text-white tracking-tight flex items-center gap-2">
-              <span>📦 Basic Purchase Report</span>
+              <span>Basic Purchase Report</span>
             </h1>
           </div>
         </div>
@@ -920,11 +920,11 @@ export const BasicPurchaseReport: React.FC = () => {
               onChange={(e) => handleReportTypeChange(e.target.value as BasicPurchaseReportType)}
               className="w-full appearance-none rounded-xl border border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/30 py-3.5 px-4 text-sm font-bold text-black dark:text-white transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
             >
-              <option value="bill">📋 Purchase Bill wise Report (Audit bills & inward items)</option>
-              <option value="vendor">🏢 Vendor / Supplier wise Report (Audit procurement by supplier)</option>
-              <option value="product">📦 Product wise Report (Items & SKU procurement turnover)</option>
-              <option value="brand">🏷️ Brand wise Report (Factory & manufacturer procurement)</option>
-              <option value="color">🎨 Color Wise Purchases (Tile & surface shade analytics)</option>
+              <option value="bill">Purchase Bill wise Report (Audit bills & inward items)</option>
+              <option value="vendor">Vendor / Supplier wise Report (Audit procurement by supplier)</option>
+              <option value="product">Product wise Report (Items & SKU procurement turnover)</option>
+              <option value="brand">Brand wise Report (Factory & manufacturer procurement)</option>
+              <option value="color">Color Wise Purchases (Tile & surface shade analytics)</option>
             </select>
           </div>
           <p className="text-[11px] text-gray-400">

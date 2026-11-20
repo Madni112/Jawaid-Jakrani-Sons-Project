@@ -1022,7 +1022,7 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                   : 'text-gray-500 hover:text-black dark:hover:text-white'
               }`}
             >
-              <span>✨ Modern</span>
+              <span>Modern</span>
             </button>
             <button
               type="button"
@@ -1033,7 +1033,7 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                   : 'text-gray-500 hover:text-black dark:hover:text-white'
               }`}
             >
-              <span>📜 Classic Ledger</span>
+              <span>Classic Ledger</span>
             </button>
           </div>
 
@@ -1133,6 +1133,7 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                           <th className="py-2.5 print:py-1 px-2">Date</th>
                           <th className="py-2.5 print:py-1 px-2">Bill #</th>
                           <th className="py-2.5 print:py-1 px-2">Vendor Name & Code</th>
+                          <th className="py-2.5 print:py-1 px-2">Warehouse</th>
                           <th className="py-2.5 print:py-1 px-2">Products Summary</th>
                           <th className="py-2.5 print:py-1 px-2">Terms</th>
                           <th className="py-2.5 print:py-1 px-2 text-right">Gross Amount</th>
@@ -1186,6 +1187,9 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                                   <div className="text-[10px] text-gray-400 font-mono">
                                     Code: {bill.vendorCode}
                                   </div>
+                                </td>
+                                <td className="py-2 print:py-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                                  {bill.warehouse}
                                 </td>
                                 <td className="py-2 print:py-1 px-2 whitespace-nowrap">
                                   <span className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300">
@@ -1250,7 +1254,7 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                                   style={{ contentVisibility: 'auto', containIntrinsicSize: '0 90px' }}
                                   className="bg-slate-50/80 dark:bg-meta-4/20 print:bg-transparent"
                                 >
-                                  <td colSpan={10} className="p-3 pl-8">
+                                  <td colSpan={11} className="p-3 pl-8">
                                     <div className={`p-3 rounded-xl ${isClassic ? 'border border-black bg-white' : 'border border-blue-200 dark:border-blue-900 bg-white dark:bg-boxdark shadow-xs'}`}>
                                       <h4 className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 mb-2 flex items-center justify-between">
                                         <div className="flex items-center gap-1.5">
@@ -1305,9 +1309,9 @@ export const BasicPurchaseReportPrint: React.FC = () => {
 
                       {/* ── FOOTER: PAGE SUB-TOTAL ON EVERY PAGE, GRAND TOTAL ON LAST PAGE ONLY ── */}
                       <tfoot>
-                        {/* 📄 1. PAGE SUB-TOTAL (Strictly for this page's rows) */}
+                        {/* 1. PAGE SUB-TOTAL (Strictly for this page's rows) */}
                         <tr className={`${isClassic ? 'border-t-2 border-b border-black font-bold bg-gray-100 text-black' : 'border-t-2 border-b border-stroke dark:border-strokedark font-bold bg-blue-50/60 dark:bg-meta-4/30 text-black dark:text-white'}`}>
-                          <td colSpan={6} className="py-2.5 print:py-1 px-2 text-right uppercase tracking-wider text-[11px] font-bold text-blue-900 dark:text-blue-300">
+                          <td colSpan={7} className="py-2.5 print:py-1 px-2 text-right uppercase tracking-wider text-[11px] font-bold text-blue-900 dark:text-blue-300">
                             Page {pageIdx + 1} Subtotal ({pageObj.billsCount} Bills):
                           </td>
                           <td className="py-2.5 print:py-1 px-2 text-right font-mono text-xs font-bold">
@@ -1324,10 +1328,10 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                           </td>
                         </tr>
 
-                        {/* 📊 2. LAST PAGE ONLY: GRAND TOTAL (Directly below Page Sub-total) */}
+                        {/* 2. LAST PAGE ONLY: GRAND TOTAL (Directly below Page Sub-total) */}
                         {isLastPage && (
                           <tr className={`${isClassic ? 'border-t-2 border-b-4 border-double border-black font-black bg-gray-200 text-black' : 'border-t-2 border-b-2 border-emerald-400 dark:border-emerald-600 font-black bg-emerald-50 dark:bg-emerald-950/40 text-black dark:text-white'}`}>
-                            <td colSpan={6} className="py-3 print:py-1.5 px-2 text-right uppercase tracking-wider text-xs font-black text-emerald-900 dark:text-emerald-300">
+                            <td colSpan={7} className="py-3 print:py-1.5 px-2 text-right uppercase tracking-wider text-xs font-black text-emerald-900 dark:text-emerald-300">
                               Grand Total ({kpiTotals.totalBills} Bills):
                             </td>
                             <td className="py-3 print:py-1.5 px-2 text-right font-mono text-xs font-black">
@@ -1387,10 +1391,10 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                     >
                       <span className="flex items-center gap-2 text-sm uppercase tracking-wide">
                         <span>
-                          {criteria.reportType === 'product' && '📦 PRODUCT: '}
-                          {criteria.reportType === 'vendor' && '🏢 VENDOR: '}
-                          {criteria.reportType === 'brand' && '🏷️ BRAND: '}
-                          {criteria.reportType === 'color' && '🎨 COLOR: '}
+                          {criteria.reportType === 'product' && 'PRODUCT: '}
+                          {criteria.reportType === 'vendor' && 'VENDOR: '}
+                          {criteria.reportType === 'brand' && 'BRAND: '}
+                          {criteria.reportType === 'color' && 'COLOR: '}
                           <strong>{group.groupName}</strong>
                         </span>
                         <span className="text-[10px] font-normal opacity-80">
@@ -1419,6 +1423,7 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                             </>
                           ) : (
                             <>
+                              <th className="py-2 px-2">Warehouse</th>
                               <th className="py-2 px-2 text-right">Gross Amount</th>
                               <th className="py-2 px-2 text-right">Discount</th>
                               <th className="py-2 px-2 text-right">Freight</th>
@@ -1460,6 +1465,9 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                               </>
                             ) : (
                               <>
+                                <td className="py-1.5 px-2 text-gray-500">
+                                  {r.warehouse}
+                                </td>
                                 <td className="py-1.5 px-2 text-right font-mono font-semibold">
                                   {Math.round(r.grossPurchaseAmount).toLocaleString()}
                                 </td>

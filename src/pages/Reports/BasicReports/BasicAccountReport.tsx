@@ -705,7 +705,7 @@ export const BasicAccountReport: React.FC = () => {
               </span>
             </div>
             <h1 className="text-xl md:text-2xl font-black text-black dark:text-white tracking-tight flex items-center gap-2">
-              <span>📑 Basic Accounts Report</span>
+              <span>Basic Accounts Report</span>
             </h1>
           </div>
         </div>
@@ -755,11 +755,11 @@ export const BasicAccountReport: React.FC = () => {
               }}
               className="w-full appearance-none rounded-xl border border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/30 py-3.5 px-4 text-sm font-bold text-black dark:text-white transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
             >
-              <option value="customer">👥 Customer Balances &amp; Receivables Ledger Report</option>
-              <option value="vendor">🏢 Vendor / Supplier Balances &amp; Payables Ledger Report</option>
-              <option value="coa">📊 Chart of Accounts &amp; Trial Balance (Financial Structure)</option>
-              <option value="cash_bank">💵 Cash &amp; Bank Book (Daily Financial Transactions)</option>
-              <option value="expense">📉 Operating Expense Report (Operational &amp; Admin Costs)</option>
+              <option value="customer">Customer Balances &amp; Receivables Ledger Report</option>
+              <option value="vendor">Vendor / Supplier Balances &amp; Payables Ledger Report</option>
+              <option value="coa">Chart of Accounts &amp; Trial Balance (Financial Structure)</option>
+              <option value="cash_bank">Cash &amp; Bank Book (Daily Financial Transactions)</option>
+              <option value="expense">Operating Expense Report (Operational &amp; Admin Costs)</option>
             </select>
           </div>
         </div>

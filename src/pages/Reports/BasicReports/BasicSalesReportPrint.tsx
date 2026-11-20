@@ -1045,7 +1045,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                   : 'text-gray-500 hover:text-black dark:hover:text-white'
               }`}
             >
-              <span>🎨 Modern Layout</span>
+              <span>Modern Layout</span>
             </button>
             <button
               type="button"
@@ -1056,7 +1056,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                   : 'text-gray-500 hover:text-black dark:hover:text-white'
               }`}
             >
-              <span>📜 Classic Ledger</span>
+              <span>Classic Ledger</span>
             </button>
           </div>
 
@@ -1328,7 +1328,7 @@ export const BasicSalesReportPrint: React.FC = () => {
 
                       {/* ── FOOTER: PAGE SUB-TOTAL ON EVERY PAGE, GRAND TOTAL ON LAST PAGE ONLY ── */}
                       <tfoot>
-                        {/* 📄 1. PAGE SUB-TOTAL (Strictly for this page's rows) */}
+                        {/* 1. PAGE SUB-TOTAL (Strictly for this page's rows) */}
                         <tr className={`${isClassic ? 'border-t-2 border-b border-black font-bold bg-gray-100 text-black' : 'border-t-2 border-b border-stroke dark:border-strokedark font-bold bg-blue-50/60 dark:bg-meta-4/30 text-black dark:text-white'}`}>
                           <td colSpan={6} className="py-2.5 print:py-1 px-2 text-right uppercase tracking-wider text-[11px] font-bold text-blue-900 dark:text-blue-300">
                             Page {pageIdx + 1} Subtotal ({pageObj.invoicesCount} Invoices):
@@ -1347,7 +1347,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                           </td>
                         </tr>
 
-                        {/* 📊 2. LAST PAGE ONLY: GRAND TOTAL (Directly below Page Sub-total) */}
+                        {/* 2. LAST PAGE ONLY: GRAND TOTAL (Directly below Page Sub-total) */}
                         {isLastPage && (
                           <tr className={`${isClassic ? 'border-t-2 border-b-4 border-double border-black font-black bg-gray-200 text-black' : 'border-t-2 border-b-2 border-emerald-400 dark:border-emerald-600 font-black bg-emerald-50 dark:bg-emerald-950/40 text-black dark:text-white'}`}>
                             <td colSpan={6} className="py-3 print:py-1.5 px-2 text-right uppercase tracking-wider text-xs font-black text-emerald-900 dark:text-emerald-300">
@@ -1410,7 +1410,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                     >
                       <span className="flex items-center gap-2 text-sm uppercase tracking-wide">
                         <span>
-                          {criteria.reportType === 'product' ? '📦 PRODUCT' : `🏷️ ${criteria.reportType.toUpperCase()}`}:{' '}
+                          {criteria.reportType === 'product' ? 'PRODUCT' : criteria.reportType.toUpperCase()}:{' '}
                           <strong>{group.groupName}</strong>
                         </span>
                         {group.groupMeta && (
