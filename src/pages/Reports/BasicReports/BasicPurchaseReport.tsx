@@ -1106,7 +1106,7 @@ export const BasicPurchaseReport: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 pt-4 border-t border-stroke/60 dark:border-strokedark/60 items-end">
           {/* Vendor / Supplier (Shown when reportType !== 'vendor') */}
           {reportType !== 'vendor' && (
-            <div className="lg:col-span-3 space-y-1.5">
+            <div className="lg:col-span-5 space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
                   <MdStore className="text-primary" size={15} />
@@ -1133,27 +1133,8 @@ export const BasicPurchaseReport: React.FC = () => {
             </div>
           )}
 
-          {/* Target Warehouse */}
-          <div className={`${reportType !== 'vendor' ? 'lg:col-span-3' : 'lg:col-span-4'} space-y-1.5`}>
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <MdWarehouse className="text-primary" size={15} />
-              <span>Target Warehouse:</span>
-            </label>
-            <SearchableSelect
-              options={warehouseOptions}
-              value={selectedWarehouses}
-              onChange={(val) => {
-                if (Array.isArray(val)) setSelectedWarehouses(val);
-                else setSelectedWarehouses(val ? [val] : []);
-              }}
-              multiple={true}
-              placeholder="All Warehouses"
-              searchPlaceholder="Search warehouse..."
-            />
-          </div>
-
           {/* Date Filter */}
-          <div className={`${reportType !== 'vendor' ? 'lg:col-span-4' : 'lg:col-span-5'} space-y-2`}>
+          <div className={`${reportType !== 'vendor' ? 'lg:col-span-4' : 'lg:col-span-8'} space-y-2`}>
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                 <MdCalendarToday className="text-primary" size={15} />
@@ -1236,7 +1217,7 @@ export const BasicPurchaseReport: React.FC = () => {
           </div>
 
           {/* Sort Order */}
-          <div className={`${reportType !== 'vendor' ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-1.5`}>
+          <div className={`${reportType !== 'vendor' ? 'lg:col-span-3' : 'lg:col-span-4'} space-y-1.5`}>
             <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block">
               Sort Order
             </label>
