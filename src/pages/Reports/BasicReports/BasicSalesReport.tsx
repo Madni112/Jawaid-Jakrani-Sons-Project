@@ -858,7 +858,7 @@ const BasicSalesReport: React.FC = () => {
   const locationOptions: SearchableOption[] = useMemo(() => {
     const locSet = new Set<string>();
     dbLocations.forEach((l) => locSet.add(l));
-    rawInvoices.forEach((inv) => {
+    invoices.forEach((inv) => {
       if (inv.dispatch_warehouse && String(inv.dispatch_warehouse).trim()) {
         locSet.add(String(inv.dispatch_warehouse).trim());
       }
@@ -876,7 +876,7 @@ const BasicSalesReport: React.FC = () => {
         subLabel: `Location / Warehouse: ${loc}`
       }))
     ];
-  }, [dbLocations, rawInvoices]);
+  }, [dbLocations, invoices]);
 
   const customerOptions: SearchableOption[] = useMemo(() => {
     const list: SearchableOption[] = [
