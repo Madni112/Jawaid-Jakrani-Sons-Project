@@ -52,8 +52,8 @@ export interface BasicPurchaseFilterCriteria {
   sortBy: 'date_desc' | 'date_asc' | 'bill_desc' | 'bill_asc' | 'vendor_asc' | 'vendor_desc';
 }
 
-const STORAGE_CRITERIA_KEY = 'zac_basic_purchase_report_criteria';
-const META_CACHE_KEY = 'zac_basic_purchase_meta_v1';
+const STORAGE_CRITERIA_KEY = 'zac_basic_purchase_report_criteria_v2';
+const META_CACHE_KEY = 'zac_basic_purchase_meta_v2';
 
 // ── REUSABLE FACET CHECKBOX LIST WITH SEARCHBAR, SHIFT+CLICK & KEYBOARD ARROW/ENTER NAVIGATION ──
 interface FacetItem {
@@ -408,8 +408,8 @@ export const BasicPurchaseReport: React.FC = () => {
         const [p1, p2, pr1, pr2, catRes, venRes, locRes] = await Promise.all([
           supabase.from('supplier_purchases').select('id, purchase_no, bill_no, supplier_name, vendor_name, target_warehouse, purchase_date, payment_term, total_amount, items, created_at').order('id', { ascending: false }).range(0, 999),
           supabase.from('supplier_purchases').select('id, purchase_no, bill_no, supplier_name, vendor_name, target_warehouse, purchase_date, payment_term, total_amount, items, created_at').order('id', { ascending: false }).range(1000, 2999),
-          supabase.from('products').select('id, product_name, sku, parent_category, sub_category, category, brand, cost_price, purchase_price, uom').order('id', { ascending: true }).range(0, 999),
-          supabase.from('products').select('id, product_name, sku, parent_category, sub_category, category, brand, cost_price, purchase_price, uom').order('id', { ascending: true }).range(1000, 2999),
+          supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no').order('id', { ascending: true }).range(0, 999),
+          supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no').order('id', { ascending: true }).range(1000, 2999),
           supabase.from('inventory_categories').select('id, name, parent_id').order('name'),
           supabase.from('vendors').select('id, name, vendor_name, vendor_code, vendorCode').order('name'),
           supabase.from('inventory_locations').select('name')
@@ -713,12 +713,12 @@ export const BasicPurchaseReport: React.FC = () => {
       if (seenNames.has(lower)) return;
       seenNames.add(lower);
 
-      const price = p.cost_price || p.purchase_price;
-      const meta = price ? `Rs. ${Number(price).toLocaleString()}` : p.sku || undefined;
+      const price = p.purchase_price || p.retail_price;
+      const meta = price ? `Rs. ${Number(price).toLocaleString()}` : p.item_sr_no ? `Code: ${p.item_sr_no}` : undefined;
       deduplicated.push({
         id: name,
         label: name,
-        subLabel: p.brand ? `Brand: ${p.brand}` : undefined,
+        subLabel: p.brand ? `Brand: ${p.brand}` : p.category ? `Category: ${p.category}` : undefined,
         meta
       });
     });

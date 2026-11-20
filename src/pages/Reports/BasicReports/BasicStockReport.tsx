@@ -50,8 +50,8 @@ export interface BasicStockFilterCriteria {
   sortBy: 'stock_desc' | 'stock_asc' | 'valuation_desc' | 'name_asc' | 'name_desc' | 'sku_asc';
 }
 
-const STORAGE_CRITERIA_KEY = 'zac_basic_stock_report_criteria';
-const META_CACHE_KEY = 'zac_basic_stock_meta_v1';
+const STORAGE_CRITERIA_KEY = 'zac_basic_stock_report_criteria_v2';
+const META_CACHE_KEY = 'zac_basic_stock_meta_v2';
 
 // ── REUSABLE FACET CHECKBOX LIST WITH LIVE SEARCHBAR & KEYBOARD ARROW/ENTER NAVIGATION ──
 interface FacetItem {
@@ -399,8 +399,8 @@ export const BasicStockReport: React.FC = () => {
         }
 
         const [p1, p2, catRes, locRes] = await Promise.all([
-          supabase.from('products').select('id, product_name, sku, parent_category, sub_category, category, brand, cost_price, purchase_price, retail_price, uom').order('id', { ascending: true }).range(0, 999),
-          supabase.from('products').select('id, product_name, sku, parent_category, sub_category, category, brand, cost_price, purchase_price, retail_price, uom').order('id', { ascending: true }).range(1000, 2999),
+          supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock').order('id', { ascending: true }).range(0, 999),
+          supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock').order('id', { ascending: true }).range(1000, 2999),
           supabase.from('inventory_categories').select('id, name, parent_id').order('name'),
           supabase.from('inventory_locations').select('id, name').order('name')
         ]);
@@ -611,12 +611,12 @@ export const BasicStockReport: React.FC = () => {
       if (seenNames.has(lower)) return;
       seenNames.add(lower);
 
-      const price = p.retail_price || p.cost_price;
-      const meta = price ? `Rs. ${Number(price).toLocaleString()}` : p.sku || undefined;
+      const price = p.retail_price || p.purchase_price;
+      const meta = price ? `Rs. ${Number(price).toLocaleString()}` : p.item_sr_no ? `Code: ${p.item_sr_no}` : undefined;
       deduplicated.push({
         id: name,
         label: name,
-        subLabel: p.brand ? `Brand: ${p.brand}` : undefined,
+        subLabel: p.brand ? `Brand: ${p.brand}` : p.category ? `Category: ${p.category}` : undefined,
         meta
       });
     });
@@ -754,7 +754,7 @@ export const BasicStockReport: React.FC = () => {
   const handleGenerateReport = () => {
     const criteria: BasicStockFilterCriteria = {
       reportType,
-      productNames: selectedProductNames.length > 0 && !selectedProductNames.includes('All') ? selectedProductNames : undefined,
+      productNames: selectedProducts.length > 0 ? selectedProducts : undefined,
       warehouses: selectedWarehouses.length > 0 && !selectedWarehouses.includes('All') ? selectedWarehouses : undefined,
       warehouse: selectedWarehouses.length === 1 && selectedWarehouses[0] !== 'All' ? selectedWarehouses[0] : undefined,
       brands: selectedBrands.length > 0 && !selectedBrands.includes('All') ? selectedBrands : undefined,
@@ -809,7 +809,7 @@ export const BasicStockReport: React.FC = () => {
               </span>
             </div>
             <h1 className="text-xl md:text-2xl font-black text-black dark:text-white tracking-tight flex items-center gap-2">
-              <span>📊 Basic Stock Report</span>
+              <span>Basic Stock Report</span>
             </h1>
           </div>
         </div>
@@ -855,34 +855,16 @@ export const BasicStockReport: React.FC = () => {
               onChange={(e) => setReportType(e.target.value as BasicStockReportType)}
               className="w-full appearance-none rounded-xl border border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/30 py-3.5 px-4 text-sm font-bold text-black dark:text-white transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
             >
-              <option value="balance">📦 Current Stock Balance &amp; Inventory Valuation Report</option>
-              <option value="warehouse">🏬 Warehouse / Location wise Stock Breakdown</option>
-              <option value="category">📑 Category-Wise Stock Volume &amp; SKU Turnover</option>
-              <option value="reorder">⚠️ Low Stock &amp; Reorder Level Alert Register</option>
-              <option value="dead">⏳ Zero &amp; Out-of-Stock Audit (Negative / Nil Balances)</option>
+              <option value="balance">Current Stock Balance &amp; Inventory Valuation Report</option>
+              <option value="warehouse">Warehouse / Location wise Stock Breakdown</option>
+              <option value="category">Category-Wise Stock Volume &amp; SKU Turnover</option>
+              <option value="reorder">Low Stock &amp; Reorder Level Alert Register</option>
+              <option value="dead">Zero &amp; Out-of-Stock Audit (Negative / Nil Balances)</option>
             </select>
           </div>
         </div>
 
-        {/* 2. OPTIONAL TARGET PRODUCT SPECIFIER */}
-        <div className="space-y-2 pt-2 border-t border-stroke/60 dark:border-strokedark/60">
-          <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-            <MdInventory className="text-primary" size={16} />
-            <span>Select Specific Product(s) (Optional — pick specific to isolate):</span>
-          </label>
-          <SearchableSelect
-            options={targetProductOptions}
-            value={selectedProductNames}
-            onChange={(val) => {
-              if (Array.isArray(val)) setSelectedProductNames(val);
-              else setSelectedProductNames(val ? [val] : []);
-            }}
-            multiple={true}
-            placeholder={`All Products (${productsMaster.length} Total Catalog SKUs)`}
-          />
-        </div>
-
-        {/* 3. CASCADING CATEGORY HIERARCHY & PRODUCT FILTER */}
+        {/* 2. CASCADING CATEGORY HIERARCHY & PRODUCT FILTER */}
         <div className="space-y-3 pt-2 border-t border-stroke/60 dark:border-strokedark/60">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
