@@ -21,8 +21,8 @@ import {
 import { BasicStockFilterCriteria } from './BasicStockReport';
 import { extractProductColor } from '../../../utils/colorService';
 
-const STORAGE_CRITERIA_KEY = 'zac_basic_stock_report_criteria';
-const META_CACHE_KEY = 'zac_basic_stock_meta_v1';
+const STORAGE_CRITERIA_KEY = 'zac_basic_stock_report_criteria_v2';
+const META_CACHE_KEY = 'zac_basic_stock_meta_v2';
 
 export const BasicStockReportPrint: React.FC = () => {
   const location = useLocation();
@@ -82,21 +82,25 @@ export const BasicStockReportPrint: React.FC = () => {
             sessionStorage.getItem(META_CACHE_KEY);
           if (cached) {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed.productsMaster)) cachedProducts = parsed.productsMaster;
-            if (Array.isArray(parsed.warehouses)) cachedWarehouses = parsed.warehouses;
+            if (Array.isArray(parsed.productsMaster) && parsed.productsMaster.length > 0) {
+              cachedProducts = parsed.productsMaster;
+            }
+            if (Array.isArray(parsed.warehouses) && parsed.warehouses.length > 0) {
+              cachedWarehouses = parsed.warehouses;
+            }
           }
         } catch {}
 
         // 2. Fetch master products if not in cache
-        const productsPromise = cachedProducts
+        const productsPromise = cachedProducts && cachedProducts.length > 0
           ? Promise.resolve({ data: cachedProducts })
           : Promise.all([
-              supabase.from('products').select('*').order('id', { ascending: true }).range(0, 999),
-              supabase.from('products').select('*').order('id', { ascending: true }).range(1000, 2999)
+              supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock').order('id', { ascending: true }).range(0, 999),
+              supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock').order('id', { ascending: true }).range(1000, 2999)
             ]).then(([p1, p2]) => ({ data: [...(p1.data || []), ...(p2.data || [])] }));
 
         // 3. Fetch warehouses
-        const warehousesPromise = cachedWarehouses
+        const warehousesPromise = cachedWarehouses && cachedWarehouses.length > 0
           ? Promise.resolve({ data: cachedWarehouses })
           : supabase.from('inventory_locations').select('id, name').order('name');
 
@@ -234,7 +238,7 @@ export const BasicStockReportPrint: React.FC = () => {
 
     const rows = uniqueProducts.map((p) => {
       const pNameLower = String(p.product_name || '').trim().toLowerCase();
-      const parentCat = String(p.parent_category || '').trim();
+      const parentCat = String(p.sub_sub_category || p.parent_category || '').trim();
       const subCat = String(p.sub_category || '').trim();
       const leafCat = String(p.category || '').trim();
       const brand = String(p.brand || '').trim();
@@ -277,7 +281,7 @@ export const BasicStockReportPrint: React.FC = () => {
       }
 
       // Price and Valuation calculations
-      const costPrice = Number(p.cost_price || p.purchase_price || 0);
+      const costPrice = Number(p.purchase_price || p.cost_price || 0);
       const retailPrice = Number(p.retail_price || 0);
       const totalValuation = Math.round(effectiveStock * costPrice);
       const totalRetailValuation = Math.round(effectiveStock * retailPrice);
@@ -292,7 +296,7 @@ export const BasicStockReportPrint: React.FC = () => {
 
       return {
         id: p.id,
-        sku: p.sku || '—',
+        sku: p.item_sr_no || p.sku || '—',
         product_name: p.product_name,
         pNameLower,
         parent_category: parentCat || 'General',
