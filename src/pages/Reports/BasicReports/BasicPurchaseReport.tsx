@@ -26,7 +26,7 @@ import { extractProductColor, DEFAULT_PRODUCT_COLORS, getSwatchColor } from '../
 import SearchableSelect, { SearchableOption } from '../../../components/SearchableSelect';
 import { fetchSystemMasterConfig } from '../../../utils/systemPermissions';
 
-export type BasicPurchaseReportType = 'bill' | 'vendor' | 'brand' | 'color' | 'product';
+export type BasicPurchaseReportType = 'bill' | 'vendor' | 'brand' | 'color' | 'product' | 'location';
 
 export interface BasicPurchaseFilterCriteria {
   reportType: BasicPurchaseReportType;
@@ -925,6 +925,7 @@ export const BasicPurchaseReport: React.FC = () => {
               <option value="product">Product wise Report (Items & SKU procurement turnover)</option>
               <option value="brand">Brand wise Report (Factory & manufacturer procurement)</option>
               <option value="color">Color Wise Purchases (Tile & surface shade analytics)</option>
+              <option value="location">Location / Warehouse Wise Purchases (Procurement by warehouse)</option>
             </select>
           </div>
           <p className="text-[11px] text-gray-400">
@@ -933,6 +934,7 @@ export const BasicPurchaseReport: React.FC = () => {
             {reportType === 'product' && 'Product purchase register grouped by item, displaying individual line items, rate, quantity, and product totals.'}
             {reportType === 'brand' && 'Aggregates procurement turnover by manufacturer & product brand.'}
             {reportType === 'color' && 'Analyzes shade procurement, tile finishes, and inward color volumes.'}
+            {reportType === 'location' && 'Breaks down procurement inward spend grouped by destination warehouse (A-39 vs SHOP).'}
           </p>
         </div>
 
@@ -1036,6 +1038,35 @@ export const BasicPurchaseReport: React.FC = () => {
               {selectedColors.length > 0 && (
                 <p className="text-[10px] text-pink-600 dark:text-pink-400 font-medium">
                   Categories & products filtered to color: {selectedColors.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Target Location / Warehouse Dropdown */}
+          {reportType === 'location' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-white flex items-center gap-1.5">
+                <MdWarehouse className="text-amber-500" size={16} />
+                <span>Select Location / Destination Warehouse:</span>
+              </label>
+              <SearchableSelect
+                multiple={true}
+                options={warehouseOptions.length > 0 ? warehouseOptions : [
+                  { value: 'A-39', label: 'A-39 (Main Storage Godown)' },
+                  { value: 'SHOP', label: 'SHOP (Saddar Bouri Bazar)' }
+                ]}
+                value={selectedWarehouses}
+                onChange={(val) => {
+                  if (Array.isArray(val)) setSelectedWarehouses(val);
+                  else setSelectedWarehouses(val ? [val] : []);
+                }}
+                placeholder="All Warehouses (A-39 & SHOP)"
+                searchPlaceholder="Search warehouse location..."
+              />
+              {selectedWarehouses.length > 0 && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                  Procurement filtered to warehouse: {selectedWarehouses.join(', ')}
                 </p>
               )}
             </div>

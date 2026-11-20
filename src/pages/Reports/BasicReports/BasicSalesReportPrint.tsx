@@ -359,6 +359,21 @@ export const BasicSalesReportPrint: React.FC = () => {
       });
     }
 
+    // Location / Warehouse Constraint
+    const activeLocations = (criteria.locations || (criteria.location ? [criteria.location] : []))
+      .filter((l) => l && l !== 'All')
+      .map((l) => l.trim().toLowerCase());
+    if (activeLocations.length > 0) {
+      pool = pool.filter((inv) => {
+        const invWarehouse = (inv.dispatch_warehouse || '').trim().toLowerCase();
+        if (activeLocations.includes(invWarehouse)) return true;
+        const items = Array.isArray(inv.items)
+          ? inv.items
+          : (typeof inv.items === 'string' ? JSON.parse(inv.items || '[]') : []);
+        return items.some((it: any) => activeLocations.includes((it.warehouse || '').trim().toLowerCase()));
+      });
+    }
+
     // 5. Sorting (Includes Customer A-Z and Customer Z-A)
     pool.sort((a, b) => {
       const dateA = a.sale_date || a.created_at || '';
@@ -707,6 +722,9 @@ export const BasicSalesReportPrint: React.FC = () => {
         const firstItem = inv.parsedItems[0];
         const prod = firstItem ? productsMap[firstItem.name.trim().toLowerCase()] : null;
         groupKey = extractProductColor(prod || { product_description: firstItem?.name || '' }) || criteria.colors?.join(', ') || criteria.color || 'Standard';
+      } else if (criteria.reportType === 'location') {
+        const firstItem = inv.parsedItems[0];
+        groupKey = (inv.dispatch_warehouse || firstItem?.warehouse || 'A-39').trim();
       }
 
       if (!groupMap[groupKey]) groupMap[groupKey] = [];
@@ -732,7 +750,7 @@ export const BasicSalesReportPrint: React.FC = () => {
           subTotal
         };
       });
-  }, [parsedInvoiceRows, criteria.reportType, criteria.brand, criteria.brands, criteria.color, criteria.colors, criteria.products, productsMap]);
+  }, [parsedInvoiceRows, criteria.reportType, criteria.brand, criteria.brands, criteria.color, criteria.colors, criteria.products, criteria.locations, criteria.location, productsMap]);
 
   // Export Table Data directly to Excel (.xlsx)
   const handleExportExcel = () => {
@@ -848,7 +866,9 @@ export const BasicSalesReportPrint: React.FC = () => {
                 ? 'Salesmen Sales Performance'
                 : criteria.reportType === 'brand'
                 ? 'Brand Wise Turnover'
-                : 'Color & Surface Shade Analysis'}
+                : criteria.reportType === 'color'
+                ? 'Color & Surface Shade Analysis'
+                : 'Location / Warehouse Wise Sales Analysis'}
             </span>
           </div>
           <h1 className="text-2xl print:text-lg font-black text-black dark:text-white tracking-tight mt-1">

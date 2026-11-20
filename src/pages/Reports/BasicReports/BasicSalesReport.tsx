@@ -20,13 +20,14 @@ import {
   MdSearch,
   MdCheckCircle,
   MdLayers,
-  MdTrendingUp
+  MdTrendingUp,
+  MdLocationOn
 } from 'react-icons/md';
 import { extractProductColor, DEFAULT_PRODUCT_COLORS, getSwatchColor } from '../../../utils/colorService';
 import SearchableSelect, { SearchableOption } from '../../../components/SearchableSelect';
 import { fetchSystemMasterConfig } from '../../../utils/systemPermissions';
 
-export type BasicSalesReportType = 'invoice' | 'salesmen' | 'brand' | 'color' | 'product';
+export type BasicSalesReportType = 'invoice' | 'salesmen' | 'brand' | 'color' | 'product' | 'location';
 
 export interface BasicSalesFilterCriteria {
   reportType: BasicSalesReportType;
@@ -39,6 +40,8 @@ export interface BasicSalesFilterCriteria {
   brand?: string;
   colors?: string[];
   color?: string;
+  locations?: string[];
+  location?: string;
   customers?: string[];
   customer?: string;
   parentCategories?: string[];
@@ -357,6 +360,7 @@ const BasicSalesReport: React.FC = () => {
   const [selectedSalesmen, setSelectedSalesmen] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
   // 3. Shared Cascading Filters (Parent -> Sub -> Leaf -> Product)
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
@@ -842,6 +846,12 @@ const BasicSalesReport: React.FC = () => {
     return list;
   }, [colorOptions]);
 
+  const locationOptions: SearchableOption[] = useMemo(() => [
+    { id: 'All', label: 'All Locations (SHOP & A-39)', subLabel: 'Turnover across all warehouses' },
+    { id: 'SHOP', label: 'SHOP', subLabel: 'Saddar Bouri Bazar Sale Point' },
+    { id: 'A-39', label: 'A-39', subLabel: 'Main Storage Godown (Near Boulevard Mall)' }
+  ], []);
+
   const customerOptions: SearchableOption[] = useMemo(() => {
     const list: SearchableOption[] = [
       { id: 'All', label: `All Customers (${customers.length})`, subLabel: 'Include sales across all registered customers' }
@@ -893,6 +903,7 @@ const BasicSalesReport: React.FC = () => {
     setSelectedSalesmen([]);
     setSelectedBrands([]);
     setSelectedColors([]);
+    setSelectedLocations([]);
     setSelectedCustomers([]);
     setSelectedParentCategories([]);
     setSelectedSubCategories([]);
@@ -916,6 +927,7 @@ const BasicSalesReport: React.FC = () => {
     setSelectedSalesmen([]);
     setSelectedBrands([]);
     setSelectedColors([]);
+    setSelectedLocations([]);
     setSelectedParentCategories([]);
     setSelectedSubCategories([]);
     setSelectedLeafCategories([]);
@@ -937,6 +949,8 @@ const BasicSalesReport: React.FC = () => {
       brand: reportType === 'brand' && selectedBrands.length === 1 && selectedBrands[0] !== 'All' ? selectedBrands[0] : undefined,
       colors: reportType === 'color' && selectedColors.length > 0 && !selectedColors.includes('All') ? selectedColors : undefined,
       color: reportType === 'color' && selectedColors.length === 1 && selectedColors[0] !== 'All' ? selectedColors[0] : undefined,
+      locations: reportType === 'location' && selectedLocations.length > 0 && !selectedLocations.includes('All') ? selectedLocations : undefined,
+      location: reportType === 'location' && selectedLocations.length === 1 && selectedLocations[0] !== 'All' ? selectedLocations[0] : undefined,
       customers: selectedCustomers.length > 0 && !selectedCustomers.includes('All') ? selectedCustomers : undefined,
       customer: selectedCustomers.length === 1 && selectedCustomers[0] !== 'All' ? selectedCustomers[0] : undefined,
       parentCategories: selectedParentCategories.length > 0 ? selectedParentCategories : undefined,
@@ -1058,6 +1072,7 @@ const BasicSalesReport: React.FC = () => {
               <option value="salesmen">Salesmen wise Report (Sales representative performance)</option>
               <option value="brand">Brand wise Sales (Turnover grouped by brand)</option>
               <option value="color">Color Wise Sales (Tile &amp; surface shade analytics)</option>
+              <option value="location">Location / Warehouse Wise Sales (SHOP vs A-39)</option>
             </select>
           </div>
           <p className="text-[11px] text-gray-400">
@@ -1066,6 +1081,7 @@ const BasicSalesReport: React.FC = () => {
             {reportType === 'salesmen' && 'Breaks down sales performance grouped by sales representative.'}
             {reportType === 'brand' && 'Aggregates turnover by manufacturer & product brand.'}
             {reportType === 'color' && 'Analyzes shade popularity, tile finishes, and color volumes.'}
+            {reportType === 'location' && 'Groups and compares sales revenue by store or warehouse dispatch point (SHOP vs A-39).'}
           </p>
         </div>
 
@@ -1154,6 +1170,29 @@ const BasicSalesReport: React.FC = () => {
               {selectedColors.length > 0 && !selectedColors.includes('All') && (
                 <p className="text-[10px] text-pink-600 dark:text-pink-400 font-medium">
                   Categories &amp; products filtered to color: {selectedColors.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Location / Warehouse Multi-Select Dropdown */}
+          {reportType === 'location' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-white flex items-center gap-1.5">
+                <MdLocationOn className="text-amber-500" size={16} />
+                <span>Select Location / Warehouse:</span>
+              </label>
+              <SearchableSelect
+                multiple={true}
+                options={locationOptions}
+                value={selectedLocations}
+                onChange={setSelectedLocations}
+                placeholder="All Locations (SHOP & A-39)"
+                searchPlaceholder="Search location..."
+              />
+              {selectedLocations.length > 0 && !selectedLocations.includes('All') && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                  Sales turnover filtered to location: {selectedLocations.join(', ')}
                 </p>
               )}
             </div>

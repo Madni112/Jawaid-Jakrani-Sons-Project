@@ -673,12 +673,13 @@ export const BasicPurchaseReportPrint: React.FC = () => {
       });
     }
 
-    // Group by Vendor, Brand, or Color
+    // Group by Vendor, Location, Brand, or Color
     const groupKeyMap: Record<string, { groupName: string; rows: any[] }> = {};
 
     sortedPurchaseRows.forEach((row) => {
       let key = 'General';
       if (criteria.reportType === 'vendor') key = row.vendor_name || 'Unknown Vendor';
+      else if (criteria.reportType === 'location') key = row.warehouse || row.target_warehouse || 'A-39';
       else if (criteria.reportType === 'brand') key = row.parsedItems[0]?.brand || 'Unbranded';
       else if (criteria.reportType === 'color') key = row.parsedItems[0]?.color || 'General';
 
@@ -791,6 +792,8 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                 ? 'Product Wise Procurement Hierarchy'
                 : criteria?.reportType === 'vendor'
                 ? 'Vendor / Supplier Procurement Summary'
+                : criteria?.reportType === 'location'
+                ? 'Location / Warehouse Wise Procurement Summary'
                 : criteria?.reportType === 'brand'
                 ? 'Brand Wise Procurement'
                 : 'Color & Surface Shade Analysis'}
@@ -1393,6 +1396,7 @@ export const BasicPurchaseReportPrint: React.FC = () => {
                         <span>
                           {criteria.reportType === 'product' && 'PRODUCT: '}
                           {criteria.reportType === 'vendor' && 'VENDOR: '}
+                          {criteria.reportType === 'location' && 'LOCATION: '}
                           {criteria.reportType === 'brand' && 'BRAND: '}
                           {criteria.reportType === 'color' && 'COLOR: '}
                           <strong>{group.groupName}</strong>
