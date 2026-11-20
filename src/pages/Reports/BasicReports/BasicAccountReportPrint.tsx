@@ -64,8 +64,8 @@ export const BasicAccountReportPrint: React.FC = () => {
   // View Mode: 'default' | 'detailed'
   const [viewMode, setViewMode] = useState<'default' | 'detailed'>('default');
 
-  // Detail transaction rows limit per party: 25 | 50 | 'all'
-  const [detailLimit, setDetailLimit] = useState<number | 'all'>(25);
+  // Detail transaction rows limit per party: 'all'
+  const [detailLimit, setDetailLimit] = useState<number | 'all'>('all');
 
   // Expanded party cards in detailed view (party id -> boolean)
   const [expandedParties, setExpandedParties] = useState<Record<string, boolean>>({});
@@ -1511,47 +1511,6 @@ export const BasicAccountReportPrint: React.FC = () => {
                   >
                     <MdUnfoldLess size={15} />
                     <span>Collapse</span>
-                  </button>
-                </div>
-
-                {/* Per-Party Detail Rows Limit Selector */}
-                <div className="inline-flex items-center p-0.5 rounded-xl border border-stroke dark:border-strokedark bg-gray-100 dark:bg-meta-4/40 text-xs font-bold">
-                  <span className="text-[10px] text-gray-500 uppercase px-2 font-black">Print Rows:</span>
-                  <button
-                    type="button"
-                    onClick={() => setDetailLimit(25)}
-                    className={`px-2 py-1 rounded-lg transition cursor-pointer text-xs ${
-                      detailLimit === 25
-                        ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
-                        : 'text-gray-500 hover:text-black dark:hover:text-white'
-                    }`}
-                    title="Print 25 most recent bills/receipts per party (keeps statement to 2-3 pages)"
-                  >
-                    Top 25
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDetailLimit(50)}
-                    className={`px-2 py-1 rounded-lg transition cursor-pointer text-xs ${
-                      detailLimit === 50
-                        ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
-                        : 'text-gray-500 hover:text-black dark:hover:text-white'
-                    }`}
-                    title="Print 50 bills/receipts per party"
-                  >
-                    Top 50
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDetailLimit('all')}
-                    className={`px-2 py-1 rounded-lg transition cursor-pointer text-xs ${
-                      detailLimit === 'all'
-                        ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
-                        : 'text-gray-500 hover:text-black dark:hover:text-white'
-                    }`}
-                    title="Print complete ledger history for all bills & vouchers"
-                  >
-                    All Rows
                   </button>
                 </div>
               </>
