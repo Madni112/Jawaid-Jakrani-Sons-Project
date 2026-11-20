@@ -733,7 +733,11 @@ export const BasicPurchaseReport: React.FC = () => {
   // Searchable Options for Secondary Dropdowns
   const targetPurchaseOptions = useMemo<SearchableOption[]>(() => {
     return purchasesMaster.map((p) => {
-      const pNo = p.bill_no ? `Bill #${p.bill_no}` : p.purchase_no ? `PO #${p.purchase_no}` : `PUR-${p.id}`;
+      const pNo = p.bill_no
+        ? `Bill #${p.bill_no}`
+        : p.purchase_no
+        ? (String(p.purchase_no).toUpperCase().startsWith('PUR-') ? p.purchase_no : `PUR-${p.purchase_no}`)
+        : `PUR-${p.id}`;
       const vName = p.vendor_name || p.supplier_name || 'Vendor';
       const amt = Number(p.total_amount || 0).toLocaleString();
       const date = p.purchase_date || String(p.created_at || '').split('T')[0];
