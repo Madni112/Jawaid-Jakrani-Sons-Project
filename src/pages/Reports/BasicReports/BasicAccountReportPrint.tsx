@@ -156,6 +156,30 @@ export const BasicAccountReportPrint: React.FC = () => {
           retSum[key] = (retSum[key] || 0) + Number(ret.total_amount || 0);
         });
 
+        // Sum vouchers for customer receipts and vendor payments
+        const custReceiptSum: Record<string, number> = {};
+        const vendPaymentSum: Record<string, number> = {};
+        (vouchRes.data || []).forEach((v: any) => {
+          const p = (v.party_name || v.customer_name || '').trim().toLowerCase();
+          if (!p) return;
+          const isReceive =
+            (v.voucher_type || '').includes('Receive') ||
+            (v.voucher_no || '').startsWith('CRV') ||
+            (Number(v.credit || 0) > 0 && !(v.voucher_type || '').includes('Return') && !(v.voucher_type || '').includes('Accrual'));
+          if (isReceive) {
+            custReceiptSum[p] = (custReceiptSum[p] || 0) + Number(v.credit || v.total_amount || 0);
+          }
+          const isPayment =
+            (v.voucher_type || '').includes('Payment') ||
+            (v.voucher_no || '').startsWith('CPV') ||
+            (v.voucher_no || '').startsWith('VPV') ||
+            (v.voucher_no || '').startsWith('BPV') ||
+            (Number(v.debit || 0) > 0 && !(v.voucher_type || '').includes('Return') && !(v.voucher_type || '').includes('Accrual') && !(v.voucher_type || '').includes('Sale'));
+          if (isPayment) {
+            vendPaymentSum[p] = (vendPaymentSum[p] || 0) + Number(v.debit || v.total_amount || 0);
+          }
+        });
+
         // Build live purchase & return balance maps for vendors
         const purSum: Record<string, { count: number; total: number; paid: number }> = {};
         (purRes.data || []).forEach((p: any) => {
@@ -174,14 +198,52 @@ export const BasicAccountReportPrint: React.FC = () => {
           pretSum[key] = (pretSum[key] || 0) + Number(r.total_amount || 0);
         });
 
+        // Discover any ad-hoc customers from invoices/vouchers not in customers master
+        const existingCustNames = new Set(
+          (cRes.data || []).map((c: any) => (c.customer_name || c.name || '').trim().toLowerCase())
+        );
+        const adhocCustomers: any[] = [];
+        (invRes.data || []).forEach((inv: any) => {
+          const k = (inv.customer_name || '').trim();
+          const kLower = k.toLowerCase();
+          if (k && !existingCustNames.has(kLower)) {
+            existingCustNames.add(kLower);
+            adhocCustomers.push({
+              id: `adhoc-${kLower}`,
+              customer_name: k,
+              customer_code: 'POS',
+              opening_balance: 0,
+              balance_nature: 'debit',
+              area: 'Direct / Walk-in'
+            });
+          }
+        });
+        (vouchRes.data || []).forEach((v: any) => {
+          const k = (v.party_name || v.customer_name || '').trim();
+          const kLower = k.toLowerCase();
+          if (k && !existingCustNames.has(kLower)) {
+            existingCustNames.add(kLower);
+            adhocCustomers.push({
+              id: `adhoc-${kLower}`,
+              customer_name: k,
+              customer_code: 'VOUCHER',
+              opening_balance: 0,
+              balance_nature: 'credit',
+              area: 'Direct / Walk-in'
+            });
+          }
+        });
+        const combinedCustPool = [...(cRes.data || []), ...adhocCustomers];
+
         // Dynamic Customers (Opening + Invoiced - Paid - Returns)
-        const loadedCust = (cRes.data || []).map((c: any) => {
+        const loadedCust = combinedCustPool.map((c: any) => {
           const k = (c.customer_name || c.customerName || c.name || '').trim().toLowerCase();
           const invInfo = invSum[k] || { count: 0, total: 0, paid: 0 };
           const retTotal = retSum[k] || 0;
           const openBal = Math.abs(Number(c.opening_balance || 0));
           const effectiveOpen = (c.balance_nature || '').toLowerCase().includes('credit') ? -openBal : openBal;
-          const dynamicNet = invInfo.total - invInfo.paid - retTotal;
+          const paidTotal = Math.max(invInfo.paid, custReceiptSum[k] || 0);
+          const dynamicNet = invInfo.total - paidTotal - retTotal;
           const finalBal = effectiveOpen + dynamicNet;
 
           return {
@@ -199,7 +261,8 @@ export const BasicAccountReportPrint: React.FC = () => {
           const retTotal = pretSum[k] || 0;
           const openBal = Math.abs(Number(v.opening_balance || 0));
           const effectiveOpen = (v.balance_nature || '').toLowerCase().includes('debit') ? -openBal : openBal;
-          const dynamicNet = purInfo.total - purInfo.paid - retTotal;
+          const paidTotal = Math.max(purInfo.paid, vendPaymentSum[k] || 0);
+          const dynamicNet = purInfo.total - paidTotal - retTotal;
           const finalBal = effectiveOpen + dynamicNet;
 
           return {
@@ -280,21 +343,11 @@ export const BasicAccountReportPrint: React.FC = () => {
         });
       }
 
-      // Hide zero balances
-      if (criteria.hideZeroBalances) {
-        pool = pool.filter((c) => Math.abs(Number(c.current_balance || c.balance || 0)) > 0);
-      }
-
-      return pool.map((c) => {
+      const rows = pool.map((c) => {
         const cId = String(c.id);
         const cName = String(c.customer_name || c.customerName || c.customername || c.name || '').trim().toLowerCase();
         const openBal = Math.abs(Number(c.opening_balance || 0));
-        const effectiveOpen = (c.balance_nature || '').toLowerCase().includes('credit') ? -openBal : openBal;
-        const invInfo = invoicesSummary[cName] || invoicesSummary[cId] || { count: 0, total: 0, paid: 0 };
-        const retAmt = returnsSummary[cName] || 0;
-        const invoicedTotal = invInfo.total;
-        const receivedTotal = invInfo.paid;
-        const closeBal = effectiveOpen + invoicedTotal - receivedTotal - retAmt;
+        const initialOpen = (c.balance_nature || '').toLowerCase().includes('credit') ? -openBal : openBal;
 
         // Build party's transaction and voucher hierarchy
         const partyInvoices = detailedInvoices.filter(
@@ -303,10 +356,58 @@ export const BasicAccountReportPrint: React.FC = () => {
         const partyReturns = detailedSalesReturns.filter(
           (ret) => (ret.customer_name || '').trim().toLowerCase() === cName
         );
-        const partyVouchers = vouchersByParty[cName] || [];
+        const partyVouchers = (vouchersByParty[cName] || []).filter(
+          (v) =>
+            (v.voucher_type || '').includes('Receive') ||
+            (v.voucher_no || '').startsWith('CRV') ||
+            (Number(v.credit || 0) > 0 && !(v.voucher_type || '').includes('Return') && !(v.voucher_type || '').includes('Accrual'))
+        );
 
-        // 1. Bill Vouchers (SAV)
-        const bills = partyInvoices.map((inv) => {
+        const hasDateRange = criteria.dateMode === 'multi' && Boolean(criteria.dateFrom) && Boolean(criteria.dateTo);
+        const hasSingleDate = criteria.dateMode === 'single' && Boolean(criteria.singleDate);
+
+        let preInvoiced = 0;
+        let preReceived = 0;
+        let preReturns = 0;
+
+        let activeInvoices = partyInvoices;
+        let activeVouchers = partyVouchers;
+        let activeReturns = partyReturns;
+
+        if (hasDateRange) {
+          const dFrom = criteria.dateFrom!;
+          const dTo = criteria.dateTo!;
+
+          partyInvoices.forEach((inv) => {
+            if (inv.sale_date && inv.sale_date < dFrom) {
+              preInvoiced += Number(inv.total_amount || 0);
+            }
+          });
+          partyVouchers.forEach((v) => {
+            if (v.voucher_date && v.voucher_date < dFrom) {
+              preReceived += Number(v.credit || v.total_amount || 0);
+            }
+          });
+          partyReturns.forEach((ret) => {
+            if (ret.return_date && ret.return_date < dFrom) {
+              preReturns += Number(ret.total_amount || 0);
+            }
+          });
+
+          activeInvoices = partyInvoices.filter((inv) => !inv.sale_date || (inv.sale_date >= dFrom && inv.sale_date <= dTo));
+          activeVouchers = partyVouchers.filter((v) => !v.voucher_date || (v.voucher_date >= dFrom && v.voucher_date <= dTo));
+          activeReturns = partyReturns.filter((ret) => !ret.return_date || (ret.return_date >= dFrom && ret.return_date <= dTo));
+        } else if (hasSingleDate) {
+          const sDate = criteria.singleDate!;
+          activeInvoices = partyInvoices.filter((inv) => !inv.sale_date || inv.sale_date <= sDate);
+          activeVouchers = partyVouchers.filter((v) => !v.voucher_date || v.voucher_date <= sDate);
+          activeReturns = partyReturns.filter((ret) => !ret.return_date || ret.return_date <= sDate);
+        }
+
+        const periodOpeningBal = initialOpen + preInvoiced - preReceived - preReturns;
+
+        // 1. Bill Vouchers (SAV) in active period
+        const bills = activeInvoices.map((inv) => {
           const invKey = String(inv.invoice_no || '').trim().toLowerCase();
           const matchedVoucher = (vouchersByInvoiceNo[invKey] || []).find(
             (v) => (v.voucher_type || '').includes('Sale') || (v.voucher_no || '').startsWith('SAV')
@@ -325,26 +426,19 @@ export const BasicAccountReportPrint: React.FC = () => {
           };
         });
 
-        // 2. Receipt / Payment Vouchers (CRV)
-        const receipts = partyVouchers
-          .filter(
-            (v) =>
-              (v.voucher_type || '').includes('Receive') ||
-              (v.voucher_no || '').startsWith('CRV') ||
-              (Number(v.credit || 0) > 0 && !(v.voucher_type || '').includes('Return'))
-          )
-          .map((v) => ({
-            id: String(v.id),
-            voucherNo: v.voucher_no,
-            voucherType: v.voucher_type || 'Customer Receive Voucher',
-            refNo: v.original_invoice_no || 'Receipt Slip',
-            date: v.voucher_date || '—',
-            amount: Number(v.credit || v.total_amount || 0),
-            mode: v.description || 'Cash / Bank Receipt'
-          }));
+        // 2. Receipt / Payment Vouchers (CRV) in active period
+        const receipts = activeVouchers.map((v) => ({
+          id: String(v.id),
+          voucherNo: v.voucher_no,
+          voucherType: v.voucher_type || 'Customer Receive Voucher',
+          refNo: v.original_invoice_no || 'Receipt Slip',
+          date: v.voucher_date || '—',
+          amount: Number(v.credit || v.total_amount || 0),
+          mode: v.description || 'Cash / Bank Receipt'
+        }));
 
-        // 3. Return Vouchers (SRV)
-        const returns = partyReturns.map((ret) => {
+        // 3. Return Vouchers (SRV) in active period
+        const returns = activeReturns.map((ret) => {
           const retKey = String(ret.return_no || '').trim().toLowerCase();
           const matchedVoucher = (vouchersByInvoiceNo[retKey] || []).find(
             (v) => (v.voucher_type || '').includes('Return') || (v.voucher_no || '').startsWith('SRV')
@@ -359,13 +453,21 @@ export const BasicAccountReportPrint: React.FC = () => {
           };
         });
 
+        const invoicedTotal = bills.reduce((sum, b) => sum + b.amount, 0);
+        const voucherReceived = receipts.reduce((sum, rc) => sum + rc.amount, 0);
+        const invoicePaidSum = bills.reduce((sum, b) => sum + b.paid, 0);
+        const receivedTotal = Math.max(invoicePaidSum, voucherReceived);
+        const retAmt = returns.reduce((sum, r) => sum + r.amount, 0);
+
+        const closeBal = periodOpeningBal + invoicedTotal - receivedTotal - retAmt;
+
         return {
           id: c.id,
           code: c.customer_code || c.customerCode || c.account_code || '—',
           name: c.customer_name || c.customerName || c.customername || c.name || 'Customer',
           area: c.area || c.city || '—',
           phone: c.phone || c.primaryPhone || c.primaryphone || '—',
-          openingBalance: effectiveOpen,
+          openingBalance: periodOpeningBal,
           invoicedAmount: invoicedTotal,
           receivedAmount: receivedTotal,
           returnAmount: retAmt,
@@ -381,6 +483,11 @@ export const BasicAccountReportPrint: React.FC = () => {
           }
         };
       });
+
+      if (criteria.hideZeroBalances) {
+        return rows.filter((r) => Math.abs(r.closingBalance) > 0.01);
+      }
+      return rows;
     }
 
     if (criteria.reportType === 'vendor') {
@@ -391,19 +498,10 @@ export const BasicAccountReportPrint: React.FC = () => {
         pool = pool.filter((v) => idSet.has(String(v.id)) || idSet.has(String(v.vendor_code || v.vendorCode)));
       }
 
-      if (criteria.hideZeroBalances) {
-        pool = pool.filter((v) => Math.abs(Number(v.currentBalance || v.balance || v.current_balance || 0)) > 0);
-      }
-
-      return pool.map((v) => {
+      const rows = pool.map((v) => {
         const vName = String(v.vendor_name || v.name || '').trim().toLowerCase();
         const openBal = Math.abs(Number(v.opening_balance || 0));
-        const effectiveOpen = (v.balance_nature || '').toLowerCase().includes('debit') ? -openBal : openBal;
-        const purInfo = purchasesSummary[vName] || { count: 0, total: 0, paid: 0 };
-        const retAmt = purchaseReturnsSummary[vName] || 0;
-        const invoicedTotal = purInfo.total;
-        const paidTotal = purInfo.paid;
-        const closeBal = effectiveOpen + invoicedTotal - paidTotal - retAmt;
+        const initialOpen = (v.balance_nature || '').toLowerCase().includes('debit') ? -openBal : openBal;
 
         // Build vendor's transaction and voucher hierarchy
         const partyPurchases = detailedPurchases.filter(
@@ -414,10 +512,60 @@ export const BasicAccountReportPrint: React.FC = () => {
         const partyReturns = detailedPurchaseReturns.filter(
           (ret) => (ret.vendor_name || '').trim().toLowerCase() === vName
         );
-        const partyVouchers = vouchersByParty[vName] || [];
+        const partyVouchers = (vouchersByParty[vName] || []).filter(
+          (v) =>
+            (v.voucher_type || '').includes('Payment') ||
+            (v.voucher_no || '').startsWith('CPV') ||
+            (v.voucher_no || '').startsWith('VPV') ||
+            (v.voucher_no || '').startsWith('BPV') ||
+            (Number(v.debit || 0) > 0 && !(v.voucher_type || '').includes('Return') && !(v.voucher_type || '').includes('Accrual') && !(v.voucher_type || '').includes('Sale'))
+        );
+
+        const hasDateRange = criteria.dateMode === 'multi' && Boolean(criteria.dateFrom) && Boolean(criteria.dateTo);
+        const hasSingleDate = criteria.dateMode === 'single' && Boolean(criteria.singleDate);
+
+        let prePurchased = 0;
+        let prePaid = 0;
+        let preReturns = 0;
+
+        let activePurchases = partyPurchases;
+        let activeVouchers = partyVouchers;
+        let activeReturns = partyReturns;
+
+        if (hasDateRange) {
+          const dFrom = criteria.dateFrom!;
+          const dTo = criteria.dateTo!;
+
+          partyPurchases.forEach((p) => {
+            if (p.purchase_date && p.purchase_date < dFrom) {
+              prePurchased += Number(p.total_amount || 0);
+            }
+          });
+          partyVouchers.forEach((v) => {
+            if (v.voucher_date && v.voucher_date < dFrom) {
+              prePaid += Number(v.debit || v.total_amount || 0);
+            }
+          });
+          partyReturns.forEach((ret) => {
+            if (ret.return_date && ret.return_date < dFrom) {
+              preReturns += Number(ret.total_amount || 0);
+            }
+          });
+
+          activePurchases = partyPurchases.filter((p) => !p.purchase_date || (p.purchase_date >= dFrom && p.purchase_date <= dTo));
+          activeVouchers = partyVouchers.filter((v) => !v.voucher_date || (v.voucher_date >= dFrom && v.voucher_date <= dTo));
+          activeReturns = partyReturns.filter((ret) => !ret.return_date || (ret.return_date >= dFrom && ret.return_date <= dTo));
+        } else if (hasSingleDate) {
+          const sDate = criteria.singleDate!;
+          activePurchases = partyPurchases.filter((p) => !p.purchase_date || p.purchase_date <= sDate);
+          activeVouchers = partyVouchers.filter((v) => !v.voucher_date || v.voucher_date <= sDate);
+          activeReturns = partyReturns.filter((ret) => !ret.return_date || ret.return_date <= sDate);
+        }
+
+        const periodOpeningBal = initialOpen + prePurchased - prePaid - preReturns;
 
         // 1. Bill Vouchers (PAV)
-        const bills = partyPurchases.map((p) => {
+        const bills = activePurchases.map((p) => {
           const pKey = String(p.purchase_no || '').trim().toLowerCase();
           const matchedVoucher = (vouchersByInvoiceNo[pKey] || []).find(
             (v) => (v.voucher_type || '').includes('Purchase') || (v.voucher_no || '').startsWith('PAV')
@@ -434,27 +582,19 @@ export const BasicAccountReportPrint: React.FC = () => {
           };
         });
 
-        // 2. Payment Vouchers (CPV / VPV)
-        const receipts = partyVouchers
-          .filter(
-            (v) =>
-              (v.voucher_type || '').includes('Payment') ||
-              (v.voucher_no || '').startsWith('CPV') ||
-              (v.voucher_no || '').startsWith('VPV') ||
-              (Number(v.debit || 0) > 0 && !(v.voucher_type || '').includes('Return'))
-          )
-          .map((v) => ({
-            id: String(v.id),
-            voucherNo: v.voucher_no,
-            voucherType: v.voucher_type || 'Payment Voucher',
-            refNo: v.original_invoice_no || 'Payment Slip',
-            date: v.voucher_date || '—',
-            amount: Number(v.debit || v.total_amount || 0),
-            mode: v.description || 'Cash / Bank Payment'
-          }));
+        // 2. Payment Vouchers (CPV / VPV / BPV)
+        const receipts = activeVouchers.map((v) => ({
+          id: String(v.id),
+          voucherNo: v.voucher_no,
+          voucherType: v.voucher_type || 'Payment Voucher',
+          refNo: v.original_invoice_no || 'Payment Slip',
+          date: v.voucher_date || '—',
+          amount: Number(v.debit || v.total_amount || 0),
+          mode: v.description || 'Cash / Bank Payment'
+        }));
 
         // 3. Return Vouchers (PRV)
-        const returns = partyReturns.map((ret) => {
+        const returns = activeReturns.map((ret) => {
           const retKey = String(ret.return_no || '').trim().toLowerCase();
           const matchedVoucher = (vouchersByInvoiceNo[retKey] || []).find(
             (v) => (v.voucher_type || '').includes('Return') || (v.voucher_no || '').startsWith('PRV')
@@ -469,13 +609,21 @@ export const BasicAccountReportPrint: React.FC = () => {
           };
         });
 
+        const invoicedTotal = bills.reduce((sum, b) => sum + b.amount, 0);
+        const voucherPaid = receipts.reduce((sum, rc) => sum + rc.amount, 0);
+        const purPaidSum = bills.reduce((sum, b) => sum + b.paid, 0);
+        const paidTotal = Math.max(purPaidSum, voucherPaid);
+        const retAmt = returns.reduce((sum, r) => sum + r.amount, 0);
+
+        const closeBal = periodOpeningBal + invoicedTotal - paidTotal - retAmt;
+
         return {
           id: v.id,
           code: v.vendor_code || v.vendorCode || '—',
           name: v.vendor_name || v.name || 'Vendor',
           area: v.category || v.city || 'Supplier',
           phone: v.phone || v.phone_no || v.cell_no || v.mobile || '—',
-          openingBalance: effectiveOpen,
+          openingBalance: periodOpeningBal,
           invoicedAmount: invoicedTotal,
           receivedAmount: paidTotal,
           returnAmount: retAmt,
@@ -491,6 +639,11 @@ export const BasicAccountReportPrint: React.FC = () => {
           }
         };
       });
+
+      if (criteria.hideZeroBalances) {
+        return rows.filter((r) => Math.abs(r.closingBalance) > 0.01);
+      }
+      return rows;
     }
 
     // Chart of Accounts / Cash & Bank / Expense
@@ -607,18 +760,32 @@ export const BasicAccountReportPrint: React.FC = () => {
     let totalReturns = 0;
 
     // Receivables and advances from customers
-    rawCustomers.forEach((c) => {
-      const bal = Number(c.computed_balance ?? c.current_balance ?? c.balance ?? 0);
-      if (bal > 0) totalReceivables += bal;
-      else if (bal < 0) totalAdvances += Math.abs(bal);
-    });
+    if (criteria?.reportType === 'customer') {
+      sortedAccountRows.forEach((r) => {
+        if (r.closingBalance > 0) totalReceivables += r.closingBalance;
+        else if (r.closingBalance < 0) totalAdvances += Math.abs(r.closingBalance);
+      });
+    } else {
+      rawCustomers.forEach((c) => {
+        const bal = Number(c.computed_balance ?? c.current_balance ?? c.balance ?? 0);
+        if (bal > 0) totalReceivables += bal;
+        else if (bal < 0) totalAdvances += Math.abs(bal);
+      });
+    }
 
     // Payables from vendors
-    rawVendors.forEach((v) => {
-      const bal = Number(v.computed_balance ?? v.currentBalance ?? v.balance ?? 0);
-      if (bal > 0) totalPayables += bal;
-      else if (bal < 0) totalAdvances += Math.abs(bal);
-    });
+    if (criteria?.reportType === 'vendor') {
+      sortedAccountRows.forEach((r) => {
+        if (r.closingBalance > 0) totalPayables += r.closingBalance;
+        else if (r.closingBalance < 0) totalAdvances += Math.abs(r.closingBalance);
+      });
+    } else {
+      rawVendors.forEach((v) => {
+        const bal = Number(v.computed_balance ?? v.currentBalance ?? v.balance ?? 0);
+        if (bal > 0) totalPayables += bal;
+        else if (bal < 0) totalAdvances += Math.abs(bal);
+      });
+    }
 
     // Liquid funds
     rawBanks.forEach((b) => {
@@ -641,9 +808,14 @@ export const BasicAccountReportPrint: React.FC = () => {
       totalInflows,
       totalOutflows,
       totalReturns,
-      netFinancialFlow: totalReceivables - totalPayables
+      netFinancialFlow:
+        criteria?.reportType === 'customer'
+          ? totalReceivables - totalAdvances
+          : criteria?.reportType === 'vendor'
+          ? totalPayables - totalAdvances
+          : totalReceivables - totalPayables
     };
-  }, [rawCustomers, rawVendors, rawBanks, sortedAccountRows]);
+  }, [criteria?.reportType, rawCustomers, rawVendors, rawBanks, sortedAccountRows]);
 
   // Dynamic KPI Card Config depending on whether Customer, Vendor or CoA report
   const kpiCards = useMemo(() => {
@@ -918,6 +1090,34 @@ export const BasicAccountReportPrint: React.FC = () => {
               </button>
             </div>
 
+            {/* Quick Scope Toggle: All History vs Selected Date Range */}
+            <div className="inline-flex items-center p-1 rounded-xl border border-stroke dark:border-strokedark bg-gray-100 dark:bg-meta-4/40 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setCriteria((prev) => prev ? { ...prev, dateMode: 'all' } : null)}
+                className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                  criteria.dateMode === 'all'
+                    ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+                title="View All History Turnover & Balances"
+              >
+                All Time
+              </button>
+              <button
+                type="button"
+                onClick={() => setCriteria((prev) => prev ? { ...prev, dateMode: 'multi' } : null)}
+                className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                  criteria.dateMode === 'multi'
+                    ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+                title="View Selected Date Range"
+              >
+                Period
+              </button>
+            </div>
+
             {/* Expand / Collapse All & Rows Limit in Detail View */}
             {viewMode === 'detailed' && (
               <>
@@ -1053,6 +1253,8 @@ export const BasicAccountReportPrint: React.FC = () => {
               <strong className="text-black dark:text-white">
                 {criteria.dateMode === 'single'
                   ? `As of ${criteria.singleDate}`
+                  : criteria.dateMode === 'all'
+                  ? 'All History / Complete Ledger'
                   : `${criteria.dateFrom} → ${criteria.dateTo}`}
               </strong>
             </p>

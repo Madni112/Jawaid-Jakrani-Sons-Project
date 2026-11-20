@@ -29,7 +29,7 @@ export interface BasicAccountFilterCriteria {
   accountCodes?: string[];
   areas?: string[];
   hideZeroBalances?: boolean;
-  dateMode: 'single' | 'multi';
+  dateMode: 'all' | 'single' | 'multi';
   singleDate?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -361,7 +361,7 @@ export const BasicAccountReport: React.FC = () => {
   const [selectedAccountCodes, setSelectedAccountCodes] = useState<string[]>([]);
 
   // Date Filtering
-  const [dateMode, setDateMode] = useState<'single' | 'multi'>('multi');
+  const [dateMode, setDateMode] = useState<'all' | 'single' | 'multi'>('all');
   const [singleDate, setSingleDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [dateFrom, setDateFrom] = useState<string>(() => {
     const d = new Date();
@@ -384,13 +384,16 @@ export const BasicAccountReport: React.FC = () => {
           setBusinessName(sysCfg.business_name);
         }
 
-        const [coaRes, custRes, venRes, bankRes, invRes, retRes] = await Promise.all([
+        const [coaRes, custRes, venRes, bankRes, invRes, retRes, vouchRes, purRes, pretRes] = await Promise.all([
           fetchAllPages(supabase.from('chart_of_accounts').select('*').order('account_code')),
           fetchAllPages(supabase.from('customers').select('*').order('customer_name')),
           fetchAllPages(supabase.from('vendors').select('*').order('name')),
           fetchAllPages(supabase.from('banks').select('*').order('bank_name')),
           fetchAllPages(supabase.from('sales_invoices').select('customer_name, total_amount, amount_paid')),
-          fetchAllPages(supabase.from('sales_returns').select('customer_name, total_amount'))
+          fetchAllPages(supabase.from('sales_returns').select('customer_name, total_amount')),
+          fetchAllPages(supabase.from('financial_vouchers').select('voucher_no, voucher_type, customer_name, party_name, credit, debit, total_amount')),
+          fetchAllPages(supabase.from('supplier_purchases').select('vendor_name, supplier_name, total_amount, amount_paid, paid_amount')),
+          fetchAllPages(supabase.from('purchase_returns').select('vendor_name, total_amount'))
         ]);
 
         if (!isMounted) return;
@@ -408,31 +411,137 @@ export const BasicAccountReport: React.FC = () => {
           invBalMap[k].net += (tot - paid);
         });
 
+        const retBalMap: Record<string, number> = {};
         (retRes.data || []).forEach((ret: any) => {
           const k = (ret.customer_name || '').trim().toLowerCase();
           if (!k) return;
-          if (!invBalMap[k]) invBalMap[k] = { total: 0, paid: 0, net: 0 };
-          invBalMap[k].net -= Number(ret.total_amount || 0);
+          retBalMap[k] = (retBalMap[k] || 0) + Number(ret.total_amount || 0);
         });
 
+        // Sum vouchers for customer receipts and vendor payments
+        const custReceiptSum: Record<string, number> = {};
+        const vendPaymentSum: Record<string, number> = {};
+        (vouchRes.data || []).forEach((v: any) => {
+          const p = (v.party_name || v.customer_name || '').trim().toLowerCase();
+          if (!p) return;
+          const isReceive =
+            (v.voucher_type || '').includes('Receive') ||
+            (v.voucher_no || '').startsWith('CRV') ||
+            (Number(v.credit || 0) > 0 && !(v.voucher_type || '').includes('Return') && !(v.voucher_type || '').includes('Accrual'));
+          if (isReceive) {
+            custReceiptSum[p] = (custReceiptSum[p] || 0) + Number(v.credit || v.total_amount || 0);
+          }
+          const isPayment =
+            (v.voucher_type || '').includes('Payment') ||
+            (v.voucher_no || '').startsWith('CPV') ||
+            (v.voucher_no || '').startsWith('VPV') ||
+            (v.voucher_no || '').startsWith('BPV') ||
+            (Number(v.debit || 0) > 0 && !(v.voucher_type || '').includes('Return') && !(v.voucher_type || '').includes('Accrual') && !(v.voucher_type || '').includes('Sale'));
+          if (isPayment) {
+            vendPaymentSum[p] = (vendPaymentSum[p] || 0) + Number(v.debit || v.total_amount || 0);
+          }
+        });
+
+        // Supplier purchases & returns maps
+        const purBalMap: Record<string, { total: number; paid: number }> = {};
+        (purRes.data || []).forEach((p: any) => {
+          const k = (p.vendor_name || p.supplier_name || '').trim().toLowerCase();
+          if (!k) return;
+          if (!purBalMap[k]) purBalMap[k] = { total: 0, paid: 0 };
+          purBalMap[k].total += Number(p.total_amount || 0);
+          purBalMap[k].paid += Number(p.amount_paid || p.paid_amount || 0);
+        });
+
+        const pretBalMap: Record<string, number> = {};
+        (pretRes.data || []).forEach((pr: any) => {
+          const k = (pr.vendor_name || '').trim().toLowerCase();
+          if (!k) return;
+          pretBalMap[k] = (pretBalMap[k] || 0) + Number(pr.total_amount || 0);
+        });
+
+        // Collect ad-hoc customer parties from invoices/vouchers not in customers master
+        const existingCustNames = new Set(
+          (custRes.data || []).map((c: any) => (c.customer_name || c.name || '').trim().toLowerCase())
+        );
+        const adhocCustomers: any[] = [];
+        (invRes.data || []).forEach((inv: any) => {
+          const k = (inv.customer_name || '').trim();
+          const kLower = k.toLowerCase();
+          if (k && !existingCustNames.has(kLower)) {
+            existingCustNames.add(kLower);
+            adhocCustomers.push({
+              id: `adhoc-${kLower}`,
+              customer_name: k,
+              customer_code: 'POS',
+              opening_balance: 0,
+              balance_nature: 'debit',
+              area: 'Direct / Walk-in'
+            });
+          }
+        });
+        (vouchRes.data || []).forEach((v: any) => {
+          const k = (v.party_name || v.customer_name || '').trim();
+          const kLower = k.toLowerCase();
+          if (k && !existingCustNames.has(kLower)) {
+            existingCustNames.add(kLower);
+            adhocCustomers.push({
+              id: `adhoc-${kLower}`,
+              customer_name: k,
+              customer_code: 'VOUCHER',
+              opening_balance: 0,
+              balance_nature: 'credit',
+              area: 'Direct / Walk-in'
+            });
+          }
+        });
+
+        const combinedCustPool = [...(custRes.data || []), ...adhocCustomers];
+
         const loadedCoa = coaRes.data || [];
-        const loadedCust = (custRes.data || []).map((c: any) => {
+        const loadedCust = combinedCustPool.map((c: any) => {
           const k = (c.customer_name || c.customerName || c.customername || c.name || '').trim().toLowerCase();
-          const dynamicNet = invBalMap[k]?.net || 0;
-          const finalBal = (Number(c.balance) || 0) !== 0
-            ? Number(c.balance)
-            : (Number(c.opening_balance || 0) + dynamicNet);
+          const invoiced = invBalMap[k]?.total || 0;
+          const invoicePaid = invBalMap[k]?.paid || 0;
+          const voucherPaid = custReceiptSum[k] || 0;
+          const totalPaid = Math.max(invoicePaid, voucherPaid);
+          const totalRet = retBalMap[k] || 0;
+          const openBal = Math.abs(Number(c.opening_balance || 0));
+          const effectiveOpen = (c.balance_nature || '').toLowerCase().includes('credit') ? -openBal : openBal;
+          const dynamicNet = invoiced - totalPaid - totalRet;
+          const finalBal = effectiveOpen + dynamicNet;
 
           return {
             ...c,
             balance: finalBal,
             current_balance: finalBal,
             computed_balance: finalBal,
-            invoiced_total: invBalMap[k]?.total || 0,
-            paid_total: invBalMap[k]?.paid || 0
+            invoiced_total: invoiced,
+            paid_total: totalPaid
           };
         });
-        const loadedVen = venRes.data || [];
+
+        const loadedVen = (venRes.data || []).map((v: any) => {
+          const k = (v.vendor_name || v.name || '').trim().toLowerCase();
+          const purTotal = purBalMap[k]?.total || 0;
+          const purPaid = purBalMap[k]?.paid || 0;
+          const voucherPaid = vendPaymentSum[k] || 0;
+          const totalPaid = Math.max(purPaid, voucherPaid);
+          const pretTotal = pretBalMap[k] || 0;
+          const openBal = Math.abs(Number(v.opening_balance || 0));
+          const effectiveOpen = (v.balance_nature || '').toLowerCase().includes('debit') ? -openBal : openBal;
+          const dynamicNet = purTotal - totalPaid - pretTotal;
+          const finalBal = effectiveOpen + dynamicNet;
+
+          return {
+            ...v,
+            balance: finalBal,
+            currentBalance: finalBal,
+            current_balance: finalBal,
+            computed_balance: finalBal,
+            purchased_total: purTotal,
+            paid_total: totalPaid
+          };
+        });
         const loadedBanks = bankRes.data || [];
 
         setCoaMaster(loadedCoa);
@@ -639,7 +748,7 @@ export const BasicAccountReport: React.FC = () => {
     setSelectedSubHeads([]);
     setSelectedAccountCodes([]);
     setHideZeroBalances(false);
-    setDateMode('multi');
+    setDateMode('all');
     const d = new Date();
     d.setDate(d.getDate() - 30);
     setDateFrom(d.toISOString().split('T')[0]);
@@ -879,6 +988,17 @@ export const BasicAccountReport: React.FC = () => {
               <div className="flex items-center gap-1 bg-gray-100 dark:bg-meta-4/60 p-0.5 rounded-lg">
                 <button
                   type="button"
+                  onClick={() => setDateMode('all')}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition ${
+                    dateMode === 'all'
+                      ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
+                      : 'text-gray-500 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  All History
+                </button>
+                <button
+                  type="button"
                   onClick={() => setDateMode('single')}
                   className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition ${
                     dateMode === 'single'
@@ -903,7 +1023,11 @@ export const BasicAccountReport: React.FC = () => {
             </div>
 
             {/* Inputs */}
-            {dateMode === 'single' ? (
+            {dateMode === 'all' ? (
+              <div className="p-2.5 rounded-xl border border-stroke dark:border-strokedark bg-gray-50/50 dark:bg-meta-4/20 text-xs text-gray-500 dark:text-gray-400">
+                Displaying complete historical turnover and current active balances across all records.
+              </div>
+            ) : dateMode === 'single' ? (
               <div>
                 <span className="text-[10px] text-gray-400 block mb-0.5">As of Date</span>
                 <input
