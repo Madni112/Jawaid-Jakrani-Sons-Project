@@ -61,14 +61,42 @@ export const BasicAccountReportPrint: React.FC = () => {
   const [detailedPurchaseReturns, setDetailedPurchaseReturns] = useState<any[]>([]);
   const [vouchersMaster, setVouchersMaster] = useState<any[]>([]);
 
-  // View Mode: 'default' | 'detailed'
-  const [viewMode, setViewMode] = useState<'default' | 'detailed'>('default');
+  // Global & Per-Row Breakdown Expansion (High-Speed O(1) State like Sales/Purchase reports)
+  const [expandAllBreakdown, setExpandAllBreakdown] = useState(false);
+  const [isTogglingExpand, setIsTogglingExpand] = useState(false);
+  const [individualToggledIds, setIndividualToggledIds] = useState<Set<string>>(new Set());
 
-  // Detail transaction rows limit per party: 'all'
-  const [detailLimit, setDetailLimit] = useState<number | 'all'>('all');
+  // Check if a row is expanded: O(1) instant lookup
+  const isRowExpanded = (partyId: string | number) => {
+    const idStr = String(partyId);
+    if (expandAllBreakdown) {
+      return !individualToggledIds.has(idStr); // Expanded unless individually collapsed
+    }
+    return individualToggledIds.has(idStr); // Collapsed unless individually expanded
+  };
 
-  // Expanded party cards in detailed view (party id -> boolean)
-  const [expandedParties, setExpandedParties] = useState<Record<string, boolean>>({});
+  const handleToggleRow = (partyId: string | number) => {
+    const idStr = String(partyId);
+    setIndividualToggledIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(idStr)) next.delete(idStr);
+      else next.add(idStr);
+      return next;
+    });
+  };
+
+  // Toggle all breakdowns with asynchronous loader to prevent UI freeze
+  const handleToggleAllBreakdowns = () => {
+    if (isTogglingExpand) return;
+    setIsTogglingExpand(true);
+    setTimeout(() => {
+      setExpandAllBreakdown((prev) => !prev);
+      setIndividualToggledIds(new Set()); // Reset individual overrides
+      setTimeout(() => {
+        setIsTogglingExpand(false);
+      }, 120);
+    }, 50);
+  };
 
   // Layout Theme: 'modern' | 'classic'
   const [layoutTheme, setLayoutTheme] = useState<'modern' | 'classic'>(() => {
@@ -84,25 +112,6 @@ export const BasicAccountReportPrint: React.FC = () => {
     try {
       localStorage.setItem('jakwani_reports_layout', next);
     } catch {}
-  };
-
-  const togglePartyExpand = (partyId: string) => {
-    setExpandedParties((prev) => ({
-      ...prev,
-      [partyId]: prev[partyId] !== undefined ? !prev[partyId] : false
-    }));
-  };
-
-  const expandAllParties = (allIds: string[]) => {
-    const next: Record<string, boolean> = {};
-    allIds.forEach((id) => {
-      next[id] = true;
-    });
-    setExpandedParties(next);
-  };
-
-  const collapseAllParties = () => {
-    setExpandedParties({});
   };
 
   const handleHeaderSort = (col: 'code' | 'name' | 'opening' | 'invoiced' | 'received' | 'return' | 'balance' | 'expense') => {
@@ -1386,39 +1395,6 @@ export const BasicAccountReportPrint: React.FC = () => {
           </button>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* View Mode Pill Selector: Default View vs Detail View */}
-            <div className="inline-flex items-center p-1 rounded-xl border border-stroke dark:border-strokedark bg-gray-100 dark:bg-meta-4/40 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => setViewMode('default')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === 'default'
-                    ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
-                    : 'text-gray-500 hover:text-black dark:hover:text-white'
-                }`}
-                title="Standard Ledger Summary Statement"
-              >
-                <MdFormatListBulleted size={14} />
-                <span>Default View</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('detailed');
-                  expandAllParties(sortedAccountRows.map((r) => String(r.id)));
-                }}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === 'detailed'
-                    ? 'bg-white dark:bg-boxdark text-primary dark:text-white shadow-xs font-black'
-                    : 'text-gray-500 hover:text-black dark:hover:text-white'
-                }`}
-                title="Hierarchical Breakdown with all Bill, Transaction & Return Vouchers"
-              >
-                <MdAccountTree size={14} />
-                <span>Detail View</span>
-              </button>
-            </div>
-
             {/* Quick Scope Toggle: All History vs Selected Date Range */}
             <div className="inline-flex items-center p-1 rounded-xl border border-stroke dark:border-strokedark bg-gray-100 dark:bg-meta-4/40 text-xs font-bold">
               <button
@@ -1492,29 +1468,32 @@ export const BasicAccountReportPrint: React.FC = () => {
               </select>
             </div>
 
-            {/* Expand / Collapse All & Rows Limit in Detail View */}
-            {viewMode === 'detailed' && (
-              <>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => expandAllParties(sortedAccountRows.map((r) => String(r.id)))}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer text-gray-700 dark:text-gray-300"
-                    title="Expand All Parties"
-                  >
-                    <MdUnfoldMore size={15} />
-                    <span>Expand All</span>
-                  </button>
-                  <button
-                    onClick={collapseAllParties}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-100 dark:hover:bg-meta-4 transition shadow-xs cursor-pointer text-gray-700 dark:text-gray-300"
-                    title="Collapse All Parties"
-                  >
-                    <MdUnfoldLess size={15} />
-                    <span>Collapse</span>
-                  </button>
-                </div>
-              </>
-            )}
+            {/* Single Toggle Expand / Collapse All Button matching Sales & Purchase Reports */}
+            <button
+              type="button"
+              onClick={handleToggleAllBreakdowns}
+              disabled={isTogglingExpand}
+              className={`group relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all duration-200 cursor-pointer select-none shadow-xs disabled:cursor-wait ${
+                isTogglingExpand
+                  ? 'bg-blue-50/80 dark:bg-blue-950/50 border-blue-400 text-blue-600 dark:text-blue-300 opacity-90'
+                  : expandAllBreakdown
+                  ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white border-blue-600 shadow-md shadow-blue-500/20 active:scale-95'
+                  : 'bg-white dark:bg-boxdark border-stroke dark:border-strokedark text-gray-700 dark:text-gray-200 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 dark:hover:bg-meta-4/60 dark:hover:border-blue-500 dark:hover:text-blue-300 active:bg-blue-100 active:scale-95'
+              }`}
+            >
+              {isTogglingExpand ? (
+                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+              ) : expandAllBreakdown ? (
+                <MdUnfoldLess size={16} className="shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:translate-y-0" />
+              ) : (
+                <MdUnfoldMore size={16} className="shrink-0 transition-transform duration-200 group-hover:translate-y-0.5 group-active:translate-y-0" />
+              )}
+              <span>
+                {isTogglingExpand
+                  ? (expandAllBreakdown ? 'Collapsing...' : 'Expanding...')
+                  : (expandAllBreakdown ? 'Collapse All' : 'Expand All')}
+              </span>
+            </button>
 
             {/* Layout Theme Toggle */}
             <button
@@ -1566,7 +1545,7 @@ export const BasicAccountReportPrint: React.FC = () => {
               <span className="text-xs font-bold text-gray-500 uppercase">
                 {criteria.reportType.toUpperCase()} FINANCIAL STATEMENT
               </span>
-              {viewMode === 'detailed' && (
+              {expandAllBreakdown && (
                 <>
                   <span className="text-xs text-gray-400">•</span>
                   <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
@@ -1593,7 +1572,7 @@ export const BasicAccountReportPrint: React.FC = () => {
             </p>
             <p className="mt-0.5">
               Print Date: {new Date().toLocaleDateString('en-GB')} • Mode:{' '}
-              <span className="font-semibold capitalize">{viewMode}</span>
+              <span className="font-semibold capitalize">{expandAllBreakdown ? 'Detailed' : 'Summary'}</span>
             </p>
           </div>
         </div>
@@ -1769,9 +1748,7 @@ export const BasicAccountReportPrint: React.FC = () => {
                   </div>
                 </th>
                 <th className="py-2.5 px-2 text-center w-28">Nature</th>
-                {viewMode === 'detailed' && (
-                  <th className="py-2.5 px-2 text-center w-12 print:hidden">Tree</th>
-                )}
+                <th className="py-2.5 px-2 text-center w-12 print:hidden">Tree</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stroke dark:divide-strokedark">
@@ -1779,9 +1756,7 @@ export const BasicAccountReportPrint: React.FC = () => {
                 <tr>
                   <td
                     colSpan={
-                      criteria.reportType === 'customer' || criteria.reportType === 'vendor'
-                        ? viewMode === 'detailed' ? 11 : 10
-                        : viewMode === 'detailed' ? 8 : 7
+                      criteria.reportType === 'customer' || criteria.reportType === 'vendor' ? 11 : 8
                     }
                     className="py-8 text-center text-gray-400"
                   >
@@ -1790,11 +1765,7 @@ export const BasicAccountReportPrint: React.FC = () => {
                 </tr>
               ) : (
                 sortedAccountRows.map((r, idx) => {
-                  const partyIdStr = String(r.id);
-                  const isExpanded =
-                    expandedParties[partyIdStr] !== undefined
-                      ? expandedParties[partyIdStr]
-                      : viewMode === 'detailed';
+                  const isExpanded = isRowExpanded(r.id);
                   const hasDetails =
                     r.detailTree &&
                     (r.detailTree.bills.length > 0 ||
@@ -1802,11 +1773,9 @@ export const BasicAccountReportPrint: React.FC = () => {
                       r.detailTree.returns.length > 0);
 
                   const colSpanTotal =
-                    criteria.reportType === 'customer' || criteria.reportType === 'vendor'
-                      ? viewMode === 'detailed' ? 11 : 10
-                      : viewMode === 'detailed' ? 8 : 7;
+                    criteria.reportType === 'customer' || criteria.reportType === 'vendor' ? 11 : 8;
 
-                  const hasDetailRow = viewMode === 'detailed' && isExpanded;
+                  const hasDetailRow = isExpanded;
 
                   return (
                     <React.Fragment key={r.id}>
@@ -1814,7 +1783,7 @@ export const BasicAccountReportPrint: React.FC = () => {
                       <tr
                         className={`master-row ${hasDetailRow ? 'has-detail-expanded' : ''} hover:bg-gray-50/80 dark:hover:bg-meta-4/20 transition ${
                           isClassic ? (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50') : ''
-                        } ${isExpanded && viewMode === 'detailed' ? 'bg-blue-50/20 dark:bg-meta-4/10' : ''}`}
+                        } ${isExpanded ? 'bg-blue-50/20 dark:bg-meta-4/10' : ''}`}
                       >
                         <td className="py-2 px-2 text-center text-gray-400 font-mono text-[11px]">
                           {idx + 1}
@@ -1824,20 +1793,25 @@ export const BasicAccountReportPrint: React.FC = () => {
                         </td>
                         <td className="py-2 px-2 font-semibold">
                           <div className="flex items-center gap-1.5">
-                            {viewMode === 'detailed' && hasDetails && (
-                              <button
-                                type="button"
-                                onClick={() => togglePartyExpand(partyIdStr)}
-                                className="print:hidden text-gray-400 hover:text-primary transition cursor-pointer"
-                              >
-                                {isExpanded ? (
-                                  <MdKeyboardArrowDown size={16} />
-                                ) : (
-                                  <MdKeyboardArrowUp size={16} className="rotate-90" />
-                                )}
-                              </button>
-                            )}
-                            <span>{r.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRow(r.id)}
+                              className="print:hidden text-gray-400 hover:text-primary transition cursor-pointer"
+                              title={isExpanded ? 'Collapse vouchers' : 'Expand vouchers'}
+                            >
+                              {isExpanded ? (
+                                <MdKeyboardArrowDown size={16} />
+                              ) : (
+                                <MdKeyboardArrowUp size={16} className="rotate-90" />
+                              )}
+                            </button>
+                            <span
+                              onClick={() => handleToggleRow(r.id)}
+                              className="cursor-pointer hover:text-primary transition"
+                              title="Click to toggle voucher breakdown"
+                            >
+                              {r.name}
+                            </span>
                           </div>
                         </td>
                         <td className="py-2 px-2 text-gray-500">{r.area}</td>
@@ -1891,25 +1865,23 @@ export const BasicAccountReportPrint: React.FC = () => {
                             {r.balanceNature}
                           </span>
                         </td>
-                        {viewMode === 'detailed' && (
-                          <td className="py-2 px-2 text-center print:hidden">
-                            <button
-                              type="button"
-                              onClick={() => togglePartyExpand(partyIdStr)}
-                              className="text-gray-400 hover:text-primary transition p-1 cursor-pointer"
-                              title={isExpanded ? 'Collapse vouchers' : 'Expand vouchers'}
-                            >
-                              {isExpanded ? <MdKeyboardArrowUp size={16} /> : <MdKeyboardArrowDown size={16} />}
-                            </button>
-                          </td>
-                        )}
+                        <td className="py-2 px-2 text-center print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRow(r.id)}
+                            className="text-gray-400 hover:text-primary transition p-1 cursor-pointer"
+                            title={isExpanded ? 'Collapse vouchers' : 'Expand vouchers'}
+                          >
+                            {isExpanded ? <MdKeyboardArrowUp size={16} /> : <MdKeyboardArrowDown size={16} />}
+                          </button>
+                        </td>
                       </tr>
 
                       {/* ── DETAIL VIEW: NESTED TRANSACTION & VOUCHER HIERARCHY (NO SCROLLBARS, 100% PRINTABLE) ── */}
-                      {viewMode === 'detailed' && isExpanded && (() => {
-                        const displayedBills = detailLimit === 'all' ? r.detailTree.bills : r.detailTree.bills.slice(0, detailLimit);
-                        const displayedReceipts = detailLimit === 'all' ? r.detailTree.receipts : r.detailTree.receipts.slice(0, detailLimit);
-                        const displayedReturns = detailLimit === 'all' ? r.detailTree.returns : r.detailTree.returns.slice(0, detailLimit);
+                      {isExpanded && (() => {
+                        const displayedBills = r.detailTree.bills;
+                        const displayedReceipts = r.detailTree.receipts;
+                        const displayedReturns = r.detailTree.returns;
 
                         return (
                           <tr className="bg-gray-50/90 dark:bg-meta-4/20 border-b border-stroke dark:border-strokedark">
@@ -1984,19 +1956,6 @@ export const BasicAccountReportPrint: React.FC = () => {
                                             </div>
                                           </div>
                                         ))}
-
-                                        {r.detailTree.bills.length > displayedBills.length && (
-                                          <div className="text-[9.5px] text-gray-500 font-mono text-center pt-1 border-t border-dashed border-stroke dark:border-strokedark print:border-black">
-                                            <span>Showing {displayedBills.length} of {r.detailTree.bills.length} bills</span>
-                                            <button
-                                              type="button"
-                                              onClick={() => setDetailLimit('all')}
-                                              className="print:hidden ml-1 text-primary underline font-bold cursor-pointer"
-                                            >
-                                              (Show all)
-                                            </button>
-                                          </div>
-                                        )}
                                       </div>
                                     )}
 
@@ -2049,19 +2008,6 @@ export const BasicAccountReportPrint: React.FC = () => {
                                             </div>
                                           </div>
                                         ))}
-
-                                        {r.detailTree.receipts.length > displayedReceipts.length && (
-                                          <div className="text-[9.5px] text-gray-500 font-mono text-center pt-1 border-t border-dashed border-stroke dark:border-strokedark print:border-black">
-                                            <span>Showing {displayedReceipts.length} of {r.detailTree.receipts.length} slips</span>
-                                            <button
-                                              type="button"
-                                              onClick={() => setDetailLimit('all')}
-                                              className="print:hidden ml-1 text-emerald-600 underline font-bold cursor-pointer"
-                                            >
-                                              (Show all)
-                                            </button>
-                                          </div>
-                                        )}
                                       </div>
                                     )}
 
@@ -2116,19 +2062,6 @@ export const BasicAccountReportPrint: React.FC = () => {
                                             </div>
                                           </div>
                                         ))}
-
-                                        {r.detailTree.returns.length > displayedReturns.length && (
-                                          <div className="text-[9.5px] text-gray-500 font-mono text-center pt-1 border-t border-dashed border-stroke dark:border-strokedark print:border-black">
-                                            <span>Showing {displayedReturns.length} of {r.detailTree.returns.length} returns</span>
-                                            <button
-                                              type="button"
-                                              onClick={() => setDetailLimit('all')}
-                                              className="print:hidden ml-1 text-rose-600 underline font-bold cursor-pointer"
-                                            >
-                                              (Show all)
-                                            </button>
-                                          </div>
-                                        )}
                                       </div>
                                     )}
 
@@ -2253,7 +2186,7 @@ export const BasicAccountReportPrint: React.FC = () => {
                   ).toLocaleString()}
                 </td>
                 <td></td>
-                {viewMode === 'detailed' && <td className="print:hidden"></td>}
+                <td className="print:hidden"></td>
               </tr>
             </tfoot>
           </table>
