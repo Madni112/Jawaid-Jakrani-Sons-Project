@@ -1007,64 +1007,59 @@ export const BasicAccountReportPrint: React.FC = () => {
       if (criteria.reportType === 'cash_bank') {
         const isCashAcc = codeLower.startsWith('1010') || codeLower.startsWith('1000') || titleLower.includes('cash');
 
-        let cashInflows = detailedInvoices.filter((inv) => {
-          const isCash = (inv.payment_term || '').toLowerCase() === 'cash' || Number(inv.amount_paid || 0) > 0;
-          return isCash && isCashAcc;
-        });
         let cashVoucherInflows = (vouchersMaster || []).filter((v) => {
-          const isCRV = (v.voucher_no || '').startsWith('CRV') || (v.voucher_type || '').includes('Receive');
-          return isCashAcc && isCRV;
+          const vNo = (v.voucher_no || '').toUpperCase();
+          const vType = (v.voucher_type || '').toLowerCase();
+          const isReceive = vNo.startsWith('CRV') || vNo.startsWith('BRV') || vType.includes('receive');
+          if (isCashAcc) {
+            return isReceive && (vNo.startsWith('CRV') || vType.includes('cash') || !vNo.startsWith('BRV'));
+          }
+          return isReceive && (vNo.startsWith('BRV') || vType.includes('bank'));
         });
+
         let cashVoucherOutflows = (vouchersMaster || []).filter((v) => {
-          const isCPV = (v.voucher_no || '').startsWith('CPV') || (v.voucher_type || '').includes('Payment');
-          return isCashAcc && isCPV;
+          const vNo = (v.voucher_no || '').toUpperCase();
+          const vType = (v.voucher_type || '').toLowerCase();
+          const isPayment = vNo.startsWith('CPV') || vNo.startsWith('BPV') || vNo.startsWith('VPV') || vType.includes('payment');
+          if (isCashAcc) {
+            return isPayment && (vNo.startsWith('CPV') || vType.includes('cash') || !vNo.startsWith('BPV'));
+          }
+          return isPayment && (vNo.startsWith('BPV') || vType.includes('bank'));
         });
 
         // Date range filtering
         if (hasDateRange && dFrom && dTo) {
-          cashInflows = cashInflows.filter((inv) => !inv.sale_date || (inv.sale_date >= dFrom && inv.sale_date <= dTo));
           cashVoucherInflows = cashVoucherInflows.filter((v) => !v.voucher_date || (v.voucher_date >= dFrom && v.voucher_date <= dTo));
           cashVoucherOutflows = cashVoucherOutflows.filter((v) => !v.voucher_date || (v.voucher_date >= dFrom && v.voucher_date <= dTo));
         } else if (hasSingleDate && sDate) {
-          cashInflows = cashInflows.filter((inv) => !inv.sale_date || inv.sale_date <= sDate);
           cashVoucherInflows = cashVoucherInflows.filter((v) => !v.voucher_date || v.voucher_date <= sDate);
           cashVoucherOutflows = cashVoucherOutflows.filter((v) => !v.voucher_date || v.voucher_date <= sDate);
         }
 
-        const totalIn =
-          cashInflows.reduce((sum, inv) => sum + Number(inv.amount_paid || inv.total_amount || 0), 0) +
-          cashVoucherInflows.reduce((sum, v) => sum + Number(v.credit || v.total_amount || 0), 0);
+        const totalIn = cashVoucherInflows.reduce((sum, v) => sum + Number(v.credit || v.total_amount || 0), 0);
         const totalOut = cashVoucherOutflows.reduce((sum, v) => sum + Number(v.debit || v.total_amount || 0), 0);
         const closing = openBal + totalIn - totalOut;
 
-        const bills = cashInflows.map((inv) => ({
-          id: String(inv.id),
-          billNo: inv.invoice_no || '—',
-          voucherNo: `CRV-INV-${inv.invoice_no || inv.id}`,
-          voucherType: 'Cash Sale Collection',
-          date: inv.sale_date || '—',
-          amount: Number(inv.amount_paid || inv.total_amount || 0),
-          paid: Number(inv.amount_paid || inv.total_amount || 0),
-          balance: 0
-        }));
-
-        const receipts = cashVoucherInflows.map((v) => ({
+        const receiptsInflows = cashVoucherInflows.map((v) => ({
           id: String(v.id),
+          billNo: v.voucher_no || '—',
           voucherNo: v.voucher_no,
-          voucherType: v.voucher_type || 'Cash Receive Voucher',
-          refNo: v.party_name || v.customer_name || 'Cash Deposit',
+          voucherType: v.voucher_type || (isCashAcc ? 'Cash Receive Voucher' : 'Bank Receive Voucher'),
           date: v.voucher_date || '—',
           amount: Number(v.credit || v.total_amount || 0),
-          mode: v.description || 'Cash Received'
+          paid: Number(v.credit || v.total_amount || 0),
+          balance: 0,
+          party: v.party_name || v.customer_name || 'Cash Deposit'
         }));
 
-        const returns = cashVoucherOutflows.map((v) => ({
+        const paymentsOutflows = cashVoucherOutflows.map((v) => ({
           id: String(v.id),
-          returnNo: v.voucher_no,
           voucherNo: v.voucher_no,
-          voucherType: v.voucher_type || 'Cash Payment Voucher',
+          voucherType: v.voucher_type || (isCashAcc ? 'Cash Payment Voucher' : 'Bank Payment Voucher'),
+          refNo: v.party_name || v.description || 'Payment Slip',
           date: v.voucher_date || '—',
-          amount: Number(v.debit || v.total_amount || 0)
+          amount: Number(v.debit || v.total_amount || 0),
+          mode: v.description || (isCashAcc ? 'Cash Paid' : 'Bank Paid')
         }));
 
         return {
@@ -1080,9 +1075,9 @@ export const BasicAccountReportPrint: React.FC = () => {
           closingBalance: closing,
           balanceNature: closing >= 0 ? 'Debit' : 'Credit',
           detailTree: {
-            bills,
-            receipts,
-            returns,
+            bills: receiptsInflows,
+            receipts: paymentsOutflows,
+            returns: [],
             totalBills: totalIn,
             totalPayments: totalOut,
             totalReturns: 0
@@ -1365,7 +1360,53 @@ export const BasicAccountReportPrint: React.FC = () => {
       ];
     }
 
-    // Chart of Accounts / All / Cash & Bank
+    if (criteria?.reportType === 'cash_bank') {
+      const totalOpen = sortedAccountRows.reduce((s, r) => s + (r.openingBalance || 0), 0);
+      const totalClose = sortedAccountRows.reduce((s, r) => s + (r.closingBalance || 0), 0);
+      const netMovement = kpiTotals.totalInflows - kpiTotals.totalOutflows;
+
+      return [
+        {
+          label: 'Opening Liquid Funds',
+          value: `Rs. ${Math.round(totalOpen).toLocaleString()}`,
+          note: 'Opening bank & cash',
+          textColor: 'text-gray-700 dark:text-gray-200'
+        },
+        {
+          label: 'Total Receipts (Inflows)',
+          value: `Rs. ${Math.round(kpiTotals.totalInflows).toLocaleString()}`,
+          note: 'CRV & BRV cash receipts',
+          textColor: 'text-emerald-600 dark:text-emerald-400',
+          highlight: true
+        },
+        {
+          label: 'Total Payments (Outflows)',
+          value: `Rs. ${Math.round(kpiTotals.totalOutflows).toLocaleString()}`,
+          note: 'CPV & BPV cash payments',
+          textColor: 'text-rose-600 dark:text-rose-400'
+        },
+        {
+          label: 'Net Cash Movement',
+          value: `${netMovement >= 0 ? '+' : '-'}Rs. ${Math.abs(Math.round(netMovement)).toLocaleString()}`,
+          note: 'Period net flow (In - Out)',
+          textColor: netMovement >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+        },
+        {
+          label: 'Active Registers',
+          value: `${sortedAccountRows.length} Accounts`,
+          note: 'Cash & bank accounts'
+        },
+        {
+          label: 'Closing Liquid Reserves',
+          value: `Rs. ${Math.round(totalClose).toLocaleString()}`,
+          note: 'Available closing funds',
+          highlight: true,
+          textColor: 'text-blue-600 dark:text-blue-400'
+        }
+      ];
+    }
+
+    // Chart of Accounts / All General Ledger
     return [
       {
         label: 'Total Receivables',
@@ -2044,17 +2085,25 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200">
                                         <MdReceiptLong className="text-blue-500" size={15} />
                                         <span>
-                                          {criteria.reportType === 'vendor' ? 'Purchase Bills' : 'Sales Invoices'}
+                                          {criteria.reportType === 'cash_bank'
+                                            ? 'Receipts & Inflows'
+                                            : criteria.reportType === 'vendor'
+                                            ? 'Purchase Bills'
+                                            : 'Sales Invoices'}
                                         </span>
                                       </div>
                                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 font-bold">
-                                        {r.detailTree.bills.length} Bills
+                                        {criteria.reportType === 'cash_bank'
+                                          ? `${r.detailTree.bills.length} Receipts`
+                                          : `${r.detailTree.bills.length} Bills`}
                                       </span>
                                     </div>
 
                                     {r.detailTree.bills.length === 0 ? (
                                       <p className="text-[11px] text-gray-400 italic py-2 text-center">
-                                        No bill vouchers recorded
+                                        {criteria.reportType === 'cash_bank'
+                                          ? 'No receipts or inflows recorded'
+                                          : 'No bill vouchers recorded'}
                                       </p>
                                     ) : (
                                       <div className="space-y-1 overflow-visible">
@@ -2068,7 +2117,9 @@ export const BasicAccountReportPrint: React.FC = () => {
                                                 <span className="font-mono font-black text-primary text-[10px]">
                                                   {b.voucherNo}
                                                 </span>
-                                                <span className="text-[10px] text-gray-500">• #{b.billNo}</span>
+                                                <span className="text-[10px] text-gray-500">
+                                                  {criteria.reportType === 'cash_bank' ? `• ${b.party || 'Cash Deposit'}` : `• #${b.billNo}`}
+                                                </span>
                                               </div>
                                               <span className="text-[9.5px] text-gray-400 block">{b.date}</span>
                                             </div>
@@ -2076,7 +2127,9 @@ export const BasicAccountReportPrint: React.FC = () => {
                                               <span className="font-bold block text-black dark:text-white">
                                                 Rs. {Math.round(b.amount).toLocaleString()}
                                               </span>
-                                              {b.balance > 0 ? (
+                                              {criteria.reportType === 'cash_bank' ? (
+                                                <span className="text-[9px] text-emerald-600 block font-semibold">Inflow</span>
+                                              ) : b.balance > 0 ? (
                                                 <span className="text-[9px] text-amber-600 block">
                                                   Bal: {Math.round(b.balance).toLocaleString()}
                                                 </span>
@@ -2090,7 +2143,11 @@ export const BasicAccountReportPrint: React.FC = () => {
                                     )}
 
                                     <div className="mt-2 pt-1.5 border-t border-stroke dark:border-strokedark flex justify-between text-[11px] font-bold print:border-black">
-                                      <span>Total Billed:</span>
+                                      <span>
+                                        {criteria.reportType === 'cash_bank'
+                                          ? 'Total Receipts (Inflows):'
+                                          : 'Total Billed:'}
+                                      </span>
                                       <span className="font-mono text-primary">
                                         Rs. {Math.round(r.detailTree.totalBills).toLocaleString()}
                                       </span>
@@ -2103,17 +2160,25 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200">
                                         <MdPayments className="text-emerald-500" size={15} />
                                         <span>
-                                          {criteria.reportType === 'vendor' ? 'Payments (Paid)' : 'Receipts (Received)'}
+                                          {criteria.reportType === 'cash_bank'
+                                            ? 'Payments & Outflows'
+                                            : criteria.reportType === 'vendor'
+                                            ? 'Payments (Paid)'
+                                            : 'Receipts (Received)'}
                                         </span>
                                       </div>
                                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 font-bold">
-                                        {r.detailTree.receipts.length} Slips
+                                        {criteria.reportType === 'cash_bank'
+                                          ? `${r.detailTree.receipts.length} Payments`
+                                          : `${r.detailTree.receipts.length} Slips`}
                                       </span>
                                     </div>
 
                                     {r.detailTree.receipts.length === 0 ? (
                                       <p className="text-[11px] text-gray-400 italic py-2 text-center">
-                                        No payment vouchers recorded
+                                        {criteria.reportType === 'cash_bank'
+                                          ? 'No disbursements or payments recorded'
+                                          : 'No payment vouchers recorded'}
                                       </p>
                                     ) : (
                                       <div className="space-y-1 overflow-visible">
@@ -2124,7 +2189,7 @@ export const BasicAccountReportPrint: React.FC = () => {
                                           >
                                             <div>
                                               <div className="flex items-center gap-1.5">
-                                                <span className="font-mono font-black text-emerald-600 text-[10px]">
+                                                <span className="font-mono font-black text-rose-600 text-[10px]">
                                                   {rc.voucherNo}
                                                 </span>
                                                 <span className="text-[10px] text-gray-500">• {rc.refNo}</span>
@@ -2132,9 +2197,12 @@ export const BasicAccountReportPrint: React.FC = () => {
                                               <span className="text-[9.5px] text-gray-400 block">{rc.date}</span>
                                             </div>
                                             <div className="text-right font-mono">
-                                              <span className="font-bold text-emerald-600 block">
+                                              <span className="font-bold text-rose-600 block">
                                                 Rs. {Math.round(rc.amount).toLocaleString()}
                                               </span>
+                                              {criteria.reportType === 'cash_bank' && (
+                                                <span className="text-[9px] text-rose-500 block font-semibold">Outflow</span>
+                                              )}
                                             </div>
                                           </div>
                                         ))}
@@ -2143,9 +2211,13 @@ export const BasicAccountReportPrint: React.FC = () => {
 
                                     <div className="mt-2 pt-1.5 border-t border-stroke dark:border-strokedark flex justify-between text-[11px] font-bold print:border-black">
                                       <span>
-                                        Total {criteria.reportType === 'vendor' ? 'Paid' : 'Received'}:
+                                        {criteria.reportType === 'cash_bank'
+                                          ? 'Total Payments (Outflows):'
+                                          : criteria.reportType === 'vendor'
+                                          ? 'Total Paid:'
+                                          : 'Total Received:'}
                                       </span>
-                                      <span className="font-mono text-emerald-600">
+                                      <span className="font-mono text-rose-600">
                                         Rs. {Math.round(r.detailTree.totalPayments).toLocaleString()}
                                       </span>
                                     </div>
@@ -2157,17 +2229,25 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200">
                                         <MdAssignmentReturn className="text-rose-500" size={15} />
                                         <span>
-                                          {criteria.reportType === 'vendor' ? 'Purchase Returns' : 'Sale Returns'}
+                                          {criteria.reportType === 'cash_bank'
+                                            ? 'Contra & Transfers'
+                                            : criteria.reportType === 'vendor'
+                                            ? 'Purchase Returns'
+                                            : 'Sale Returns'}
                                         </span>
                                       </div>
                                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200 font-bold">
-                                        {r.detailTree.returns.length} Returns
+                                        {criteria.reportType === 'cash_bank'
+                                          ? `${r.detailTree.returns.length} Transfers`
+                                          : `${r.detailTree.returns.length} Returns`}
                                       </span>
                                     </div>
 
                                     {r.detailTree.returns.length === 0 ? (
                                       <p className="text-[11px] text-gray-400 italic py-2 text-center">
-                                        No return bill vouchers recorded
+                                        {criteria.reportType === 'cash_bank'
+                                          ? 'No contra transfers recorded'
+                                          : 'No return bill vouchers recorded'}
                                       </p>
                                     ) : (
                                       <div className="space-y-1 overflow-visible">
@@ -2196,7 +2276,11 @@ export const BasicAccountReportPrint: React.FC = () => {
                                     )}
 
                                     <div className="mt-2 pt-1.5 border-t border-stroke dark:border-strokedark flex justify-between text-[11px] font-bold print:border-black">
-                                      <span>Total Returns:</span>
+                                      <span>
+                                        {criteria.reportType === 'cash_bank'
+                                          ? 'Total Transfers:'
+                                          : 'Total Returns:'}
+                                      </span>
                                       <span className="font-mono text-rose-600">
                                         Rs. {Math.round(r.detailTree.totalReturns).toLocaleString()}
                                       </span>
@@ -2212,16 +2296,26 @@ export const BasicAccountReportPrint: React.FC = () => {
                                     </span>
                                     <span>+</span>
                                     <span>
-                                      Bills: <strong>Rs. {Math.round(r.detailTree.totalBills).toLocaleString()}</strong>
+                                      {criteria.reportType === 'cash_bank' ? 'Receipts: ' : 'Bills: '}
+                                      <strong>Rs. {Math.round(r.detailTree.totalBills).toLocaleString()}</strong>
                                     </span>
                                     <span>-</span>
                                     <span>
-                                      Paid/Rec: <strong>Rs. {Math.round(r.detailTree.totalPayments).toLocaleString()}</strong>
+                                      {criteria.reportType === 'cash_bank'
+                                        ? 'Payments: '
+                                        : criteria.reportType === 'vendor'
+                                        ? 'Paid: '
+                                        : 'Rec: '}
+                                      <strong>Rs. {Math.round(r.detailTree.totalPayments).toLocaleString()}</strong>
                                     </span>
-                                    <span>-</span>
-                                    <span>
-                                      Returns: <strong>Rs. {Math.round(r.detailTree.totalReturns).toLocaleString()}</strong>
-                                    </span>
+                                    {criteria.reportType !== 'cash_bank' && (
+                                      <>
+                                        <span>-</span>
+                                        <span>
+                                          Returns: <strong>Rs. {Math.round(r.detailTree.totalReturns).toLocaleString()}</strong>
+                                        </span>
+                                      </>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className="uppercase text-[10px] text-gray-500">Closing Balance:</span>
