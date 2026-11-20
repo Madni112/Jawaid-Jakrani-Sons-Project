@@ -775,7 +775,9 @@ export const BasicAccountReportPrint: React.FC = () => {
       if (code.startsWith('2')) headName = 'Liabilities';
       else if (code.startsWith('3')) headName = 'Equity';
       else if (code.startsWith('4')) headName = 'Revenue';
-      else if (code.startsWith('5')) headName = 'Expenses';
+      else if (code.startsWith('5')) {
+        headName = acc.sub_category_code || acc.control_code || 'Expenses';
+      }
 
       // 1. Check if matching customer
       const matchedCust = criteria.reportType !== 'cash_bank' && (custByCode.get(codeLower) || custByName.get(titleLower));
@@ -1439,7 +1441,7 @@ export const BasicAccountReportPrint: React.FC = () => {
           textColor: 'text-amber-600 dark:text-amber-400'
         },
         {
-          label: 'Indirect Operating Expenses',
+          label: 'Indirect Expenses',
           value: `Rs. ${Math.round(indirectExpense).toLocaleString()}`,
           note: 'Rent, salaries, logistics & power',
           textColor: 'text-purple-600 dark:text-purple-400'
@@ -1689,10 +1691,34 @@ export const BasicAccountReportPrint: React.FC = () => {
                   <option value="expense_asc">expense (lowest - highest)</option>
                 </optgroup>
                 <optgroup label="Alphabetical & Code">
-                  <option value="name_asc">Party Name (A to Z)</option>
-                  <option value="name_desc">Party Name (Z to A)</option>
-                  <option value="code_asc">Party Code (Ascending)</option>
-                  <option value="code_desc">Party Code (Descending)</option>
+                  <option value="name_asc">
+                    {criteria.reportType === 'customer'
+                      ? 'Party Name (A to Z)'
+                      : criteria.reportType === 'vendor'
+                      ? 'Vendor Name (A to Z)'
+                      : 'Account Title (A to Z)'}
+                  </option>
+                  <option value="name_desc">
+                    {criteria.reportType === 'customer'
+                      ? 'Party Name (Z to A)'
+                      : criteria.reportType === 'vendor'
+                      ? 'Vendor Name (Z to A)'
+                      : 'Account Title (Z to A)'}
+                  </option>
+                  <option value="code_asc">
+                    {criteria.reportType === 'customer'
+                      ? 'Party Code (Ascending)'
+                      : criteria.reportType === 'vendor'
+                      ? 'Vendor Code (Ascending)'
+                      : 'Account Code (Ascending)'}
+                  </option>
+                  <option value="code_desc">
+                    {criteria.reportType === 'customer'
+                      ? 'Party Code (Descending)'
+                      : criteria.reportType === 'vendor'
+                      ? 'Vendor Code (Descending)'
+                      : 'Account Code (Descending)'}
+                  </option>
                 </optgroup>
               </select>
             </div>
@@ -1863,7 +1889,15 @@ export const BasicAccountReportPrint: React.FC = () => {
                   title="Click to sort by Account / Party Name"
                 >
                   <div className="flex items-center gap-1">
-                    <span>Account Title / Party Name</span>
+                    <span>
+                      {criteria.reportType === 'customer'
+                        ? 'Customer Name'
+                        : criteria.reportType === 'vendor'
+                        ? 'Vendor Name'
+                        : criteria.reportType === 'expense'
+                        ? 'Expense Account Title'
+                        : 'Account Title / Party Name'}
+                    </span>
                     {criteria.sortBy === 'name_asc' && <span className="print:hidden text-[10px] text-primary">▲</span>}
                     {criteria.sortBy === 'name_desc' && <span className="print:hidden text-[10px] text-primary">▼</span>}
                   </div>
@@ -1873,6 +1907,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                     ? 'Area / City'
                     : criteria.reportType === 'vendor'
                     ? 'Category / City'
+                    : criteria.reportType === 'expense'
+                    ? 'Expense Category'
                     : 'Account Head'}
                 </th>
                 <th
@@ -2145,6 +2181,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                         <span>
                                           {criteria.reportType === 'cash_bank'
                                             ? 'Receipts & Inflows'
+                                            : criteria.reportType === 'expense'
+                                            ? 'Expense Charges (Incurred)'
                                             : criteria.reportType === 'vendor'
                                             ? 'Purchase Bills'
                                             : 'Sales Invoices'}
@@ -2153,6 +2191,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 font-bold">
                                         {criteria.reportType === 'cash_bank'
                                           ? `${r.detailTree.bills.length} Receipts`
+                                          : criteria.reportType === 'expense'
+                                          ? `${r.detailTree.bills.length} Records`
                                           : `${r.detailTree.bills.length} Bills`}
                                       </span>
                                     </div>
@@ -2161,6 +2201,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <p className="text-[11px] text-gray-400 italic py-2 text-center">
                                         {criteria.reportType === 'cash_bank'
                                           ? 'No receipts or inflows recorded'
+                                          : criteria.reportType === 'expense'
+                                          ? 'No expense vouchers recorded'
                                           : 'No bill vouchers recorded'}
                                       </p>
                                     ) : (
@@ -2204,6 +2246,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <span>
                                         {criteria.reportType === 'cash_bank'
                                           ? 'Total Receipts (Inflows):'
+                                          : criteria.reportType === 'expense'
+                                          ? 'Total Incurred:'
                                           : 'Total Billed:'}
                                       </span>
                                       <span className="font-mono text-primary">
@@ -2220,6 +2264,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                         <span>
                                           {criteria.reportType === 'cash_bank'
                                             ? 'Payments & Outflows'
+                                            : criteria.reportType === 'expense'
+                                            ? 'Payments & Disbursements'
                                             : criteria.reportType === 'vendor'
                                             ? 'Payments (Paid)'
                                             : 'Receipts (Received)'}
@@ -2236,6 +2282,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <p className="text-[11px] text-gray-400 italic py-2 text-center">
                                         {criteria.reportType === 'cash_bank'
                                           ? 'No disbursements or payments recorded'
+                                          : criteria.reportType === 'expense'
+                                          ? 'No disbursements recorded'
                                           : 'No payment vouchers recorded'}
                                       </p>
                                     ) : (
@@ -2271,6 +2319,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <span>
                                         {criteria.reportType === 'cash_bank'
                                           ? 'Total Payments (Outflows):'
+                                          : criteria.reportType === 'expense'
+                                          ? 'Total Disbursed:'
                                           : criteria.reportType === 'vendor'
                                           ? 'Total Paid:'
                                           : 'Total Received:'}
@@ -2289,6 +2339,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                         <span>
                                           {criteria.reportType === 'cash_bank'
                                             ? 'Contra & Transfers'
+                                            : criteria.reportType === 'expense'
+                                            ? 'Adjustments & Reversals'
                                             : criteria.reportType === 'vendor'
                                             ? 'Purchase Returns'
                                             : 'Sale Returns'}
@@ -2297,6 +2349,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200 font-bold">
                                         {criteria.reportType === 'cash_bank'
                                           ? `${r.detailTree.returns.length} Transfers`
+                                          : criteria.reportType === 'expense'
+                                          ? `${r.detailTree.returns.length} Adjustments`
                                           : `${r.detailTree.returns.length} Returns`}
                                       </span>
                                     </div>
@@ -2305,6 +2359,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <p className="text-[11px] text-gray-400 italic py-2 text-center">
                                         {criteria.reportType === 'cash_bank'
                                           ? 'No contra transfers recorded'
+                                          : criteria.reportType === 'expense'
+                                          ? 'No adjustments recorded'
                                           : 'No return bill vouchers recorded'}
                                       </p>
                                     ) : (
@@ -2337,6 +2393,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                                       <span>
                                         {criteria.reportType === 'cash_bank'
                                           ? 'Total Transfers:'
+                                          : criteria.reportType === 'expense'
+                                          ? 'Total Adjustments:'
                                           : 'Total Returns:'}
                                       </span>
                                       <span className="font-mono text-rose-600">
@@ -2354,19 +2412,25 @@ export const BasicAccountReportPrint: React.FC = () => {
                                     </span>
                                     <span>+</span>
                                     <span>
-                                      {criteria.reportType === 'cash_bank' ? 'Receipts: ' : 'Bills: '}
+                                      {criteria.reportType === 'cash_bank'
+                                        ? 'Receipts: '
+                                        : criteria.reportType === 'expense'
+                                        ? 'Incurred: '
+                                        : 'Bills: '}
                                       <strong>Rs. {Math.round(r.detailTree.totalBills).toLocaleString()}</strong>
                                     </span>
                                     <span>-</span>
                                     <span>
                                       {criteria.reportType === 'cash_bank'
                                         ? 'Payments: '
+                                        : criteria.reportType === 'expense'
+                                        ? 'Disbursed: '
                                         : criteria.reportType === 'vendor'
                                         ? 'Paid: '
                                         : 'Rec: '}
                                       <strong>Rs. {Math.round(r.detailTree.totalPayments).toLocaleString()}</strong>
                                     </span>
-                                    {criteria.reportType !== 'cash_bank' && (
+                                    {criteria.reportType !== 'cash_bank' && criteria.reportType !== 'expense' && (
                                       <>
                                         <span>-</span>
                                         <span>
