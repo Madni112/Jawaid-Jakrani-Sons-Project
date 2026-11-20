@@ -1360,15 +1360,9 @@ export const BasicAccountReportPrint: React.FC = () => {
           tfoot {
             display: table-row-group !important;
           }
-          tbody.account-group {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .master-row {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
+          .has-detail-expanded {
             page-break-after: avoid !important;
-            break-after: avoid-page !important;
+            break-after: avoid !important;
           }
           .detail-row {
             page-break-inside: avoid !important;
@@ -1821,8 +1815,8 @@ export const BasicAccountReportPrint: React.FC = () => {
                 )}
               </tr>
             </thead>
-            {sortedAccountRows.length === 0 ? (
-              <tbody className="divide-y divide-stroke dark:divide-strokedark">
+            <tbody className="divide-y divide-stroke dark:divide-strokedark">
+              {sortedAccountRows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={
@@ -1835,36 +1829,34 @@ export const BasicAccountReportPrint: React.FC = () => {
                     No account records found matching the selected criteria.
                   </td>
                 </tr>
-              </tbody>
-            ) : (
-              sortedAccountRows.map((r, idx) => {
-                const partyIdStr = String(r.id);
-                const isExpanded =
-                  expandedParties[partyIdStr] !== undefined
-                    ? expandedParties[partyIdStr]
-                    : viewMode === 'detailed';
-                const hasDetails =
-                  r.detailTree &&
-                  (r.detailTree.bills.length > 0 ||
-                    r.detailTree.receipts.length > 0 ||
-                    r.detailTree.returns.length > 0);
+              ) : (
+                sortedAccountRows.map((r, idx) => {
+                  const partyIdStr = String(r.id);
+                  const isExpanded =
+                    expandedParties[partyIdStr] !== undefined
+                      ? expandedParties[partyIdStr]
+                      : viewMode === 'detailed';
+                  const hasDetails =
+                    r.detailTree &&
+                    (r.detailTree.bills.length > 0 ||
+                      r.detailTree.receipts.length > 0 ||
+                      r.detailTree.returns.length > 0);
 
-                const colSpanTotal =
-                  criteria.reportType === 'customer' || criteria.reportType === 'vendor'
-                    ? viewMode === 'detailed' ? 11 : 10
-                    : viewMode === 'detailed' ? 8 : 7;
+                  const colSpanTotal =
+                    criteria.reportType === 'customer' || criteria.reportType === 'vendor'
+                      ? viewMode === 'detailed' ? 11 : 10
+                      : viewMode === 'detailed' ? 8 : 7;
 
-                return (
-                  <tbody
-                    key={r.id}
-                    className="account-group divide-y divide-stroke dark:divide-strokedark"
-                  >
-                    {/* Master Row */}
-                    <tr
-                      className={`master-row hover:bg-gray-50/80 dark:hover:bg-meta-4/20 transition ${
-                        isClassic ? (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50') : ''
-                      } ${isExpanded && viewMode === 'detailed' ? 'bg-blue-50/20 dark:bg-meta-4/10' : ''}`}
-                    >
+                  const hasDetailRow = viewMode === 'detailed' && isExpanded;
+
+                  return (
+                    <React.Fragment key={r.id}>
+                      {/* Master Row */}
+                      <tr
+                        className={`master-row ${hasDetailRow ? 'has-detail-expanded' : ''} hover:bg-gray-50/80 dark:hover:bg-meta-4/20 transition ${
+                          isClassic ? (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50') : ''
+                        } ${isExpanded && viewMode === 'detailed' ? 'bg-blue-50/20 dark:bg-meta-4/10' : ''}`}
+                      >
                         <td className="py-2 px-2 text-center text-gray-400 font-mono text-[11px]">
                           {idx + 1}
                         </td>
@@ -2224,10 +2216,11 @@ export const BasicAccountReportPrint: React.FC = () => {
                           </tr>
                         );
                       })()}
-                    </tbody>
+                    </React.Fragment>
                   );
                 })
               )}
+            </tbody>
             <tfoot>
               <tr
                 className={`${
