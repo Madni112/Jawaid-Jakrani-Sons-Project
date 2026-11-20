@@ -726,12 +726,42 @@ export const BasicAccountReport: React.FC = () => {
       if (reportType === 'expense') {
         pool = pool.filter((acc) => String(acc.account_code || '').startsWith('5'));
       } else if (reportType === 'cash_bank') {
-        pool = pool.filter(
-          (acc) =>
-            String(acc.account_code || '').startsWith('10') ||
-            String(acc.account_title || '').toLowerCase().includes('cash') ||
-            String(acc.account_title || '').toLowerCase().includes('bank')
-        );
+        pool = pool.filter((acc) => {
+          const code = String(acc.account_code || '');
+          const title = String(acc.account_title || '').toLowerCase();
+          const head = String(acc.head_name || '').toLowerCase();
+
+          // Strictly exclude Receivables, Inventory, Loans, and Opening Balance suspense
+          if (code.startsWith('1020') || code.startsWith('1030') || code === '1011') return false;
+          if (code.startsWith('2') || title.includes('loan')) return false;
+          if (title.includes('receivable') || title.includes('inventory') || title.includes('stock')) return false;
+
+          // Include genuine Cash & Bank asset accounts
+          return (
+            code.startsWith('1010') ||
+            code.startsWith('1000') ||
+            title.includes('cash') ||
+            ((head.includes('asset') || code.startsWith('1')) && title.includes('bank'))
+          );
+        });
+
+        // Add registered bank accounts from banksMaster if not already present
+        const existingTitles = new Set(pool.map((p) => String(p.account_title || '').trim().toLowerCase()));
+        banksMaster.forEach((b: any) => {
+          const bTitle = String(b.account_title || b.accountTitle || b.bank_name || b.bankName || '').trim();
+          if (bTitle && !existingTitles.has(bTitle.toLowerCase())) {
+            pool.push({
+              id: `bank-${b.id}`,
+              account_code: b.account_number || b.accountNumber || `BNK-${b.id}`,
+              account_title: b.bank_name || b.bankName ? `${b.bank_name || b.bankName} (${bTitle})` : bTitle,
+              head_name: 'Assets',
+              sub_head_name: 'Bank Accounts',
+              opening_balance: Number(b.opening_balance || b.current_balance || 0),
+              balance_nature: 'debit',
+              area: b.branch_name || 'Bank'
+            });
+          }
+        });
       }
 
       list = pool.map((acc) => {

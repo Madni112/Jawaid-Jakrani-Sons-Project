@@ -701,12 +701,42 @@ export const BasicAccountReportPrint: React.FC = () => {
     if (criteria.reportType === 'expense') {
       pool = pool.filter((acc) => String(acc.account_code || '').startsWith('5'));
     } else if (criteria.reportType === 'cash_bank') {
-      pool = pool.filter(
-        (acc) =>
-          String(acc.account_code || '').startsWith('10') ||
-          String(acc.account_title || '').toLowerCase().includes('cash') ||
-          String(acc.account_title || '').toLowerCase().includes('bank')
-      );
+      pool = pool.filter((acc) => {
+        const code = String(acc.account_code || '');
+        const title = String(acc.account_title || '').toLowerCase();
+        const head = String(acc.head_name || '').toLowerCase();
+
+        // Strictly exclude Receivables, Inventory, Loans, and Opening Balance suspense
+        if (code.startsWith('1020') || code.startsWith('1030') || code === '1011') return false;
+        if (code.startsWith('2') || title.includes('loan')) return false;
+        if (title.includes('receivable') || title.includes('inventory') || title.includes('stock')) return false;
+
+        // Include genuine Cash & Bank asset accounts
+        return (
+          code.startsWith('1010') ||
+          code.startsWith('1000') ||
+          title.includes('cash') ||
+          ((head.includes('asset') || code.startsWith('1')) && title.includes('bank'))
+        );
+      });
+
+      // Add registered bank accounts from rawBanks if not already present
+      const existingTitles = new Set(pool.map((p) => String(p.account_title || '').trim().toLowerCase()));
+      rawBanks.forEach((b: any) => {
+        const bTitle = String(b.account_title || b.accountTitle || b.bank_name || b.bankName || '').trim();
+        if (bTitle && !existingTitles.has(bTitle.toLowerCase())) {
+          pool.push({
+            id: `bank-${b.id}`,
+            account_code: b.account_number || b.accountNumber || `BNK-${b.id}`,
+            account_title: b.bank_name || b.bankName ? `${b.bank_name || b.bankName} (${bTitle})` : bTitle,
+            head_name: 'Assets',
+            sub_head_name: 'Bank Accounts',
+            opening_balance: Number(b.opening_balance || b.current_balance || 0),
+            balance_nature: 'debit',
+            area: b.branch_name || 'Bank'
+          });
+        }
+      });
     }
 
     // Helper lookups to connect COA party accounts to dynamic ledger transactions
@@ -748,7 +778,7 @@ export const BasicAccountReportPrint: React.FC = () => {
       else if (code.startsWith('5')) headName = 'Expenses';
 
       // 1. Check if matching customer
-      const matchedCust = custByCode.get(codeLower) || custByName.get(titleLower);
+      const matchedCust = criteria.reportType !== 'cash_bank' && (custByCode.get(codeLower) || custByName.get(titleLower));
       if (matchedCust) {
         const cName = String(matchedCust.customer_name || matchedCust.customerName || matchedCust.name || '').trim().toLowerCase();
         const initialOpen = (matchedCust.balance_nature || acc.balance_nature || '').toLowerCase().includes('credit')
@@ -861,7 +891,7 @@ export const BasicAccountReportPrint: React.FC = () => {
       }
 
       // 2. Check if matching vendor
-      const matchedVen = venByCode.get(codeLower) || venByName.get(titleLower);
+      const matchedVen = criteria.reportType !== 'cash_bank' && (venByCode.get(codeLower) || venByName.get(titleLower));
       if (matchedVen) {
         const vName = String(matchedVen.vendor_name || matchedVen.name || '').trim().toLowerCase();
         const initialOpen = (matchedVen.balance_nature || acc.balance_nature || '').toLowerCase().includes('debit')
@@ -973,7 +1003,94 @@ export const BasicAccountReportPrint: React.FC = () => {
         };
       }
 
-      // 3. General Ledger / Control Account fallback
+      // 3. Cash & Bank or General Ledger / Control Account fallback
+      if (criteria.reportType === 'cash_bank') {
+        const isCashAcc = codeLower.startsWith('1010') || codeLower.startsWith('1000') || titleLower.includes('cash');
+
+        let cashInflows = detailedInvoices.filter((inv) => {
+          const isCash = (inv.payment_term || '').toLowerCase() === 'cash' || Number(inv.amount_paid || 0) > 0;
+          return isCash && isCashAcc;
+        });
+        let cashVoucherInflows = (vouchersMaster || []).filter((v) => {
+          const isCRV = (v.voucher_no || '').startsWith('CRV') || (v.voucher_type || '').includes('Receive');
+          return isCashAcc && isCRV;
+        });
+        let cashVoucherOutflows = (vouchersMaster || []).filter((v) => {
+          const isCPV = (v.voucher_no || '').startsWith('CPV') || (v.voucher_type || '').includes('Payment');
+          return isCashAcc && isCPV;
+        });
+
+        // Date range filtering
+        if (hasDateRange && dFrom && dTo) {
+          cashInflows = cashInflows.filter((inv) => !inv.sale_date || (inv.sale_date >= dFrom && inv.sale_date <= dTo));
+          cashVoucherInflows = cashVoucherInflows.filter((v) => !v.voucher_date || (v.voucher_date >= dFrom && v.voucher_date <= dTo));
+          cashVoucherOutflows = cashVoucherOutflows.filter((v) => !v.voucher_date || (v.voucher_date >= dFrom && v.voucher_date <= dTo));
+        } else if (hasSingleDate && sDate) {
+          cashInflows = cashInflows.filter((inv) => !inv.sale_date || inv.sale_date <= sDate);
+          cashVoucherInflows = cashVoucherInflows.filter((v) => !v.voucher_date || v.voucher_date <= sDate);
+          cashVoucherOutflows = cashVoucherOutflows.filter((v) => !v.voucher_date || v.voucher_date <= sDate);
+        }
+
+        const totalIn =
+          cashInflows.reduce((sum, inv) => sum + Number(inv.amount_paid || inv.total_amount || 0), 0) +
+          cashVoucherInflows.reduce((sum, v) => sum + Number(v.credit || v.total_amount || 0), 0);
+        const totalOut = cashVoucherOutflows.reduce((sum, v) => sum + Number(v.debit || v.total_amount || 0), 0);
+        const closing = openBal + totalIn - totalOut;
+
+        const bills = cashInflows.map((inv) => ({
+          id: String(inv.id),
+          billNo: inv.invoice_no || '—',
+          voucherNo: `CRV-INV-${inv.invoice_no || inv.id}`,
+          voucherType: 'Cash Sale Collection',
+          date: inv.sale_date || '—',
+          amount: Number(inv.amount_paid || inv.total_amount || 0),
+          paid: Number(inv.amount_paid || inv.total_amount || 0),
+          balance: 0
+        }));
+
+        const receipts = cashVoucherInflows.map((v) => ({
+          id: String(v.id),
+          voucherNo: v.voucher_no,
+          voucherType: v.voucher_type || 'Cash Receive Voucher',
+          refNo: v.party_name || v.customer_name || 'Cash Deposit',
+          date: v.voucher_date || '—',
+          amount: Number(v.credit || v.total_amount || 0),
+          mode: v.description || 'Cash Received'
+        }));
+
+        const returns = cashVoucherOutflows.map((v) => ({
+          id: String(v.id),
+          returnNo: v.voucher_no,
+          voucherNo: v.voucher_no,
+          voucherType: v.voucher_type || 'Cash Payment Voucher',
+          date: v.voucher_date || '—',
+          amount: Number(v.debit || v.total_amount || 0)
+        }));
+
+        return {
+          id: acc.id,
+          code: acc.account_code,
+          name: acc.account_title,
+          area: headName,
+          phone: 'Debit',
+          openingBalance: openBal,
+          invoicedAmount: totalIn,
+          receivedAmount: totalOut,
+          returnAmount: 0,
+          closingBalance: closing,
+          balanceNature: closing >= 0 ? 'Debit' : 'Credit',
+          detailTree: {
+            bills,
+            receipts,
+            returns,
+            totalBills: totalIn,
+            totalPayments: totalOut,
+            totalReturns: 0
+          }
+        };
+      }
+
+      // General Ledger / Control Account fallback
       return {
         id: acc.id,
         code: acc.account_code,
@@ -1122,9 +1239,22 @@ export const BasicAccountReportPrint: React.FC = () => {
     }
 
     // Liquid funds
-    rawBanks.forEach((b) => {
-      totalCashBank += Number(b.current_balance || 0);
-    });
+    if (criteria?.reportType === 'cash_bank') {
+      sortedAccountRows.forEach((r) => {
+        totalCashBank += r.closingBalance;
+      });
+    } else {
+      rawBanks.forEach((b) => {
+        totalCashBank += Number(b.current_balance || 0);
+      });
+      rawCoa.forEach((acc) => {
+        const c = String(acc.account_code || '');
+        const t = String(acc.account_title || '').toLowerCase();
+        if (c.startsWith('1010') || c.startsWith('1000') || t.includes('cash')) {
+          totalCashBank += Number(acc.closing_balance || acc.opening_balance || 0);
+        }
+      });
+    }
 
     // Inflows, Outflows and Returns from active filtered table rows
     sortedAccountRows.forEach((r) => {
@@ -1850,7 +1980,7 @@ export const BasicAccountReportPrint: React.FC = () => {
                         )}
 
                         <td className="py-2 px-2 text-right font-mono font-bold text-black dark:text-white">
-                          Rs. {Math.round(r.closingBalance).toLocaleString()}
+                          Rs. {Math.abs(Math.round(r.closingBalance)).toLocaleString()}
                         </td>
                         <td className="py-2 px-2 text-center">
                           <span
@@ -2096,7 +2226,7 @@ export const BasicAccountReportPrint: React.FC = () => {
                                   <div className="flex items-center gap-2">
                                     <span className="uppercase text-[10px] text-gray-500">Closing Balance:</span>
                                     <span className="text-sm font-black text-primary font-mono">
-                                      Rs. {Math.round(r.closingBalance).toLocaleString()}
+                                      Rs. {Math.abs(Math.round(r.closingBalance)).toLocaleString()}
                                     </span>
                                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white dark:bg-boxdark border border-stroke dark:border-strokedark print:border-black">
                                       {r.balanceNature}
