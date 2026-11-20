@@ -385,7 +385,8 @@ export const BasicPurchaseReportPrint: React.FC = () => {
       const netTotalAmount = hasSpecificFilter ? calculatedGross - discountAmount + freightAmount : rawGross;
 
       const dateStr = p.purchase_date || String(p.created_at || '').split('T')[0];
-      const purchaseNo = p.purchase_no || `PUR-${p.id}`;
+      const rawNo = p.purchase_no || `PUR-${p.id}`;
+      const purchaseNo = String(rawNo).toUpperCase().startsWith('PUR-') ? rawNo : `PUR-${rawNo}`;
 
       return {
         id: p.id,
