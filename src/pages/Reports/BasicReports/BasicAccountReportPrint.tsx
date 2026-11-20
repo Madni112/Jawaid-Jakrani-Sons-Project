@@ -1406,6 +1406,64 @@ export const BasicAccountReportPrint: React.FC = () => {
       ];
     }
 
+    if (criteria?.reportType === 'expense') {
+      const totalExpense = sortedAccountRows.reduce((sum, r) => sum + Math.abs(r.closingBalance || r.openingBalance || 0), 0);
+      const directExpense = sortedAccountRows
+        .filter((r) => String(r.code).startsWith('501'))
+        .reduce((sum, r) => sum + Math.abs(r.closingBalance || r.openingBalance || 0), 0);
+      const indirectExpense = sortedAccountRows
+        .filter((r) => {
+          const c = String(r.code);
+          return c.startsWith('502') || c.startsWith('503') || c.startsWith('504') || c.startsWith('505');
+        })
+        .reduce((sum, r) => sum + Math.abs(r.closingBalance || r.openingBalance || 0), 0);
+      const adminExpense = sortedAccountRows
+        .filter((r) => {
+          const c = String(r.code);
+          return c.startsWith('506') || c.startsWith('507') || c.startsWith('508') || c.startsWith('51') || c.startsWith('52');
+        })
+        .reduce((sum, r) => sum + Math.abs(r.closingBalance || r.openingBalance || 0), 0);
+
+      return [
+        {
+          label: 'Total Operating Expenses',
+          value: `Rs. ${Math.round(totalExpense).toLocaleString()}`,
+          note: 'Total operational costs',
+          textColor: 'text-rose-600 dark:text-rose-400',
+          highlight: true
+        },
+        {
+          label: 'Direct Costs / COGS',
+          value: `Rs. ${Math.round(directExpense).toLocaleString()}`,
+          note: 'Cost of goods & sales',
+          textColor: 'text-amber-600 dark:text-amber-400'
+        },
+        {
+          label: 'Indirect Operating Expenses',
+          value: `Rs. ${Math.round(indirectExpense).toLocaleString()}`,
+          note: 'Rent, salaries, logistics & power',
+          textColor: 'text-purple-600 dark:text-purple-400'
+        },
+        {
+          label: 'General & Admin Expenses',
+          value: `Rs. ${Math.round(adminExpense).toLocaleString()}`,
+          note: 'Office, marketing & supplies',
+          textColor: 'text-blue-600 dark:text-blue-400'
+        },
+        {
+          label: 'Active Expense Heads',
+          value: `${sortedAccountRows.length} Accounts`,
+          note: 'Monitored expense lines'
+        },
+        {
+          label: 'Net Period Expense Impact',
+          value: `Rs. ${Math.round(totalExpense).toLocaleString()}`,
+          note: 'Total operational impact',
+          highlight: true
+        }
+      ];
+    }
+
     // Chart of Accounts / All General Ledger
     return [
       {

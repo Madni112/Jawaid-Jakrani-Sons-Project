@@ -715,15 +715,16 @@ export const BasicAccountReport: React.FC = () => {
     } else {
       // Chart of Accounts / Cash & Bank / Expenses
       let pool = coaMaster;
-      if (selectedHeads.length > 0) {
-        const prefixes = new Set(selectedHeads);
-        pool = pool.filter((acc) => prefixes.has(String(acc.account_code || '').charAt(0)));
-      }
-      if (selectedSubHeads.length > 0) {
-        const subPrefixes = new Set(selectedSubHeads);
-        pool = pool.filter((acc) => subPrefixes.has(String(acc.account_code || '').substring(0, 2)));
-      }
-      if (reportType === 'expense') {
+      if (reportType === 'coa') {
+        if (selectedHeads.length > 0) {
+          const prefixes = new Set(selectedHeads);
+          pool = pool.filter((acc) => prefixes.has(String(acc.account_code || '').charAt(0)));
+        }
+        if (selectedSubHeads.length > 0) {
+          const subPrefixes = new Set(selectedSubHeads);
+          pool = pool.filter((acc) => subPrefixes.has(String(acc.account_code || '').substring(0, 2)));
+        }
+      } else if (reportType === 'expense') {
         pool = pool.filter((acc) => String(acc.account_code || '').startsWith('5'));
       } else if (reportType === 'cash_bank') {
         pool = pool.filter((acc) => {
@@ -768,10 +769,11 @@ export const BasicAccountReport: React.FC = () => {
         const title = acc.account_title || 'Account';
         const code = acc.account_code || '—';
         const bal = Number(acc.opening_balance || 0);
+        const sub = acc.sub_category_code || acc.control_code || acc.category_code || acc.balance_nature || 'Ledger Account';
         return {
           id: String(acc.account_code),
           label: `${code} — ${title}`,
-          subLabel: acc.account_type || acc.balance_nature || 'Ledger Account',
+          subLabel: sub,
           meta: bal !== 0 ? `Rs. ${Math.round(bal).toLocaleString()}` : undefined
         };
       });
@@ -936,7 +938,7 @@ export const BasicAccountReport: React.FC = () => {
                   : reportType === 'cash_bank'
                   ? 'Cash & Bank Accounts Filtering'
                   : reportType === 'expense'
-                  ? 'Operating Expense Accounts Hierarchy'
+                  ? 'Operating Expense Accounts Filtering'
                   : 'Chart of Accounts Financial Hierarchy'}
               </span>
             </div>
@@ -945,7 +947,7 @@ export const BasicAccountReport: React.FC = () => {
             </span>
           </div>
 
-          {reportType === 'coa' || reportType === 'expense' ? (
+          {reportType === 'coa' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Box 1: Primary Account Head */}
               <FacetCheckboxList
@@ -979,6 +981,8 @@ export const BasicAccountReport: React.FC = () => {
                   ? 'Active Vendors Register'
                   : reportType === 'cash_bank'
                   ? 'Active Cash & Bank Accounts Register'
+                  : reportType === 'expense'
+                  ? 'Active Operating Expense Accounts Register'
                   : '3. Specific General Ledger Accounts'
               }
               items={specificAccountItems}
