@@ -478,17 +478,23 @@ export const BasicPurchaseReport: React.FC = () => {
     } catch {}
   }, []);
 
-  // Auto-lock single date when purchase bills are selected
+  // Auto-lock Vendor and Date when purchase bills are selected
   useEffect(() => {
     if (selectedPurchaseBills.length > 0) {
-      setDateMode('single');
       const firstPicked = purchasesMaster.find((p) =>
-        selectedPurchaseBills.includes(String(p.id)) || selectedPurchaseBills.includes(p.purchase_no)
+        selectedPurchaseBills.includes(String(p.id)) ||
+        selectedPurchaseBills.includes(p.purchase_no) ||
+        selectedPurchaseBills.includes(p.bill_no)
       );
       if (firstPicked) {
+        const vName = firstPicked.vendor_name || firstPicked.supplier_name;
+        if (vName) {
+          setSelectedVendors([vName]);
+        }
         const rawDate = firstPicked.purchase_date || firstPicked.created_at;
         if (rawDate) {
           const dateOnly = String(rawDate).split('T')[0];
+          setDateMode('single');
           setSingleDate(dateOnly);
         }
       }
@@ -917,28 +923,119 @@ export const BasicPurchaseReport: React.FC = () => {
               <option value="color">🎨 Color Wise Purchases (Tile & surface shade analytics)</option>
             </select>
           </div>
+          <p className="text-[11px] text-gray-400">
+            {reportType === 'bill' && 'Direct transaction ledger. Auto-locks vendor and date when target purchase bill is picked.'}
+            {reportType === 'vendor' && 'Breaks down procurement spend & inward volumes grouped by supplier.'}
+            {reportType === 'product' && 'Product purchase register grouped by item, displaying individual line items, rate, quantity, and product totals.'}
+            {reportType === 'brand' && 'Aggregates procurement turnover by manufacturer & product brand.'}
+            {reportType === 'color' && 'Analyzes shade procurement, tile finishes, and inward color volumes.'}
+          </p>
         </div>
 
-        {/* 2. OPTIONAL TARGET PURCHASE BILL SPECIFIER */}
-        <div className="space-y-2 pt-2 border-t border-stroke/60 dark:border-strokedark/60">
-          <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-            <MdReceipt className="text-primary" size={16} />
-            <span>Select Target Purchase Bill (Optional — pick specific to auto-fill & lock criteria):</span>
-          </label>
-          <SearchableSelect
-            options={targetPurchaseOptions}
-            value={selectedPurchaseBills}
-            onChange={(val) => {
-              if (Array.isArray(val)) setSelectedPurchaseBills(val);
-              else setSelectedPurchaseBills(val ? [val] : []);
-            }}
-            multiple={true}
-            placeholder={
-              purchasesMaster.length > 0
-                ? `All Purchase Bills (${purchasesMaster.length} Total)`
-                : 'No purchase bills found'
-            }
-          />
+        {/* 2. MODE-SPECIFIC MULTI-SELECT DROPDOWNS */}
+        <div className="space-y-4">
+          {/* Target Purchase Bill */}
+          {reportType === 'bill' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-white flex items-center gap-1.5">
+                <MdReceipt className="text-blue-500" size={16} />
+                <span>Select Target Purchase Bill (Optional — pick specific to auto-fill & lock criteria):</span>
+              </label>
+              <SearchableSelect
+                multiple={true}
+                options={targetPurchaseOptions}
+                value={selectedPurchaseBills}
+                onChange={(val) => {
+                  if (Array.isArray(val)) setSelectedPurchaseBills(val);
+                  else setSelectedPurchaseBills(val ? [val] : []);
+                }}
+                placeholder={
+                  purchasesMaster.length > 0
+                    ? `All Purchase Bills (${purchasesMaster.length} Total)`
+                    : 'No purchase bills found'
+                }
+                searchPlaceholder="Search bill #, supplier name, date..."
+              />
+            </div>
+          )}
+
+          {/* Vendor Mode */}
+          {reportType === 'vendor' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-white flex items-center gap-1.5">
+                <MdStore className="text-emerald-500" size={16} />
+                <span>Select Vendor / Supplier:</span>
+              </label>
+              <SearchableSelect
+                multiple={true}
+                options={vendorOptions}
+                value={selectedVendors}
+                onChange={(val) => {
+                  if (Array.isArray(val)) setSelectedVendors(val);
+                  else setSelectedVendors(val ? [val] : []);
+                }}
+                placeholder="All Vendors"
+                searchPlaceholder="Search vendor by name or code..."
+              />
+              {selectedVendors.length > 0 && (
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  Showing procurement & products supplied by {selectedVendors.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Brand Mode */}
+          {reportType === 'brand' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-white flex items-center gap-1.5">
+                <MdBrandingWatermark className="text-indigo-500" size={16} />
+                <span>Select Brand:</span>
+              </label>
+              <SearchableSelect
+                multiple={true}
+                options={brandOptions}
+                value={selectedBrands}
+                onChange={(val) => {
+                  if (Array.isArray(val)) setSelectedBrands(val);
+                  else setSelectedBrands(val ? [val] : []);
+                }}
+                placeholder="All Brands"
+                searchPlaceholder="Search brand name..."
+              />
+              {selectedBrands.length > 0 && (
+                <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+                  Categories & products filtered to brand: {selectedBrands.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Color Mode */}
+          {reportType === 'color' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-white flex items-center gap-1.5">
+                <MdPalette className="text-pink-500" size={16} />
+                <span>Select Color / Surface Shade:</span>
+              </label>
+              <SearchableSelect
+                multiple={true}
+                options={colorOptions}
+                value={selectedColors}
+                onChange={(val) => {
+                  if (Array.isArray(val)) setSelectedColors(val);
+                  else setSelectedColors(val ? [val] : []);
+                }}
+                placeholder="All Available Colors"
+                searchPlaceholder="Type color name (e.g. White, Grey, Gold)..."
+              />
+              {selectedColors.length > 0 && (
+                <p className="text-[10px] text-pink-600 dark:text-pink-400 font-medium">
+                  Categories & products filtered to color: {selectedColors.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 3. CASCADING CATEGORY HIERARCHY & PRODUCT FILTER */}
@@ -1001,31 +1098,42 @@ export const BasicPurchaseReport: React.FC = () => {
           </div>
         </div>
 
-        {/* 4. SECONDARY CRITERIA ROW */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-3 border-t border-stroke/60 dark:border-strokedark/60">
-          {/* Vendor / Supplier */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <MdStore className="text-primary" size={15} />
-              <span>Vendor / Supplier:</span>
-            </label>
-            <SearchableSelect
-              options={vendorOptions}
-              value={selectedVendors}
-              onChange={(val) => {
-                if (Array.isArray(val)) setSelectedVendors(val);
-                else setSelectedVendors(val ? [val] : []);
-              }}
-              multiple={true}
-              placeholder="All Vendors"
-            />
-          </div>
+        {/* 4. SECONDARY CRITERIA & DATE FILTER ROW */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 pt-4 border-t border-stroke/60 dark:border-strokedark/60 items-end">
+          {/* Vendor / Supplier (Shown when reportType !== 'vendor') */}
+          {reportType !== 'vendor' && (
+            <div className="lg:col-span-3 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <MdStore className="text-primary" size={15} />
+                  <span>Vendor / Supplier:</span>
+                </label>
+                {isPurchaseSelected && (
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5">
+                    <MdLock size={11} /> Locked to Bill
+                  </span>
+                )}
+              </div>
+              <SearchableSelect
+                options={vendorOptions}
+                value={selectedVendors}
+                onChange={(val) => {
+                  if (Array.isArray(val)) setSelectedVendors(val);
+                  else setSelectedVendors(val ? [val] : []);
+                }}
+                disabled={isPurchaseSelected}
+                multiple={true}
+                placeholder="All Vendors"
+                searchPlaceholder="Search vendor by name..."
+              />
+            </div>
+          )}
 
-          {/* Warehouse */}
-          <div className="space-y-1.5">
+          {/* Target Warehouse */}
+          <div className={`${reportType !== 'vendor' ? 'lg:col-span-3' : 'lg:col-span-4'} space-y-1.5`}>
             <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
               <MdWarehouse className="text-primary" size={15} />
-              <span>Warehouse:</span>
+              <span>Target Warehouse:</span>
             </label>
             <SearchableSelect
               options={warehouseOptions}
@@ -1036,50 +1144,12 @@ export const BasicPurchaseReport: React.FC = () => {
               }}
               multiple={true}
               placeholder="All Warehouses"
+              searchPlaceholder="Search warehouse..."
             />
           </div>
 
-          {/* Brand */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <MdBrandingWatermark className="text-primary" size={15} />
-              <span>Select Brand:</span>
-            </label>
-            <SearchableSelect
-              options={brandOptions}
-              value={selectedBrands}
-              onChange={(val) => {
-                if (Array.isArray(val)) setSelectedBrands(val);
-                else setSelectedBrands(val ? [val] : []);
-              }}
-              multiple={true}
-              placeholder="All Brands"
-            />
-          </div>
-
-          {/* Color Shade */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <MdPalette className="text-primary" size={15} />
-              <span>Color / Shade:</span>
-            </label>
-            <SearchableSelect
-              options={colorOptions}
-              value={selectedColors}
-              onChange={(val) => {
-                if (Array.isArray(val)) setSelectedColors(val);
-                else setSelectedColors(val ? [val] : []);
-              }}
-              multiple={true}
-              placeholder="All Available Colors"
-            />
-          </div>
-        </div>
-
-        {/* 5. DATE FILTER & SORT ORDER */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-3 border-t border-stroke/60 dark:border-strokedark/60 items-end">
           {/* Date Filter */}
-          <div className="lg:col-span-8 space-y-2">
+          <div className={`${reportType !== 'vendor' ? 'lg:col-span-4' : 'lg:col-span-5'} space-y-2`}>
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                 <MdCalendarToday className="text-primary" size={15} />
@@ -1097,7 +1167,7 @@ export const BasicPurchaseReport: React.FC = () => {
                       ? 'opacity-60 cursor-not-allowed text-gray-400'
                       : dateMode === 'single'
                       ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
-                      : 'text-gray-500 hover:text-black dark:hover:text-white'
+                      : 'text-gray-500 hover:text-black dark:hover:text-white cursor-pointer'
                   }`}
                 >
                   Single Date
@@ -1111,7 +1181,7 @@ export const BasicPurchaseReport: React.FC = () => {
                       ? 'opacity-40 cursor-not-allowed text-gray-400'
                       : dateMode === 'multi'
                       ? 'bg-white dark:bg-boxdark text-primary shadow-xs'
-                      : 'text-gray-500 hover:text-black dark:hover:text-white'
+                      : 'text-gray-500 hover:text-black dark:hover:text-white cursor-pointer'
                   }`}
                 >
                   Date Range
@@ -1132,7 +1202,7 @@ export const BasicPurchaseReport: React.FC = () => {
                   }`}
                 />
                 {isPurchaseSelected && (
-                  <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-1 font-semibold">
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1 font-semibold">
                     <MdLock size={12} /> Auto-locked to purchase bill date
                   </span>
                 )}
@@ -1162,7 +1232,7 @@ export const BasicPurchaseReport: React.FC = () => {
           </div>
 
           {/* Sort Order */}
-          <div className="lg:col-span-4 space-y-1.5">
+          <div className={`${reportType !== 'vendor' ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-1.5`}>
             <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block">
               Sort Order
             </label>
