@@ -802,10 +802,15 @@ export const BasicAccountReportPrint: React.FC = () => {
     let totalOutflows = 0;
     let totalReturns = 0;
 
-    // Receivables and advances from customers
+    // Balance derivations strictly separated by report type
     if (criteria?.reportType === 'customer') {
       sortedAccountRows.forEach((r) => {
         if (r.closingBalance > 0) totalReceivables += r.closingBalance;
+        else if (r.closingBalance < 0) totalAdvances += Math.abs(r.closingBalance);
+      });
+    } else if (criteria?.reportType === 'vendor') {
+      sortedAccountRows.forEach((r) => {
+        if (r.closingBalance > 0) totalPayables += r.closingBalance;
         else if (r.closingBalance < 0) totalAdvances += Math.abs(r.closingBalance);
       });
     } else {
@@ -814,19 +819,9 @@ export const BasicAccountReportPrint: React.FC = () => {
         if (bal > 0) totalReceivables += bal;
         else if (bal < 0) totalAdvances += Math.abs(bal);
       });
-    }
-
-    // Payables from vendors
-    if (criteria?.reportType === 'vendor') {
-      sortedAccountRows.forEach((r) => {
-        if (r.closingBalance > 0) totalPayables += r.closingBalance;
-        else if (r.closingBalance < 0) totalAdvances += Math.abs(r.closingBalance);
-      });
-    } else {
       rawVendors.forEach((v) => {
         const bal = Number(v.computed_balance ?? v.currentBalance ?? v.balance ?? 0);
         if (bal > 0) totalPayables += bal;
-        else if (bal < 0) totalAdvances += Math.abs(bal);
       });
     }
 
