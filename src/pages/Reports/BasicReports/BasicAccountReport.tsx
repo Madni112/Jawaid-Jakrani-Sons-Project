@@ -933,6 +933,10 @@ export const BasicAccountReport: React.FC = () => {
                   ? 'Customer Accounts & Area Filtering'
                   : reportType === 'vendor'
                   ? 'Vendor Accounts & Category Filtering'
+                  : reportType === 'cash_bank'
+                  ? 'Cash & Bank Accounts Filtering'
+                  : reportType === 'expense'
+                  ? 'Operating Expense Accounts Hierarchy'
                   : 'Chart of Accounts Financial Hierarchy'}
               </span>
             </div>
@@ -941,7 +945,7 @@ export const BasicAccountReport: React.FC = () => {
             </span>
           </div>
 
-          {reportType === 'coa' || reportType === 'cash_bank' || reportType === 'expense' ? (
+          {reportType === 'coa' || reportType === 'expense' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Box 1: Primary Account Head */}
               <FacetCheckboxList
@@ -973,6 +977,8 @@ export const BasicAccountReport: React.FC = () => {
                   ? 'Active Customers Register'
                   : reportType === 'vendor'
                   ? 'Active Vendors Register'
+                  : reportType === 'cash_bank'
+                  ? 'Active Cash & Bank Accounts Register'
                   : '3. Specific General Ledger Accounts'
               }
               items={specificAccountItems}
