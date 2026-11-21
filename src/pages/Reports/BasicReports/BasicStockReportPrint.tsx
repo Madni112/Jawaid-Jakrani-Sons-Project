@@ -167,7 +167,7 @@ export const BasicStockReportPrint: React.FC = () => {
   const [stockMap, setStockMap] = useState<Map<string, any>>(new Map());
   const [warehouseStockMap, setWarehouseStockMap] = useState<Map<string, Record<string, number>>>(new Map());
   const [warehousesList, setWarehousesList] = useState<string[]>([]);
-  const [salesVelocityMap, setSalesVelocityMap] = useState<Map<string, { lastDate: string; daysAgo: number; monthlyQty: number }>>(new Map());
+  const [salesVelocityMap, setSalesVelocityMap] = useState<Map<string, { lastDate: string; daysAgo: number; monthlyQty: number; lastQty: number; totalSold: number }>>(new Map());
 
   // Layout Theme: 'modern' | 'classic'
   const [layoutTheme, setLayoutTheme] = useState<'modern' | 'classic'>(() => {
@@ -371,7 +371,7 @@ export const BasicStockReportPrint: React.FC = () => {
         setWarehouseStockMap(whMap);
 
         // Build Last Sold Date & Monthly Sales Demand Map
-        const lastSoldInfoMap = new Map<string, { lastDate: string; daysAgo: number; monthlyQty: number }>();
+        const lastSoldInfoMap = new Map<string, { lastDate: string; daysAgo: number; monthlyQty: number; lastQty: number; totalSold: number }>();
         const asOfRef = effectiveEndDate ? new Date(effectiveEndDate) : new Date();
 
         if (salesRes?.data && Array.isArray(salesRes.data)) {
@@ -385,15 +385,27 @@ export const BasicStockReportPrint: React.FC = () => {
               const nameKey = String(itName || '').replace(/['`]/g, '').trim().toLowerCase();
               const skuKey = String(sku || '').trim().toLowerCase();
               const keys = [nameKey, skuKey].filter(Boolean);
+              const q = Number(qty || 0);
 
               keys.forEach((k) => {
                 let rec = lastSoldInfoMap.get(k);
                 if (!rec) {
-                  rec = { lastDate: sDate, daysAgo: diffDays, monthlyQty: 0 };
+                  rec = { lastDate: sDate, daysAgo: diffDays, monthlyQty: 0, lastQty: q, totalSold: 0 };
                   lastSoldInfoMap.set(k, rec);
+                } else {
+                  const currTime = new Date(sDate).getTime();
+                  const recTime = new Date(rec.lastDate).getTime();
+                  if (currTime > recTime) {
+                    rec.lastDate = sDate;
+                    rec.daysAgo = diffDays;
+                    rec.lastQty = q;
+                  } else if (currTime === recTime) {
+                    rec.lastQty += q;
+                  }
                 }
+                rec.totalSold += q;
                 if (isLast30) {
-                  rec.monthlyQty += Number(qty || 0);
+                  rec.monthlyQty += q;
                 }
               });
             };
@@ -1230,7 +1242,11 @@ export const BasicStockReportPrint: React.FC = () => {
                         <th className="py-2 px-3 text-right">On Hand</th>
                         <th className="py-2 px-3 text-right">Valuation (Rs)</th>
                         <th className="py-2 px-3 text-center">
-                          {criteria?.reportType === 'reorder' ? 'Last Sold / Demand' : 'Status'}
+                          {criteria?.reportType === 'reorder'
+                            ? 'Last Sold / Demand'
+                            : criteria?.reportType === 'dead'
+                            ? 'Stockout Audit / Demand'
+                            : 'Status'}
                         </th>
                       </tr>
                     </thead>
@@ -1298,6 +1314,30 @@ export const BasicStockReportPrint: React.FC = () => {
                                     </span>
                                   </div>
                                 )
+                              ) : criteria?.reportType === 'dead' ? (
+                                row.salesVelocity ? (
+                                  <div className="inline-flex flex-col items-center">
+                                    <span className="text-[11px] font-bold text-slate-800 whitespace-nowrap">
+                                      {row.salesVelocity.lastQty} sold out on {new Date(row.salesVelocity.lastDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    </span>
+                                    <span
+                                      className={`mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight border whitespace-nowrap ${
+                                        row.salesVelocity.daysAgo <= 30
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                                      }`}
+                                    >
+                                      {row.salesVelocity.daysAgo <= 30 ? 'Active Demand' : 'Restock Candidate'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex flex-col items-center">
+                                    <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">Zero Lifetime Sales</span>
+                                    <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-300 mt-0.5 whitespace-nowrap">
+                                      Archive / Inactive
+                                    </span>
+                                  </div>
+                                )
                               ) : (
                                 <span
                                   className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
@@ -1308,7 +1348,7 @@ export const BasicStockReportPrint: React.FC = () => {
                                       : 'bg-rose-50 text-rose-700 border border-rose-200'
                                   }`}
                                 >
-                                  {row.status.replace('_', ' ')}
+                                  {row.status.replace(/_/g, ' ')}
                                 </span>
                               )}
                             </td>
@@ -1498,7 +1538,11 @@ export const BasicStockReportPrint: React.FC = () => {
                   <th className="py-2.5 px-3 text-right">On Hand</th>
                   <th className="py-2.5 px-3 text-right">Valuation (Rs)</th>
                   <th className="py-2.5 px-3 text-center">
-                    {criteria?.reportType === 'reorder' ? 'Last Sold / Monthly Demand' : 'Status'}
+                    {criteria?.reportType === 'reorder'
+                      ? 'Last Sold / Monthly Demand'
+                      : criteria?.reportType === 'dead'
+                      ? 'Stockout Audit / Demand'
+                      : 'Status'}
                   </th>
                 </tr>
               </thead>
@@ -1605,6 +1649,30 @@ export const BasicStockReportPrint: React.FC = () => {
                                 </span>
                               </div>
                             )
+                          ) : criteria?.reportType === 'dead' ? (
+                            row.salesVelocity ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="text-[11px] font-bold text-slate-800 whitespace-nowrap">
+                                  {row.salesVelocity.lastQty} sold out on {new Date(row.salesVelocity.lastDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </span>
+                                <span
+                                  className={`mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight border whitespace-nowrap ${
+                                    row.salesVelocity.daysAgo <= 30
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                                  }`}
+                                >
+                                  {row.salesVelocity.daysAgo <= 30 ? 'Active Demand' : 'Restock Candidate'}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">Zero Lifetime Sales</span>
+                                <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-300 mt-0.5 whitespace-nowrap">
+                                  Archive / Inactive
+                                </span>
+                              </div>
+                            )
                           ) : (
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
@@ -1615,7 +1683,7 @@ export const BasicStockReportPrint: React.FC = () => {
                                   : 'bg-rose-50 text-rose-700 border border-rose-200'
                               }`}
                             >
-                              {row.status.replace('_', ' ')}
+                              {row.status.replace(/_/g, ' ')}
                             </span>
                           )}
                         </td>
