@@ -225,10 +225,28 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   const [activitySummary, setActivitySummary] = useState<{
     totalEvents: number;
     totalSales: number;
-    totalInflow: number;
-    totalOutflow: number;
-    totalReturns: number;
-  }>({ totalEvents: 0, totalSales: 0, totalInflow: 0, totalOutflow: 0, totalReturns: 0 });
+    totalPurchases: number;
+    cashReceived: number;
+    cashPaid: number;
+    expenses: number;
+    salesReturns: number;
+    purchaseReturns: number;
+    totalInflow?: number;
+    totalOutflow?: number;
+    totalReturns?: number;
+  }>({
+    totalEvents: 0,
+    totalSales: 0,
+    totalPurchases: 0,
+    cashReceived: 0,
+    cashPaid: 0,
+    expenses: 0,
+    salesReturns: 0,
+    purchaseReturns: 0,
+    totalInflow: 0,
+    totalOutflow: 0,
+    totalReturns: 0
+  });
 
   // Summary KPIs for active report
   const [summary, setSummary] = useState<{
@@ -1910,6 +1928,12 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
         const rows: DailyActivityRow[] = [];
         let totalSales = 0;
+        let totalPurchases = 0;
+        let cashReceived = 0;
+        let cashPaid = 0;
+        let expenses = 0;
+        let salesReturns = 0;
+        let purchaseReturns = 0;
         let totalInflow = 0;
         let totalOutflow = 0;
         let totalReturns = 0;
@@ -2050,6 +2074,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           if (ts < startMs || ts > endMs) return;
 
           const amt = Number(pur.total_amount || 0);
+          totalPurchases += amt;
           totalOutflow += amt;
 
           const itemsArr: Array<{ name: string; qty?: number; rate?: number; amount?: number; uom?: string }> = [];
@@ -2120,6 +2145,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             vType = 'Cash Receipt (CRV)';
             badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
             stColor = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200';
+            cashReceived += amt;
             totalInflow += amt;
             partyType = 'Customer';
             hierarchyGroup = 'customer_receipts';
@@ -2127,6 +2153,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             vType = 'Bank Receipt (BRV)';
             badgeColor = 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800';
             stColor = 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200';
+            cashReceived += amt;
             totalInflow += amt;
             partyType = 'Customer';
             hierarchyGroup = 'customer_receipts';
@@ -2134,6 +2161,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             vType = 'Cash Payment (CPV)';
             badgeColor = 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800';
             stColor = 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200';
+            cashPaid += amt;
             totalOutflow += amt;
             partyType = 'Account';
             hierarchyGroup = 'vendor_payments';
@@ -2141,6 +2169,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             vType = 'Bank Payment (BPV)';
             badgeColor = 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800';
             stColor = 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200';
+            cashPaid += amt;
             totalOutflow += amt;
             partyType = 'Account';
             hierarchyGroup = 'vendor_payments';
@@ -2148,6 +2177,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             vType = 'Vendor Payment (VPV)';
             badgeColor = 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800';
             stColor = 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200';
+            cashPaid += amt;
             totalOutflow += amt;
             partyType = 'Supplier';
             hierarchyGroup = 'vendor_payments';
@@ -2155,9 +2185,30 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             vType = 'Expense Voucher';
             badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
             stColor = 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200';
+            expenses += amt;
             totalOutflow += amt;
             partyType = 'Account';
             hierarchyGroup = 'expenses';
+          } else {
+            if (String(v.account_code || '').startsWith('5')) {
+              vType = 'Expense Voucher';
+              badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
+              stColor = 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200';
+              expenses += amt;
+              totalOutflow += amt;
+              partyType = 'Account';
+              hierarchyGroup = 'expenses';
+            } else if (Number(v.debit) > 0) {
+              cashPaid += amt;
+              totalOutflow += amt;
+              partyType = 'Account';
+              hierarchyGroup = 'vendor_payments';
+            } else if (Number(v.credit) > 0) {
+              cashReceived += amt;
+              totalInflow += amt;
+              partyType = 'Customer';
+              hierarchyGroup = 'customer_receipts';
+            }
           }
 
           rows.push({
@@ -2187,6 +2238,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           if (ts < startMs || ts > endMs) return;
 
           const amt = Number(sr.return_amount || sr.total_amount || 0);
+          salesReturns += amt;
           totalReturns += amt;
 
           rows.push({
@@ -2216,6 +2268,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           if (ts < startMs || ts > endMs) return;
 
           const amt = Number(pr.return_amount || pr.total_amount || 0);
+          purchaseReturns += amt;
           totalReturns += amt;
 
           rows.push({
@@ -2249,16 +2302,22 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
         setActivitySummary({
           totalEvents: rows.length,
           totalSales,
-          totalInflow,
-          totalOutflow,
-          totalReturns
+          totalPurchases,
+          cashReceived,
+          cashPaid,
+          expenses,
+          salesReturns,
+          purchaseReturns,
+          totalInflow: cashReceived,
+          totalOutflow: cashPaid + expenses + totalPurchases,
+          totalReturns: salesReturns + purchaseReturns
         });
         setSummary({
           opening: rows.length,
           debit: totalSales,
-          credit: totalInflow,
-          closing: totalOutflow,
-          returnAmt: totalReturns,
+          credit: cashReceived,
+          closing: cashPaid + expenses + totalPurchases,
+          returnAmt: salesReturns + purchaseReturns,
           count: rows.length
         });
       }
@@ -3430,6 +3489,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
             pnlData={pnlData}
             pnlCalculationMode={pnlCalculationMode}
             pnlIncludeOB={pnlIncludeOB}
+            activitySummary={activitySummary}
           />
 
           {/* Search Table Toolbar with Quick Filters */}

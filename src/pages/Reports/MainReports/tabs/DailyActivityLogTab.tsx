@@ -54,12 +54,18 @@ interface DailyActivityLogTabProps {
   isGeneratingPdf: boolean;
   dateMode: 'single' | 'range';
   activityRows: DailyActivityRow[];
-  summary: {
+  summary?: {
     totalEvents: number;
     totalSales: number;
-    totalInflow: number;
-    totalOutflow: number;
-    totalReturns: number;
+    totalPurchases?: number;
+    cashReceived?: number;
+    cashPaid?: number;
+    expenses?: number;
+    salesReturns?: number;
+    purchaseReturns?: number;
+    totalInflow?: number;
+    totalOutflow?: number;
+    totalReturns?: number;
   };
   handleSort: (field: string) => void;
   renderSortIcon: (field: string) => React.ReactNode;
