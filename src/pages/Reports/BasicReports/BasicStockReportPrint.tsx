@@ -167,6 +167,7 @@ export const BasicStockReportPrint: React.FC = () => {
   const [stockMap, setStockMap] = useState<Map<string, any>>(new Map());
   const [warehouseStockMap, setWarehouseStockMap] = useState<Map<string, Record<string, number>>>(new Map());
   const [warehousesList, setWarehousesList] = useState<string[]>([]);
+  const [salesVelocityMap, setSalesVelocityMap] = useState<Map<string, { lastDate: string; daysAgo: number; monthlyQty: number }>>(new Map());
 
   // Layout Theme: 'modern' | 'classic'
   const [layoutTheme, setLayoutTheme] = useState<'modern' | 'classic'>(() => {
@@ -294,11 +295,19 @@ export const BasicStockReportPrint: React.FC = () => {
           .from('stock_balances')
           .select('product_name, warehouse_name, quantity');
 
-        const [prodRes, whRes, rpcRes, balancesRes] = await Promise.all([
+        // 6. Fetch recent sales invoices for Last Sold Date & Monthly Sales Demand calculation
+        const salesPromise = supabase
+          .from('sales_invoices')
+          .select('sale_date, items')
+          .order('sale_date', { ascending: false })
+          .limit(400);
+
+        const [prodRes, whRes, rpcRes, balancesRes, salesRes] = await Promise.all([
           productsPromise,
           warehousesPromise,
           rpcPromise,
-          balancesPromise
+          balancesPromise,
+          salesPromise
         ]);
 
         if (!isMounted) return;
@@ -361,6 +370,47 @@ export const BasicStockReportPrint: React.FC = () => {
           });
         }
         setWarehouseStockMap(whMap);
+
+        // Build Last Sold Date & Monthly Sales Demand Map
+        const lastSoldInfoMap = new Map<string, { lastDate: string; daysAgo: number; monthlyQty: number }>();
+        const asOfRef = effectiveEndDate ? new Date(effectiveEndDate) : new Date();
+
+        if (salesRes?.data && Array.isArray(salesRes.data)) {
+          salesRes.data.forEach((inv: any) => {
+            const sDate = inv.sale_date ? String(inv.sale_date).trim() : null;
+            if (!sDate) return;
+            const diffDays = Math.floor((asOfRef.getTime() - new Date(sDate).getTime()) / (1000 * 60 * 60 * 24));
+            const isLast30 = diffDays >= 0 && diffDays <= 30;
+
+            const processItem = (itName: any, sku: any, qty: any) => {
+              const nameKey = String(itName || '').replace(/['`]/g, '').trim().toLowerCase();
+              const skuKey = String(sku || '').trim().toLowerCase();
+              const keys = [nameKey, skuKey].filter(Boolean);
+
+              keys.forEach((k) => {
+                let rec = lastSoldInfoMap.get(k);
+                if (!rec) {
+                  rec = { lastDate: sDate, daysAgo: diffDays, monthlyQty: 0 };
+                  lastSoldInfoMap.set(k, rec);
+                }
+                if (isLast30) {
+                  rec.monthlyQty += Number(qty || 0);
+                }
+              });
+            };
+
+            const items = Array.isArray(inv.items) ? inv.items : [];
+            items.forEach((it: any) => {
+              processItem(it.itemName || it.product_name, it.skuCode || it.item_sr_no, Number(it.qty || 0));
+              if (Array.isArray(it._tileItems)) {
+                it._tileItems.forEach((t: any) => {
+                  processItem(t.itemName || t.product_name, t.skuCode, Number(t.boxQty || t.qty || 0));
+                });
+              }
+            });
+          });
+        }
+        setSalesVelocityMap(lastSoldInfoMap);
       } catch (err) {
         console.error('Failed to load stock report print data:', err);
       } finally {
@@ -486,6 +536,14 @@ export const BasicStockReportPrint: React.FC = () => {
         status = 'low_stock';
       }
 
+      // Sales Velocity & Demand Lookup
+      const skuKey = String(p.item_sr_no || p.sku || '').trim().toLowerCase();
+      const salesVelocity =
+        salesVelocityMap.get(pNameClean) ||
+        salesVelocityMap.get(pNameLower) ||
+        salesVelocityMap.get(skuKey) ||
+        null;
+
       return {
         id: p.id,
         sku: p.item_sr_no || p.sku || '—',
@@ -507,6 +565,7 @@ export const BasicStockReportPrint: React.FC = () => {
         openingStock,
         totalIn,
         totalOut,
+        salesVelocity,
         rawProduct: p
       };
     });
@@ -553,7 +612,7 @@ export const BasicStockReportPrint: React.FC = () => {
     });
 
     return filtered;
-  }, [productsMaster, stockMap, warehouseStockMap, criteria]);
+  }, [productsMaster, stockMap, warehouseStockMap, criteria, salesVelocityMap]);
 
   // ── SORTING ──
   const sortedRows = useMemo(() => {
@@ -1171,7 +1230,9 @@ export const BasicStockReportPrint: React.FC = () => {
                         <th className="py-2 px-3 text-right">Cost Price</th>
                         <th className="py-2 px-3 text-right">On Hand</th>
                         <th className="py-2 px-3 text-right">Valuation (Rs)</th>
-                        <th className="py-2 px-3 text-center">Status</th>
+                        <th className="py-2 px-3 text-center">
+                          {criteria?.reportType === 'reorder' ? 'Last Sold / Demand' : 'Status'}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1207,17 +1268,50 @@ export const BasicStockReportPrint: React.FC = () => {
                               Rs. {Math.round(row.totalValuation).toLocaleString()}
                             </td>
                             <td className="py-2 px-3 text-center">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                  row.status === 'in_stock'
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : row.status === 'low_stock'
-                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                }`}
-                              >
-                                {row.status.replace('_', ' ')}
-                              </span>
+                              {criteria?.reportType === 'reorder' ? (
+                                row.salesVelocity ? (
+                                  <div className="inline-flex flex-col items-center">
+                                    <span className="text-[11px] font-bold text-slate-800 whitespace-nowrap">
+                                      {new Date(row.salesVelocity.lastDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                                      <span className="text-[10px] text-slate-400 font-normal ml-1">
+                                        ({row.salesVelocity.daysAgo === 0 ? 'Today' : `${row.salesVelocity.daysAgo}d ago`})
+                                      </span>
+                                    </span>
+                                    <span
+                                      className={`mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight border whitespace-nowrap ${
+                                        row.salesVelocity.monthlyQty >= 20
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          : row.salesVelocity.monthlyQty >= 5
+                                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                                      }`}
+                                    >
+                                      {row.salesVelocity.monthlyQty > 0
+                                        ? `${row.salesVelocity.monthlyQty} ${row.uom}/mo`
+                                        : '0 / mo (Low)'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex flex-col items-center">
+                                    <span className="text-[10px] text-slate-400 italic">No Sales</span>
+                                    <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 mt-0.5">
+                                      Dormant
+                                    </span>
+                                  </div>
+                                )
+                              ) : (
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                    row.status === 'in_stock'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : row.status === 'low_stock'
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  }`}
+                                >
+                                  {row.status.replace('_', ' ')}
+                                </span>
+                              )}
                             </td>
                           </tr>
                           {isRowExpanded(row.id) && (
@@ -1404,7 +1498,9 @@ export const BasicStockReportPrint: React.FC = () => {
                   <th className="py-2.5 px-3 text-right">Cost Rate</th>
                   <th className="py-2.5 px-3 text-right">On Hand</th>
                   <th className="py-2.5 px-3 text-right">Valuation (Rs)</th>
-                  <th className="py-2.5 px-3 text-center">Status</th>
+                  <th className="py-2.5 px-3 text-center">
+                    {criteria?.reportType === 'reorder' ? 'Last Sold / Monthly Demand' : 'Status'}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1479,17 +1575,50 @@ export const BasicStockReportPrint: React.FC = () => {
                           Rs. {Math.round(row.totalValuation).toLocaleString()}
                         </td>
                         <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              row.status === 'in_stock'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : row.status === 'low_stock'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}
-                          >
-                            {row.status.replace('_', ' ')}
-                          </span>
+                          {criteria?.reportType === 'reorder' ? (
+                            row.salesVelocity ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="text-[11px] font-bold text-slate-800">
+                                  {new Date(row.salesVelocity.lastDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                  <span className="text-[10px] text-slate-400 font-normal ml-1">
+                                    ({row.salesVelocity.daysAgo === 0 ? 'Today' : `${row.salesVelocity.daysAgo}d ago`})
+                                  </span>
+                                </span>
+                                <span
+                                  className={`mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight border ${
+                                    row.salesVelocity.monthlyQty >= 20
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      : row.salesVelocity.monthlyQty >= 5
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}
+                                >
+                                  {row.salesVelocity.monthlyQty > 0
+                                    ? `${row.salesVelocity.monthlyQty} ${row.uom}/mo`
+                                    : '0 / mo (Low)'}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="text-[10px] text-slate-400 italic">No Recent Sales</span>
+                                <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 mt-0.5">
+                                  Dormant
+                                </span>
+                              </div>
+                            )
+                          ) : (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                row.status === 'in_stock'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : row.status === 'low_stock'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}
+                            >
+                              {row.status.replace('_', ' ')}
+                            </span>
+                          )}
                         </td>
                       </tr>
                       {isRowExpanded(row.id) && (
