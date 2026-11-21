@@ -1292,9 +1292,9 @@ export const BasicStockReportPrint: React.FC = () => {
                                   </div>
                                 ) : (
                                   <div className="inline-flex flex-col items-center">
-                                    <span className="text-[10px] text-slate-400 italic">No Sales</span>
-                                    <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 mt-0.5">
-                                      Dormant
+                                    <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">No Sales History</span>
+                                    <span className="text-[9px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 mt-0.5 whitespace-nowrap">
+                                      Review / Slow Mover
                                     </span>
                                   </div>
                                 )
@@ -1599,9 +1599,9 @@ export const BasicStockReportPrint: React.FC = () => {
                               </div>
                             ) : (
                               <div className="inline-flex flex-col items-center">
-                                <span className="text-[10px] text-slate-400 italic">No Recent Sales</span>
-                                <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 mt-0.5">
-                                  Dormant
+                                <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">No Sales History</span>
+                                <span className="text-[9px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 mt-0.5 whitespace-nowrap">
+                                  Review / Slow Mover
                                 </span>
                               </div>
                             )
