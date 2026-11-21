@@ -1699,12 +1699,15 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
       // ── TAB 5: EXPENSE REPORT ──
       else if (targetTab === 'expense-report') {
-        const { data: vchList } = await fetchAllPages(
-          supabase
-            .from('financial_vouchers')
-            .select('*')
-            .order('voucher_date', { ascending: false })
-        );
+        let vchQ = supabase
+          .from('financial_vouchers')
+          .select('*')
+          .order('voucher_date', { ascending: false });
+
+        if (effFrom) vchQ = vchQ.gte('voucher_date', effFrom);
+        if (effTo) vchQ = vchQ.lte('voucher_date', effTo);
+
+        const { data: vchList } = await fetchAllPages(vchQ);
 
         const filtered = (vchList || []).filter(v => {
           const vNo = String(v.voucher_no || '').toUpperCase();
@@ -1770,12 +1773,15 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
       // ── TAB 6: DAILYBOOK (ROZNAMCHA) ──
       else if (targetTab === 'daily-book') {
-        const { data: vchList } = await fetchAllPages(
-          supabase
-            .from('financial_vouchers')
-            .select('*')
-            .order('voucher_date', { ascending: true })
-        );
+        let vchQ = supabase
+          .from('financial_vouchers')
+          .select('*')
+          .order('voucher_date', { ascending: true });
+
+        if (effFrom) vchQ = vchQ.gte('voucher_date', effFrom);
+        if (effTo) vchQ = vchQ.lte('voucher_date', effTo);
+
+        const { data: vchList } = await fetchAllPages(vchQ);
 
         const rows: any[] = [];
         let totalCashIn = 0;
@@ -1918,14 +1924,42 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
       // ── TAB 7: DAILY ACTIVITY AUDIT TRAIL LOG ──
       else if (targetTab === 'daily-activity') {
+        let salesQ = supabase.from('sales_invoices').select('*').order('created_at', { ascending: false });
+        let dcQ = supabase.from('delivery_challans').select('*').order('created_at', { ascending: false });
+        let purchQ = supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false });
+        let vchQ = supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false });
+        let sRetQ = supabase.from('sales_returns').select('*').order('created_at', { ascending: false });
+        let pRetQ = supabase.from('purchase_returns').select('*').order('created_at', { ascending: false });
+        let transQ = supabase.from('stock_transfers').select('*').order('created_at', { ascending: false });
+
+        if (effFrom) {
+          salesQ = salesQ.gte('sale_date', effFrom);
+          dcQ = dcQ.gte('challan_date', effFrom);
+          purchQ = purchQ.gte('purchase_date', effFrom);
+          vchQ = vchQ.gte('voucher_date', effFrom);
+          sRetQ = sRetQ.gte('return_date', effFrom);
+          pRetQ = pRetQ.gte('return_date', effFrom);
+          transQ = transQ.gte('transfer_date', effFrom);
+        }
+
+        if (effTo) {
+          salesQ = salesQ.lte('sale_date', effTo);
+          dcQ = dcQ.lte('challan_date', effTo);
+          purchQ = purchQ.lte('purchase_date', effTo);
+          vchQ = vchQ.lte('voucher_date', effTo);
+          sRetQ = sRetQ.lte('return_date', effTo);
+          pRetQ = pRetQ.lte('return_date', effTo);
+          transQ = transQ.lte('transfer_date', effTo);
+        }
+
         const [salesRes, dcRes, purchRes, vchRes, sRetRes, pRetRes, transRes] = await Promise.all([
-          fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })),
-          fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
-          fetchAllPages(supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false })),
-          fetchAllPages(supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false })),
-          fetchAllPages(supabase.from('sales_returns').select('*').order('created_at', { ascending: false })),
-          fetchAllPages(supabase.from('purchase_returns').select('*').order('created_at', { ascending: false })),
-          fetchAllPages(supabase.from('stock_transfers').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(salesQ),
+          fetchAllPages(dcQ),
+          fetchAllPages(purchQ),
+          fetchAllPages(vchQ),
+          fetchAllPages(sRetQ),
+          fetchAllPages(pRetQ),
+          fetchAllPages(transQ),
         ]);
 
         const rows: DailyActivityRow[] = [];
@@ -1945,25 +1979,25 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           let dateStr = '';
           let ts = 0;
 
-          if (createdVal) {
-            try {
-              const cd = new Date(createdVal);
-              if (!isNaN(cd.getTime())) {
-                ts = cd.getTime();
-                time = cd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-                dateStr = cd.toISOString().split('T')[0];
-              }
-            } catch {}
-          }
-
           if (dateVal) {
             const raw = String(dateVal).split('T')[0];
             if (raw.length === 10) {
               dateStr = raw;
-              if (!ts) {
-                ts = new Date(`${raw}T12:00:00`).getTime();
-              }
+              ts = new Date(`${raw}T12:00:00`).getTime();
             }
+          }
+
+          if (createdVal) {
+            try {
+              const cd = new Date(createdVal);
+              if (!isNaN(cd.getTime())) {
+                time = cd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                if (!ts) {
+                  ts = cd.getTime();
+                  dateStr = cd.toISOString().split('T')[0];
+                }
+              }
+            } catch {}
           }
 
           return { dateStr, time, ts };
