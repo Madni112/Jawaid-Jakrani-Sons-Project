@@ -27,6 +27,7 @@ import {
 } from 'react-icons/md';
 import { BasicStockFilterCriteria } from './BasicStockReport';
 import { extractProductColor } from '../../../utils/colorService';
+import { migrateMainWarehouseToA39 } from '../../../utils/warehouseMigration';
 
 // Helper to format stock quantity so loose tiles and loose items never show in decimal points
 export const formatStockQty = (
@@ -326,7 +327,9 @@ export const BasicStockReportPrint: React.FC = () => {
         if (!isMounted) return;
 
         const loadedProds = prodRes.data || [];
-        const loadedWhs = (whRes.data || []).map((w: any) => String(w.name).trim());
+        const loadedWhs = (whRes.data || [])
+          .map((w: any) => String(w.name).trim())
+          .filter((w: string) => w.toLowerCase() !== 'main warehouse');
         setProductsMaster(loadedProds);
         setWarehousesList(loadedWhs);
 
@@ -368,12 +371,18 @@ export const BasicStockReportPrint: React.FC = () => {
         setStockMap(sMap);
 
         // Build warehouse-specific stock map (normalized product_name -> { [warehouse]: qty })
+        // Consolidates legacy 'Main Warehouse' balances directly into 'A-39'
+        let hasMainWh = false;
         const whMap = new Map<string, Record<string, number>>();
         if (balancesRes.data && Array.isArray(balancesRes.data)) {
           balancesRes.data.forEach((b: any) => {
             const rawP = String(b.product_name || '');
             const pKey = rawP.replace(/[`'"]/g, '').trim().toLowerCase();
-            const wName = String(b.warehouse_name || 'Global').trim();
+            const rawW = String(b.warehouse_name || 'Global').trim();
+            if (rawW.toLowerCase() === 'main warehouse') {
+              hasMainWh = true;
+            }
+            const wName = rawW.toLowerCase() === 'main warehouse' ? 'A-39' : rawW;
             const q = Number(b.quantity || 0);
             if (!whMap.has(pKey)) {
               whMap.set(pKey, {});
@@ -383,6 +392,11 @@ export const BasicStockReportPrint: React.FC = () => {
           });
         }
         setWarehouseStockMap(whMap);
+
+        // Auto-heal legacy database rows in background if Main Warehouse was encountered
+        if (hasMainWh) {
+          migrateMainWarehouseToA39().catch(() => {});
+        }
 
         // Build Last Sold Date & Monthly Sales Demand Map
         const lastSoldInfoMap = new Map<string, { lastDate: string; daysAgo: number; monthlyQty: number; lastQty: number; totalSold: number }>();
