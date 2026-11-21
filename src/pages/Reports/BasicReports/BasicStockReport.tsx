@@ -47,7 +47,7 @@ export interface BasicStockFilterCriteria {
   dateFrom?: string;
   dateTo?: string;
   asOfDate?: string;
-  sortBy: 'stock_desc' | 'stock_asc' | 'valuation_desc' | 'name_asc' | 'name_desc' | 'sku_asc';
+  sortBy: 'stock_desc' | 'stock_asc' | 'valuation_desc' | 'valuation_asc' | 'name_asc' | 'name_desc' | 'sku_asc' | 'sku_desc';
 }
 
 const STORAGE_CRITERIA_KEY = 'zac_basic_stock_report_criteria_v2';
@@ -1043,9 +1043,11 @@ export const BasicStockReport: React.FC = () => {
               <option value="stock_desc">Available Stock (Highest First)</option>
               <option value="stock_asc">Available Stock (Lowest First)</option>
               <option value="valuation_desc">Total Valuation (Highest First)</option>
+              <option value="valuation_asc">Total Valuation (Lowest First)</option>
               <option value="name_asc">Product Name (A to Z)</option>
               <option value="name_desc">Product Name (Z to A)</option>
-              <option value="sku_asc">SKU / Item Code</option>
+              <option value="sku_asc">SKU Code (A to Z)</option>
+              <option value="sku_desc">SKU Code (Z to A)</option>
             </select>
           </div>
         </div>

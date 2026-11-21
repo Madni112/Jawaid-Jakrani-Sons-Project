@@ -525,12 +525,16 @@ export const BasicStockReportPrint: React.FC = () => {
         return list.sort((a, b) => a.availableStock - b.availableStock);
       case 'valuation_desc':
         return list.sort((a, b) => b.totalValuation - a.totalValuation);
+      case 'valuation_asc':
+        return list.sort((a, b) => a.totalValuation - b.totalValuation);
       case 'name_asc':
         return list.sort((a, b) => a.product_name.localeCompare(b.product_name));
       case 'name_desc':
         return list.sort((a, b) => b.product_name.localeCompare(a.product_name));
       case 'sku_asc':
         return list.sort((a, b) => a.sku.localeCompare(b.sku));
+      case 'sku_desc':
+        return list.sort((a, b) => b.sku.localeCompare(a.sku));
       default:
         return list;
     }
@@ -604,6 +608,37 @@ export const BasicStockReportPrint: React.FC = () => {
           grp.totalVal += val;
         }
       });
+    });
+
+    // Ensure items inside each warehouse group accurately follow the selected sort order
+    whMap.forEach((grp) => {
+      if (!criteria?.sortBy) return;
+      switch (criteria.sortBy) {
+        case 'valuation_desc':
+          grp.items.sort((a, b) => b.valuation - a.valuation);
+          break;
+        case 'valuation_asc':
+          grp.items.sort((a, b) => a.valuation - b.valuation);
+          break;
+        case 'stock_desc':
+          grp.items.sort((a, b) => b.qty - a.qty);
+          break;
+        case 'stock_asc':
+          grp.items.sort((a, b) => a.qty - b.qty);
+          break;
+        case 'name_asc':
+          grp.items.sort((a, b) => a.product.product_name.localeCompare(b.product.product_name));
+          break;
+        case 'name_desc':
+          grp.items.sort((a, b) => b.product.product_name.localeCompare(a.product.product_name));
+          break;
+        case 'sku_asc':
+          grp.items.sort((a, b) => a.product.sku.localeCompare(b.product.sku));
+          break;
+        case 'sku_desc':
+          grp.items.sort((a, b) => b.product.sku.localeCompare(a.product.sku));
+          break;
+      }
     });
 
     return Array.from(whMap.values()).filter((g) => g.items.length > 0 || (criteria?.warehouses && criteria.warehouses.includes(g.warehouseName)));
@@ -728,9 +763,11 @@ export const BasicStockReportPrint: React.FC = () => {
               <option value="stock_desc">Available Stock (Highest First)</option>
               <option value="stock_asc">Available Stock (Lowest First)</option>
               <option value="valuation_desc">Valuation (Highest First)</option>
+              <option value="valuation_asc">Valuation (Lowest First)</option>
               <option value="name_asc">Product Name (A to Z)</option>
               <option value="name_desc">Product Name (Z to A)</option>
               <option value="sku_asc">SKU Code (A to Z)</option>
+              <option value="sku_desc">SKU Code (Z to A)</option>
             </select>
           </div>
 
