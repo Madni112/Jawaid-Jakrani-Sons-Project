@@ -6,6 +6,7 @@ import { UserRole } from '../constant/auth';
 import { getModulesForRole, ROLE_PRESETS } from '../constant/roles';
 import { toast } from 'react-hot-toast';
 import { getModulePermissions, ModulePermissionState, cleanBaseModuleId } from '../utils/permissionUtils';
+import { checkLoginSecurityStatus, recordFailedLoginAttempt, resetLoginSecurity, formatLockoutTime } from '../utils/loginSecurity';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -334,10 +335,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const login = async (email: string, password: string) => {
+    // 1. Guard against login if current email or device is under active security lockout
+    const secStatus = checkLoginSecurityStatus(email);
+    if (secStatus.isLocked) {
+      const waitTime = formatLockoutTime(secStatus.remainingSeconds);
+      throw new Error(`Account temporarily locked for security (Level ${secStatus.tier}). Please wait ${waitTime} before retrying.`);
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    
+    if (error) {
+      // Record failed attempt and compute updated security status
+      const updatedStatus = recordFailedLoginAttempt(email);
+
+      // Log security event to database audit trail
+      try {
+        await supabase.from('audit_logs').insert([{
+          action_type: updatedStatus.isLocked ? 'SECURITY_LOCKOUT' : 'FAILED_LOGIN',
+          table_name: 'auth_users',
+          performed_by: email || 'Anonymous',
+          details: {
+            email,
+            tier: updatedStatus.tier,
+            attempts: updatedStatus.currentAttempts,
+            remainingAttempts: updatedStatus.remainingAttempts,
+            isLocked: updatedStatus.isLocked,
+            lockoutDurationSec: updatedStatus.lockoutDurationSec,
+            error: error.message,
+            timestamp: new Date().toISOString()
+          }
+        }]);
+      } catch (_) {}
+
+      if (updatedStatus.isLocked) {
+        const waitTime = formatLockoutTime(updatedStatus.remainingSeconds);
+        throw new Error(`Security lockout triggered (Level ${updatedStatus.tier}): 5 consecutive failed attempts. Please wait ${waitTime} before retrying.`);
+      } else {
+        throw new Error(`Invalid email or password. You have ${updatedStatus.remainingAttempts} attempt(s) remaining before a security timeout.`);
+      }
+    }
 
     if (data.user) {
+      // 2. Clear security lockout counters and tiers on successful login
+      resetLoginSecurity(email);
+
       await handleAuthState(data.session);
       try {
         await supabase.from('audit_logs').insert([{
