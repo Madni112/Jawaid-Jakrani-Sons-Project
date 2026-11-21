@@ -1071,7 +1071,7 @@ export const BasicStockReportPrint: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-700">
                     <span>
-                      Total Units: <span className="text-slate-900">{whGrp.totalQty.toLocaleString()}</span>
+                      Total Units: <span className="text-slate-900">{Math.round(whGrp.totalQty).toLocaleString()}</span>
                     </span>
                     <span>
                       Location Valuation: <span className="text-emerald-700">Rs. {Math.round(whGrp.totalVal).toLocaleString()}</span>
@@ -1110,8 +1110,8 @@ export const BasicStockReportPrint: React.FC = () => {
                           <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
                             {it.product.costPrice > 0 ? Math.round(it.product.costPrice).toLocaleString() : '—'}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                            {it.qty.toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">{it.product.uom}</span>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                            {formatStockQty(it.qty, it.product.rawProduct)}
                           </td>
                           <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
                             Rs. {Math.round(it.valuation).toLocaleString()}
