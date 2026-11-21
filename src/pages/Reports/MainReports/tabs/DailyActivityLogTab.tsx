@@ -17,7 +17,8 @@ import {
   MdUnfoldMore,
   MdUnfoldLess,
   MdMoney,
-  MdTrendingUp
+  MdTrendingUp,
+  MdCompareArrows
 } from 'react-icons/md';
 
 export type HierarchyGroupKey =
@@ -26,7 +27,8 @@ export type HierarchyGroupKey =
   | 'customer_receipts'
   | 'vendor_payments'
   | 'stock_movements'
-  | 'expenses';
+  | 'expenses'
+  | 'transfers';
 
 export interface DailyActivityRow {
   id: string;
@@ -34,7 +36,7 @@ export interface DailyActivityRow {
   date: string; // YYYY-MM-DD
   time: string; // e.g. "02:45 PM"
   timestamp: number;
-  category: 'sales' | 'challan' | 'purchase' | 'voucher' | 'return';
+  category: 'sales' | 'challan' | 'purchase' | 'voucher' | 'return' | 'transfer';
   hierarchyGroup: HierarchyGroupKey;
   type: string;
   typeBadgeColor: string;
@@ -135,6 +137,15 @@ const HIERARCHY_GROUPS: GroupMeta[] = [
     headerBg: 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',
     badgeBg: 'bg-rose-600 text-white',
     description: 'Petty cash, utility bills and administrative operational expenses'
+  },
+  {
+    key: 'transfers',
+    title: '7. Internal Cash & Bank Transfers (Contra)',
+    icon: MdCompareArrows,
+    accentColor: 'text-cyan-700 dark:text-cyan-400',
+    headerBg: 'bg-cyan-50/80 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800',
+    badgeBg: 'bg-cyan-600 text-white',
+    description: 'Internal cash deposits, withdrawals, and bank transfers'
   }
 ];
 
@@ -142,28 +153,45 @@ export const DailyActivityLogTab: React.FC<DailyActivityLogTabProps> = ({
   isGeneratingPdf,
   dateMode,
   activityRows,
+  summary,
   handleSort,
   renderSortIcon,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedOperator, setSelectedOperator] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'hierarchical' | 'flat'>('hierarchical');
   const [expandAllBreakdown, setExpandAllBreakdown] = useState<boolean>(false);
   const [individualExpandedMap, setIndividualExpandedMap] = useState<Record<string, boolean>>({});
 
-  // Filtered rows by search term
+  // Unique operators list
+  const operatorsList = useMemo(() => {
+    const set = new Set<string>();
+    activityRows.forEach(r => {
+      const op = (r.operator || '').trim();
+      if (op) set.add(op);
+    });
+    return Array.from(set).sort();
+  }, [activityRows]);
+
+  // Filtered rows by operator and search term
   const filteredRows = useMemo(() => {
-    if (!searchTerm.trim()) return activityRows;
+    let rows = activityRows;
+    if (selectedOperator !== 'ALL') {
+      rows = rows.filter(r => (r.operator || '').trim() === selectedOperator);
+    }
+    if (!searchTerm.trim()) return rows;
     const q = searchTerm.toLowerCase().trim();
-    return activityRows.filter(r => {
+    return rows.filter(r => {
       const matchRef = (r.refNo || '').toLowerCase().includes(q);
       const matchParty = (r.partyName || '').toLowerCase().includes(q);
       const matchDetails = (r.details || '').toLowerCase().includes(q);
       const matchType = (r.type || '').toLowerCase().includes(q);
       const matchWh = (r.warehouse || '').toLowerCase().includes(q);
+      const matchOp = (r.operator || '').toLowerCase().includes(q);
       const matchItems = (r.itemsList || []).some(it => (it.name || '').toLowerCase().includes(q));
-      return matchRef || matchParty || matchDetails || matchType || matchWh || matchItems;
+      return matchRef || matchParty || matchDetails || matchType || matchWh || matchOp || matchItems;
     });
-  }, [activityRows, searchTerm]);
+  }, [activityRows, searchTerm, selectedOperator]);
 
   // Grouped rows for hierarchy view
   const groupedData = useMemo(() => {
@@ -173,7 +201,8 @@ export const DailyActivityLogTab: React.FC<DailyActivityLogTabProps> = ({
       customer_receipts: [],
       vendor_payments: [],
       stock_movements: [],
-      expenses: []
+      expenses: [],
+      transfers: []
     };
 
     filteredRows.forEach(r => {
@@ -504,7 +533,54 @@ export const DailyActivityLogTab: React.FC<DailyActivityLogTabProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* ── TOOLBAR: VIEW SWITCHER, BREAKDOWN TOGGLE PILL & SEARCH (Hidden in PDF/Print) ── */}
+      {/* ── PRINT & PDF AUDIT SUMMARY STRIP (Included in PDF & Print) ── */}
+      {summary && (
+        <div className={`${isGeneratingPdf ? 'block' : 'hidden print:block'} mb-3 p-2.5 border border-slate-400 bg-slate-50 text-[9px] text-slate-900 rounded`}>
+          <div className="flex items-center justify-between font-bold uppercase tracking-wider text-[10px] pb-1 border-b border-slate-300 mb-1.5">
+            <span>Daily Activity Financial Summary</span>
+            <span className="font-mono">
+              Net Operating Cash: Rs. {Number((summary.cashReceived || 0) - ((summary.cashPaid || 0) + (summary.expenses || 0))).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {((summary.cashReceived || 0) - ((summary.cashPaid || 0) + (summary.expenses || 0))) >= 0 ? ' (Surplus)' : ' (Deficit)'}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5 text-center font-mono">
+            <div className="p-1 border border-slate-300 bg-white">
+              <div className="text-[7.5px] uppercase font-bold text-slate-600">Total Activities</div>
+              <div className="font-extrabold text-[9px]">{Number(summary.totalEvents || 0).toLocaleString()} events</div>
+            </div>
+            <div className="p-1 border border-slate-300 bg-white">
+              <div className="text-[7.5px] uppercase font-bold text-slate-600">Total Sales</div>
+              <div className="font-extrabold text-[9px]">Rs. {Number(summary.totalSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div className="p-1 border border-slate-300 bg-white">
+              <div className="text-[7.5px] uppercase font-bold text-slate-600">Total Purchases</div>
+              <div className="font-extrabold text-[9px]">Rs. {Number(summary.totalPurchases || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div className="p-1 border border-slate-300 bg-white">
+              <div className="text-[7.5px] uppercase font-bold text-slate-600">Cash Received</div>
+              <div className="font-extrabold text-[9px]">Rs. {Number(summary.cashReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div className="p-1 border border-slate-300 bg-white">
+              <div className="text-[7.5px] uppercase font-bold text-slate-600">Cash Paid</div>
+              <div className="font-extrabold text-[9px]">Rs. {Number(summary.cashPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div className="p-1 border border-slate-300 bg-white">
+              <div className="text-[7.5px] uppercase font-bold text-slate-600">Expense</div>
+              <div className="font-extrabold text-[9px]">Rs. {Number(summary.expenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div className="p-1 border border-slate-300 bg-white">
+              <div className="text-[7.5px] uppercase font-bold text-slate-600">Sales Returns</div>
+              <div className="font-extrabold text-[9px]">Rs. {Number(summary.salesReturns || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div className="p-1 border border-slate-300 bg-white">
+              <div className="text-[7.5px] uppercase font-bold text-slate-600">Purchase Returns</div>
+              <div className="font-extrabold text-[9px]">Rs. {Number(summary.purchaseReturns || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOOLBAR: VIEW SWITCHER, BREAKDOWN TOGGLE PILL, OPERATOR & SEARCH (Hidden in PDF/Print) ── */}
       {!isGeneratingPdf && (
         <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3 print:hidden">
           {/* Left: View Mode Segmented Switch + Breakdown Master Pill */}
@@ -555,16 +631,31 @@ export const DailyActivityLogTab: React.FC<DailyActivityLogTabProps> = ({
             </button>
           </div>
 
-          {/* Right: Search Input */}
-          <div className="relative min-w-[220px] max-w-xs flex-1">
-            <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search party, ref #, items..."
-              className="w-full h-[34px] pl-9 pr-3 rounded-xl border border-stroke dark:border-strokedark bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary font-medium"
-            />
+          {/* Right: Operator Filter & Search Input */}
+          <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
+            {operatorsList.length > 0 && (
+              <select
+                value={selectedOperator}
+                onChange={(e) => setSelectedOperator(e.target.value)}
+                className="h-[34px] px-3 rounded-xl border border-stroke dark:border-strokedark bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold outline-none focus:border-primary cursor-pointer max-w-[180px]"
+              >
+                <option value="ALL">All Operators ({operatorsList.length})</option>
+                {operatorsList.map(op => (
+                  <option key={op} value={op}>{op}</option>
+                ))}
+              </select>
+            )}
+
+            <div className="relative min-w-[200px] max-w-xs flex-1">
+              <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search party, ref #, items..."
+                className="w-full h-[34px] pl-9 pr-3 rounded-xl border border-stroke dark:border-strokedark bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary font-medium"
+              />
+            </div>
           </div>
         </div>
       )}

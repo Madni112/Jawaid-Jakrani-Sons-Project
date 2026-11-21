@@ -22,7 +22,8 @@ import {
   MdUnfoldMore,
   MdUnfoldLess,
   MdExpandMore,
-  MdChevronRight
+  MdChevronRight,
+  MdAttachMoney
 } from 'react-icons/md';
 import { BasicStockFilterCriteria } from './BasicStockReport';
 import { extractProductColor } from '../../../utils/colorService';
@@ -178,6 +179,9 @@ export const BasicStockReportPrint: React.FC = () => {
     } catch {}
     return 'modern';
   });
+
+  // Valuation Basis: 'cost' | 'retail'
+  const [valuationBasis, setValuationBasis] = useState<'cost' | 'retail'>('cost');
 
   // Modal inspection of product breakdown
   const [inspectedProduct, setInspectedProduct] = useState<any | null>(null);
@@ -693,12 +697,13 @@ export const BasicStockReportPrint: React.FC = () => {
       const displayTitle = `${normParent} › ${normSub}`;
 
       if (!catMap.has(lookupKey)) {
-        catMap.set(lookupKey, { categoryTitle: displayTitle, items: [], totalQty: 0, totalVal: 0 });
+        catMap.set(lookupKey, { categoryTitle: displayTitle, items: [], totalQty: 0, totalVal: 0, totalRetailVal: 0 });
       }
       const grp = catMap.get(lookupKey)!;
       grp.items.push(row);
       grp.totalQty += row.availableStock;
       grp.totalVal += row.totalValuation;
+      grp.totalRetailVal = (grp.totalRetailVal || 0) + row.totalRetailValuation;
     });
 
     const categoriesList = Array.from(catMap.values());
@@ -759,19 +764,20 @@ export const BasicStockReportPrint: React.FC = () => {
 
   const groupedByBrand = useMemo(() => {
     if (criteria?.reportType !== 'brand') return [];
-    const brandMap = new Map<string, { brandTitle: string; items: typeof sortedRows; totalQty: number; totalVal: number }>();
+    const brandMap = new Map<string, { brandTitle: string; items: typeof sortedRows; totalQty: number; totalVal: number; totalRetailVal: number }>();
 
     sortedRows.forEach((row) => {
       const normBrand = String(row.brand || 'Unbranded').trim().replace(/\s+/g, ' ') || 'Unbranded';
       const lookupKey = normBrand.toLowerCase();
 
       if (!brandMap.has(lookupKey)) {
-        brandMap.set(lookupKey, { brandTitle: normBrand, items: [], totalQty: 0, totalVal: 0 });
+        brandMap.set(lookupKey, { brandTitle: normBrand, items: [], totalQty: 0, totalVal: 0, totalRetailVal: 0 });
       }
       const grp = brandMap.get(lookupKey)!;
       grp.items.push(row);
       grp.totalQty += row.availableStock;
       grp.totalVal += row.totalValuation;
+      grp.totalRetailVal = (grp.totalRetailVal || 0) + row.totalRetailValuation;
     });
 
     const brandList = Array.from(brandMap.values());
@@ -828,19 +834,20 @@ export const BasicStockReportPrint: React.FC = () => {
 
   const groupedByColor = useMemo(() => {
     if (criteria?.reportType !== 'color') return [];
-    const colorMap = new Map<string, { colorTitle: string; items: typeof sortedRows; totalQty: number; totalVal: number }>();
+    const colorMap = new Map<string, { colorTitle: string; items: typeof sortedRows; totalQty: number; totalVal: number; totalRetailVal: number }>();
 
     sortedRows.forEach((row) => {
       const normColor = String(row.color || 'General').trim().replace(/\s+/g, ' ') || 'General';
       const lookupKey = normColor.toLowerCase();
 
       if (!colorMap.has(lookupKey)) {
-        colorMap.set(lookupKey, { colorTitle: normColor, items: [], totalQty: 0, totalVal: 0 });
+        colorMap.set(lookupKey, { colorTitle: normColor, items: [], totalQty: 0, totalVal: 0, totalRetailVal: 0 });
       }
       const grp = colorMap.get(lookupKey)!;
       grp.items.push(row);
       grp.totalQty += row.availableStock;
       grp.totalVal += row.totalValuation;
+      grp.totalRetailVal = (grp.totalRetailVal || 0) + row.totalRetailValuation;
     });
 
     const colorList = Array.from(colorMap.values());
@@ -897,24 +904,26 @@ export const BasicStockReportPrint: React.FC = () => {
 
   const groupedByWarehouse = useMemo(() => {
     if (criteria?.reportType !== 'warehouse') return [];
-    const whMap = new Map<string, { warehouseName: string; items: { product: typeof sortedRows[0]; qty: number; valuation: number }[]; totalQty: number; totalVal: number }>();
+    const whMap = new Map<string, { warehouseName: string; items: { product: typeof sortedRows[0]; qty: number; valuation: number; retailValuation: number }[]; totalQty: number; totalVal: number; totalRetailVal: number }>();
 
     // For every warehouse, collect products that have stock in it
     warehousesList.forEach((wh) => {
-      whMap.set(wh, { warehouseName: wh, items: [], totalQty: 0, totalVal: 0 });
+      whMap.set(wh, { warehouseName: wh, items: [], totalQty: 0, totalVal: 0, totalRetailVal: 0 });
     });
 
     sortedRows.forEach((row) => {
       Object.entries(row.whBreakdown).forEach(([wh, q]) => {
         if (q > 0) {
           if (!whMap.has(wh)) {
-            whMap.set(wh, { warehouseName: wh, items: [], totalQty: 0, totalVal: 0 });
+            whMap.set(wh, { warehouseName: wh, items: [], totalQty: 0, totalVal: 0, totalRetailVal: 0 });
           }
           const grp = whMap.get(wh)!;
           const val = Math.round(q * row.costPrice);
-          grp.items.push({ product: row, qty: q, valuation: val });
+          const retailVal = Math.round(q * row.retailPrice);
+          grp.items.push({ product: row, qty: q, valuation: val, retailValuation: retailVal });
           grp.totalQty += q;
           grp.totalVal += val;
+          grp.totalRetailVal = (grp.totalRetailVal || 0) + retailVal;
         }
       });
     });
@@ -1102,6 +1111,21 @@ export const BasicStockReportPrint: React.FC = () => {
                 <span>Modern Slate</span>
               </>
             )}
+          </button>
+
+          {/* Valuation Basis Toggle: Cost vs Retail */}
+          <button
+            type="button"
+            onClick={() => setValuationBasis(prev => prev === 'cost' ? 'retail' : 'cost')}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border rounded-xl shadow-2xs transition cursor-pointer ${
+              valuationBasis === 'retail'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-600/20'
+                : 'bg-white dark:bg-boxdark text-gray-700 dark:text-gray-200 border-stroke dark:border-strokedark hover:bg-gray-100'
+            }`}
+            title="Toggle valuation between Cost Price and Retail Selling Price"
+          >
+            <MdAttachMoney size={16} />
+            <span>{valuationBasis === 'retail' ? 'Valuation: Retail' : 'Valuation: Cost'}</span>
           </button>
 
           {/* Expand / Collapse All Button */}
@@ -1367,7 +1391,7 @@ export const BasicStockReportPrint: React.FC = () => {
                       Total Units: <span className="text-slate-900">{Math.round(catGrp.totalQty).toLocaleString()}</span>
                     </span>
                     <span>
-                      Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(catGrp.totalVal).toLocaleString()}</span>
+                      Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(valuationBasis === 'retail' ? (catGrp.totalRetailVal || 0) : catGrp.totalVal).toLocaleString()}</span>
                     </span>
                   </div>
                 </div>
@@ -1382,9 +1406,9 @@ export const BasicStockReportPrint: React.FC = () => {
                         <th className="py-2 px-3">SKU</th>
                         <th className="py-2 px-3">Product Title</th>
                         <th className="py-2 px-3">Brand / Color</th>
-                        <th className="py-2 px-3 text-right">Cost Price</th>
+                        <th className="py-2 px-3 text-right">{valuationBasis === 'retail' ? 'Retail Price' : 'Cost Price'}</th>
                         <th className="py-2 px-3 text-right">On Hand</th>
-                        <th className="py-2 px-3 text-right">Valuation (Rs)</th>
+                        <th className="py-2 px-3 text-right">Valuation ({valuationBasis === 'retail' ? 'Retail' : 'Cost'})</th>
                         <th className="py-2 px-3 text-center">
                           {criteria?.reportType === 'reorder'
                             ? 'Last Sold / Demand'
@@ -1418,13 +1442,15 @@ export const BasicStockReportPrint: React.FC = () => {
                               {row.brand} <span className="text-slate-400">•</span> {row.color}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
-                              {row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—'}
+                              {valuationBasis === 'retail' 
+                                ? (row.retailPrice > 0 ? Math.round(row.retailPrice).toLocaleString() : '—') 
+                                : (row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—')}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
                               {formatStockQty(row.availableStock, row.rawProduct)}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                              Rs. {Math.round(row.totalValuation).toLocaleString()}
+                              Rs. {Math.round(valuationBasis === 'retail' ? row.totalRetailValuation : row.totalValuation).toLocaleString()}
                             </td>
                             <td className="py-2 px-3 text-center">
                               {criteria?.reportType === 'reorder' ? (
@@ -1577,7 +1603,7 @@ export const BasicStockReportPrint: React.FC = () => {
                       Total Units: <span className="text-slate-900">{Math.round(brandGrp.totalQty).toLocaleString()}</span>
                     </span>
                     <span>
-                      Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(brandGrp.totalVal).toLocaleString()}</span>
+                      Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(valuationBasis === 'retail' ? (brandGrp.totalRetailVal || 0) : brandGrp.totalVal).toLocaleString()}</span>
                     </span>
                   </div>
                 </div>
@@ -1593,9 +1619,9 @@ export const BasicStockReportPrint: React.FC = () => {
                         <th className="py-2 px-3">Product Title</th>
                         <th className="py-2 px-3">Category Hierarchy</th>
                         <th className="py-2 px-3">Color / Shade</th>
-                        <th className="py-2 px-3 text-right">Cost Price</th>
+                        <th className="py-2 px-3 text-right">{valuationBasis === 'retail' ? 'Retail Price' : 'Cost Price'}</th>
                         <th className="py-2 px-3 text-right">On Hand</th>
-                        <th className="py-2 px-3 text-right">Valuation (Rs)</th>
+                        <th className="py-2 px-3 text-right">Valuation ({valuationBasis === 'retail' ? 'Retail' : 'Cost'})</th>
                         <th className="py-2 px-3 text-center">Status</th>
                       </tr>
                     </thead>
@@ -1626,13 +1652,15 @@ export const BasicStockReportPrint: React.FC = () => {
                               {row.color}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
-                              {row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—'}
+                              {valuationBasis === 'retail'
+                                ? (row.retailPrice > 0 ? Math.round(row.retailPrice).toLocaleString() : '—')
+                                : (row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—')}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
                               {formatStockQty(row.availableStock, row.rawProduct)}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                              Rs. {Math.round(row.totalValuation).toLocaleString()}
+                              Rs. {Math.round(valuationBasis === 'retail' ? row.totalRetailValuation : row.totalValuation).toLocaleString()}
                             </td>
                             <td className="py-2 px-3 text-center">
                               <span
@@ -1728,7 +1756,7 @@ export const BasicStockReportPrint: React.FC = () => {
                       Total Units: <span className="text-slate-900">{Math.round(colorGrp.totalQty).toLocaleString()}</span>
                     </span>
                     <span>
-                      Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(colorGrp.totalVal).toLocaleString()}</span>
+                      Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(valuationBasis === 'retail' ? (colorGrp.totalRetailVal || 0) : colorGrp.totalVal).toLocaleString()}</span>
                     </span>
                   </div>
                 </div>
@@ -1744,9 +1772,9 @@ export const BasicStockReportPrint: React.FC = () => {
                         <th className="py-2 px-3">Product Title</th>
                         <th className="py-2 px-3">Category Hierarchy</th>
                         <th className="py-2 px-3">Brand</th>
-                        <th className="py-2 px-3 text-right">Cost Price</th>
+                        <th className="py-2 px-3 text-right">{valuationBasis === 'retail' ? 'Retail Price' : 'Cost Price'}</th>
                         <th className="py-2 px-3 text-right">On Hand</th>
-                        <th className="py-2 px-3 text-right">Valuation (Rs)</th>
+                        <th className="py-2 px-3 text-right">Valuation ({valuationBasis === 'retail' ? 'Retail' : 'Cost'})</th>
                         <th className="py-2 px-3 text-center">Status</th>
                       </tr>
                     </thead>
@@ -1777,13 +1805,15 @@ export const BasicStockReportPrint: React.FC = () => {
                               {row.brand}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
-                              {row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—'}
+                              {valuationBasis === 'retail'
+                                ? (row.retailPrice > 0 ? Math.round(row.retailPrice).toLocaleString() : '—')
+                                : (row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—')}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
                               {formatStockQty(row.availableStock, row.rawProduct)}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                              Rs. {Math.round(row.totalValuation).toLocaleString()}
+                              Rs. {Math.round(valuationBasis === 'retail' ? row.totalRetailValuation : row.totalValuation).toLocaleString()}
                             </td>
                             <td className="py-2 px-3 text-center">
                               <span
@@ -1879,7 +1909,7 @@ export const BasicStockReportPrint: React.FC = () => {
                       Total Units: <span className="text-slate-900">{Math.round(whGrp.totalQty).toLocaleString()}</span>
                     </span>
                     <span>
-                      Location Valuation: <span className="text-emerald-700">Rs. {Math.round(whGrp.totalVal).toLocaleString()}</span>
+                      Location Valuation: <span className="text-emerald-700">Rs. {Math.round(valuationBasis === 'retail' ? (whGrp.totalRetailVal || 0) : whGrp.totalVal).toLocaleString()}</span>
                     </span>
                   </div>
                 </div>
@@ -1894,9 +1924,9 @@ export const BasicStockReportPrint: React.FC = () => {
                         <th className="py-2 px-3">SKU</th>
                         <th className="py-2 px-3">Product Title</th>
                         <th className="py-2 px-3">Category</th>
-                        <th className="py-2 px-3 text-right">Cost Price</th>
+                        <th className="py-2 px-3 text-right">{valuationBasis === 'retail' ? 'Retail Price' : 'Cost Price'}</th>
                         <th className="py-2 px-3 text-right">Warehouse Qty</th>
-                        <th className="py-2 px-3 text-right">Valuation (Rs)</th>
+                        <th className="py-2 px-3 text-right">Valuation ({valuationBasis === 'retail' ? 'Retail' : 'Cost'})</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1921,13 +1951,15 @@ export const BasicStockReportPrint: React.FC = () => {
                             </td>
                             <td className="py-2 px-3 text-slate-600">{it.product.parent_category} › {it.product.sub_category}</td>
                             <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
-                              {it.product.costPrice > 0 ? Math.round(it.product.costPrice).toLocaleString() : '—'}
+                              {valuationBasis === 'retail'
+                                ? (it.product.retailPrice > 0 ? Math.round(it.product.retailPrice).toLocaleString() : '—')
+                                : (it.product.costPrice > 0 ? Math.round(it.product.costPrice).toLocaleString() : '—')}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
                               {formatStockQty(it.qty, it.product.rawProduct)}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                              Rs. {Math.round(it.valuation).toLocaleString()}
+                              Rs. {Math.round(valuationBasis === 'retail' ? it.retailValuation : it.valuation).toLocaleString()}
                             </td>
                           </tr>
                           {isRowExpanded(it.product.id) && (
@@ -1980,9 +2012,9 @@ export const BasicStockReportPrint: React.FC = () => {
                   <th className="py-2.5 px-3">Category Hierarchy</th>
                   <th className="py-2.5 px-3">Brand &amp; Color</th>
                   <th className="py-2.5 px-3">Warehouses Breakdown</th>
-                  <th className="py-2.5 px-3 text-right">Cost Rate</th>
+                  <th className="py-2.5 px-3 text-right">{valuationBasis === 'retail' ? 'Retail Rate' : 'Cost Rate'}</th>
                   <th className="py-2.5 px-3 text-right">On Hand</th>
-                  <th className="py-2.5 px-3 text-right">Valuation (Rs)</th>
+                  <th className="py-2.5 px-3 text-right">Valuation ({valuationBasis === 'retail' ? 'Retail' : 'Cost'})</th>
                   <th className="py-2.5 px-3 text-center">
                     {criteria?.reportType === 'reorder'
                       ? 'Last Sold / Monthly Demand'
@@ -2055,13 +2087,15 @@ export const BasicStockReportPrint: React.FC = () => {
                           </div>
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-700 whitespace-nowrap">
-                          {row.costPrice > 0 ? `Rs. ${Math.round(row.costPrice).toLocaleString()}` : '—'}
+                          {valuationBasis === 'retail'
+                            ? (row.retailPrice > 0 ? `Rs. ${Math.round(row.retailPrice).toLocaleString()}` : '—')
+                            : (row.costPrice > 0 ? `Rs. ${Math.round(row.costPrice).toLocaleString()}` : '—')}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-black text-slate-900 whitespace-nowrap">
                           {formatStockQty(row.availableStock, row.rawProduct)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-black text-slate-900 whitespace-nowrap">
-                          Rs. {Math.round(row.totalValuation).toLocaleString()}
+                          Rs. {Math.round(valuationBasis === 'retail' ? row.totalRetailValuation : row.totalValuation).toLocaleString()}
                         </td>
                         <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           {criteria?.reportType === 'reorder' ? (
@@ -2167,7 +2201,7 @@ export const BasicStockReportPrint: React.FC = () => {
                       {Math.round(kpiTotals.totalUnits).toLocaleString()}
                     </td>
                     <td className="py-3 px-3 text-right font-mono font-black text-emerald-800 text-sm whitespace-nowrap">
-                      Rs. {kpiTotals.totalValuation.toLocaleString()}
+                      Rs. {(valuationBasis === 'retail' ? kpiTotals.totalRetailValuation : kpiTotals.totalValuation).toLocaleString()}
                     </td>
                     <td></td>
                   </tr>

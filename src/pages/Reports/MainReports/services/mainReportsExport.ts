@@ -156,7 +156,8 @@ export const exportMainReportToExcel = ({
       customer_receipts: '3. Customer Receipts',
       vendor_payments: '4. Vendor Payments',
       stock_movements: '5. Stock Movements (In/Out)',
-      expenses: '6. Operational Expenses'
+      expenses: '6. Operational Expenses',
+      transfers: '7. Internal Cash & Bank Transfers (Contra)'
     };
 
     exportData = dailyActivityRows.map((r, idx) => {

@@ -40,7 +40,7 @@ import { CombinedLedgerTab } from './MainReports/tabs/CombinedLedgerTab';
 import { ProfitLossTab } from './MainReports/tabs/ProfitLossTab';
 import { ExpenseReportTab } from './MainReports/tabs/ExpenseReportTab';
 import { DailyBookTab } from './MainReports/tabs/DailyBookTab';
-import { DailyActivityLogTab, DailyActivityRow } from './MainReports/tabs/DailyActivityLogTab';
+import { DailyActivityLogTab, DailyActivityRow, HierarchyGroupKey } from './MainReports/tabs/DailyActivityLogTab';
 import { MainReportsMetrics } from './MainReports/components/MainReportsMetrics';
 import { exportMainReportToExcel } from './MainReports/services/mainReportsExport';
 import { fetchSystemMasterConfig, SystemMasterConfig } from '../../utils/systemPermissions';
@@ -1918,13 +1918,14 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
       // ── TAB 7: DAILY ACTIVITY AUDIT TRAIL LOG ──
       else if (targetTab === 'daily-activity') {
-        const [salesRes, dcRes, purchRes, vchRes, sRetRes, pRetRes] = await Promise.all([
+        const [salesRes, dcRes, purchRes, vchRes, sRetRes, pRetRes, transRes] = await Promise.all([
           fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })),
           fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
           fetchAllPages(supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false })),
           fetchAllPages(supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false })),
           fetchAllPages(supabase.from('sales_returns').select('*').order('created_at', { ascending: false })),
           fetchAllPages(supabase.from('purchase_returns').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('stock_transfers').select('*').order('created_at', { ascending: false })),
         ]);
 
         const rows: DailyActivityRow[] = [];
@@ -2069,6 +2070,46 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           });
         });
 
+        // 2b. Process Warehouse Stock Transfers & Adjustments
+        (transRes.data || []).forEach((st: any) => {
+          const { dateStr, time, ts } = parseRowTime(st.transfer_date, st.created_at);
+          if (ts < startMs || ts > endMs) return;
+
+          const itemsArr: Array<{ name: string; qty?: number; rate?: number; amount?: number; uom?: string }> = [];
+          const rawItems = Array.isArray(st.items) ? st.items : (typeof st.items === 'string' ? JSON.parse(st.items || '[]') : []);
+          rawItems.forEach((it: any) => {
+            const pName = String(it.itemName || it.item_name || it.product_name || it.name || 'Transfer Item').trim();
+            const qty = Number(it.qty || it.quantity || 0);
+            itemsArr.push({
+              name: pName,
+              qty,
+              uom: it.uom || 'units'
+            });
+          });
+
+          rows.push({
+            id: `st-${st.id}`,
+            index: 0,
+            date: dateStr,
+            time,
+            timestamp: ts,
+            category: 'transfer',
+            hierarchyGroup: 'stock_movements',
+            type: 'Stock Transfer / Adjustment',
+            typeBadgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800',
+            refNo: st.transfer_no || `ST-${st.id}`,
+            partyName: `${st.from_location || 'Source'} → ${st.to_location || 'Destination'}`,
+            partyType: 'Internal',
+            details: st.remarks || (itemsArr.length > 0 ? `${itemsArr.length} item(s) reallocated` : 'Warehouse stock transfer'),
+            itemsList: itemsArr,
+            warehouse: `${st.from_location || ''} → ${st.to_location || ''}`,
+            amount: 0,
+            status: st.status || 'Confirmed',
+            statusColor: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200',
+            operator: st.created_by || ''
+          });
+        });
+
         // 3. Process Supplier Purchases
         (purchRes.data || []).forEach((pur: any) => {
           const { dateStr, time, ts } = parseRowTime(pur.purchase_date, pur.created_at);
@@ -2142,7 +2183,13 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
           let partyType: 'Customer' | 'Supplier' | 'Account' | 'Internal' = 'Account';
           let hierarchyGroup: HierarchyGroupKey = 'expenses';
 
-          if (vNo.startsWith('CRV-') || vType.toLowerCase().includes('receipt')) {
+          if (vNo.startsWith('CTV-') || vNo.startsWith('TRF-') || vType.toLowerCase().includes('contra') || vType.toLowerCase().includes('transfer')) {
+            vType = 'Contra / Bank Transfer';
+            badgeColor = 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800';
+            stColor = 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-200';
+            partyType = 'Internal';
+            hierarchyGroup = 'transfers';
+          } else if (vNo.startsWith('CRV-') || vType.toLowerCase().includes('receipt')) {
             vType = 'Cash Receipt (CRV)';
             badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
             stColor = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200';

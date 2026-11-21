@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 interface VendorLedgerTabProps {
   filteredVendorRows: any[];
@@ -13,8 +13,68 @@ export const VendorLedgerTab: React.FC<VendorLedgerTabProps> = ({
   renderSortIcon,
   isGeneratingPdf
 }) => {
+  const aging = useMemo(() => {
+    const now = Date.now();
+    let d0_30 = 0;
+    let d31_60 = 0;
+    let d61_90 = 0;
+    let d90_plus = 0;
+
+    filteredVendorRows.forEach(r => {
+      const amt = Number(r.purchases || 0);
+      if (amt <= 0) return;
+      const t = r.timestamp || (r.date ? new Date(r.date + 'T12:00:00').getTime() : now);
+      const days = Math.max(0, Math.floor((now - t) / (1000 * 60 * 60 * 24)));
+      if (days <= 30) d0_30 += amt;
+      else if (days <= 60) d31_60 += amt;
+      else if (days <= 90) d61_90 += amt;
+      else d90_plus += amt;
+    });
+
+    return { d0_30, d31_60, d61_90, d90_plus };
+  }, [filteredVendorRows]);
+
   return (
-    <div className={`bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs ${isGeneratingPdf ? 'overflow-visible border-none shadow-none rounded-none' : 'overflow-hidden'} print:border-none print:shadow-none print:rounded-none print:overflow-visible`}>
+    <div className="space-y-3">
+      {/* ── AGING ANALYSIS BRACKETS ── */}
+      <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-3 shadow-2xs print:border-slate-300 print:shadow-none">
+        <div className="flex items-center justify-between pb-2 border-b border-stroke dark:border-strokedark mb-2">
+          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            Vendor Payables Aging Analysis
+          </span>
+          <span className="text-[10px] text-slate-400 font-mono">
+            Total Liabilities: Rs. {Number(aging.d0_30 + aging.d31_60 + aging.d61_90 + aging.d90_plus).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono">
+          <div className="p-2 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
+            <span className="block text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase">0 - 30 Days (Current)</span>
+            <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 mt-0.5 block">
+              Rs. {Number(aging.d0_30).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="p-2 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+            <span className="block text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">31 - 60 Days</span>
+            <span className="text-xs font-black text-amber-800 dark:text-amber-300 mt-0.5 block">
+              Rs. {Number(aging.d31_60).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="p-2 rounded-xl bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
+            <span className="block text-[10px] font-bold text-orange-700 dark:text-orange-400 uppercase">61 - 90 Days</span>
+            <span className="text-xs font-black text-orange-800 dark:text-orange-300 mt-0.5 block">
+              Rs. {Number(aging.d61_90).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="p-2 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800">
+            <span className="block text-[10px] font-bold text-rose-700 dark:text-rose-400 uppercase">90+ Days (Overdue)</span>
+            <span className="text-xs font-black text-rose-800 dark:text-rose-300 mt-0.5 block">
+              Rs. {Number(aging.d90_plus).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className={`bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-2xs ${isGeneratingPdf ? 'overflow-visible border-none shadow-none rounded-none' : 'overflow-hidden'} print:border-none print:shadow-none print:rounded-none print:overflow-visible`}>
       <div className={`${isGeneratingPdf ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
         <table className="w-full text-left border-collapse text-xs print:text-[10px]">
           <thead className="print:table-header-group">
@@ -164,5 +224,6 @@ export const VendorLedgerTab: React.FC<VendorLedgerTabProps> = ({
         </table>
       </div>
     </div>
+  </div>
   );
 };

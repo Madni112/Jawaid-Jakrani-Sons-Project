@@ -46,6 +46,8 @@ export const MainReportsMetrics: React.FC<MainReportsMetricsProps> = ({
       purchaseReturns: 0
     };
 
+    const netCash = (act.cashReceived || 0) - ((act.cashPaid || 0) + (act.expenses || 0));
+
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 print:hidden">
         {/* Row 1: 4 Cards */}
@@ -111,6 +113,33 @@ export const MainReportsMetrics: React.FC<MainReportsMetricsProps> = ({
           <span className="text-[11px] font-bold text-orange-600 uppercase tracking-wider">Purchase Returns</span>
           <div className="text-base font-black text-orange-600 font-mono mt-1">
             Rs. {Number(act.purchaseReturns || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+
+        {/* Row 3: Net Cash Flow Status Bar */}
+        <div className={`col-span-full p-3.5 rounded-2xl border shadow-2xs flex flex-wrap items-center justify-between gap-3 ${
+          netCash >= 0
+            ? 'bg-emerald-50/70 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800'
+            : 'bg-rose-50/70 border-rose-200 dark:bg-rose-950/20 dark:border-rose-800'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className={`w-3 h-3 rounded-full ${netCash >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+            <div>
+              <span className={`text-[11px] font-bold uppercase tracking-wider ${netCash >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                Net Operating Cash Position (Cash Received − Cash Paid − Expense)
+              </span>
+              <div className={`text-base font-black font-mono ${netCash >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
+                Rs. {Number(Math.abs(netCash)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <span className="text-xs font-semibold ml-2 opacity-85">
+                  {netCash >= 0 ? '(Operating Cash Surplus)' : '(Operating Cash Deficit)'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-mono font-bold">
+            <span className="text-teal-700 dark:text-teal-400">Cash In: Rs. {Number(act.cashReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <span className="text-slate-300 dark:text-slate-700">|</span>
+            <span className="text-rose-700 dark:text-rose-400">Cash Out &amp; Exp: Rs. {Number((act.cashPaid || 0) + (act.expenses || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
       </div>
