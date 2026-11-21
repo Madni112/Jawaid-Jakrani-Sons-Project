@@ -16,7 +16,11 @@ import {
   MdWarning,
   MdHourglassEmpty,
   MdInfoOutline,
-  MdCheckCircle
+  MdCheckCircle,
+  MdUnfoldMore,
+  MdUnfoldLess,
+  MdExpandMore,
+  MdChevronRight
 } from 'react-icons/md';
 import { BasicStockFilterCriteria } from './BasicStockReport';
 import { extractProductColor } from '../../../utils/colorService';
@@ -174,7 +178,45 @@ export const BasicStockReportPrint: React.FC = () => {
 
   // Modal inspection of product breakdown
   const [inspectedProduct, setInspectedProduct] = useState<any | null>(null);
-  const [showDetails, setShowDetails] = useState<boolean>(false);
+
+  // Global & Per-Row Detail Expansion
+  const [expandAll, setExpandAll] = useState<boolean>(false);
+  const [individualToggledIds, setIndividualToggledIds] = useState<Set<string>>(new Set());
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+
+  // Check if a specific row is expanded inline: O(1)
+  const isRowExpanded = (rowId: string | number) => {
+    const idStr = String(rowId);
+    if (expandAll) {
+      return !individualToggledIds.has(idStr); // Expanded unless individually collapsed
+    }
+    return individualToggledIds.has(idStr); // Collapsed unless individually expanded
+  };
+
+  const toggleRowDetail = (e: React.MouseEvent, rowId: string | number) => {
+    e.stopPropagation();
+    const idStr = String(rowId);
+    setIndividualToggledIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(idStr)) next.delete(idStr);
+      else next.add(idStr);
+      return next;
+    });
+  };
+
+  const toggleExpandAll = () => {
+    setExpandAll((prev) => !prev);
+    setIndividualToggledIds(new Set()); // Reset individual overrides
+  };
+
+  const toggleCategoryCollapse = (catTitle: string) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(catTitle)) next.delete(catTitle);
+      else next.add(catTitle);
+      return next;
+    });
+  };
 
   const toggleLayout = () => {
     const next = layoutTheme === 'modern' ? 'classic' : 'modern';
@@ -848,19 +890,28 @@ export const BasicStockReportPrint: React.FC = () => {
             )}
           </button>
 
-          {/* Details Toggle */}
+          {/* Expand / Collapse All Button */}
           <button
             type="button"
-            onClick={() => setShowDetails((prev) => !prev)}
+            onClick={toggleExpandAll}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border rounded-xl shadow-2xs transition cursor-pointer ${
-              showDetails
+              expandAll
                 ? 'bg-primary text-white border-primary shadow-primary/20'
                 : 'bg-white dark:bg-boxdark text-gray-700 dark:text-gray-200 border-stroke dark:border-strokedark hover:bg-gray-100'
             }`}
-            title="Toggle detailed warehouse breakdown and movement ledger on screen and print"
+            title="Expand or collapse detailed warehouse breakdown and movement ledger for all items"
           >
-            <MdInfoOutline size={16} className={showDetails ? 'text-white' : 'text-primary'} />
-            <span>{showDetails ? 'Hide Details' : 'Show Details'}</span>
+            {expandAll ? (
+              <>
+                <MdUnfoldLess size={16} />
+                <span>Collapse All</span>
+              </>
+            ) : (
+              <>
+                <MdUnfoldMore size={16} />
+                <span>Expand All</span>
+              </>
+            )}
           </button>
 
           {/* Export CSV */}
@@ -1070,14 +1121,25 @@ export const BasicStockReportPrint: React.FC = () => {
         {/* ── PERSPECTIVE VIEW: CATEGORY-WISE GROUPING ── */}
         {criteria?.reportType === 'category' && (
           <div className="space-y-6 mb-6">
-            {groupedByCategory.map((catGrp, gIdx) => (
+            {groupedByCategory.map((catGrp, gIdx) => {
+              const isCollapsed = collapsedCategories.has(catGrp.categoryTitle);
+              return (
               <div
                 key={gIdx}
                 className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs"
               >
                 {/* Category Header */}
-                <div className="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                <div
+                  onClick={() => toggleCategoryCollapse(catGrp.categoryTitle)}
+                  className="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-slate-200/60 transition select-none"
+                  title="Click to fold or unfold this category"
+                >
                   <div className="flex items-center gap-2">
+                    {isCollapsed ? (
+                      <MdChevronRight className="text-slate-500" size={18} />
+                    ) : (
+                      <MdExpandMore className="text-primary" size={18} />
+                    )}
                     <MdCategory className="text-primary" size={16} />
                     <span className="font-bold text-xs text-slate-900 uppercase tracking-wide">
                       {catGrp.categoryTitle}
@@ -1097,6 +1159,7 @@ export const BasicStockReportPrint: React.FC = () => {
                 </div>
 
                 {/* Table */}
+                {!isCollapsed && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
@@ -1121,8 +1184,15 @@ export const BasicStockReportPrint: React.FC = () => {
                             <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
                             <td className="py-2 px-3 font-mono font-bold text-primary text-[11px]">{row.sku}</td>
                             <td className="py-2 px-3 font-semibold text-slate-900">
-                              {row.product_name}
-                              <span className="text-[10px] text-primary ml-1.5 hover:underline">▼ details</span>
+                              <span className="hover:text-primary transition" onClick={() => setInspectedProduct(row)}>
+                                {row.product_name}
+                              </span>
+                              <span
+                                onClick={(e) => toggleRowDetail(e, row.id)}
+                                className="text-[10px] text-primary ml-1.5 hover:underline cursor-pointer select-none font-bold"
+                              >
+                                {isRowExpanded(row.id) ? '▲ collapse' : '▼ details'}
+                              </span>
                             </td>
                             <td className="py-2 px-3 text-slate-600">
                               {row.brand} <span className="text-slate-400">•</span> {row.color}
@@ -1150,7 +1220,7 @@ export const BasicStockReportPrint: React.FC = () => {
                               </span>
                             </td>
                           </tr>
-                          {showDetails && (
+                          {isRowExpanded(row.id) && (
                             <tr className="bg-slate-50/70 border-b border-slate-200/80">
                               <td colSpan={8} className="py-2 px-4">
                                 <div className="flex flex-wrap items-center justify-between gap-3 text-[11px]">
@@ -1188,22 +1258,35 @@ export const BasicStockReportPrint: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
 
         {/* ── PERSPECTIVE VIEW: WAREHOUSE-WISE GROUPING ── */}
         {criteria?.reportType === 'warehouse' && (
           <div className="space-y-6 mb-6">
-            {groupedByWarehouse.map((whGrp, wIdx) => (
+            {groupedByWarehouse.map((whGrp, wIdx) => {
+              const isWhCollapsed = collapsedCategories.has(whGrp.warehouseName);
+              return (
               <div
                 key={wIdx}
                 className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs"
               >
                 {/* Warehouse Header */}
-                <div className="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                <div
+                  onClick={() => toggleCategoryCollapse(whGrp.warehouseName)}
+                  className="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-slate-200/60 transition select-none"
+                  title="Click to fold or unfold this warehouse location"
+                >
                   <div className="flex items-center gap-2">
+                    {isWhCollapsed ? (
+                      <MdChevronRight className="text-slate-500" size={18} />
+                    ) : (
+                      <MdExpandMore className="text-primary" size={18} />
+                    )}
                     <MdWarehouse className="text-primary" size={18} />
                     <span className="font-bold text-xs text-slate-900 uppercase tracking-wide">
                       Location: {whGrp.warehouseName}
@@ -1223,6 +1306,7 @@ export const BasicStockReportPrint: React.FC = () => {
                 </div>
 
                 {/* Table */}
+                {!isWhCollapsed && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
@@ -1246,8 +1330,15 @@ export const BasicStockReportPrint: React.FC = () => {
                             <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
                             <td className="py-2 px-3 font-mono font-bold text-primary text-[11px]">{it.product.sku}</td>
                             <td className="py-2 px-3 font-semibold text-slate-900">
-                              {it.product.product_name}
-                              <span className="text-[10px] text-primary ml-1.5 hover:underline">▼ details</span>
+                              <span className="hover:text-primary transition" onClick={() => setInspectedProduct(it.product)}>
+                                {it.product.product_name}
+                              </span>
+                              <span
+                                onClick={(e) => toggleRowDetail(e, it.product.id)}
+                                className="text-[10px] text-primary ml-1.5 hover:underline cursor-pointer select-none font-bold"
+                              >
+                                {isRowExpanded(it.product.id) ? '▲ collapse' : '▼ details'}
+                              </span>
                             </td>
                             <td className="py-2 px-3 text-slate-600">{it.product.parent_category} › {it.product.sub_category}</td>
                             <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
@@ -1260,7 +1351,7 @@ export const BasicStockReportPrint: React.FC = () => {
                               Rs. {Math.round(it.valuation).toLocaleString()}
                             </td>
                           </tr>
-                          {showDetails && (
+                          {isRowExpanded(it.product.id) && (
                             <tr className="bg-slate-50/70 border-b border-slate-200/80">
                               <td colSpan={7} className="py-1.5 px-4">
                                 <div className="flex flex-wrap items-center justify-between gap-3 text-[11px]">
@@ -1282,8 +1373,10 @@ export const BasicStockReportPrint: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
 
@@ -1335,9 +1428,17 @@ export const BasicStockReportPrint: React.FC = () => {
                           {row.sku}
                         </td>
                         <td className="py-2.5 px-3">
-                          <span className="font-bold text-slate-900 block">{row.product_name}</span>
-                          <span className="text-[10px] text-primary hover:underline font-semibold cursor-pointer">
-                            ▼ view movement audit
+                          <span
+                            className="font-bold text-slate-900 block hover:text-primary transition"
+                            onClick={() => setInspectedProduct(row)}
+                          >
+                            {row.product_name}
+                          </span>
+                          <span
+                            onClick={(e) => toggleRowDetail(e, row.id)}
+                            className="text-[10px] text-primary hover:underline font-semibold cursor-pointer select-none"
+                          >
+                            {isRowExpanded(row.id) ? '▲ collapse flow' : '▼ view movement flow'}
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-slate-600">
@@ -1391,7 +1492,7 @@ export const BasicStockReportPrint: React.FC = () => {
                           </span>
                         </td>
                       </tr>
-                      {showDetails && (
+                      {isRowExpanded(row.id) && (
                         <tr className="bg-slate-50/70 border-b border-slate-200/80">
                           <td colSpan={10} className="py-1.5 px-4">
                             <div className="flex flex-wrap items-center justify-between gap-3 text-[11px]">
