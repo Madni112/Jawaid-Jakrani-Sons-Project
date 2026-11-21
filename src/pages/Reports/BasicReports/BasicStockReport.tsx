@@ -51,7 +51,7 @@ export interface BasicStockFilterCriteria {
 }
 
 const STORAGE_CRITERIA_KEY = 'zac_basic_stock_report_criteria_v2';
-const META_CACHE_KEY = 'zac_basic_stock_meta_v2';
+const META_CACHE_KEY = 'zac_basic_stock_meta_v3';
 
 // ── REUSABLE FACET CHECKBOX LIST WITH LIVE SEARCHBAR & KEYBOARD ARROW/ENTER NAVIGATION ──
 interface FacetItem {
@@ -399,8 +399,8 @@ export const BasicStockReport: React.FC = () => {
         }
 
         const [p1, p2, catRes, locRes] = await Promise.all([
-          supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock').order('id', { ascending: true }).range(0, 999),
-          supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock').order('id', { ascending: true }).range(1000, 2999),
+          supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, loose_conversion_ratio, allow_loose_sales, loose_uom').order('id', { ascending: true }).range(0, 999),
+          supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, loose_conversion_ratio, allow_loose_sales, loose_uom').order('id', { ascending: true }).range(1000, 2999),
           supabase.from('inventory_categories').select('id, name, parent_id').order('name'),
           supabase.from('inventory_locations').select('id, name').order('name')
         ]);

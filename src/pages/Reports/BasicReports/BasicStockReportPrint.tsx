@@ -35,10 +35,10 @@ export const formatStockQty = (
   const cat = String(prod?.category || prod?.sub_category || prod?.sub_sub_category || '').toLowerCase().trim();
 
   const rawPcs = Number(
-    prod?.loose_conversion_ratio ||
     prod?.pieces_per_box ||
     prod?.pcs_per_box ||
     prod?.pieces_per_packing ||
+    (Number(prod?.loose_conversion_ratio || 0) > 1 ? prod?.loose_conversion_ratio : 0) ||
     0
   );
 
@@ -59,7 +59,7 @@ export const formatStockQty = (
   if (piecesPerBox <= 1 && isBoxProduct) {
     if (Math.abs(absQty - Math.round(absQty)) > 0.0001) {
       const fraction = absQty - Math.floor(absQty);
-      for (const cand of [12, 6, 8, 4, 10, 16, 24, 2]) {
+      for (const cand of [8, 4, 6, 12, 10, 16, 24, 2]) {
         const pcs = fraction * cand;
         if (Math.abs(pcs - Math.round(pcs)) < 0.01) {
           piecesPerBox = cand;
@@ -79,14 +79,25 @@ export const formatStockQty = (
 
     const boxLabel = short ? 'Bx' : boxes === 1 ? 'Box' : 'Boxes';
     const pcsLabel = short ? 'pc' : 'Pcs';
-    const prefix = isNegative ? '-' : '';
+
+    if (isNegative) {
+      if (boxes > 0 && loose > 0) {
+        return `-${boxes} ${boxLabel} - ${loose} ${pcsLabel}`;
+      } else if (boxes > 0) {
+        return `-${boxes} ${boxLabel}`;
+      } else if (loose > 0) {
+        return `-${loose} ${pcsLabel}`;
+      } else {
+        return `0 ${boxLabel}`;
+      }
+    }
 
     if (boxes > 0 && loose > 0) {
-      return `${prefix}${boxes.toLocaleString()} ${boxLabel} + ${loose} ${pcsLabel}`;
+      return `${boxes.toLocaleString()} ${boxLabel} + ${loose} ${pcsLabel}`;
     } else if (boxes > 0) {
-      return `${prefix}${boxes.toLocaleString()} ${boxLabel}`;
+      return `${boxes.toLocaleString()} ${boxLabel}`;
     } else if (loose > 0) {
-      return `${prefix}${loose} ${pcsLabel}`;
+      return `${loose} ${pcsLabel}`;
     } else {
       return `0 ${boxLabel}`;
     }
@@ -99,14 +110,25 @@ export const formatStockQty = (
     const loose = totalPieces % rawPcs;
     const bulkLabel = prod?.uom || 'Unit';
     const looseLabel = prod?.loose_uom || 'Pcs';
-    const prefix = isNegative ? '-' : '';
+
+    if (isNegative) {
+      if (bulk > 0 && loose > 0) {
+        return `-${bulk} ${bulkLabel} - ${loose} ${looseLabel}`;
+      } else if (bulk > 0) {
+        return `-${bulk} ${bulkLabel}`;
+      } else if (loose > 0) {
+        return `-${loose} ${looseLabel}`;
+      } else {
+        return `0 ${bulkLabel}`;
+      }
+    }
 
     if (bulk > 0 && loose > 0) {
-      return `${prefix}${bulk.toLocaleString()} ${bulkLabel} + ${loose} ${looseLabel}`;
+      return `${bulk.toLocaleString()} ${bulkLabel} + ${loose} ${looseLabel}`;
     } else if (bulk > 0) {
-      return `${prefix}${bulk.toLocaleString()} ${bulkLabel}`;
+      return `${bulk.toLocaleString()} ${bulkLabel}`;
     } else if (loose > 0) {
-      return `${prefix}${loose} ${looseLabel}`;
+      return `${loose} ${looseLabel}`;
     } else {
       return `0 ${bulkLabel}`;
     }
@@ -119,7 +141,7 @@ export const formatStockQty = (
 };
 
 const STORAGE_CRITERIA_KEY = 'zac_basic_stock_report_criteria_v2';
-const META_CACHE_KEY = 'zac_basic_stock_meta_v2';
+const META_CACHE_KEY = 'zac_basic_stock_meta_v3';
 
 export const BasicStockReportPrint: React.FC = () => {
   const location = useLocation();
@@ -192,8 +214,8 @@ export const BasicStockReportPrint: React.FC = () => {
         const productsPromise = cachedProducts && cachedProducts.length > 0
           ? Promise.resolve({ data: cachedProducts })
           : Promise.all([
-              supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock').order('id', { ascending: true }).range(0, 999),
-              supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock').order('id', { ascending: true }).range(1000, 2999)
+              supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, loose_conversion_ratio, allow_loose_sales, loose_uom').order('id', { ascending: true }).range(0, 999),
+              supabase.from('products').select('id, product_name, category, sub_category, sub_sub_category, brand, purchase_price, retail_price, uom, item_sr_no, current_stock, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, loose_conversion_ratio, allow_loose_sales, loose_uom').order('id', { ascending: true }).range(1000, 2999)
             ]).then(([p1, p2]) => ({ data: [...(p1.data || []), ...(p2.data || [])] }));
 
         // 3. Fetch warehouses
@@ -244,12 +266,39 @@ export const BasicStockReportPrint: React.FC = () => {
         setProductsMaster(loadedProds);
         setWarehousesList(loadedWhs);
 
-        // Build dynamic stock lookup map (normalized product_name -> row)
+        // Build dynamic stock lookup map (normalized product_name -> aggregated row)
+        // Aggregates rows with identical sanitized names (handling trailing spaces, backticks, or duplicates)
         const sMap = new Map<string, any>();
         if (rpcRes.data && Array.isArray(rpcRes.data)) {
           rpcRes.data.forEach((r: any) => {
-            const key = String(r.product_name || '').trim().toLowerCase();
-            if (key) sMap.set(key, r);
+            const rawName = String(r.product_name || '');
+            const cleanKey = rawName.replace(/[`'"]/g, '').trim().toLowerCase();
+            if (!cleanKey) return;
+            if (!sMap.has(cleanKey)) {
+              sMap.set(cleanKey, {
+                product_name: cleanKey,
+                opening_stock: Number(r.opening_stock || 0),
+                prior_in: Number(r.prior_in || 0),
+                prior_out: Number(r.prior_out || 0),
+                period_in: Number(r.period_in || 0),
+                period_out: Number(r.period_out || 0),
+                period_purchases: Number(r.period_purchases || 0),
+                period_sales: Number(r.period_sales || 0),
+                period_sales_returns: Number(r.period_sales_returns || 0),
+                period_purchase_returns: Number(r.period_purchase_returns || 0)
+              });
+            } else {
+              const ex = sMap.get(cleanKey)!;
+              ex.opening_stock += Number(r.opening_stock || 0);
+              ex.prior_in += Number(r.prior_in || 0);
+              ex.prior_out += Number(r.prior_out || 0);
+              ex.period_in += Number(r.period_in || 0);
+              ex.period_out += Number(r.period_out || 0);
+              ex.period_purchases += Number(r.period_purchases || 0);
+              ex.period_sales += Number(r.period_sales || 0);
+              ex.period_sales_returns += Number(r.period_sales_returns || 0);
+              ex.period_purchase_returns += Number(r.period_purchase_returns || 0);
+            }
           });
         }
         setStockMap(sMap);
@@ -258,7 +307,8 @@ export const BasicStockReportPrint: React.FC = () => {
         const whMap = new Map<string, Record<string, number>>();
         if (balancesRes.data && Array.isArray(balancesRes.data)) {
           balancesRes.data.forEach((b: any) => {
-            const pKey = String(b.product_name || '').trim().toLowerCase();
+            const rawP = String(b.product_name || '');
+            const pKey = rawP.replace(/[`'"]/g, '').trim().toLowerCase();
             const wName = String(b.warehouse_name || 'Global').trim();
             const q = Number(b.quantity || 0);
             if (!whMap.has(pKey)) {
@@ -335,6 +385,7 @@ export const BasicStockReportPrint: React.FC = () => {
 
     const rows = uniqueProducts.map((p) => {
       const pNameLower = String(p.product_name || '').trim().toLowerCase();
+      const pNameClean = pNameLower.replace(/[`'"]/g, '').trim();
       const parentCat = String(p.sub_sub_category || p.parent_category || '').trim();
       const subCat = String(p.sub_category || '').trim();
       const leafCat = String(p.category || '').trim();
@@ -342,7 +393,7 @@ export const BasicStockReportPrint: React.FC = () => {
       const color = extractProductColor(p) || 'General';
 
       // Stock from RPC calculation
-      const rpcStock = stockMap.get(pNameLower);
+      const rpcStock = stockMap.get(pNameClean) || stockMap.get(pNameLower);
       let calculatedStock = 0;
       let openingStock = 0;
       let totalIn = 0;
@@ -355,7 +406,7 @@ export const BasicStockReportPrint: React.FC = () => {
         calculatedStock = openingStock + totalIn - totalOut;
       } else {
         // Fallback to product.current_stock or sum of warehouse_balances
-        const whObj = warehouseStockMap.get(pNameLower);
+        const whObj = warehouseStockMap.get(pNameClean) || warehouseStockMap.get(pNameLower);
         if (whObj) {
           calculatedStock = Object.values(whObj).reduce((acc, q) => acc + q, 0);
         } else {
@@ -364,7 +415,7 @@ export const BasicStockReportPrint: React.FC = () => {
       }
 
       // Warehouse distribution breakdown
-      const whBreakdown = warehouseStockMap.get(pNameLower) || {};
+      const whBreakdown = warehouseStockMap.get(pNameClean) || warehouseStockMap.get(pNameLower) || {};
 
       // If warehouse filter is specified, calculate stock specific to selected warehouse(s)
       let effectiveStock = calculatedStock;
@@ -380,8 +431,10 @@ export const BasicStockReportPrint: React.FC = () => {
       // Price and Valuation calculations
       const costPrice = Number(p.purchase_price || p.cost_price || 0);
       const retailPrice = Number(p.retail_price || 0);
-      const totalValuation = Math.round(effectiveStock * costPrice);
-      const totalRetailValuation = Math.round(effectiveStock * retailPrice);
+      const rawValuation = Math.round(effectiveStock * costPrice);
+      const totalValuation = rawValuation === 0 ? 0 : rawValuation;
+      const rawRetailValuation = Math.round(effectiveStock * retailPrice);
+      const totalRetailValuation = rawRetailValuation === 0 ? 0 : rawRetailValuation;
 
       // Status classification
       let status: 'in_stock' | 'low_stock' | 'out_of_stock' = 'in_stock';
