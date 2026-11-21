@@ -46,7 +46,6 @@ export const formatStockQty = (
     uom === 'box' ||
     uom === 'boxes' ||
     cat.includes('tile') ||
-    rawPcs > 1 ||
     Boolean(prod?.isTileItem);
 
   let piecesPerBox = rawPcs > 1 ? rawPcs : 0;
@@ -573,18 +572,75 @@ export const BasicStockReportPrint: React.FC = () => {
     const catMap = new Map<string, { categoryTitle: string; items: typeof sortedRows; totalQty: number; totalVal: number }>();
 
     sortedRows.forEach((row) => {
-      const key = `${row.parent_category} › ${row.sub_category}`;
-      if (!catMap.has(key)) {
-        catMap.set(key, { categoryTitle: key, items: [], totalQty: 0, totalVal: 0 });
+      const normParent = String(row.parent_category || '').trim().replace(/\s+/g, ' ');
+      const normSub = String(row.sub_category || '').trim().replace(/\s+/g, ' ');
+      const lookupKey = `${normParent.toLowerCase()} › ${normSub.toLowerCase()}`;
+      const displayTitle = `${normParent} › ${normSub}`;
+
+      if (!catMap.has(lookupKey)) {
+        catMap.set(lookupKey, { categoryTitle: displayTitle, items: [], totalQty: 0, totalVal: 0 });
       }
-      const grp = catMap.get(key)!;
+      const grp = catMap.get(lookupKey)!;
       grp.items.push(row);
       grp.totalQty += row.availableStock;
       grp.totalVal += row.totalValuation;
     });
 
-    return Array.from(catMap.values()).sort((a, b) => a.categoryTitle.localeCompare(b.categoryTitle));
-  }, [sortedRows, criteria?.reportType]);
+    const categoriesList = Array.from(catMap.values());
+
+    // Sort items inside each category according to criteria.sortBy
+    categoriesList.forEach((grp) => {
+      if (!criteria?.sortBy) return;
+      switch (criteria.sortBy) {
+        case 'stock_desc':
+          grp.items.sort((a, b) => b.availableStock - a.availableStock);
+          break;
+        case 'stock_asc':
+          grp.items.sort((a, b) => a.availableStock - b.availableStock);
+          break;
+        case 'valuation_desc':
+          grp.items.sort((a, b) => b.totalValuation - a.totalValuation);
+          break;
+        case 'valuation_asc':
+          grp.items.sort((a, b) => a.totalValuation - b.totalValuation);
+          break;
+        case 'sku_asc':
+          grp.items.sort((a, b) => a.sku.localeCompare(b.sku));
+          break;
+        case 'sku_desc':
+          grp.items.sort((a, b) => b.sku.localeCompare(a.sku));
+          break;
+        case 'name_asc':
+          grp.items.sort((a, b) => a.product_name.localeCompare(b.product_name));
+          break;
+        case 'name_desc':
+          grp.items.sort((a, b) => b.product_name.localeCompare(a.product_name));
+          break;
+      }
+    });
+
+    // Sort categories list according to criteria.sortBy
+    if (criteria?.sortBy) {
+      switch (criteria.sortBy) {
+        case 'stock_desc':
+          return categoriesList.sort((a, b) => b.totalQty - a.totalQty);
+        case 'stock_asc':
+          return categoriesList.sort((a, b) => a.totalQty - b.totalQty);
+        case 'valuation_desc':
+          return categoriesList.sort((a, b) => b.totalVal - a.totalVal);
+        case 'valuation_asc':
+          return categoriesList.sort((a, b) => a.totalVal - b.totalVal);
+        case 'sku_asc':
+        case 'sku_desc':
+        case 'name_asc':
+        case 'name_desc':
+        default:
+          return categoriesList.sort((a, b) => a.categoryTitle.localeCompare(b.categoryTitle));
+      }
+    }
+
+    return categoriesList.sort((a, b) => a.categoryTitle.localeCompare(b.categoryTitle));
+  }, [sortedRows, criteria?.reportType, criteria?.sortBy]);
 
   const groupedByWarehouse = useMemo(() => {
     if (criteria?.reportType !== 'warehouse') return [];
@@ -1016,7 +1072,7 @@ export const BasicStockReportPrint: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-700">
                     <span>
-                      Total Units: <span className="text-slate-900">{catGrp.totalQty.toLocaleString()}</span>
+                      Total Units: <span className="text-slate-900">{Math.round(catGrp.totalQty).toLocaleString()}</span>
                     </span>
                     <span>
                       Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(catGrp.totalVal).toLocaleString()}</span>
