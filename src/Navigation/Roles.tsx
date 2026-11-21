@@ -183,9 +183,15 @@ export const adminRoutes = [
         icon: MdCategory
       },
       {
+        path: '/Administration/Brands',
+        component: <Brands />,
+        label: 'Brands',
+        icon: MdDomain
+      },
+      {
         path: '/Administration/Surface-Finish',
         component: <SurfaceFinish />,
-        label: 'Brand',
+        label: 'Surface Finishes',
         icon: MdTexture
       },
       {
@@ -194,14 +200,6 @@ export const adminRoutes = [
         label: 'UOMs',
         icon: MdStraighten
       },
-      /*
-      {
-        path: '/Administration/Brands',
-        component: <Brands />,
-        label: 'Brands',
-        icon: MdDomain
-      },
-      */
       {
         label: 'Products',
         icon: MdDashboard,

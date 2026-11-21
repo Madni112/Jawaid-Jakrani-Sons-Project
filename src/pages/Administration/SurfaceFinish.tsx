@@ -236,7 +236,7 @@ const SurfaceFinish = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search Brandes..."
+              placeholder="Search surface finishes..."
               className="w-full sm:w-72 rounded-xl border border-slate-200 py-2 px-3.5 bg-slate-50/50 dark:bg-slate-800/60 dark:border-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-xs text-slate-800 dark:text-white transition"
             />
           </div>
@@ -247,7 +247,7 @@ const SurfaceFinish = () => {
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
                 <th className="py-3.5 px-4 w-16 text-center">S#</th>
-                <th className="py-3.5 px-4">Brand Name</th>
+                <th className="py-3.5 px-4">Finish Name</th>
                 <th className="py-3.5 px-4 w-28 text-center">Actions</th>
               </tr>
             </thead>
