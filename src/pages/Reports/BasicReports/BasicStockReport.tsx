@@ -25,7 +25,7 @@ import { extractProductColor, DEFAULT_PRODUCT_COLORS, getSwatchColor } from '../
 import SearchableSelect, { SearchableOption } from '../../../components/SearchableSelect';
 import { fetchSystemMasterConfig } from '../../../utils/systemPermissions';
 
-export type BasicStockReportType = 'balance' | 'warehouse' | 'category' | 'reorder' | 'dead';
+export type BasicStockReportType = 'balance' | 'warehouse' | 'category' | 'brand' | 'color' | 'reorder' | 'dead';
 
 export interface BasicStockFilterCriteria {
   reportType: BasicStockReportType;
@@ -858,6 +858,8 @@ export const BasicStockReport: React.FC = () => {
               <option value="balance">Current Stock Balance &amp; Inventory Valuation Report</option>
               <option value="warehouse">Warehouse / Location wise Stock Breakdown</option>
               <option value="category">Category-Wise Stock Volume &amp; SKU Turnover</option>
+              <option value="brand">Brand-Wise Stock Volume &amp; SKU Turnover</option>
+              <option value="color">Color-Wise Stock Volume &amp; SKU Turnover</option>
               <option value="reorder">Low Stock &amp; Reorder Level Alert Register</option>
               <option value="dead">Zero &amp; Out-of-Stock Audit (Negative / Nil Balances)</option>
             </select>

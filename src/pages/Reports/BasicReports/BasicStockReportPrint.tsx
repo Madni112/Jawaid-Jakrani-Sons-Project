@@ -13,6 +13,8 @@ import {
   MdInventory,
   MdWarehouse,
   MdCategory,
+  MdBrandingWatermark,
+  MdPalette,
   MdWarning,
   MdHourglassEmpty,
   MdInfoOutline,
@@ -755,6 +757,144 @@ export const BasicStockReportPrint: React.FC = () => {
     return categoriesList.sort((a, b) => a.categoryTitle.localeCompare(b.categoryTitle));
   }, [sortedRows, criteria?.reportType, criteria?.sortBy]);
 
+  const groupedByBrand = useMemo(() => {
+    if (criteria?.reportType !== 'brand') return [];
+    const brandMap = new Map<string, { brandTitle: string; items: typeof sortedRows; totalQty: number; totalVal: number }>();
+
+    sortedRows.forEach((row) => {
+      const normBrand = String(row.brand || 'Unbranded').trim().replace(/\s+/g, ' ') || 'Unbranded';
+      const lookupKey = normBrand.toLowerCase();
+
+      if (!brandMap.has(lookupKey)) {
+        brandMap.set(lookupKey, { brandTitle: normBrand, items: [], totalQty: 0, totalVal: 0 });
+      }
+      const grp = brandMap.get(lookupKey)!;
+      grp.items.push(row);
+      grp.totalQty += row.availableStock;
+      grp.totalVal += row.totalValuation;
+    });
+
+    const brandList = Array.from(brandMap.values());
+
+    // Sort items inside each brand according to criteria.sortBy
+    brandList.forEach((grp) => {
+      if (!criteria?.sortBy) return;
+      switch (criteria.sortBy) {
+        case 'stock_desc':
+          grp.items.sort((a, b) => b.availableStock - a.availableStock);
+          break;
+        case 'stock_asc':
+          grp.items.sort((a, b) => a.availableStock - b.availableStock);
+          break;
+        case 'valuation_desc':
+          grp.items.sort((a, b) => b.totalValuation - a.totalValuation);
+          break;
+        case 'valuation_asc':
+          grp.items.sort((a, b) => a.totalValuation - b.totalValuation);
+          break;
+        case 'sku_asc':
+          grp.items.sort((a, b) => a.sku.localeCompare(b.sku));
+          break;
+        case 'sku_desc':
+          grp.items.sort((a, b) => b.sku.localeCompare(a.sku));
+          break;
+        case 'name_asc':
+          grp.items.sort((a, b) => a.product_name.localeCompare(b.product_name));
+          break;
+        case 'name_desc':
+          grp.items.sort((a, b) => b.product_name.localeCompare(a.product_name));
+          break;
+      }
+    });
+
+    // Sort brand list according to criteria.sortBy
+    if (criteria?.sortBy) {
+      switch (criteria.sortBy) {
+        case 'stock_desc':
+          return brandList.sort((a, b) => b.totalQty - a.totalQty);
+        case 'stock_asc':
+          return brandList.sort((a, b) => a.totalQty - b.totalQty);
+        case 'valuation_desc':
+          return brandList.sort((a, b) => b.totalVal - a.totalVal);
+        case 'valuation_asc':
+          return brandList.sort((a, b) => a.totalVal - b.totalVal);
+        default:
+          return brandList.sort((a, b) => a.brandTitle.localeCompare(b.brandTitle));
+      }
+    }
+
+    return brandList.sort((a, b) => a.brandTitle.localeCompare(b.brandTitle));
+  }, [sortedRows, criteria?.reportType, criteria?.sortBy]);
+
+  const groupedByColor = useMemo(() => {
+    if (criteria?.reportType !== 'color') return [];
+    const colorMap = new Map<string, { colorTitle: string; items: typeof sortedRows; totalQty: number; totalVal: number }>();
+
+    sortedRows.forEach((row) => {
+      const normColor = String(row.color || 'General').trim().replace(/\s+/g, ' ') || 'General';
+      const lookupKey = normColor.toLowerCase();
+
+      if (!colorMap.has(lookupKey)) {
+        colorMap.set(lookupKey, { colorTitle: normColor, items: [], totalQty: 0, totalVal: 0 });
+      }
+      const grp = colorMap.get(lookupKey)!;
+      grp.items.push(row);
+      grp.totalQty += row.availableStock;
+      grp.totalVal += row.totalValuation;
+    });
+
+    const colorList = Array.from(colorMap.values());
+
+    // Sort items inside each color according to criteria.sortBy
+    colorList.forEach((grp) => {
+      if (!criteria?.sortBy) return;
+      switch (criteria.sortBy) {
+        case 'stock_desc':
+          grp.items.sort((a, b) => b.availableStock - a.availableStock);
+          break;
+        case 'stock_asc':
+          grp.items.sort((a, b) => a.availableStock - b.availableStock);
+          break;
+        case 'valuation_desc':
+          grp.items.sort((a, b) => b.totalValuation - a.totalValuation);
+          break;
+        case 'valuation_asc':
+          grp.items.sort((a, b) => a.totalValuation - b.totalValuation);
+          break;
+        case 'sku_asc':
+          grp.items.sort((a, b) => a.sku.localeCompare(b.sku));
+          break;
+        case 'sku_desc':
+          grp.items.sort((a, b) => b.sku.localeCompare(a.sku));
+          break;
+        case 'name_asc':
+          grp.items.sort((a, b) => a.product_name.localeCompare(b.product_name));
+          break;
+        case 'name_desc':
+          grp.items.sort((a, b) => b.product_name.localeCompare(a.product_name));
+          break;
+      }
+    });
+
+    // Sort color list according to criteria.sortBy
+    if (criteria?.sortBy) {
+      switch (criteria.sortBy) {
+        case 'stock_desc':
+          return colorList.sort((a, b) => b.totalQty - a.totalQty);
+        case 'stock_asc':
+          return colorList.sort((a, b) => a.totalQty - b.totalQty);
+        case 'valuation_desc':
+          return colorList.sort((a, b) => b.totalVal - a.totalVal);
+        case 'valuation_asc':
+          return colorList.sort((a, b) => a.totalVal - b.totalVal);
+        default:
+          return colorList.sort((a, b) => a.colorTitle.localeCompare(b.colorTitle));
+      }
+    }
+
+    return colorList.sort((a, b) => a.colorTitle.localeCompare(b.colorTitle));
+  }, [sortedRows, criteria?.reportType, criteria?.sortBy]);
+
   const groupedByWarehouse = useMemo(() => {
     if (criteria?.reportType !== 'warehouse') return [];
     const whMap = new Map<string, { warehouseName: string; items: { product: typeof sortedRows[0]; qty: number; valuation: number }[]; totalQty: number; totalVal: number }>();
@@ -881,6 +1021,10 @@ export const BasicStockReportPrint: React.FC = () => {
         return 'Warehouse & Multi-Location Stock Breakdown';
       case 'category':
         return 'Category-Wise Stock Volume & Valuation';
+      case 'brand':
+        return 'Brand-Wise Stock Volume & Valuation';
+      case 'color':
+        return 'Color-Wise Stock Volume & Valuation';
       case 'reorder':
         return 'Low Stock & Reorder Alert Register';
       case 'dead':
@@ -1356,6 +1500,308 @@ export const BasicStockReportPrint: React.FC = () => {
                           {isRowExpanded(row.id) && (
                             <tr className="bg-slate-50/70 border-b border-slate-200/80">
                               <td colSpan={8} className="py-2 px-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3 text-[11px]">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-bold text-slate-500 uppercase text-[10px]">Locations:</span>
+                                    {Object.keys(row.whBreakdown).length === 0 ? (
+                                      <span className="text-slate-400 italic text-[10px]">Global Pool</span>
+                                    ) : (
+                                      Object.entries(row.whBreakdown).map(([wh, qty]) => (
+                                        <span
+                                          key={wh}
+                                          className={`px-1.5 py-0.5 rounded font-mono text-[10px] ${
+                                            qty > 0
+                                              ? 'bg-white border border-slate-200 text-slate-800 font-bold'
+                                              : 'bg-rose-50 text-rose-600 border border-rose-100'
+                                          }`}
+                                        >
+                                          <strong>{wh}:</strong> {formatStockQty(qty, row.rawProduct, true)}
+                                        </span>
+                                      ))
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 font-mono text-[10px] text-slate-600">
+                                    <span>Opening: <strong className="text-slate-800">{formatStockQty(row.openingStock, row.rawProduct, true)}</strong></span>
+                                    <span>In: <strong className="text-emerald-700">+{formatStockQty(row.totalIn, row.rawProduct, true)}</strong></span>
+                                    <span>Out: <strong className="text-rose-700">-{formatStockQty(row.totalOut, row.rawProduct, true)}</strong></span>
+                                    <span>Net: <strong className="text-slate-900">{formatStockQty(row.availableStock, row.rawProduct, true)}</strong></span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                )}
+              </div>
+            );
+            })}
+          </div>
+        )}
+
+        {/* ── PERSPECTIVE VIEW: BRAND-WISE GROUPING ── */}
+        {criteria?.reportType === 'brand' && (
+          <div className="space-y-6 mb-6">
+            {groupedByBrand.map((brandGrp, bIdx) => {
+              const isCollapsed = collapsedCategories.has(brandGrp.brandTitle);
+              return (
+              <div
+                key={bIdx}
+                className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs"
+              >
+                {/* Brand Header */}
+                <div
+                  onClick={() => toggleCategoryCollapse(brandGrp.brandTitle)}
+                  className="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-slate-200/60 transition select-none"
+                  title="Click to fold or unfold this brand"
+                >
+                  <div className="flex items-center gap-2">
+                    {isCollapsed ? (
+                      <MdChevronRight className="text-slate-500" size={18} />
+                    ) : (
+                      <MdExpandMore className="text-primary" size={18} />
+                    )}
+                    <MdBrandingWatermark className="text-primary" size={16} />
+                    <span className="font-bold text-xs text-slate-900 uppercase tracking-wide">
+                      Brand: {brandGrp.brandTitle}
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                      {brandGrp.items.length} SKUs
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-bold text-slate-700">
+                    <span>
+                      Total Units: <span className="text-slate-900">{Math.round(brandGrp.totalQty).toLocaleString()}</span>
+                    </span>
+                    <span>
+                      Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(brandGrp.totalVal).toLocaleString()}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Table */}
+                {!isCollapsed && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-[11px] font-extrabold text-slate-600 uppercase border-b border-slate-200">
+                        <th className="py-2 px-3 w-10">S#</th>
+                        <th className="py-2 px-3">SKU</th>
+                        <th className="py-2 px-3">Product Title</th>
+                        <th className="py-2 px-3">Category Hierarchy</th>
+                        <th className="py-2 px-3">Color / Shade</th>
+                        <th className="py-2 px-3 text-right">Cost Price</th>
+                        <th className="py-2 px-3 text-right">On Hand</th>
+                        <th className="py-2 px-3 text-right">Valuation (Rs)</th>
+                        <th className="py-2 px-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {brandGrp.items.map((row, idx) => (
+                        <React.Fragment key={row.id}>
+                          <tr
+                            className="hover:bg-slate-50/70 transition cursor-pointer"
+                            onClick={() => setInspectedProduct(row)}
+                          >
+                            <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                            <td className="py-2 px-3 font-mono font-bold text-primary text-[11px]">{row.sku}</td>
+                            <td className="py-2 px-3 font-semibold text-slate-900">
+                              <span className="hover:text-primary transition" onClick={() => setInspectedProduct(row)}>
+                                {row.product_name}
+                              </span>
+                              <span
+                                onClick={(e) => toggleRowDetail(e, row.id)}
+                                className="text-[10px] text-primary ml-1.5 hover:underline cursor-pointer select-none font-bold"
+                              >
+                                {isRowExpanded(row.id) ? '▲ collapse' : '▼ details'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-slate-600">
+                              {row.parent_category} › {row.sub_category}
+                            </td>
+                            <td className="py-2 px-3 text-slate-600">
+                              {row.color}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
+                              {row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                              {formatStockQty(row.availableStock, row.rawProduct)}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                              Rs. {Math.round(row.totalValuation).toLocaleString()}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  row.status === 'in_stock'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : row.status === 'low_stock'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}
+                              >
+                                {row.status.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                          </tr>
+                          {isRowExpanded(row.id) && (
+                            <tr className="bg-slate-50/70 border-b border-slate-200/80">
+                              <td colSpan={9} className="py-1.5 px-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3 text-[11px]">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-bold text-slate-500 uppercase text-[10px]">Locations:</span>
+                                    {Object.keys(row.whBreakdown).length === 0 ? (
+                                      <span className="text-slate-400 italic text-[10px]">Global Pool</span>
+                                    ) : (
+                                      Object.entries(row.whBreakdown).map(([wh, qty]) => (
+                                        <span
+                                          key={wh}
+                                          className={`px-1.5 py-0.5 rounded font-mono text-[10px] ${
+                                            qty > 0
+                                              ? 'bg-white border border-slate-200 text-slate-800 font-bold'
+                                              : 'bg-rose-50 text-rose-600 border border-rose-100'
+                                          }`}
+                                        >
+                                          <strong>{wh}:</strong> {formatStockQty(qty, row.rawProduct, true)}
+                                        </span>
+                                      ))
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 font-mono text-[10px] text-slate-600">
+                                    <span>Opening: <strong className="text-slate-800">{formatStockQty(row.openingStock, row.rawProduct, true)}</strong></span>
+                                    <span>In: <strong className="text-emerald-700">+{formatStockQty(row.totalIn, row.rawProduct, true)}</strong></span>
+                                    <span>Out: <strong className="text-rose-700">-{formatStockQty(row.totalOut, row.rawProduct, true)}</strong></span>
+                                    <span>Net: <strong className="text-slate-900">{formatStockQty(row.availableStock, row.rawProduct, true)}</strong></span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                )}
+              </div>
+            );
+            })}
+          </div>
+        )}
+
+        {/* ── PERSPECTIVE VIEW: COLOR-WISE GROUPING ── */}
+        {criteria?.reportType === 'color' && (
+          <div className="space-y-6 mb-6">
+            {groupedByColor.map((colorGrp, cIdx) => {
+              const isCollapsed = collapsedCategories.has(colorGrp.colorTitle);
+              return (
+              <div
+                key={cIdx}
+                className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs"
+              >
+                {/* Color Header */}
+                <div
+                  onClick={() => toggleCategoryCollapse(colorGrp.colorTitle)}
+                  className="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-slate-200/60 transition select-none"
+                  title="Click to fold or unfold this color group"
+                >
+                  <div className="flex items-center gap-2">
+                    {isCollapsed ? (
+                      <MdChevronRight className="text-slate-500" size={18} />
+                    ) : (
+                      <MdExpandMore className="text-primary" size={18} />
+                    )}
+                    <MdPalette className="text-primary" size={16} />
+                    <span className="font-bold text-xs text-slate-900 uppercase tracking-wide">
+                      Color / Shade: {colorGrp.colorTitle}
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                      {colorGrp.items.length} SKUs
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-bold text-slate-700">
+                    <span>
+                      Total Units: <span className="text-slate-900">{Math.round(colorGrp.totalQty).toLocaleString()}</span>
+                    </span>
+                    <span>
+                      Subtotal Valuation: <span className="text-emerald-700">Rs. {Math.round(colorGrp.totalVal).toLocaleString()}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Table */}
+                {!isCollapsed && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-[11px] font-extrabold text-slate-600 uppercase border-b border-slate-200">
+                        <th className="py-2 px-3 w-10">S#</th>
+                        <th className="py-2 px-3">SKU</th>
+                        <th className="py-2 px-3">Product Title</th>
+                        <th className="py-2 px-3">Category Hierarchy</th>
+                        <th className="py-2 px-3">Brand</th>
+                        <th className="py-2 px-3 text-right">Cost Price</th>
+                        <th className="py-2 px-3 text-right">On Hand</th>
+                        <th className="py-2 px-3 text-right">Valuation (Rs)</th>
+                        <th className="py-2 px-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {colorGrp.items.map((row, idx) => (
+                        <React.Fragment key={row.id}>
+                          <tr
+                            className="hover:bg-slate-50/70 transition cursor-pointer"
+                            onClick={() => setInspectedProduct(row)}
+                          >
+                            <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                            <td className="py-2 px-3 font-mono font-bold text-primary text-[11px]">{row.sku}</td>
+                            <td className="py-2 px-3 font-semibold text-slate-900">
+                              <span className="hover:text-primary transition" onClick={() => setInspectedProduct(row)}>
+                                {row.product_name}
+                              </span>
+                              <span
+                                onClick={(e) => toggleRowDetail(e, row.id)}
+                                className="text-[10px] text-primary ml-1.5 hover:underline cursor-pointer select-none font-bold"
+                              >
+                                {isRowExpanded(row.id) ? '▲ collapse' : '▼ details'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-slate-600">
+                              {row.parent_category} › {row.sub_category}
+                            </td>
+                            <td className="py-2 px-3 text-slate-600">
+                              {row.brand}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
+                              {row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                              {formatStockQty(row.availableStock, row.rawProduct)}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                              Rs. {Math.round(row.totalValuation).toLocaleString()}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  row.status === 'in_stock'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : row.status === 'low_stock'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}
+                              >
+                                {row.status.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                          </tr>
+                          {isRowExpanded(row.id) && (
+                            <tr className="bg-slate-50/70 border-b border-slate-200/80">
+                              <td colSpan={9} className="py-1.5 px-4">
                                 <div className="flex flex-wrap items-center justify-between gap-3 text-[11px]">
                                   <div className="flex flex-wrap items-center gap-1.5">
                                     <span className="font-bold text-slate-500 uppercase text-[10px]">Locations:</span>
