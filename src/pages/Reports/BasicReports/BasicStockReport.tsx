@@ -372,6 +372,7 @@ export const BasicStockReport: React.FC = () => {
   const [selectedSubCategories, setSelectedSubCategories] = useState<string[]>([]);
   const [selectedLeafCategories, setSelectedLeafCategories] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [showCategoryCascade, setShowCategoryCascade] = useState<boolean>(false);
 
   // Snapshot As-Of Date & Period Range (Mirroring Sales Report Logic)
   const [dateMode, setDateMode] = useState<'single' | 'multi'>('single');
@@ -866,64 +867,154 @@ export const BasicStockReport: React.FC = () => {
           </div>
         </div>
 
+        {/* 1B. CONTEXTUAL PRIMARY BRAND FILTER (ACTIVE ON BRAND-WISE REPORT) */}
+        {reportType === 'brand' && (
+          <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="text-xs font-black uppercase tracking-wider text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                <MdBrandingWatermark className="text-amber-600 dark:text-amber-400" size={18} />
+                <span>Select Brand *</span>
+              </label>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-300">
+                {selectedBrands.length === 0 || selectedBrands.includes('All')
+                  ? `All Brands Included (${availableBrands.length})`
+                  : `${selectedBrands.length} Brand(s) Selected`}
+              </span>
+            </div>
+            <SearchableSelect
+              options={brandOptions}
+              value={selectedBrands}
+              onChange={(val) => {
+                if (Array.isArray(val)) setSelectedBrands(val);
+                else setSelectedBrands(val ? [val] : []);
+              }}
+              multiple={true}
+              placeholder="All Brands (or search and pick specific brands to audit...)"
+              searchPlaceholder="Type brand name to filter..."
+            />
+            <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
+              Filter report to specific brands, or leave on &ldquo;All Brands&rdquo; to group and audit every manufacturer.
+            </p>
+          </div>
+        )}
+
+        {/* 1C. CONTEXTUAL PRIMARY COLOR FILTER (ACTIVE ON COLOR-WISE REPORT) */}
+        {reportType === 'color' && (
+          <div className="p-4 rounded-2xl bg-purple-50/70 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="text-xs font-black uppercase tracking-wider text-purple-950 dark:text-purple-200 flex items-center gap-1.5">
+                <MdPalette className="text-purple-600 dark:text-purple-400" size={18} />
+                <span>Select Color / Shade *</span>
+              </label>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 border border-purple-300">
+                {selectedColors.length === 0 || selectedColors.includes('All')
+                  ? `All Colors Included (${availableColors.length})`
+                  : `${selectedColors.length} Color(s) Selected`}
+              </span>
+            </div>
+            <SearchableSelect
+              options={colorOptions}
+              value={selectedColors}
+              onChange={(val) => {
+                if (Array.isArray(val)) setSelectedColors(val);
+                else setSelectedColors(val ? [val] : []);
+              }}
+              multiple={true}
+              placeholder="All Available Colors (or search and pick specific shades...)"
+              searchPlaceholder="Type color name to filter..."
+            />
+            <p className="text-[11px] text-purple-800/80 dark:text-purple-300/80">
+              Filter report to specific colors, or leave on &ldquo;All Colors&rdquo; to group and audit every shade.
+            </p>
+          </div>
+        )}
+
         {/* 2. CASCADING CATEGORY HIERARCHY & PRODUCT FILTER */}
         <div className="space-y-3 pt-2 border-t border-stroke/60 dark:border-strokedark/60">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div
+            className={`flex flex-wrap items-center justify-between gap-2 ${
+              reportType === 'brand' || reportType === 'color'
+                ? 'cursor-pointer select-none p-2.5 rounded-xl bg-gray-50 dark:bg-meta-4/20 hover:bg-gray-100 dark:hover:bg-meta-4/40 transition border border-stroke/60 dark:border-strokedark/60'
+                : ''
+            }`}
+            onClick={() => {
+              if (reportType === 'brand' || reportType === 'color') {
+                setShowCategoryCascade((prev) => !prev);
+              }
+            }}
+          >
             <div className="flex items-center gap-1.5">
               <MdLayers className="text-primary" size={16} />
               <span className="text-xs font-black uppercase tracking-wider text-black dark:text-white">
-                Cascading Category Hierarchy &amp; Product Filter
+                {reportType === 'brand' || reportType === 'color'
+                  ? 'Narrow by Category Hierarchy & Products (Optional)'
+                  : 'Cascading Category Hierarchy & Product Filter'}
               </span>
+              {(reportType === 'brand' || reportType === 'color') && (
+                <span className="text-[10px] font-bold text-primary ml-1 px-2 py-0.5 rounded bg-primary/10">
+                  {(reportType !== 'brand' && reportType !== 'color') || showCategoryCascade || selectedParentCategories.length > 0
+                    ? '▲ Hide Filters'
+                    : '▼ Expand Filters'}
+                </span>
+              )}
             </div>
             <span className="text-[11px] text-gray-400">
-              Interactive facet boxes with live search &amp; keyboard navigation (↑↓ and Enter)
+              {reportType === 'brand' || reportType === 'color'
+                ? selectedParentCategories.length > 0
+                  ? `${selectedParentCategories.length} category filter(s) active`
+                  : 'Click to optionally restrict to specific categories or products'
+                : 'Interactive facet boxes with live search & keyboard navigation (↑↓ and Enter)'}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Box 1: Parent Category */}
-            <FacetCheckboxList
-              title="1. Parent Category"
-              items={parentCategoryItems}
-              selectedIds={selectedParentCategories}
-              onSelectionChange={setSelectedParentCategories}
-              placeholder="Search parent category..."
-            />
+          {((reportType !== 'brand' && reportType !== 'color') || showCategoryCascade || selectedParentCategories.length > 0) && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Box 1: Parent Category */}
+                <FacetCheckboxList
+                  title="1. Parent Category"
+                  items={parentCategoryItems}
+                  selectedIds={selectedParentCategories}
+                  onSelectionChange={setSelectedParentCategories}
+                  placeholder="Search parent category..."
+                />
 
-            {/* Box 2: Sub-Category */}
-            <FacetCheckboxList
-              title="2. Sub-Category"
-              items={subCategoryItems}
-              selectedIds={selectedSubCategories}
-              onSelectionChange={setSelectedSubCategories}
-              placeholder="Search sub-category..."
-              disabled={selectedParentCategories.length === 0}
-              disabledMessage="Select Parent Category first"
-            />
+                {/* Box 2: Sub-Category */}
+                <FacetCheckboxList
+                  title="2. Sub-Category"
+                  items={subCategoryItems}
+                  selectedIds={selectedSubCategories}
+                  onSelectionChange={setSelectedSubCategories}
+                  placeholder="Search sub-category..."
+                  disabled={selectedParentCategories.length === 0}
+                  disabledMessage="Select Parent Category first"
+                />
 
-            {/* Box 3: Leaf Category */}
-            <FacetCheckboxList
-              title="3. Leaf Category"
-              items={leafCategoryItems}
-              selectedIds={selectedLeafCategories}
-              onSelectionChange={setSelectedLeafCategories}
-              placeholder="Search leaf category..."
-              disabled={selectedSubCategories.length === 0}
-              disabledMessage="Select Sub-Category first"
-            />
-          </div>
+                {/* Box 3: Leaf Category */}
+                <FacetCheckboxList
+                  title="3. Leaf Category"
+                  items={leafCategoryItems}
+                  selectedIds={selectedLeafCategories}
+                  onSelectionChange={setSelectedLeafCategories}
+                  placeholder="Search leaf category..."
+                  disabled={selectedSubCategories.length === 0}
+                  disabledMessage="Select Sub-Category first"
+                />
+              </div>
 
-          {/* Box 4: Specific Products Filter */}
-          <div className="pt-2">
-            <FacetCheckboxList
-              title="4. Specific Product Filter"
-              items={productFacetItems}
-              selectedIds={selectedProducts}
-              onSelectionChange={setSelectedProducts}
-              placeholder="Search products by title, SKU, or price..."
-              heightClass="h-56"
-            />
-          </div>
+              {/* Box 4: Specific Products Filter */}
+              <div className="pt-2">
+                <FacetCheckboxList
+                  title="4. Specific Product Filter"
+                  items={productFacetItems}
+                  selectedIds={selectedProducts}
+                  onSelectionChange={setSelectedProducts}
+                  placeholder="Search products by title, SKU, or price..."
+                  heightClass="h-56"
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {/* 4. LOCATION, DATE & SORTING ROW (MIRRORING SALES REPORT LAYOUT) */}
@@ -1057,40 +1148,44 @@ export const BasicStockReport: React.FC = () => {
         {/* 5. BRAND, COLOR & ZERO-STOCK ATTRIBUTES ROW */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-stroke/60 dark:border-strokedark/60 items-center">
           {/* Brand */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <MdBrandingWatermark className="text-primary" size={15} />
-              <span>Select Brand:</span>
-            </label>
-            <SearchableSelect
-              options={brandOptions}
-              value={selectedBrands}
-              onChange={(val) => {
-                if (Array.isArray(val)) setSelectedBrands(val);
-                else setSelectedBrands(val ? [val] : []);
-              }}
-              multiple={true}
-              placeholder="All Brands"
-            />
-          </div>
+          {reportType !== 'brand' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                <MdBrandingWatermark className="text-primary" size={15} />
+                <span>Select Brand:</span>
+              </label>
+              <SearchableSelect
+                options={brandOptions}
+                value={selectedBrands}
+                onChange={(val) => {
+                  if (Array.isArray(val)) setSelectedBrands(val);
+                  else setSelectedBrands(val ? [val] : []);
+                }}
+                multiple={true}
+                placeholder="All Brands"
+              />
+            </div>
+          )}
 
           {/* Color Shade */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <MdPalette className="text-primary" size={15} />
-              <span>Color / Shade:</span>
-            </label>
-            <SearchableSelect
-              options={colorOptions}
-              value={selectedColors}
-              onChange={(val) => {
-                if (Array.isArray(val)) setSelectedColors(val);
-                else setSelectedColors(val ? [val] : []);
-              }}
-              multiple={true}
-              placeholder="All Available Colors"
-            />
-          </div>
+          {reportType !== 'color' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                <MdPalette className="text-primary" size={15} />
+                <span>Color / Shade:</span>
+              </label>
+              <SearchableSelect
+                options={colorOptions}
+                value={selectedColors}
+                onChange={(val) => {
+                  if (Array.isArray(val)) setSelectedColors(val);
+                  else setSelectedColors(val ? [val] : []);
+                }}
+                multiple={true}
+                placeholder="All Available Colors"
+              />
+            </div>
+          )}
 
           {/* Zero Stock Toggle */}
           <div className="flex items-center gap-2 pt-2 sm:pt-4">
