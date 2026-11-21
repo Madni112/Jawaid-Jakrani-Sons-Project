@@ -165,6 +165,11 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
     if (p && visibleTabs.some(t => t.key === p)) {
       setActiveTab(p);
+      if (p === 'daily-activity' || p === 'daily-book') {
+        const today = new Date().toISOString().split('T')[0];
+        setFromDate(today);
+        setToDate(today);
+      }
     } else if (!visibleTabs.some(t => t.key === activeTab)) {
       setActiveTab(visibleTabs[0]?.key || (effectiveMode === 'accounts' ? 'customer-ledger' : 'profit-loss'));
     }
@@ -183,7 +188,16 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   const [selectedCombinedParties, setSelectedCombinedParties] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
-  const [fromDate, setFromDate] = useState<string>('2026-06-22');
+  const [fromDate, setFromDate] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const p = params.get('tab') as TabKey;
+      if (p === 'daily-activity' || p === 'daily-book') {
+        return new Date().toISOString().split('T')[0];
+      }
+    } catch {}
+    return '2026-06-22';
+  });
   const [toDate, setToDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [partyTypeFilter, setPartyTypeFilter] = useState<'ALL' | 'CUSTOMER' | 'VENDOR'>('ALL');
   const [expenseCoaFilter, setExpenseCoaFilter] = useState<string>('ALL');
@@ -586,11 +600,19 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
       const currentCustAccounts = (targetTab === 'customer-ledger' && targetParties) ? targetParties : selectedCustomerAccounts;
       const currentVendAccounts = (targetTab === 'vendor-ledger' && targetParties) ? targetParties : selectedVendorAccounts;
 
-      const effFrom = overrideFrom !== undefined ? overrideFrom : fromDate;
-      const effTo = overrideTo !== undefined ? overrideTo : toDate;
+      let effFrom = overrideFrom !== undefined ? overrideFrom : fromDate;
+      let effTo = overrideTo !== undefined ? overrideTo : toDate;
+
+      // In single-day mode, effTo MUST always match effFrom
+      if (
+        (targetTab === 'daily-activity' && dailyActivityDateMode === 'single') ||
+        (targetTab === 'daily-book' && dailyDateMode === 'single')
+      ) {
+        effTo = effFrom;
+      }
 
       const startMs = effFrom ? new Date(effFrom + 'T00:00:00').getTime() : 0;
-      const endMs = effTo ? new Date(effTo + 'T23:59:59').getTime() : Infinity;
+      const endMs = effTo ? new Date(effTo + 'T23:59:59.999').getTime() : Infinity;
 
       // ── TAB 1: CUSTOMER LEDGER ──
       if (targetTab === 'customer-ledger') {
@@ -1924,13 +1946,34 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
       // ── TAB 7: DAILY ACTIVITY AUDIT TRAIL LOG ──
       else if (targetTab === 'daily-activity') {
-        let salesQ = supabase.from('sales_invoices').select('*').order('created_at', { ascending: false });
-        let dcQ = supabase.from('delivery_challans').select('*').order('created_at', { ascending: false });
-        let purchQ = supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false });
-        let vchQ = supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false });
-        let sRetQ = supabase.from('sales_returns').select('*').order('created_at', { ascending: false });
-        let pRetQ = supabase.from('purchase_returns').select('*').order('created_at', { ascending: false });
-        let transQ = supabase.from('stock_transfers').select('*').order('created_at', { ascending: false });
+        let salesQ = supabase
+          .from('sales_invoices')
+          .select('id, invoice_no, sale_date, created_at, customer_name, total_amount, payment_term, status, salesman_name, created_by, dispatch_warehouse, warehouse, remarks, items, tileItems')
+          .order('created_at', { ascending: false });
+        let dcQ = supabase
+          .from('delivery_challans')
+          .select('id, challan_no, challan_date, created_at, customer_name, total_qty, status, salesman_name, created_by, dispatch_warehouse, source_warehouse, remarks, items')
+          .order('created_at', { ascending: false });
+        let purchQ = supabase
+          .from('supplier_purchases')
+          .select('id, purchase_no, purchase_date, created_at, vendor_name, total_amount, payment_status, target_warehouse, created_by, remarks, items')
+          .order('created_at', { ascending: false });
+        let vchQ = supabase
+          .from('financial_vouchers')
+          .select('id, voucher_no, voucher_type, voucher_date, created_at, account_code, account_title, debit, credit, total_amount, payment_mode, remarks, created_by, status, items')
+          .order('created_at', { ascending: false });
+        let sRetQ = supabase
+          .from('sales_returns')
+          .select('id, return_no, return_date, created_at, customer_name, total_amount, status, warehouse_name, source_warehouse, created_by, remarks, items')
+          .order('created_at', { ascending: false });
+        let pRetQ = supabase
+          .from('purchase_returns')
+          .select('id, return_no, return_date, created_at, vendor_name, total_amount, status, warehouse, created_by, remarks, items')
+          .order('created_at', { ascending: false });
+        let transQ = supabase
+          .from('stock_transfers')
+          .select('id, transfer_no, transfer_date, created_at, source_location, destination_location, status, created_by, notes, items')
+          .order('created_at', { ascending: false });
 
         if (effFrom) {
           salesQ = salesQ.gte('sale_date', effFrom);

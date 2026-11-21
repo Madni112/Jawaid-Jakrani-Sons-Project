@@ -162,6 +162,12 @@ export const DailyActivityLogTab: React.FC<DailyActivityLogTabProps> = ({
   const [viewMode, setViewMode] = useState<'hierarchical' | 'flat'>('hierarchical');
   const [expandAllBreakdown, setExpandAllBreakdown] = useState<boolean>(false);
   const [individualExpandedMap, setIndividualExpandedMap] = useState<Record<string, boolean>>({});
+  const [expandedSectionLimits, setExpandedSectionLimits] = useState<Record<string, boolean>>({});
+  const [flatViewLimit, setFlatViewLimit] = useState<number>(60);
+
+  const toggleSectionLimit = (key: string) => {
+    setExpandedSectionLimits(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Unique operators list
   const operatorsList = useMemo(() => {
@@ -671,6 +677,9 @@ export const DailyActivityLogTab: React.FC<DailyActivityLogTabProps> = ({
             // Hide empty sections during PDF generation to keep PDF clean
             if (isGeneratingPdf && rows.length === 0) return null;
 
+            const isExpanded = Boolean(expandedSectionLimits[grp.key]);
+            const displayRows = (!isGeneratingPdf && !isExpanded && rows.length > 50) ? rows.slice(0, 50) : rows;
+
             return (
               <div
                 key={grp.key}
@@ -709,7 +718,25 @@ export const DailyActivityLogTab: React.FC<DailyActivityLogTabProps> = ({
                 </div>
 
                 {/* Section Items Table */}
-                {renderActivityTable(rows, true)}
+                {renderActivityTable(displayRows, true)}
+
+                {/* Sliced Rendering Controls for High Volume Events */}
+                {rows.length > 50 && !isGeneratingPdf && (
+                  <div className="p-2.5 px-4 bg-slate-50 dark:bg-slate-800/40 border-t border-stroke dark:border-strokedark flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">
+                      {isExpanded
+                        ? `Showing all ${rows.length} entries`
+                        : `Showing first 50 of ${rows.length} entries`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleSectionLimit(grp.key)}
+                      className="px-3 py-1 font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition cursor-pointer"
+                    >
+                      {isExpanded ? 'Show First 50' : `Show All ${rows.length} Entries`}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -721,7 +748,40 @@ export const DailyActivityLogTab: React.FC<DailyActivityLogTabProps> = ({
             isGeneratingPdf ? 'overflow-visible border-none shadow-none rounded-none w-full' : 'overflow-hidden'
           } print:border-none print:shadow-none print:rounded-none print:overflow-visible`}
         >
-          {renderActivityTable(filteredRows, true)}
+          {(() => {
+            const isFlatExpanded = flatViewLimit >= filteredRows.length;
+            const flatDisplayRows = (!isGeneratingPdf && !isFlatExpanded) ? filteredRows.slice(0, flatViewLimit) : filteredRows;
+            return (
+              <>
+                {renderActivityTable(flatDisplayRows, true)}
+                {filteredRows.length > 60 && !isGeneratingPdf && (
+                  <div className="p-3 px-4 bg-slate-50 dark:bg-slate-800/40 border-t border-stroke dark:border-strokedark flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">
+                      Showing {Math.min(flatViewLimit, filteredRows.length)} of {filteredRows.length} events
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {flatViewLimit < filteredRows.length && (
+                        <button
+                          type="button"
+                          onClick={() => setFlatViewLimit(prev => prev + 60)}
+                          className="px-3 py-1 font-bold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 rounded-lg transition cursor-pointer"
+                        >
+                          Load 60 More
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setFlatViewLimit(isFlatExpanded ? 60 : filteredRows.length)}
+                        className="px-3 py-1 font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition cursor-pointer"
+                      >
+                        {isFlatExpanded ? 'Show First 60' : `Show All ${filteredRows.length}`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>
