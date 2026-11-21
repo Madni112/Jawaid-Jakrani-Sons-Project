@@ -295,12 +295,11 @@ export const BasicStockReportPrint: React.FC = () => {
           .from('stock_balances')
           .select('product_name, warehouse_name, quantity');
 
-        // 6. Fetch recent sales invoices for Last Sold Date & Monthly Sales Demand calculation
-        const salesPromise = supabase
-          .from('sales_invoices')
-          .select('sale_date, items')
-          .order('sale_date', { ascending: false })
-          .limit(400);
+        // 6. Fetch complete sales invoices history for accurate Last Sold Date & 30-Day Demand
+        const salesPromise = Promise.all([
+          supabase.from('sales_invoices').select('sale_date, items').order('id', { ascending: false }).range(0, 999),
+          supabase.from('sales_invoices').select('sale_date, items').order('id', { ascending: false }).range(1000, 2999)
+        ]).then(([s1, s2]) => ({ data: [...(s1.data || []), ...(s2.data || [])] }));
 
         const [prodRes, whRes, rpcRes, balancesRes, salesRes] = await Promise.all([
           productsPromise,
