@@ -458,6 +458,10 @@ export const BasicPurchaseReportPrint: React.FC = () => {
         return list.sort((a, b) => a.vendor_name.localeCompare(b.vendor_name));
       case 'vendor_desc':
         return list.sort((a, b) => b.vendor_name.localeCompare(a.vendor_name));
+      case 'amount_desc':
+        return list.sort((a, b) => (b.netTotalAmount || 0) - (a.netTotalAmount || 0));
+      case 'amount_asc':
+        return list.sort((a, b) => (a.netTotalAmount || 0) - (b.netTotalAmount || 0));
       default:
         return list;
     }
@@ -1062,6 +1066,25 @@ export const BasicPurchaseReportPrint: React.FC = () => {
             >
               <span>Classic Ledger</span>
             </button>
+          </div>
+
+          {/* Quick Sort Order Selector */}
+          <div className="inline-flex items-center gap-1.5 p-1 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-xs">
+            <span className="text-[10px] text-gray-400 font-bold uppercase pl-1">Sort:</span>
+            <select
+              value={criteria.sortBy || 'date_desc'}
+              onChange={(e) => setCriteria((prev) => prev ? { ...prev, sortBy: e.target.value as any } : null)}
+              className="bg-transparent text-xs font-bold text-black dark:text-white focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="date_desc">Date (Newest First)</option>
+              <option value="date_asc">Date (Oldest First)</option>
+              <option value="vendor_asc">Vendor (A to Z)</option>
+              <option value="vendor_desc">Vendor (Z to A)</option>
+              <option value="bill_desc">Bill # (Z to A)</option>
+              <option value="bill_asc">Bill # (A to Z)</option>
+              <option value="amount_desc">Net Total (Highest First)</option>
+              <option value="amount_asc">Net Total (Lowest First)</option>
+            </select>
           </div>
 
           {/* Breakdown Toggle (for Bill Wise Mode) with Animated Loader & Rich Hover/Active Design */}

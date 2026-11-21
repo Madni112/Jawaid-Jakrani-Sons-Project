@@ -1110,6 +1110,23 @@ export const BasicSalesReportPrint: React.FC = () => {
             </button>
           </div>
 
+          {/* Quick Sort Order Selector */}
+          <div className="inline-flex items-center gap-1.5 p-1 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-xs">
+            <span className="text-[10px] text-gray-400 font-bold uppercase pl-1">Sort:</span>
+            <select
+              value={criteria.sortBy || 'date_desc'}
+              onChange={(e) => setCriteria((prev) => ({ ...prev, sortBy: e.target.value as any }))}
+              className="bg-transparent text-xs font-bold text-black dark:text-white focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="date_desc">Date (Newest First)</option>
+              <option value="date_asc">Date (Oldest First)</option>
+              <option value="customer_asc">Customer (A to Z)</option>
+              <option value="customer_desc">Customer (Z to A)</option>
+              <option value="invoice_desc">Invoice # (High to Low)</option>
+              <option value="invoice_asc">Invoice # (Low to High)</option>
+            </select>
+          </div>
+
           {/* Breakdown Toggle (for Invoice Wise) with Animated Loader & Rich Hover/Active Design */}
           {criteria.reportType === 'invoice' && (
             <button

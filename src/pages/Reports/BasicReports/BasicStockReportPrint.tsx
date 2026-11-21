@@ -717,6 +717,23 @@ export const BasicStockReportPrint: React.FC = () => {
         </button>
 
         <div className="flex items-center gap-2">
+          {/* Quick Sort Order Selector */}
+          <div className="inline-flex items-center gap-1.5 p-1 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-xs">
+            <span className="text-[10px] text-gray-400 font-bold uppercase pl-1">Sort:</span>
+            <select
+              value={criteria?.sortBy || 'stock_desc'}
+              onChange={(e) => setCriteria((prev) => prev ? { ...prev, sortBy: e.target.value as any } : null)}
+              className="bg-transparent text-xs font-bold text-slate-800 dark:text-white focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="stock_desc">Available Stock (Highest First)</option>
+              <option value="stock_asc">Available Stock (Lowest First)</option>
+              <option value="valuation_desc">Valuation (Highest First)</option>
+              <option value="name_asc">Product Name (A to Z)</option>
+              <option value="name_desc">Product Name (Z to A)</option>
+              <option value="sku_asc">SKU Code (A to Z)</option>
+            </select>
+          </div>
+
           {/* Layout Switcher */}
           <button
             type="button"
