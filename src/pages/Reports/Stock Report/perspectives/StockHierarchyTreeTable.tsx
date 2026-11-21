@@ -1,5 +1,6 @@
 import React from 'react';
 import { CategoryHierarchyParent, StockProductRow } from '../types/stockReportTypes';
+import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';
 
 interface StockHierarchyTreeTableProps {
     paginatedCategoryTree: CategoryHierarchyParent[];
@@ -105,8 +106,8 @@ export const StockHierarchyTreeTable: React.FC<StockHierarchyTreeTableProps> = (
                                                                     <td className="p-1.5 border border-slate-300 font-bold text-black font-sans uppercase">{p.product_name}</td>
                                                                     <td className="p-1.5 border border-slate-300 font-sans text-purple-700 font-bold text-center">{p.bin || '-'}</td>
                                                                     <td className="p-1.5 border border-slate-300 uppercase text-center text-slate-600">{p.uom || 'PC'}</td>
-                                                                    <td className="p-1.5 border border-slate-300 text-right font-black text-primary">
-                                                                        {p.stock_qty.toLocaleString()}
+                                                                    <td className="p-1.5 border border-slate-300 text-right font-black text-primary whitespace-nowrap">
+                                                                        {formatStockWithBoxesAndPcs(p.stock_qty, p).inlineText}
                                                                     </td>
                                                                     <td className="p-1.5 border border-slate-300 text-right font-mono text-gray-700">
                                                                         {p.unit_rate > 0 ? `Rs. ${p.unit_rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}

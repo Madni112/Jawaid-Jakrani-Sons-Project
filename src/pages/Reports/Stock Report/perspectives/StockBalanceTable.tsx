@@ -1,5 +1,6 @@
 import React from 'react';
 import { StockProductRow } from '../types/stockReportTypes';
+import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';
 
 interface StockBalanceTableProps {
     paginatedRows: StockProductRow[];
@@ -52,7 +53,7 @@ export const StockBalanceTable: React.FC<StockBalanceTableProps> = ({
                             <td className="p-2 border border-slate-300 font-sans text-slate-800">{row.sub_sub_category || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-700">{row.sub_category || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-600">{row.category || '-'}</td>
-                            <td className="p-2 border border-slate-300 text-right pr-2 text-success font-black">{qty.toLocaleString()}</td>
+                            <td className="p-2 border border-slate-300 text-right pr-2 text-success font-black whitespace-nowrap">{formatStockWithBoxesAndPcs(qty, row).inlineText}</td>
                             <td className="p-2 border border-slate-300 text-right pr-2 font-mono text-gray-700">
                                 {rate > 0 ? rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                             </td>

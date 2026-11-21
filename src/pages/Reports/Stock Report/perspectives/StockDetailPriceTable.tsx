@@ -1,5 +1,6 @@
 import React from 'react';
 import { StockProductRow, StockReportFilter } from '../types/stockReportTypes';
+import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';
 
 interface StockDetailPriceTableProps {
     paginatedRows: StockProductRow[];
@@ -55,7 +56,7 @@ export const StockDetailPriceTable: React.FC<StockDetailPriceTableProps> = ({
                             <td className="p-2 border border-slate-300 font-sans text-slate-800">{row.sub_sub_category || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-700">{row.sub_category || '-'}</td>
                             <td className="p-2 border border-slate-300 font-sans text-slate-600">{row.category || '-'}</td>
-                            <td className="p-2 border border-slate-300 text-center text-primary font-black">{qty.toLocaleString()}</td>
+                            <td className="p-2 border border-slate-300 text-center text-primary font-black whitespace-nowrap">{formatStockWithBoxesAndPcs(qty, row).inlineText}</td>
                             {filters.showSalePrice && <td className="p-2 border border-slate-300 text-right text-gray-600">Rs. {sPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
                             {filters.showPurchasePrice && <td className="p-2 border border-slate-300 text-right text-purple-700">Rs. {pPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
                             {filters.showFinalPrice && <td className="p-2 border border-slate-300 text-right text-success font-black pr-3">Rs. {netValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}

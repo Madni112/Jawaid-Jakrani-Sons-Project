@@ -21,6 +21,103 @@ import {
 import { BasicStockFilterCriteria } from './BasicStockReport';
 import { extractProductColor } from '../../../utils/colorService';
 
+// Helper to format stock quantity so loose tiles and loose items never show in decimal points
+export const formatStockQty = (
+  qty: number,
+  prod?: any,
+  short: boolean = false
+): string => {
+  const num = Number(qty) || 0;
+  const isNegative = num < 0;
+  const absQty = Math.abs(num);
+
+  const uom = String(prod?.uom || '').toLowerCase().trim();
+  const cat = String(prod?.category || prod?.sub_category || prod?.sub_sub_category || '').toLowerCase().trim();
+
+  const rawPcs = Number(
+    prod?.loose_conversion_ratio ||
+    prod?.pieces_per_box ||
+    prod?.pcs_per_box ||
+    prod?.pieces_per_packing ||
+    0
+  );
+
+  const isBoxProduct =
+    uom === 'box' ||
+    uom === 'boxes' ||
+    cat.includes('tile') ||
+    rawPcs > 1 ||
+    Boolean(prod?.isTileItem);
+
+  let piecesPerBox = rawPcs > 1 ? rawPcs : 0;
+  if (piecesPerBox <= 1 && prod?.product_description) {
+    const match = String(prod.product_description).match(/Box:\s*(\d+)\s*pcs/i);
+    if (match && Number(match[1]) > 0) piecesPerBox = Number(match[1]);
+  }
+
+  // Decimal fraction detection if piecesPerBox was not explicit
+  if (piecesPerBox <= 1 && isBoxProduct) {
+    if (Math.abs(absQty - Math.round(absQty)) > 0.0001) {
+      const fraction = absQty - Math.floor(absQty);
+      for (const cand of [12, 6, 8, 4, 10, 16, 24, 2]) {
+        const pcs = fraction * cand;
+        if (Math.abs(pcs - Math.round(pcs)) < 0.01) {
+          piecesPerBox = cand;
+          break;
+        }
+      }
+    }
+  }
+  if (piecesPerBox <= 1 && isBoxProduct) {
+    piecesPerBox = 4;
+  }
+
+  if (isBoxProduct && piecesPerBox > 1) {
+    const totalPieces = Math.round(absQty * piecesPerBox);
+    const boxes = Math.floor(totalPieces / piecesPerBox);
+    const loose = totalPieces % piecesPerBox;
+
+    const boxLabel = short ? 'Bx' : boxes === 1 ? 'Box' : 'Boxes';
+    const pcsLabel = short ? 'pc' : 'Pcs';
+    const prefix = isNegative ? '-' : '';
+
+    if (boxes > 0 && loose > 0) {
+      return `${prefix}${boxes.toLocaleString()} ${boxLabel} + ${loose} ${pcsLabel}`;
+    } else if (boxes > 0) {
+      return `${prefix}${boxes.toLocaleString()} ${boxLabel}`;
+    } else if (loose > 0) {
+      return `${prefix}${loose} ${pcsLabel}`;
+    } else {
+      return `0 ${boxLabel}`;
+    }
+  }
+
+  // Check if allow_loose_sales product with ratio
+  if (prod?.allow_loose_sales && rawPcs > 1) {
+    const totalPieces = Math.round(absQty * rawPcs);
+    const bulk = Math.floor(totalPieces / rawPcs);
+    const loose = totalPieces % rawPcs;
+    const bulkLabel = prod?.uom || 'Unit';
+    const looseLabel = prod?.loose_uom || 'Pcs';
+    const prefix = isNegative ? '-' : '';
+
+    if (bulk > 0 && loose > 0) {
+      return `${prefix}${bulk.toLocaleString()} ${bulkLabel} + ${loose} ${looseLabel}`;
+    } else if (bulk > 0) {
+      return `${prefix}${bulk.toLocaleString()} ${bulkLabel}`;
+    } else if (loose > 0) {
+      return `${prefix}${loose} ${looseLabel}`;
+    } else {
+      return `0 ${bulkLabel}`;
+    }
+  }
+
+  // Standard non-box discrete item: always integer, never points
+  const isDiscrete = ['nos', 'pcs', 'unit', 'units', 'each', 'bag', 'bags', 'can', 'tin', 'set'].includes(uom);
+  const formattedVal = isDiscrete ? Math.round(num) : (Math.abs(num - Math.round(num)) > 0.001 ? Number(num.toFixed(2)) : Math.round(num));
+  return `${formattedVal.toLocaleString()} ${prod?.uom || 'Nos'}`;
+};
+
 const STORAGE_CRITERIA_KEY = 'zac_basic_stock_report_criteria_v2';
 const META_CACHE_KEY = 'zac_basic_stock_meta_v2';
 
@@ -731,7 +828,7 @@ export const BasicStockReportPrint: React.FC = () => {
               UNITS ON HAND
             </span>
             <span className="font-black text-slate-900 break-words tracking-tight text-xs sm:text-sm lg:text-[15px] xl:text-base leading-tight block">
-              {kpiTotals.totalUnits.toLocaleString()}
+              {Math.round(kpiTotals.totalUnits).toLocaleString()}
             </span>
             <span className="text-[10px] text-slate-500 block mt-0.5">
               Physical quantity
@@ -854,8 +951,8 @@ export const BasicStockReportPrint: React.FC = () => {
                           <td className="py-2 px-3 text-right font-mono font-medium text-slate-700">
                             {row.costPrice > 0 ? Math.round(row.costPrice).toLocaleString() : '—'}
                           </td>
-                          <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                            {row.availableStock.toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">{row.uom}</span>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                            {formatStockQty(row.availableStock, row.rawProduct)}
                           </td>
                           <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
                             Rs. {Math.round(row.totalValuation).toLocaleString()}
@@ -1034,7 +1131,7 @@ export const BasicStockReportPrint: React.FC = () => {
                                     : 'bg-rose-50 text-rose-600 border border-rose-100'
                                 }`}
                               >
-                                {wh}: {qty}
+                                {wh}: {formatStockQty(qty, row.rawProduct, true)}
                               </span>
                             ))
                           )}
@@ -1044,8 +1141,7 @@ export const BasicStockReportPrint: React.FC = () => {
                         {row.costPrice > 0 ? `Rs. ${Math.round(row.costPrice).toLocaleString()}` : '—'}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono font-black text-slate-900 whitespace-nowrap">
-                        {row.availableStock.toLocaleString()}{' '}
-                        <span className="text-[10px] text-slate-400 font-normal">{row.uom}</span>
+                        {formatStockQty(row.availableStock, row.rawProduct)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono font-black text-slate-900 whitespace-nowrap">
                         Rs. {Math.round(row.totalValuation).toLocaleString()}
@@ -1076,7 +1172,7 @@ export const BasicStockReportPrint: React.FC = () => {
                       Grand Totals ({kpiTotals.totalSKUs} SKUs):
                     </td>
                     <td className="py-3 px-3 text-right font-mono font-black text-slate-900 text-sm whitespace-nowrap">
-                      {kpiTotals.totalUnits.toLocaleString()}
+                      {Math.round(kpiTotals.totalUnits).toLocaleString()}
                     </td>
                     <td className="py-3 px-3 text-right font-mono font-black text-emerald-800 text-sm whitespace-nowrap">
                       Rs. {kpiTotals.totalValuation.toLocaleString()}
@@ -1202,7 +1298,7 @@ export const BasicStockReportPrint: React.FC = () => {
                   <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-100 text-center">
                     <span className="text-[10px] text-slate-600 font-bold block">Net Available</span>
                     <span className="font-mono font-black text-sm text-slate-900">
-                      {inspectedProduct.availableStock.toLocaleString()}
+                      {formatStockQty(inspectedProduct.availableStock, inspectedProduct.rawProduct)}
                     </span>
                   </div>
                 </div>
@@ -1226,15 +1322,15 @@ export const BasicStockReportPrint: React.FC = () => {
                       {Object.keys(inspectedProduct.whBreakdown).length === 0 ? (
                         <tr>
                           <td colSpan={3} className="py-3 px-3 text-center text-gray-400 italic">
-                            No warehouse specific split recorded (Global balance: {inspectedProduct.availableStock})
+                            No warehouse specific split recorded (Global balance: {formatStockQty(inspectedProduct.availableStock, inspectedProduct.rawProduct)})
                           </td>
                         </tr>
                       ) : (
                         Object.entries(inspectedProduct.whBreakdown).map(([whName, q]: any) => (
                           <tr key={whName} className="hover:bg-slate-50/50">
                             <td className="py-2 px-3 font-semibold text-slate-800">{whName}</td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                              {Number(q).toLocaleString()} {inspectedProduct.uom}
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                              {formatStockQty(Number(q), inspectedProduct.rawProduct)}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
                               Rs. {Math.round(Number(q) * inspectedProduct.costPrice).toLocaleString()}

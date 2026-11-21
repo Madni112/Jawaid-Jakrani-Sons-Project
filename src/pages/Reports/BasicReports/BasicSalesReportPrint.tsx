@@ -21,6 +21,7 @@ import {
 } from 'react-icons/md';
 import { BasicSalesFilterCriteria } from './BasicSalesReport';
 import { extractProductColor } from '../../../utils/colorService';
+import { formatStockQty } from './BasicStockReportPrint';
 
 const STORAGE_CRITERIA_KEY = 'zac_basic_sales_report_criteria';
 
@@ -427,12 +428,28 @@ export const BasicSalesReportPrint: React.FC = () => {
         const prodMeta = productsMap[(it.itemName || it.product_name || '').trim().toLowerCase()];
         const itemWh = (it.warehouse || it.dispatch_warehouse || inv.dispatch_warehouse || '').replace(/[`'"]/g, '').trim().toUpperCase();
 
+        const bQty = it.boxQty !== undefined ? Number(it.boxQty) : it.box_qty !== undefined ? Number(it.box_qty) : undefined;
+        const lPcs = it.loosePcs !== undefined ? Number(it.loosePcs) : it.loose_pcs !== undefined ? Number(it.loose_pcs) : (it.looseQty !== undefined ? Number(it.looseQty) : undefined);
+
+        let formattedQty = '';
+        if (bQty !== undefined || lPcs !== undefined) {
+          const b = bQty || 0;
+          const l = lPcs || 0;
+          if (b > 0 && l > 0) formattedQty = `${b} Box + ${l} Pcs`;
+          else if (b > 0) formattedQty = `${b} Box${b > 1 ? 'es' : ''}`;
+          else if (l > 0) formattedQty = `${l} Pcs`;
+          else formattedQty = `0 Box`;
+        } else {
+          formattedQty = formatStockQty(qty, prodMeta);
+        }
+
         return {
           code: it.skuCode || it.sku || prodMeta?.item_sr_no || '—',
           name: it.itemName || it.product_name || 'Standard Item',
           uom: it.uom || prodMeta?.uom || 'Box',
           warehouse: itemWh,
           qty,
+          formattedQty,
           rate,
           discount: disc,
           lineTotal
@@ -677,6 +694,7 @@ export const BasicSalesReportPrint: React.FC = () => {
             product_name: it.name,
             uom: it.uom,
             qty: it.qty,
+            formattedQty: it.formattedQty,
             rate: it.rate,
             discount: it.discount,
             grossSaleAmount: it.qty * it.rate,
@@ -700,7 +718,7 @@ export const BasicSalesReportPrint: React.FC = () => {
 
           return {
             groupName: key,
-            groupMeta: `Total Sold: ${subQty.toLocaleString()} ${uom}`,
+            groupMeta: `Total Sold: ${formatStockQty(subQty, productsMap[key.toLowerCase()])}`,
             rows,
             subQty,
             subGross,
@@ -1249,7 +1267,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                                         Showing {displayItems.length} items (Part {pageItem.itemsSlice.partIndex}/{pageItem.itemsSlice.totalParts})
                                       </span>
                                     ) : (
-                                      <span>{inv.totalItemsCount} item{inv.totalItemsCount !== 1 ? 's' : ''} ({inv.totalItemQty} qty)</span>
+                                      <span>{inv.totalItemsCount} item{inv.totalItemsCount !== 1 ? 's' : ''} ({Math.round(inv.totalItemQty)} qty)</span>
                                     )}
                                     <span className="text-[10px] text-primary underline print:hidden">
                                       {isExpanded ? '▲ hide' : '▼ items'}
@@ -1337,7 +1355,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                                             <tr key={itemIdx} className="hover:bg-gray-50/50">
                                               <td className="py-1 px-1.5 font-bold text-gray-600 dark:text-gray-300">{it.code}</td>
                                               <td className="py-1 px-1.5 font-sans font-medium">{it.name}</td>
-                                              <td className="py-1 px-1.5 text-center font-bold">{it.qty} {it.uom}</td>
+                                              <td className="py-1 px-1.5 text-center font-bold">{it.formattedQty || `${it.qty} ${it.uom}`}</td>
                                               <td className="py-1 px-1.5 text-right">Rs. {it.rate.toLocaleString()}</td>
                                               <td className="py-1 px-1.5 text-right text-red-500">
                                                 {it.discount > 0 ? `-Rs. ${it.discount.toLocaleString()}` : '—'}
@@ -1580,7 +1598,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                             {criteria.reportType === 'product' ? (
                               <>
                                 <td className="py-1.5 px-2 text-center font-bold font-mono">
-                                  {r.qty} {r.uom}
+                                  {r.formattedQty || `${r.qty} ${r.uom}`}
                                 </td>
                                 <td className="py-1.5 px-2 text-right font-mono">Rs. {Number(r.rate).toLocaleString()}</td>
                                 <td className="py-1.5 px-2 text-right font-mono text-red-500">
@@ -1617,7 +1635,7 @@ export const BasicSalesReportPrint: React.FC = () => {
                           {criteria.reportType === 'product' ? (
                             <>
                               <td className="py-2 px-2 text-center font-mono text-[11px] font-black text-blue-600">
-                                {group.subQty?.toLocaleString()} {group.rows[0]?.uom}
+                                {formatStockQty(group.subQty, productsMap[group.groupName?.toLowerCase()])}
                               </td>
                               <td className="py-2 px-2 text-right font-mono text-[11px] text-gray-400">
                                 Avg: Rs. {group.subQty > 0 ? Math.round(group.subGross / group.subQty).toLocaleString() : 0}

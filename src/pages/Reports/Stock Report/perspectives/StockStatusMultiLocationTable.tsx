@@ -1,5 +1,6 @@
 import React from 'react';
 import { StockProductRow } from '../types/stockReportTypes';
+import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';
 
 interface StockStatusMultiLocationTableProps {
     paginatedRows: StockProductRow[];
@@ -100,8 +101,8 @@ export const StockStatusMultiLocationTable: React.FC<StockStatusMultiLocationTab
                                     {breakdowns.map((b, bIdx) => {
                                         const bQty = Number(b.qty || 0);
                                         return (
-                                            <div key={bIdx} className="p-2 pr-3 text-right text-success font-black flex-1 flex items-center justify-end min-h-[34px]">
-                                                {bQty.toLocaleString()}
+                                            <div key={bIdx} className="p-2 pr-3 text-right text-success font-black flex-1 flex items-center justify-end min-h-[34px] whitespace-nowrap">
+                                                {formatStockWithBoxesAndPcs(bQty, row).inlineText}
                                             </div>
                                         );
                                     })}
