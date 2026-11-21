@@ -1946,63 +1946,14 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
 
       // ── TAB 7: DAILY ACTIVITY AUDIT TRAIL LOG ──
       else if (targetTab === 'daily-activity') {
-        let salesQ = supabase
-          .from('sales_invoices')
-          .select('id, invoice_no, sale_date, created_at, customer_name, total_amount, payment_term, status, salesman_name, created_by, dispatch_warehouse, warehouse, remarks, items, tileItems')
-          .order('created_at', { ascending: false });
-        let dcQ = supabase
-          .from('delivery_challans')
-          .select('id, challan_no, challan_date, created_at, customer_name, total_qty, status, salesman_name, created_by, dispatch_warehouse, source_warehouse, remarks, items')
-          .order('created_at', { ascending: false });
-        let purchQ = supabase
-          .from('supplier_purchases')
-          .select('id, purchase_no, purchase_date, created_at, vendor_name, total_amount, payment_status, target_warehouse, created_by, remarks, items')
-          .order('created_at', { ascending: false });
-        let vchQ = supabase
-          .from('financial_vouchers')
-          .select('id, voucher_no, voucher_type, voucher_date, created_at, account_code, account_title, debit, credit, total_amount, payment_mode, remarks, created_by, status, items')
-          .order('created_at', { ascending: false });
-        let sRetQ = supabase
-          .from('sales_returns')
-          .select('id, return_no, return_date, created_at, customer_name, total_amount, status, warehouse_name, source_warehouse, created_by, remarks, items')
-          .order('created_at', { ascending: false });
-        let pRetQ = supabase
-          .from('purchase_returns')
-          .select('id, return_no, return_date, created_at, vendor_name, total_amount, status, warehouse, created_by, remarks, items')
-          .order('created_at', { ascending: false });
-        let transQ = supabase
-          .from('stock_transfers')
-          .select('id, transfer_no, transfer_date, created_at, source_location, destination_location, status, created_by, notes, items')
-          .order('created_at', { ascending: false });
-
-        if (effFrom) {
-          salesQ = salesQ.gte('sale_date', effFrom);
-          dcQ = dcQ.gte('challan_date', effFrom);
-          purchQ = purchQ.gte('purchase_date', effFrom);
-          vchQ = vchQ.gte('voucher_date', effFrom);
-          sRetQ = sRetQ.gte('return_date', effFrom);
-          pRetQ = pRetQ.gte('return_date', effFrom);
-          transQ = transQ.gte('transfer_date', effFrom);
-        }
-
-        if (effTo) {
-          salesQ = salesQ.lte('sale_date', effTo);
-          dcQ = dcQ.lte('challan_date', effTo);
-          purchQ = purchQ.lte('purchase_date', effTo);
-          vchQ = vchQ.lte('voucher_date', effTo);
-          sRetQ = sRetQ.lte('return_date', effTo);
-          pRetQ = pRetQ.lte('return_date', effTo);
-          transQ = transQ.lte('transfer_date', effTo);
-        }
-
         const [salesRes, dcRes, purchRes, vchRes, sRetRes, pRetRes, transRes] = await Promise.all([
-          fetchAllPages(salesQ),
-          fetchAllPages(dcQ),
-          fetchAllPages(purchQ),
-          fetchAllPages(vchQ),
-          fetchAllPages(sRetQ),
-          fetchAllPages(pRetQ),
-          fetchAllPages(transQ),
+          fetchAllPages(supabase.from('sales_invoices').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('delivery_challans').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('sales_returns').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('purchase_returns').select('*').order('created_at', { ascending: false })),
+          fetchAllPages(supabase.from('stock_transfers').select('*').order('created_at', { ascending: false })),
         ]);
 
         const rows: DailyActivityRow[] = [];
