@@ -562,13 +562,13 @@ export const BasicStockReportPrint: React.FC = () => {
 
     switch (criteria.sortBy) {
       case 'stock_desc':
-        return list.sort((a, b) => b.availableStock - a.availableStock);
+        return list.sort((a, b) => (b.availableStock - a.availableStock) || a.product_name.localeCompare(b.product_name));
       case 'stock_asc':
-        return list.sort((a, b) => a.availableStock - b.availableStock);
+        return list.sort((a, b) => (a.availableStock - b.availableStock) || a.product_name.localeCompare(b.product_name));
       case 'valuation_desc':
-        return list.sort((a, b) => b.totalValuation - a.totalValuation);
+        return list.sort((a, b) => (b.totalValuation - a.totalValuation) || a.product_name.localeCompare(b.product_name));
       case 'valuation_asc':
-        return list.sort((a, b) => a.totalValuation - b.totalValuation);
+        return list.sort((a, b) => (a.totalValuation - b.totalValuation) || a.product_name.localeCompare(b.product_name));
       case 'name_asc':
         return list.sort((a, b) => a.product_name.localeCompare(b.product_name));
       case 'name_desc':
