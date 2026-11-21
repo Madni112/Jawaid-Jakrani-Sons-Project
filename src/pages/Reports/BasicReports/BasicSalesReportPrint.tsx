@@ -52,7 +52,7 @@ export const BasicSalesReportPrint: React.FC = () => {
   // Layout Theme: 'modern' | 'classic'
   const [layoutTheme, setLayoutTheme] = useState<'modern' | 'classic'>(() => {
     try {
-      return localStorage.getItem('jakwani_reports_layout') === 'classic' ? 'classic' : 'modern';
+      return localStorage.getItem('zac_print_reports_layout') === 'classic' ? 'classic' : 'modern';
     } catch {
       return 'modern';
     }
@@ -76,7 +76,7 @@ export const BasicSalesReportPrint: React.FC = () => {
   const handleToggleLayoutTheme = (theme: 'modern' | 'classic') => {
     setLayoutTheme(theme);
     try {
-      localStorage.setItem('jakwani_reports_layout', theme);
+      localStorage.setItem('zac_print_reports_layout', theme);
     } catch {}
   };
 

@@ -44,6 +44,7 @@ import { DailyActivityLogTab, DailyActivityRow } from './MainReports/tabs/DailyA
 import { MainReportsMetrics } from './MainReports/components/MainReportsMetrics';
 import { exportMainReportToExcel } from './MainReports/services/mainReportsExport';
 import { fetchSystemMasterConfig, SystemMasterConfig } from '../../utils/systemPermissions';
+import { getReportLayoutMode } from '../../constant/themeConfig';
 
 
 type TabKey = 'customer-ledger' | 'vendor-ledger' | 'combined-ledger' | 'profit-loss' | 'expense-report' | 'daily-book' | 'daily-activity';
@@ -203,7 +204,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
   const [dailyActivityDateMode, setDailyActivityDateMode] = useState<'single' | 'range'>('single');
   const [dailyEntryTypeFilter, setDailyEntryTypeFilter] = useState<string>('ALL');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
-  const isModernLayout = typeof window !== 'undefined' && localStorage.getItem('jakwani_reports_layout') !== 'classic';
+  const isModernLayout = typeof window !== 'undefined' && getReportLayoutMode() !== 'classic';
   const reportPdfRef = useRef<HTMLDivElement>(null);
 
   // Generated datasets

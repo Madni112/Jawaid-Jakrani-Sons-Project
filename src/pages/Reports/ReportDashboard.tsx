@@ -51,6 +51,7 @@ import {
   getContrastTextColor,
   getSafeAccentTextColor,
   isDarkModeActive,
+  getReportLayoutMode,
 } from '../../constant/themeConfig';
 import { fetchSystemMasterConfig, SystemMasterConfig } from '../../utils/systemPermissions';
 
@@ -645,15 +646,12 @@ const getInitialCategories = () => {
 
 const ReportDashboard: React.FC = () => {
   const [reportLayout, setReportLayout] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('jakwani_reports_layout') || 'modern';
-    }
-    return 'modern';
+    return getReportLayoutMode();
   });
 
   useEffect(() => {
     const handleLayoutChange = () => {
-      setReportLayout(localStorage.getItem('jakwani_reports_layout') || 'modern');
+      setReportLayout(getReportLayoutMode());
     };
     window.addEventListener('jakwani_report_layout_mode_changed', handleLayoutChange);
     window.addEventListener('storage', handleLayoutChange);
