@@ -3,6 +3,7 @@ import { MdPrecisionManufacturing, MdLayers, MdAdd, MdDelete, MdScience, MdInven
 import SearchableProductSelect from '../../../../components/SearchableProductSelect';
 import SearchableUomDropdown from '../../../../components/SearchableUomDropdown';
 import { BomItem } from '../types/bomTypes';
+import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
 
 interface BOMRawMaterialsTabProps {
   isRTL: boolean;
@@ -222,18 +223,23 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
 
                           // Populate loose configurations if product allows loose
                           const isLooseAllowed = Boolean((product as any).allow_loose_sales || (product as any).allow_loose);
-                          if (isLooseAllowed) {
+                          const multiUnits = (product as any).multi_loose_units || [];
+                          if (isLooseAllowed || (Array.isArray(multiUnits) && multiUnits.length > 0)) {
                             const ratio = Number((product as any).loose_conversion_ratio || 1000);
                             const looseUnit = (product as any).loose_uom || (product.uom === 'LTR' || product.uom === 'Liters' ? 'ML' : 'GM');
                             updates.allow_loose = true;
                             updates.loose_uom = looseUnit;
                             updates.loose_ratio = ratio;
+                            updates.multi_loose_units = Array.isArray(multiUnits) && multiUnits.length > 0 ? multiUnits : [
+                              { uom: looseUnit, ratio: ratio, costPrice: (product as any).loose_purchase_price, salePrice: (product as any).loose_sale_price }
+                            ];
                             updates.loose_quantity = Math.round(Number(row.quantity || 1) * ratio);
                           } else {
                             updates.allow_loose = false;
                             updates.loose_uom = undefined;
                             updates.loose_ratio = undefined;
                             updates.loose_quantity = undefined;
+                            updates.multi_loose_units = [];
                           }
                         }
 
@@ -297,44 +303,30 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     )}
                   </td>
 
-                  {/* Quantity with Loose Input Option */}
-                  <td className="p-2 w-[120px]">
-                    <div className="flex flex-col gap-1">
-                      <input
-                        type="number"
-                        min="0.0001"
-                        step="any"
-                        required
-                        value={row.quantity}
-                        onChange={e => {
-                          const val = parseFloat(e.target.value) || 0;
-                          onUpdateItem(idx, 'quantity', val);
-                          if (hasLoose) {
-                            onUpdateItem(idx, 'loose_quantity', Math.round(val * ratio));
-                          }
-                        }}
-                        className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
-                      />
-                      {hasLoose && (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            placeholder={looseUom}
-                            value={row.loose_quantity ?? Math.round(Number(row.quantity || 0) * ratio)}
-                            onChange={e => {
-                              const lVal = parseFloat(e.target.value) || 0;
-                              onUpdateItem(idx, 'loose_quantity', lVal);
-                              onUpdateItem(idx, 'quantity', Number((lVal / ratio).toFixed(4)));
-                            }}
-                            className="w-full text-[10px] font-mono text-center py-0.5 px-1 rounded border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 outline-none"
-                            title={`Type loose in ${looseUom} to auto-convert to ${row.uom}`}
-                          />
-                          <span className="text-[9px] font-bold text-gray-400 uppercase font-mono">{looseUom}</span>
-                        </div>
-                      )}
-                    </div>
+                  {/* Quantity with Chained Dynamic Multi-Tier UOM Grid */}
+                  <td className="p-2 w-[180px]">
+                    <ChainedUomInputGrid
+                      primaryUom={row.uom || 'Unit'}
+                      primaryQuantity={Number(row.quantity) || 0}
+                      primaryRate={Number(row.unit_cost) || 0}
+                      tiers={row.multi_loose_units || (hasLoose ? [{ uom: looseUom, ratio: ratio }] : [])}
+                      tierQuantities={row.tier_quantities}
+                      tierRates={row.tier_rates}
+                      mode="cost"
+                      isRTL={isRTL}
+                      onChange={({ primaryQuantity, tierQuantities, tierRates, totalConvertedPrimaryQty, totalLineAmount }) => {
+                        const waste = Number(row.wastage_percentage) || 0;
+                        const wasteMultiplier = 1 + (waste / 100);
+                        const calculatedLineCost = Math.round(totalLineAmount * wasteMultiplier * 100) / 100;
+                        
+                        onUpdateItem(idx, {
+                          quantity: totalConvertedPrimaryQty,
+                          tier_quantities: tierQuantities,
+                          tier_rates: tierRates,
+                          total_cost: calculatedLineCost
+                        });
+                      }}
+                    />
                   </td>
 
                   <td className="p-2 w-[100px] relative">

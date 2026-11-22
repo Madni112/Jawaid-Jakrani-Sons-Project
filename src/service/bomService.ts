@@ -10,7 +10,15 @@ export interface BomItem {
   allow_loose?: boolean;
   loose_uom?: string;
   loose_ratio?: number;
-  loose_quantity?: number; // "Raw Chemical / Ingredient" or "Packaging Material"
+  loose_quantity?: number;
+  multi_loose_units?: Array<{
+    uom: string;
+    ratio: number | string;
+    costPrice?: number | string;
+    salePrice?: number | string;
+  }>;
+  tier_quantities?: Record<string, number>;
+  tier_rates?: Record<string, number>;
   quantity: number;
   uom: string;
   unit_cost: number;
