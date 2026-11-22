@@ -16,7 +16,7 @@ interface BOMRawMaterialsTabProps {
   rawMaterialCost: number;
   onAddItemRow: () => void;
   onRemoveItemRow: (idx: number) => void;
-  onUpdateItem: (idx: number, field: keyof BomItem, val: any) => void;
+  onUpdateItem: (idx: number, field: keyof BomItem | Partial<BomItem>, val?: any) => void;
 }
 
 export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
@@ -210,20 +210,34 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     <SearchableProductSelect
                       value={row.item_name}
                       onChange={(productName, product) => {
-                        onUpdateItem(idx, 'item_name', productName);
+                        const updates: Partial<BomItem> = {
+                          item_name: productName
+                        };
+
                         if (product) {
-                          if (product.item_sr_no) onUpdateItem(idx, 'item_code', product.item_sr_no);
-                          if (product.uom) onUpdateItem(idx, 'uom', product.uom);
+                          if (product.item_sr_no) updates.item_code = product.item_sr_no;
+                          if (product.uom) updates.uom = product.uom;
                           const cost = Number(product.purchase_price ?? product.cost_price ?? 0);
-                          if (cost > 0) onUpdateItem(idx, 'unit_cost', cost);
+                          if (cost > 0) updates.unit_cost = cost;
 
                           // Populate loose configurations if product allows loose
-                          if (product.allow_loose_sales || product.allow_loose) {
-                            onUpdateItem(idx, 'allow_loose', true);
-                            onUpdateItem(idx, 'loose_uom', product.loose_uom || (product.uom === 'LTR' || product.uom === 'Liters' ? 'ML' : 'GM'));
-                            onUpdateItem(idx, 'loose_ratio', Number(product.loose_conversion_ratio || 1000));
+                          const isLooseAllowed = Boolean((product as any).allow_loose_sales || (product as any).allow_loose);
+                          if (isLooseAllowed) {
+                            const ratio = Number((product as any).loose_conversion_ratio || 1000);
+                            const looseUnit = (product as any).loose_uom || (product.uom === 'LTR' || product.uom === 'Liters' ? 'ML' : 'GM');
+                            updates.allow_loose = true;
+                            updates.loose_uom = looseUnit;
+                            updates.loose_ratio = ratio;
+                            updates.loose_quantity = Math.round(Number(row.quantity || 1) * ratio);
+                          } else {
+                            updates.allow_loose = false;
+                            updates.loose_uom = undefined;
+                            updates.loose_ratio = undefined;
+                            updates.loose_quantity = undefined;
                           }
                         }
+
+                        onUpdateItem(idx, updates);
                       }}
                       products={catalogProducts}
                       placeholder={

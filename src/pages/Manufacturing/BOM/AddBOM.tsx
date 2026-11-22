@@ -95,7 +95,7 @@ const AddBOM: React.FC = () => {
         const [prodRes, catRes, uomsList, recList] = await Promise.all([
           supabase
             .from('products')
-            .select('id, product_name, item_sr_no, purchase_price, sales_price, retail_price, uom, category, sub_category, sub_sub_category')
+            .select('id, product_name, item_sr_no, purchase_price, sales_price, retail_price, uom, category, sub_category, sub_sub_category, allow_loose_sales, loose_uom, loose_conversion_ratio')
             .limit(1000),
           supabase
             .from('inventory_categories')
@@ -219,10 +219,16 @@ const AddBOM: React.FC = () => {
     setItems(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  const handleUpdateItem = (index: number, field: keyof BomItem, val: any) => {
+  const handleUpdateItem = (index: number, field: keyof BomItem | Partial<BomItem>, val?: any) => {
     setItems(prev => {
       const updated = [...prev];
-      const row = { ...updated[index], [field]: val };
+      let row = { ...updated[index] };
+
+      if (typeof field === 'object' && field !== null) {
+        row = { ...row, ...field };
+      } else if (typeof field === 'string') {
+        (row as any)[field] = val;
+      }
 
       // Recalculate line total: Qty * UnitCost * (1 + Wastage% / 100)
       const qty = Number(row.quantity) || 0;
