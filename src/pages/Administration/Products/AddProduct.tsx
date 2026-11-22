@@ -431,7 +431,7 @@ const AddProduct = () => {
                 : 1,
               loose_purchase_price: isTileCategory
                 ? pcs > 0
-                  ? Number(((Number(values.purchasePrice) || 0) / pcs).toFixed(2))
+                ? Number(((Number(values.purchasePrice) || 0) / pcs).toFixed(2))
                   : 0
                 : values.allowLooseSales && values.loosePurchasePrice
                 ? Number(values.loosePurchasePrice)
@@ -443,6 +443,29 @@ const AddProduct = () => {
                 : values.allowLooseSales && values.looseSalePrice
                 ? Number(values.looseSalePrice)
                 : 0,
+              multi_loose_units: isTileCategory
+                ? [
+                    {
+                      id: 'tile-pc',
+                      uom: 'PCS',
+                      ratio: pcs,
+                      costPrice: pcs > 0 ? Number(((Number(values.purchasePrice) || 0) / pcs).toFixed(2)) : 0,
+                      salePrice: pcs > 0 ? Number(((Number(values.retailPrice) || 0) / pcs).toFixed(2)) : 0
+                    }
+                  ]
+                : values.allowLooseSales
+                ? (values.looseTiers && values.looseTiers.length > 0
+                    ? values.looseTiers
+                    : [
+                        {
+                          id: 'tier-1',
+                          uom: String(values.looseUom || 'PCS').trim().toUpperCase(),
+                          ratio: rawLooseRatio > 0 ? rawLooseRatio : pcs,
+                          costPrice: values.loosePurchasePrice || 0,
+                          salePrice: values.looseSalePrice || 0
+                        }
+                      ])
+                : [],
               hs_code: finalHsCode,
               item_sr_no: finalItemSrNo,
               sro_schedule_no: values.sroScheduleNo?.trim() || ''

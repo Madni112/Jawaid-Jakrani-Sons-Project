@@ -3,7 +3,7 @@ import { MdAttachMoney } from 'react-icons/md';
 import { FiTrash2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { saveCustomLocalUom, deleteCustomLocalUom } from '../../../../../service/uomService';
-import { ProductFormValues, blockInvalidChar } from '../utils/productFormHelpers';
+import { ProductFormValues, blockInvalidChar, LooseTier } from '../utils/productFormHelpers';
 
 interface ProductPricingSectionProps {
   values: ProductFormValues;
@@ -61,7 +61,8 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
     purchasePrice: values.purchasePrice,
     retailPrice: values.retailPrice,
     ratio: values.looseConversionRatio,
-    allowLoose: values.allowLooseSales
+    allowLoose: values.allowLooseSales,
+    tiers: values.looseTiers
   });
 
   useEffect(() => {
@@ -77,17 +78,52 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
       prev.ratio !== values.looseConversionRatio ||
       prev.allowLoose !== values.allowLooseSales;
 
-    if (priceChanged && ratio > 0) {
-      const calcPur = pur > 0 ? Number((pur / ratio).toFixed(2)) : 0;
-      const calcRet = ret > 0 ? Number((ret / ratio).toFixed(2)) : 0;
-      setFieldValue('loosePurchasePrice', calcPur);
-      setFieldValue('looseSalePrice', calcRet);
+    if (priceChanged) {
+      if (ratio > 0) {
+        const calcPur = pur > 0 ? Number((pur / ratio).toFixed(2)) : 0;
+        const calcRet = ret > 0 ? Number((ret / ratio).toFixed(2)) : 0;
+        setFieldValue('loosePurchasePrice', calcPur);
+        setFieldValue('looseSalePrice', calcRet);
+      }
+
+      // Also recalculate all secondary looseTiers live
+      if (Array.isArray(values.looseTiers) && values.looseTiers.length > 0) {
+        let runningCost = pur;
+        let runningSale = ret;
+        let runningMainRatio = ratio > 0 ? ratio : 1;
+
+        const updatedTiers = values.looseTiers.map((tier, idx) => {
+          const tRatio = Number(tier.ratio) || 1;
+          if (idx === 0) {
+            // Tier 1 matches primary loose unit
+            return {
+              ...tier,
+              uom: values.looseUom || tier.uom,
+              ratio: values.looseConversionRatio || tier.ratio,
+              costPrice: pur > 0 ? Number((pur / runningMainRatio).toFixed(4)) : 0,
+              salePrice: ret > 0 ? Number((ret / runningMainRatio).toFixed(4)) : 0
+            };
+          } else {
+            // Subsequent tiers divide by their respective step ratio
+            const prevTier = values.looseTiers[idx - 1];
+            const prevCost = Number(prevTier?.costPrice) || (pur / runningMainRatio);
+            const prevSale = Number(prevTier?.salePrice) || (ret / runningMainRatio);
+            return {
+              ...tier,
+              costPrice: tRatio > 0 ? Number((prevCost / tRatio).toFixed(4)) : 0,
+              salePrice: tRatio > 0 ? Number((prevSale / tRatio).toFixed(4)) : 0
+            };
+          }
+        });
+        setFieldValue('looseTiers', updatedTiers);
+      }
 
       prevPricingRef.current = {
         purchasePrice: values.purchasePrice,
         retailPrice: values.retailPrice,
         ratio: values.looseConversionRatio,
-        allowLoose: values.allowLooseSales
+        allowLoose: values.allowLooseSales,
+        tiers: values.looseTiers
       };
     }
   }, [
@@ -285,7 +321,8 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
 
           {/* Loose Selling Dynamic Pricing Inputs */}
           {values.allowLooseSales && (
-            <div className="mt-3.5 p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeIn">
+            <>
+              <div className="mt-3.5 p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeIn">
               {/* 1. Loose Unit Dropdown */}
               <div className="relative">
                 <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1 flex items-center justify-between">
@@ -621,6 +658,162 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                 </p>
               </div>
             </div>
+
+            {/* MULTI-TIER CASCADING SUB-UNITS (e.g. Drum -> LTR -> ML -> etc) */}
+            <div className="mt-4 p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Cascading Sub-Units Chain (Multi-Tier Loose)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentTiers: LooseTier[] = Array.isArray(values.looseTiers)
+                      ? [...values.looseTiers]
+                      : [];
+                    
+                    // Previous unit to chain from
+                    const lastUnit = currentTiers.length > 0 
+                      ? currentTiers[currentTiers.length - 1].uom 
+                      : (values.looseUom || 'LTR');
+
+                    const defaultNextUom = (lastUnit === 'LTR' || lastUnit === 'Liters') ? 'ML' : (lastUnit === 'KG' ? 'GM' : 'PCS');
+                    const defaultRatio = (defaultNextUom === 'ML' || defaultNextUom === 'GM') ? 1000 : 12;
+
+                    // Calculate live cost & sale for this new tier
+                    const lastCost = currentTiers.length > 0 
+                      ? Number(currentTiers[currentTiers.length - 1].costPrice || 0) 
+                      : (Number(values.loosePurchasePrice) || 0);
+                    const lastSale = currentTiers.length > 0 
+                      ? Number(currentTiers[currentTiers.length - 1].salePrice || 0) 
+                      : (Number(values.looseSalePrice) || 0);
+
+                    const newCost = defaultRatio > 0 ? Number((lastCost / defaultRatio).toFixed(4)) : 0;
+                    const newSale = defaultRatio > 0 ? Number((lastSale / defaultRatio).toFixed(4)) : 0;
+
+                    const newTier: LooseTier = {
+                      id: `tier-${Date.now()}`,
+                      uom: defaultNextUom,
+                      ratio: defaultRatio,
+                      costPrice: newCost,
+                      salePrice: newSale
+                    };
+
+                    setFieldValue('looseTiers', [...currentTiers, newTier]);
+                    toast.success(`Sub-tier "+ ${defaultNextUom}" added!`);
+                  }}
+                  className="px-3 py-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs rounded-lg border border-emerald-500/30 cursor-pointer flex items-center gap-1 transition"
+                >
+                  <span>+ Add Next Sub-Unit (e.g. ML, GM, Pcs)</span>
+                </button>
+              </div>
+
+              {/* Tiers List */}
+              {Array.isArray(values.looseTiers) && values.looseTiers.length > 0 ? (
+                <div className="space-y-2.5">
+                  {values.looseTiers.map((tier, idx) => {
+                    const prevUnitName = idx === 0 
+                      ? (values.looseUom || values.uom || 'Bulk') 
+                      : values.looseTiers[idx - 1].uom;
+
+                    return (
+                      <div
+                        key={tier.id || idx}
+                        className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] font-mono font-bold flex items-center justify-center border border-emerald-300/40">
+                            {idx + 2}
+                          </span>
+                          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            1 {prevUnitName} contains:
+                          </span>
+                        </div>
+
+                        {/* Ratio Input & Unit Select */}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            step="any"
+                            value={tier.ratio}
+                            onChange={(e) => {
+                              const r = parseFloat(e.target.value) || 1;
+                              const updated = [...values.looseTiers];
+                              const prevCost = idx === 0 
+                                ? (Number(values.loosePurchasePrice) || (Number(values.purchasePrice) / (Number(values.looseConversionRatio) || 1)))
+                                : Number(updated[idx - 1].costPrice || 0);
+                              const prevSale = idx === 0 
+                                ? (Number(values.looseSalePrice) || (Number(values.retailPrice) / (Number(values.looseConversionRatio) || 1)))
+                                : Number(updated[idx - 1].salePrice || 0);
+
+                              updated[idx] = {
+                                ...tier,
+                                ratio: r,
+                                costPrice: r > 0 ? Number((prevCost / r).toFixed(4)) : 0,
+                                salePrice: r > 0 ? Number((prevSale / r).toFixed(4)) : 0
+                              };
+                              setFieldValue('looseTiers', updated);
+                            }}
+                            className="w-24 rounded-lg border border-slate-200 dark:border-slate-700 p-1.5 font-mono text-center font-bold text-xs outline-none focus:border-emerald-600 dark:bg-slate-900"
+                            placeholder="1000"
+                          />
+                          <input
+                            type="text"
+                            value={tier.uom}
+                            onChange={(e) => {
+                              const clean = e.target.value.toUpperCase();
+                              const updated = [...values.looseTiers];
+                              updated[idx] = { ...tier, uom: clean };
+                              setFieldValue('looseTiers', updated);
+                            }}
+                            className="w-20 rounded-lg border border-emerald-300 dark:border-emerald-700/60 p-1.5 font-mono font-black text-xs text-center text-emerald-700 dark:text-emerald-300 outline-none focus:border-emerald-600 dark:bg-slate-900 uppercase"
+                            placeholder="ML"
+                          />
+                        </div>
+
+                        {/* Live Cost & Sale for this tier */}
+                        <div className="flex items-center gap-3 text-xs font-mono">
+                          <div className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
+                            <span className="text-[10px] text-slate-400 block font-sans">Cost:</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300">
+                              Rs. {Number(tier.costPrice || 0).toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div className="bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">
+                            <span className="text-[10px] text-emerald-600 block font-sans">Sale Rate:</span>
+                            <span className="font-black text-emerald-700 dark:text-emerald-300">
+                              Rs. {Number(tier.salePrice || 0).toFixed(2)}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = values.looseTiers.filter((_, i) => i !== idx);
+                              setFieldValue('looseTiers', updated);
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer ml-1"
+                            title="Remove this sub-unit"
+                          >
+                            <FiTrash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 italic">
+                  No additional sub-units added yet. Click "+ Add Next Sub-Unit" above to chain more (e.g. 1 LTR = 1,000 ML).
+                </p>
+              )}
+            </div>
+            </>
           )}
         </div>
       )}

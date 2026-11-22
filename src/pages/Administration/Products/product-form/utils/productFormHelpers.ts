@@ -8,6 +8,14 @@ export interface UomItem {
   is_active: boolean;
 }
 
+export interface LooseTier {
+  id?: string;
+  uom: string;
+  ratio: number | string; // ratio relative to the immediate previous tier or main UOM
+  costPrice?: number | string;
+  salePrice?: number | string;
+}
+
 export interface ProductFormValues {
   productName: string;
   category: string;
@@ -36,6 +44,7 @@ export interface ProductFormValues {
   looseConversionRatio: number | string;
   loosePurchasePrice: number | string;
   looseSalePrice: number | string;
+  looseTiers: LooseTier[];
   finishType: string;
   tilePrint: string;
   weightPerBox: number | string;
@@ -119,6 +128,23 @@ export const getProductInitialValues = (editData: any, isEditMode: boolean): Pro
       looseConversionRatio: editData.loose_conversion_ratio || parsePiecesPerBox(editData) || 1,
       loosePurchasePrice: editData.loose_purchase_price || '',
       looseSalePrice: editData.loose_sale_price || '',
+      looseTiers: (() => {
+        if (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units.length > 0) {
+          return editData.multi_loose_units;
+        }
+        if (editData.loose_uom && editData.loose_conversion_ratio) {
+          return [
+            {
+              id: 'tier-1',
+              uom: editData.loose_uom,
+              ratio: editData.loose_conversion_ratio,
+              costPrice: editData.loose_purchase_price || '',
+              salePrice: editData.loose_sale_price || ''
+            }
+          ];
+        }
+        return [];
+      })(),
       finishType: editData.bin || '',
       tilePrint:
         editData.tile_print ||
@@ -163,6 +189,7 @@ export const getProductInitialValues = (editData: any, isEditMode: boolean): Pro
     looseConversionRatio: '',
     loosePurchasePrice: '',
     looseSalePrice: '',
+    looseTiers: [],
     finishType: '',
     tilePrint: '',
     weightPerBox: ''
