@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FieldArray, FormikErrors, FormikTouched } from 'formik';
 import { FiTrash2 } from 'react-icons/fi';
 import WarehouseSelect from './WarehouseSelect';
+import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
 import { GRNFormValues, LocationItem, ProductItem } from '../types/grnTypes';
 import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';
 import { isTileProduct } from '../utils/grnHelpers';
@@ -193,68 +194,27 @@ export const GRNStandardItemsSection: React.FC<GRNStandardItemsSectionProps> = (
                       );
                       const pcsPerBox = rawPcs > 1 ? rawPcs : isTile ? 4 : 1;
 
-                      if (isTile && pcsPerBox > 1) {
+                      const allowLoose = Boolean(selectedProd?.allow_loose_sales || (Array.isArray(selectedProd?.multi_loose_units) && selectedProd.multi_loose_units.length > 0));
+                      if (allowLoose || (isTile && pcsPerBox > 1)) {
                         return (
-                          <div className="flex items-center gap-1 p-1 rounded bg-slate-50 dark:bg-slate-800 border border-stroke dark:border-strokedark">
-                            {/* BOXES */}
-                            <div className="flex-1 flex items-center bg-white dark:bg-boxdark rounded px-1 focus-within:border-primary shadow-sm border border-stroke dark:border-strokedark">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={(() => {
-                                  const b = Math.floor(Number(item.qty || 0));
-                                  return b === 0 ? '' : b;
-                                })()}
-                                placeholder="0"
-                                onChange={(e) => {
-                                  const val = e.target.value.trim();
-                                  const newBoxes = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                  const currentLoose = Math.round(
-                                    (Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox
-                                  );
-                                  const combinedQty = Number((newBoxes + currentLoose / pcsPerBox).toFixed(3));
-                                  setFieldValue(`items.${idx}.qty`, combinedQty);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (!/[0-9BackspaceTabEnterArrowLeftArrowRight]/.test(e.key)) e.preventDefault();
-                                }}
-                                className="w-full bg-transparent text-center font-bold text-sm text-primary outline-none min-w-[28px] py-1"
-                              />
-                              <span className="text-[10px] font-bold text-gray-400 select-none pr-1">Box</span>
-                            </div>
-                            <span className="text-gray-400 font-bold text-xs">+</span>
-                            {/* PCS */}
-                            <div className="flex-1 flex items-center bg-white dark:bg-boxdark rounded px-1 focus-within:border-emerald-500 shadow-sm border border-stroke dark:border-strokedark">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={(() => {
-                                  const currentLoose = Math.round(
-                                    (Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox
-                                  );
-                                  return currentLoose === 0 ? '' : currentLoose;
-                                })()}
-                                placeholder="0"
-                                onChange={(e) => {
-                                  const val = e.target.value.trim();
-                                  const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                  const currentBoxes = Math.floor(Number(item.qty || 0));
-
-                                  const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
-                                  const remLoose = enteredLoose % pcsPerBox;
-                                  const finalBoxes = currentBoxes + extraBoxes;
-                                  const combinedQty =
-                                    remLoose > 0 ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3)) : finalBoxes;
-                                  setFieldValue(`items.${idx}.qty`, combinedQty);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (!/[0-9BackspaceTabEnterArrowLeftArrowRight]/.test(e.key)) e.preventDefault();
-                                }}
-                                className="w-full bg-transparent text-center font-bold text-sm text-emerald-600 outline-none min-w-[28px] py-1"
-                              />
-                              <span className="text-[10px] font-bold text-gray-400 select-none pr-1">Pcs</span>
-                            </div>
-                          </div>
+                          <ChainedUomInputGrid
+                            primaryUom={selectedProd?.uom || (isTile ? 'BOX' : 'Unit')}
+                            primaryQuantity={Number(item.qty) || 0}
+                            primaryRate={Number(selectedProd?.purchase_price) || 0}
+                            tiers={
+                              Array.isArray(selectedProd?.multi_loose_units) && selectedProd.multi_loose_units.length > 0
+                                ? selectedProd.multi_loose_units
+                                : [{ uom: selectedProd?.loose_uom || (isTile ? 'PCS' : 'Units'), ratio: pcsPerBox, costPrice: selectedProd?.loose_purchase_price, salePrice: selectedProd?.loose_sale_price }]
+                            }
+                            tierQuantities={item.tier_quantities}
+                            tierRates={item.tier_rates}
+                            mode="cost"
+                            onChange={({ primaryQuantity, tierQuantities, tierRates, totalConvertedPrimaryQty }) => {
+                              setFieldValue(`items.${idx}.qty`, totalConvertedPrimaryQty);
+                              setFieldValue(`items.${idx}.tier_quantities`, tierQuantities);
+                              setFieldValue(`items.${idx}.tier_rates`, tierRates);
+                            }}
+                          />
                         );
                       }
 

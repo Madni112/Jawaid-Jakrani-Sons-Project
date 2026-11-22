@@ -2,6 +2,7 @@ import React from 'react';
 import { FieldArray } from 'formik';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
 import WarehouseSearchableSelect from './WarehouseSearchableSelect';
+import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
 import { getAvailableStock } from '../../../../utils/stockCalculator';
 
 interface PurchaseStandardItemsTableProps {
@@ -365,82 +366,35 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                                           </div>
                                         );
                                       })()
-                                    ) : allowLoose && pcsPerBox > 1 ? (
-                                      /* DYNAMIC DUAL INPUT FOR GENERAL PRODUCTS WITH ALLOW LOOSE (KG+GM, LTR+ML, BOX+PCS) */
-                                      (() => {
-                                        const currentQty = Number(item.qty || 0);
-                                        const bulkCount = Math.floor(currentQty);
-                                        const looseCount = Math.round((currentQty - bulkCount) * pcsPerBox);
+                                    ) : (allowLoose && (pcsPerBox > 1 || (Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0))) ? (
+                                      /* DYNAMIC MULTI-TIER CHAINED UOM GRID (DRUM -> LTR -> ML, etc) */
+                                      <ChainedUomInputGrid
+                                        primaryUom={bulkUnitLabel || 'Unit'}
+                                        primaryQuantity={Number(item.qty) || 0}
+                                        primaryRate={Number(item.rate) || 0}
+                                        tiers={
+                                          Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0
+                                            ? matchedProduct.multi_loose_units
+                                            : [{ uom: looseUnitLabel, ratio: looseRatio, costPrice: matchedProduct?.loose_purchase_price, salePrice: matchedProduct?.loose_sale_price }]
+                                        }
+                                        tierQuantities={item.tier_quantities}
+                                        tierRates={item.tier_rates}
+                                        mode="cost"
+                                        onChange={({ primaryQuantity, tierQuantities, tierRates, totalConvertedPrimaryQty, totalLineAmount }) => {
+                                          setFieldValue(`items.${idx}.qty`, totalConvertedPrimaryQty);
+                                          setFieldValue(`items.${idx}.tier_quantities`, tierQuantities);
+                                          setFieldValue(`items.${idx}.tier_rates`, tierRates);
+                                          
+                                          if (totalConvertedPrimaryQty > 0 && totalLineAmount > 0) {
+                                            const effectiveUnitRate = Number((totalLineAmount / totalConvertedPrimaryQty).toFixed(2));
+                                            setFieldValue(`items.${idx}.rate`, effectiveUnitRate);
+                                          }
 
-                                        return (
-                                          <div className="flex flex-col gap-1">
-                                            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-stroke dark:border-strokedark shadow-inner">
-                                              {/* BULK UNIT INPUT */}
-                                              <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-primary shadow-sm">
-                                                <input
-                                                  type="text"
-                                                  inputMode="numeric"
-                                                  onKeyDown={blockInvalidChar}
-                                                  value={bulkCount === 0 ? '' : bulkCount}
-                                                  placeholder="0"
-                                                  onChange={(e) => {
-                                                    const val = e.target.value.trim();
-                                                    const newBulk = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                                    const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
-                                                    const combinedQty = Number((newBulk + currentLoose / pcsPerBox).toFixed(3));
-                                                    setFieldValue(`items.${idx}.qty`, combinedQty);
-
-                                                    const cost = combinedQty * (Number(item.rate) || 0);
-                                                    if (Number(item.discountPer) > 0) {
-                                                      setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
-                                                    }
-                                                  }}
-                                                  className="w-full bg-transparent text-center font-black text-sm text-primary outline-none min-w-[36px]"
-                                                />
-                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">{bulkUnitLabel}</span>
-                                              </div>
-
-                                              <span className="text-gray-400 font-black text-sm select-none">+</span>
-
-                                              {/* LOOSE SUB-UNIT INPUT */}
-                                              <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-emerald-500 shadow-sm">
-                                                <input
-                                                  type="text"
-                                                  inputMode="numeric"
-                                                  onKeyDown={blockInvalidChar}
-                                                  value={looseCount === 0 ? '' : looseCount}
-                                                  placeholder="0"
-                                                  onChange={(e) => {
-                                                    const val = e.target.value.trim();
-                                                    const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                                    const currentBulk = Math.floor(Number(item.qty || 0));
-
-                                                    const extraBulk = Math.floor(enteredLoose / pcsPerBox);
-                                                    const remLoose = enteredLoose % pcsPerBox;
-                                                    const finalBulk = currentBulk + extraBulk;
-                                                    const combinedQty = remLoose > 0
-                                                      ? Number((finalBulk + remLoose / pcsPerBox).toFixed(3))
-                                                      : finalBulk;
-
-                                                    setFieldValue(`items.${idx}.qty`, combinedQty);
-
-                                                    const cost = combinedQty * (Number(item.rate) || 0);
-                                                    if (Number(item.discountPer) > 0) {
-                                                      setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
-                                                    }
-                                                  }}
-                                                  className="w-full bg-transparent text-center font-black text-sm text-emerald-600 dark:text-emerald-400 outline-none min-w-[36px]"
-                                                />
-                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">{looseUnitLabel}</span>
-                                              </div>
-                                            </div>
-
-                                            <div className="text-center font-mono text-[10px] text-slate-500 dark:text-slate-400">
-                                              Total: <strong>{currentQty}</strong> {bulkUnitLabel} ({bulkCount} {bulkUnitLabel} + {looseCount} {looseUnitLabel})
-                                            </div>
-                                          </div>
-                                        );
-                                      })()
+                                          if (Number(item.discountPer) > 0) {
+                                            setFieldValue(`items.${idx}.discountAmt`, Number(((totalLineAmount * Number(item.discountPer)) / 100).toFixed(2)));
+                                          }
+                                        }}
+                                      />
                                     ) : (
                                       /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
                                       (() => {
