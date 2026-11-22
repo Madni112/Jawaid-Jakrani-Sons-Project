@@ -3770,7 +3770,7 @@ export const ReportDashboard: React.FC<{ mode?: 'accounts' | 'reports' }> = ({ m
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-xl font-black text-slate-950 uppercase tracking-tight">
-                    ZOHAIB ALI AND COMPANY
+                    Jawaid Jakwani & Sons
                   </h1>
                   <div className="text-[10px] text-slate-600 font-medium">
                     Cloth Retail & Wholesale Accounts Management

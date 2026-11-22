@@ -54,7 +54,7 @@ export const SidebarBrandHeader: React.FC<SidebarBrandHeaderProps> = ({
                   <span
                     className={`font-black tracking-wide text-xs ${themeStyles.brandText} font-cinzel whitespace-nowrap`}
                   >
-                    {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'ZOHAIB ALI AND COMPANY'}
+                    {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'Jawaid Jakwani & Sons'}
                   </span>
                   <span className="px-1 py-0.5 rounded text-[8px] font-mono font-black tracking-wider bg-primary/20 text-primary dark:bg-white/10 dark:text-rose-300 uppercase shrink-0">
                     ERP

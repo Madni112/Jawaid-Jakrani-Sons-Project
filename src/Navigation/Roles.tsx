@@ -211,9 +211,23 @@ export const adminRoutes = [
         icon: MdDashboard,
         path: '/Administration/Products/Bulk-Upload',
         component: <BulkProductUpload />,
-      },
+      }
+      /* 
       {
-        label: 'Manufacturing (BOM)',
+        path: '/company',
+        component: <AddCompany />,
+        label: 'Company',
+        icon: MdAccountBox
+      }
+      */
+    ]
+  },
+  {
+    label: 'Manufacturing',
+    icon: MdPrecisionManufacturing,
+    children: [
+      {
+        label: 'Bill of Materials (BOM)',
         icon: MdPrecisionManufacturing,
         path: '/Manufacturing/list',
         component: <BOMList />,
@@ -248,14 +262,6 @@ export const adminRoutes = [
         label: 'Edit BOM',
         hideFromSidebar: true,
       }
-      /* 
-      {
-        path: '/company',
-        component: <AddCompany />,
-        label: 'Company',
-        icon: MdAccountBox
-      }
-      */
     ]
   },
   {

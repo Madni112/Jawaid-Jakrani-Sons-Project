@@ -3,6 +3,8 @@ import { DedicatedRecipe } from '../../../../service/recipeService';
 
 export interface BomCalculations {
   rawMaterialCost: number;
+  chemicalCost: number;
+  packagingCost: number;
   totalOverheads: number;
   totalBatchCost: number;
   unitCost: number;

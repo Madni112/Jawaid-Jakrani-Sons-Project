@@ -166,7 +166,7 @@ export const BasicStockReportPrint: React.FC = () => {
   });
 
   const [loading, setLoading] = useState<boolean>(true);
-  const [businessName, setBusinessName] = useState<string>('Zohaib Ali & Company');
+  const [businessName, setBusinessName] = useState<string>('Jawaid Jakwani & Sons');
   const [productsMaster, setProductsMaster] = useState<any[]>([]);
   const [stockMap, setStockMap] = useState<Map<string, any>>(new Map());
   const [warehouseStockMap, setWarehouseStockMap] = useState<Map<string, Record<string, number>>>(new Map());

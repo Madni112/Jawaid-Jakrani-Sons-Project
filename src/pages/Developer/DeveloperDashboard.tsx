@@ -835,7 +835,7 @@ const DeveloperDashboard: React.FC = () => {
             full_name: salesmanToAssignLogin.name.trim(),
             role: assignLoginRole,
             tenant_id: cleanSlug,
-            business_name: 'ZOHAIB ALI AND COMPANY',
+            business_name: 'Jawaid Jakwani & Sons',
             allowed_modules: roleModules,
           },
         },
@@ -850,7 +850,7 @@ const DeveloperDashboard: React.FC = () => {
           slug: cleanSlug,
           email: assignLoginEmail.trim(),
           business_activity: assignLoginRole,
-          seller_address: 'ZOHAIB ALI AND COMPANY',
+          seller_address: 'Jawaid Jakwani & Sons',
           allowed_modules: roleModules,
         },
       ], { onConflict: 'slug' });
@@ -1295,7 +1295,7 @@ const DeveloperDashboard: React.FC = () => {
             full_name: newEmployee.name.trim(),
             role: newEmployee.role,
             tenant_id: cleanSlug,
-            business_name: 'ZOHAIB ALI AND COMPANY',
+            business_name: 'Jawaid Jakwani & Sons',
             allowed_modules: newEmployee.modules,
           },
         },
@@ -1311,7 +1311,7 @@ const DeveloperDashboard: React.FC = () => {
             slug: cleanSlug,
             email: newEmployee.email.trim(),
             business_activity: newEmployee.role,
-            seller_address: 'ZOHAIB ALI AND COMPANY',
+            seller_address: 'Jawaid Jakwani & Sons',
             allowed_modules: newEmployee.modules,
             allowed_locations: newEmployee.allowed_locations,
             location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
@@ -1326,7 +1326,7 @@ const DeveloperDashboard: React.FC = () => {
               slug: cleanSlug,
               email: newEmployee.email.trim(),
               business_activity: newEmployee.role,
-              seller_address: 'ZOHAIB ALI AND COMPANY',
+              seller_address: 'Jawaid Jakwani & Sons',
               allowed_modules: newEmployee.modules,
               allowed_locations: newEmployee.allowed_locations,
               location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
@@ -1868,7 +1868,7 @@ const DeveloperDashboard: React.FC = () => {
               <MdSecurity />
             </div>
             <h2 className="text-2xl font-black tracking-tight text-black dark:text-white">Master Role & Dev Console</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for ZOHAIB ALI AND COMPANY</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for Jawaid Jakwani & Sons</p>
           </div>
 
           {authError && (
@@ -1931,7 +1931,7 @@ const DeveloperDashboard: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">ZOHAIB ALI AND COMPANY</h1>
+              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">Jawaid Jakwani & Sons</h1>
               <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                 Employee Role & Access Control
               </span>

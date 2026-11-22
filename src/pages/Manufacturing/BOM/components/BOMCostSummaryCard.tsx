@@ -37,11 +37,21 @@ export const BOMCostSummaryCard: React.FC<BOMCostSummaryCardProps> = ({
         </div>
 
         <div className="mt-4 space-y-3 text-xs">
-          <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
-            <span>{isRTL ? 'کل خام مال کی لاگت:' : 'Raw Materials Cost:'}</span>
-            <span className="font-mono font-bold text-black dark:text-white">
-              PKR {calculations.rawMaterialCost.toLocaleString()}
-            </span>
+          <div className="space-y-1.5 p-2.5 rounded-xl bg-slate-50 dark:bg-meta-4/40 border border-slate-200/70 dark:border-strokedark">
+            <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{isRTL ? 'کل میٹریل لاگت:' : 'Total Materials Cost:'}</span>
+              <span className="font-mono font-bold text-black dark:text-white">
+                PKR {calculations.rawMaterialCost.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] text-blue-600 dark:text-blue-400 pl-2">
+              <span>↳ {isRTL ? 'خام کیمیکل / بلک مائع:' : 'Raw Chemical / Bulk Liquid:'}</span>
+              <span className="font-mono font-semibold">PKR {(calculations.chemicalCost || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] text-amber-600 dark:text-amber-400 pl-2">
+              <span>↳ {isRTL ? 'پیکجنگ سامان (بوتل، پمپ، وغیرہ):' : 'Packaging Material (Bottles/Pumps):'}</span>
+              <span className="font-mono font-semibold">PKR {(calculations.packagingCost || 0).toLocaleString()}</span>
+            </div>
           </div>
 
           <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">

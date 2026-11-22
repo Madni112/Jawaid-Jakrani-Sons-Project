@@ -63,6 +63,7 @@ const AddBOM: React.FC = () => {
       unit_cost: 0,
       wastage_percentage: 0,
       total_cost: 0,
+      item_type: 'Chemical',
       notes: ''
     }
   ]);
@@ -202,6 +203,7 @@ const AddBOM: React.FC = () => {
         unit_cost: 0,
         wastage_percentage: 0,
         total_cost: 0,
+        item_type: 'Chemical',
         notes: ''
       }
     ]);
@@ -235,9 +237,15 @@ const AddBOM: React.FC = () => {
 
   // Live Cost & Margin Calculations
   const calculations: BomCalculations = useMemo(() => {
-    const rawMaterialCost = items.reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
+    const chemicalCost = items
+      .filter(it => it.item_type !== 'Packaging')
+      .reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
+    const itemsPackagingCost = items
+      .filter(it => it.item_type === 'Packaging')
+      .reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
+    const rawMaterialCost = chemicalCost + itemsPackagingCost;
     const totalOverheads =
-      (Number(laborCost) || 0) + (Number(overheadCost) || 0) + (Number(packagingCost) || 0);
+      (Number(laborCost) || 0) + (Number(overheadCost) || 0) + (Number(packagingCost) || itemsPackagingCost);
     const totalBatchCost = rawMaterialCost + totalOverheads;
     const batchQty = Number(batchQuantity) > 0 ? Number(batchQuantity) : 1;
     const unitCost = Math.round((totalBatchCost / batchQty) * 100) / 100;
@@ -249,6 +257,8 @@ const AddBOM: React.FC = () => {
 
     return {
       rawMaterialCost,
+      chemicalCost,
+      packagingCost: itemsPackagingCost || Number(packagingCost) || 0,
       totalOverheads,
       totalBatchCost,
       unitCost,

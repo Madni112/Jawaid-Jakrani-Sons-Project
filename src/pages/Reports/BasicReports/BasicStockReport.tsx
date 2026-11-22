@@ -341,7 +341,7 @@ export const BasicStockReport: React.FC = () => {
   const navigate = useNavigate();
   const { tenantId } = useAuth();
 
-  const [businessName, setBusinessName] = useState<string>('Zohaib Ali & Company');
+  const [businessName, setBusinessName] = useState<string>('Jawaid Jakwani & Sons');
 
   // Synchronous cache hydration
   const cachedMeta = useMemo(() => {

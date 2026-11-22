@@ -107,6 +107,7 @@ const ProductionOrderList: React.FC = () => {
     completed_quantity: number;
     wastage_quantity: number;
     notes: string;
+    qc_checklist?: any;
   }) => {
     if (!orderToComplete) return;
     try {
@@ -340,8 +341,13 @@ const ProductionOrderList: React.FC = () => {
                             {order.priority}
                           </span>
                         </div>
-                        <div className="text-[11px] text-gray-400 font-mono mt-0.5">
-                          BOM: {order.bom_number}
+                        <div className="flex items-center gap-2 text-[11px] text-gray-400 font-mono mt-0.5">
+                          <span>BOM: {order.bom_number}</span>
+                          {order.batch_number && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                              {order.batch_number}
+                            </span>
+                          )}
                         </div>
                       </td>
 

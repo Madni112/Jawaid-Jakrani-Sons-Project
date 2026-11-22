@@ -62,7 +62,7 @@ export const PurchaseReportHeaderBanner: React.FC<PurchaseReportHeaderBannerProp
               WebkitPrintColorAdjust: 'exact',
               printColorAdjust: 'exact'
             }}
-          >ZAC</span>
+          >J.J.S</span>
         </div>
       </div>
 

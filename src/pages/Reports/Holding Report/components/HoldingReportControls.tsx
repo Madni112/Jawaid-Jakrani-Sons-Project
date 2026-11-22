@@ -131,7 +131,7 @@ export const HoldingReportControls: React.FC<HoldingReportControlsProps> = ({
                   WebkitPrintColorAdjust: 'exact',
                   printColorAdjust: 'exact'
                 }}
-              >ZAC</span>
+              >J.J.S</span>
             </div>
           </div>
 

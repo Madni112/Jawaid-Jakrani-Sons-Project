@@ -344,7 +344,7 @@ export const BasicPurchaseReport: React.FC = () => {
   const { tenantId } = useAuth();
 
   // Business Name from System Master
-  const [businessName, setBusinessName] = useState<string>('Zohaib Ali & Company');
+  const [businessName, setBusinessName] = useState<string>('Jawaid Jakwani & Sons');
 
   // Read cached metadata synchronously
   const cachedMeta = useMemo(() => {

@@ -138,7 +138,7 @@ export const SaleReportHeader: React.FC<SaleReportHeaderProps> = ({
                 WebkitPrintColorAdjust: 'exact',
                 printColorAdjust: 'exact',
               }}
-            >ZAC</span>
+            >J.J.S</span>
           </div>
         </div>
 

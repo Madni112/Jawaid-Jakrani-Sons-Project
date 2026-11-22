@@ -9,10 +9,8 @@ import {
   MdLayers,
   MdLocationOn,
   MdDateRange,
-  MdPerson,
-  MdPriorityHigh,
-  MdCalculate,
-  MdCheckCircle
+  MdScience,
+  MdOutlineQrCode
 } from 'react-icons/md';
 import { supabase } from '../../../Context/supabaseClient';
 import { bomService, BomHeader } from '../../../service/bomService';
@@ -36,12 +34,17 @@ const AddProductionOrder: React.FC = () => {
   // Form State
   const [selectedBomId, setSelectedBomId] = useState<string>('');
   const [orderNumber, setOrderNumber] = useState<string>('');
-  const [targetQuantity, setTargetQuantity] = useState<number>(100);
-  const [sourceWarehouse, setSourceWarehouse] = useState<string>('Raw Material Yard');
-  const [destinationWarehouse, setDestinationWarehouse] = useState<string>('Main Warehouse');
+  const [batchNumber, setBatchNumber] = useState<string>('');
+  const [mfgDate, setMfgDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [expDate, setExpDate] = useState<string>(
+    new Date(Date.now() + 86400000 * 365 * 2).toISOString().split('T')[0]
+  );
+  const [targetQuantity, setTargetQuantity] = useState<number>(1000);
+  const [sourceWarehouse, setSourceWarehouse] = useState<string>('Chemical Bulk Tank Area');
+  const [destinationWarehouse, setDestinationWarehouse] = useState<string>('Finished Goods Warehouse');
   const [plannedStartDate, setPlannedStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [plannedCompletionDate, setPlannedCompletionDate] = useState<string>(
-    new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0]
+    new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]
   );
   const [priority, setPriority] = useState<'Low' | 'Normal' | 'High' | 'Urgent'>('Normal');
   const [supervisor, setSupervisor] = useState<string>('');
@@ -66,7 +69,13 @@ const AddProductionOrder: React.FC = () => {
           .map((l: any) => l.name || l.location_name)
           .filter(Boolean);
 
-        const defaultWhs = ['Main Warehouse', 'Raw Material Yard', 'Factory Plant Line 1', 'Floor Tiles Warehouse'];
+        const defaultWhs = [
+          'Chemical Bulk Tank Area',
+          'Finished Goods Warehouse',
+          'Raw Materials Warehouse',
+          'Packaging Materials Yard',
+          'Main Warehouse'
+        ];
         const allWhs = Array.from(new Set([...extractedLocations, ...defaultWhs]));
         setLocations(allWhs);
 
@@ -75,6 +84,9 @@ const AddProductionOrder: React.FC = () => {
           if (existing) {
             setSelectedBomId(existing.bom_id);
             setOrderNumber(existing.order_number);
+            setBatchNumber(existing.batch_number || '');
+            setMfgDate(existing.mfg_date || new Date().toISOString().split('T')[0]);
+            setExpDate(existing.exp_date || new Date(Date.now() + 86400000 * 730).toISOString().split('T')[0]);
             setTargetQuantity(existing.target_quantity);
             setSourceWarehouse(existing.source_warehouse);
             setDestinationWarehouse(existing.destination_warehouse);
@@ -89,11 +101,15 @@ const AddProductionOrder: React.FC = () => {
             navigate('/Manufacturing/production-orders');
           }
         } else {
-          const nextNo = await productionOrderService.generateNextOrderNumber();
+          const [nextNo, nextBatch] = await Promise.all([
+            productionOrderService.generateNextOrderNumber(),
+            productionOrderService.generateNextBatchNumber()
+          ]);
           setOrderNumber(nextNo);
+          setBatchNumber(nextBatch);
           if (loadedBoms.length > 0) {
             setSelectedBomId(loadedBoms[0].id);
-            setTargetQuantity(loadedBoms[0].batch_quantity || 100);
+            setTargetQuantity(loadedBoms[0].batch_quantity || 1000);
           }
         }
       } catch (err: any) {
@@ -131,10 +147,11 @@ const AddProductionOrder: React.FC = () => {
         item_name: item.item_name,
         item_code: item.item_code,
         required_qty: scaledReq,
-        consumed_qty: scaledReq, // initially assumed target consumption
+        consumed_qty: scaledReq,
         uom: item.uom,
         unit_cost: unitCost,
         total_cost: totalCost,
+        item_type: item.item_type || 'Chemical',
         wastage_percentage: item.wastage_percentage,
         notes: item.notes
       };
@@ -161,11 +178,15 @@ const AddProductionOrder: React.FC = () => {
   // Handle Saving / Starting
   const handleSubmit = async (targetStatus?: 'Draft' | 'Planned' | 'In Progress') => {
     if (!selectedBom) {
-      toast.error('Please select an active BOM recipe');
+      toast.error('Please select an active BOM formulation');
       return;
     }
     if (targetQuantity <= 0) {
       toast.error('Target quantity must be greater than zero');
+      return;
+    }
+    if (!batchNumber.trim()) {
+      toast.error('Please specify a traceable Batch Number');
       return;
     }
     if (!sourceWarehouse || !destinationWarehouse) {
@@ -180,6 +201,9 @@ const AddProductionOrder: React.FC = () => {
       const orderPayload: ProductionOrder = {
         id: id || `wo-${Date.now()}`,
         order_number: orderNumber,
+        batch_number: batchNumber.trim().toUpperCase(),
+        mfg_date: mfgDate,
+        exp_date: expDate,
         bom_id: selectedBom.id,
         bom_number: selectedBom.bom_number,
         finished_product_id: selectedBom.finished_product_id,
@@ -189,7 +213,7 @@ const AddProductionOrder: React.FC = () => {
         target_quantity: targetQuantity,
         completed_quantity: 0,
         wastage_quantity: 0,
-        uom: selectedBom.uom || 'Boxes',
+        uom: selectedBom.uom || 'Bottles',
         source_warehouse: sourceWarehouse,
         destination_warehouse: destinationWarehouse,
         planned_start_date: plannedStartDate,
@@ -203,18 +227,22 @@ const AddProductionOrder: React.FC = () => {
         labor_cost: financialTotals.laborCost,
         overhead_cost: financialTotals.overheadCost,
         notes: notes.trim() || undefined,
-        materials: scaledMaterials
+        materials: scaledMaterials,
+        qc_checklist: {
+          ph_target: selectedBom.finished_product_name.toLowerCase().includes('phenyl') ? '9.0 - 10.5' : '5.5 - 6.5',
+          qc_status: 'Pending'
+        }
       };
 
       await productionOrderService.save(orderPayload);
       toast.success(
         chosenStatus === 'In Progress'
-          ? `Work Order ${orderNumber} launched into production!`
-          : `Work Order ${orderNumber} scheduled successfully!`
+          ? `Work Order ${orderNumber} launched! Batch ${batchNumber} is now In Progress.`
+          : `Work Order ${orderNumber} saved successfully!`
       );
       navigate('/Manufacturing/production-orders');
     } catch (err: any) {
-      toast.error('Failed to save order: ' + err.message);
+      toast.error('Failed to save work order: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -222,9 +250,8 @@ const AddProductionOrder: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-        <Spinner size="w-10 h-10" />
-        <p className="text-xs font-bold text-gray-500 font-mono">Loading manufacturing planner...</p>
+      <div className="flex h-96 items-center justify-center">
+        <Spinner size="w-8 h-8" />
       </div>
     );
   }
@@ -245,12 +272,15 @@ const AddProductionOrder: React.FC = () => {
               <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-400 font-bold border border-emerald-300 dark:border-emerald-800">
                 {orderNumber}
               </span>
+              <span className="font-mono text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-400 font-bold border border-blue-300 dark:border-blue-800">
+                {batchNumber}
+              </span>
               <span className="text-xs font-bold text-gray-500 uppercase">
-                {isEditMode ? 'Modify Work Order' : 'New Production Run'}
+                {isEditMode ? 'Modify Work Order' : 'Chemical FMCG Batch Run'}
               </span>
             </div>
             <h1 className="text-xl font-black text-black dark:text-white tracking-tight mt-0.5">
-              {isEditMode ? 'Edit Manufacturing Work Order' : 'Create & Schedule Work Order'}
+              {isEditMode ? 'Edit Manufacturing Work Order' : 'Create & Schedule Production Order'}
             </h1>
           </div>
         </div>
@@ -278,7 +308,7 @@ const AddProductionOrder: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: BOM Recipe Selection & General Setup */}
+        {/* Left Column: BOM Recipe Selection, Batch Traceability & Materials */}
         <div className="lg:col-span-2 space-y-6">
           {/* Section 1: Recipe Selection */}
           <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-6 shadow-default space-y-5">
@@ -299,7 +329,7 @@ const AddProductionOrder: React.FC = () => {
                   onChange={e => {
                     setSelectedBomId(e.target.value);
                     const b = boms.find(x => String(x.id) === String(e.target.value));
-                    if (b) setTargetQuantity(b.batch_quantity || 100);
+                    if (b) setTargetQuantity(b.batch_quantity || 1000);
                   }}
                   className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-emerald-500 focus:outline-hidden cursor-pointer"
                 >
@@ -334,7 +364,7 @@ const AddProductionOrder: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                    Target Batch Output ({selectedBom?.uom || 'Units'}) <span className="text-red-500">*</span>
+                    Target Batch Output ({selectedBom?.uom || 'Bottles'}) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -368,7 +398,62 @@ const AddProductionOrder: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 2: Bill of Materials Consumption Table */}
+          {/* Section 2: Batch Number & Expiry Traceability (FMCG Requirement) */}
+          <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-6 shadow-default space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-stroke dark:border-strokedark">
+              <MdOutlineQrCode className="text-blue-600 text-xl" />
+              <h2 className="text-sm font-black text-black dark:text-white uppercase tracking-wider">
+                Batch Identification, MFG & Expiry Traceability
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Traceable Batch Number <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={batchNumber}
+                    onChange={e => setBatchNumber(e.target.value)}
+                    className="w-full text-xs font-mono font-bold px-3 py-2.5 rounded-xl border border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 focus:border-blue-500 focus:outline-hidden"
+                    placeholder="BATCH-YYYYMM-XXX"
+                  />
+                </div>
+                <span className="text-[10px] text-gray-400 mt-1 block">Printed on bottles & carton labels</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Manufacturing Date (MFG) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={mfgDate}
+                  onChange={e => setMfgDate(e.target.value)}
+                  className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-emerald-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Expiry Date (EXP) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={expDate}
+                  onChange={e => setExpDate(e.target.value)}
+                  className="w-full text-xs font-bold px-3 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-emerald-500 focus:outline-hidden"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Bill of Materials Consumption Table */}
           <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-6 shadow-default space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-stroke dark:border-strokedark">
               <div className="flex items-center gap-2">
@@ -378,7 +463,7 @@ const AddProductionOrder: React.FC = () => {
                 </h2>
               </div>
               <span className="text-[11px] font-mono text-gray-500">
-                {scaledMaterials.length} Ingredients Required
+                {scaledMaterials.length} Items (Chemicals & Packaging)
               </span>
             </div>
 
@@ -386,6 +471,7 @@ const AddProductionOrder: React.FC = () => {
               <table className="w-full text-xs text-left font-sans">
                 <thead>
                   <tr className="border-b border-stroke dark:border-strokedark font-black text-[10px] uppercase text-gray-500 bg-gray-50 dark:bg-meta-4/20">
+                    <th className="py-2.5 px-3">Type</th>
                     <th className="py-2.5 px-3">Item Name</th>
                     <th className="py-2.5 px-3 text-right">Required Qty</th>
                     <th className="py-2.5 px-3 text-center">UOM</th>
@@ -394,26 +480,40 @@ const AddProductionOrder: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stroke dark:divide-strokedark">
-                  {scaledMaterials.map((mat, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/10">
-                      <td className="py-3 px-3 font-bold text-black dark:text-white">
-                        {mat.item_name}
-                        {mat.item_code && <span className="block text-[10px] text-gray-400 font-normal">{mat.item_code}</span>}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
-                        {mat.required_qty.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3 text-center font-bold text-gray-500">
-                        {mat.uom}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono text-gray-600 dark:text-gray-300">
-                        Rs. {mat.unit_cost.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-black dark:text-white">
-                        Rs. {mat.total_cost.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
+                  {scaledMaterials.map((mat, idx) => {
+                    const isPkg = mat.item_type === 'Packaging';
+                    return (
+                      <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/10">
+                        <td className="py-3 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                              isPkg
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300'
+                            }`}
+                          >
+                            {isPkg ? 'Packaging' : 'Chemical'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-bold text-black dark:text-white">
+                          {mat.item_name}
+                          {mat.item_code && <span className="block text-[10px] text-gray-400 font-normal">{mat.item_code}</span>}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+                          {mat.required_qty.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3 text-center font-bold text-gray-500">
+                          {mat.uom}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono text-gray-600 dark:text-gray-300">
+                          Rs. {mat.unit_cost.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono font-bold text-black dark:text-white">
+                          Rs. {mat.total_cost.toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -422,7 +522,7 @@ const AddProductionOrder: React.FC = () => {
 
         {/* Right Column: Routing & Production Meta */}
         <div className="space-y-6">
-          {/* Section 3: Warehouse Logistics */}
+          {/* Section 4: Warehouse Logistics */}
           <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-6 shadow-default space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-stroke dark:border-strokedark">
               <MdLocationOn className="text-emerald-600 text-xl" />
@@ -434,7 +534,7 @@ const AddProductionOrder: React.FC = () => {
             <div className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Source Raw Material Yard <span className="text-red-500">*</span>
+                  Source Raw Material / Chemical Yard <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={sourceWarehouse}
@@ -445,7 +545,7 @@ const AddProductionOrder: React.FC = () => {
                     <option key={loc} value={loc}>{loc}</option>
                   ))}
                 </select>
-                <p className="text-[10px] text-gray-400 mt-1">Deducts clay, frits & packaging from here</p>
+                <p className="text-[10px] text-gray-400 mt-1">Deducts chemicals, bottles & caps from here</p>
               </div>
 
               <div>
@@ -461,12 +561,12 @@ const AddProductionOrder: React.FC = () => {
                     <option key={loc} value={loc}>{loc}</option>
                   ))}
                 </select>
-                <p className="text-[10px] text-gray-400 mt-1">Finished boxes added to stock here upon completion</p>
+                <p className="text-[10px] text-gray-400 mt-1">Finished bottles added to inventory here upon QC approval</p>
               </div>
             </div>
           </div>
 
-          {/* Section 4: Schedule & Assignment */}
+          {/* Section 5: Schedule & Assignment */}
           <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark p-6 shadow-default space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-stroke dark:border-strokedark">
               <MdDateRange className="text-emerald-600 text-xl" />
@@ -502,13 +602,13 @@ const AddProductionOrder: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Assigned Plant Supervisor / Shift Lead
+                  Assigned Chemist / Plant Supervisor
                 </label>
                 <input
                   type="text"
                   value={supervisor}
                   onChange={e => setSupervisor(e.target.value)}
-                  placeholder="e.g. Tariq Mehmood"
+                  placeholder="e.g. Dr. Tariq / Muhammad Bilal"
                   className="w-full text-xs px-3 py-2 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-emerald-500 focus:outline-hidden"
                 />
               </div>
@@ -521,46 +621,47 @@ const AddProductionOrder: React.FC = () => {
                   rows={2}
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  placeholder="Any machine notes or special instructions..."
+                  placeholder="e.g. Bulk mixing vessel #2, check perfume temperature before dosing..."
                   className="w-full text-xs px-3 py-2 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-emerald-500 focus:outline-hidden resize-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 5: Financial Summary Box */}
-          <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl p-6 shadow-default space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-emerald-200 dark:border-emerald-800/40">
-              <MdCalculate className="text-emerald-700 dark:text-emerald-400 text-xl" />
-              <h3 className="text-sm font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
+          {/* Section 6: Live Cost Summary Card */}
+          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl p-6 shadow-xl space-y-4 border border-slate-700">
+            <div className="flex items-center gap-2 border-b border-slate-700 pb-3">
+              <MdScience className="text-emerald-400 text-xl" />
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-300">
                 Batch Cost Estimate
               </h3>
             </div>
 
-            <div className="space-y-2 text-xs font-mono">
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Raw Materials:</span>
-                <span>Rs. {financialTotals.rawMaterialCost.toLocaleString()}</span>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between text-slate-400">
+                <span>Total Materials Cost:</span>
+                <span className="font-mono text-white font-bold">Rs. {financialTotals.rawMaterialCost.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Labor & Machinery:</span>
-                <span>Rs. {financialTotals.laborCost.toLocaleString()}</span>
+              <div className="flex justify-between text-slate-400">
+                <span>Direct Labor Cost:</span>
+                <span className="font-mono text-white font-bold">Rs. {financialTotals.laborCost.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Overheads & Power:</span>
-                <span>Rs. {financialTotals.overheadCost.toLocaleString()}</span>
+              <div className="flex justify-between text-slate-400">
+                <span>Factory Overhead Cost:</span>
+                <span className="font-mono text-white font-bold">Rs. {financialTotals.overheadCost.toLocaleString()}</span>
               </div>
 
-              <div className="pt-2 border-t border-emerald-300 dark:border-emerald-800/50 flex justify-between font-bold text-sm text-black dark:text-white">
-                <span>Total Run Cost:</span>
-                <span className="text-emerald-700 dark:text-emerald-400">
-                  Rs. {financialTotals.totalCost.toLocaleString()}
+              <div className="border-t border-slate-700 pt-3 flex justify-between items-center text-sm font-black">
+                <span className="text-emerald-400">Estimated Total:</span>
+                <span className="font-mono text-base text-emerald-400">Rs. {financialTotals.totalCost.toLocaleString()}</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 text-center mt-2">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Estimated Unit Cost</span>
+                <span className="text-xl font-black font-mono text-white">
+                  Rs. {financialTotals.unitCost.toLocaleString()}
+                  <span className="text-xs font-normal text-slate-400"> / {selectedBom?.uom || 'Bottle'}</span>
                 </span>
-              </div>
-
-              <div className="flex justify-between font-black text-xs text-blue-900 dark:text-blue-300 pt-1">
-                <span>Unit Cost / {selectedBom?.uom || 'Unit'}:</span>
-                <span>Rs. {financialTotals.unitCost.toLocaleString()}</span>
               </div>
             </div>
           </div>

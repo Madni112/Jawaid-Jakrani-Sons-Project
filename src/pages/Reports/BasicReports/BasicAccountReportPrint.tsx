@@ -44,7 +44,7 @@ export const BasicAccountReportPrint: React.FC = () => {
   });
 
   const [loading, setLoading] = useState<boolean>(true);
-  const [businessName, setBusinessName] = useState<string>('Zohaib Ali & Company');
+  const [businessName, setBusinessName] = useState<string>('Jawaid Jakwani & Sons');
   const [rawCustomers, setRawCustomers] = useState<any[]>([]);
   const [rawVendors, setRawVendors] = useState<any[]>([]);
   const [rawCoa, setRawCoa] = useState<any[]>([]);
@@ -1810,7 +1810,7 @@ export const BasicAccountReportPrint: React.FC = () => {
               )}
             </div>
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-black dark:text-white uppercase">
-              {businessName || 'Zohaib Ali & Company'}
+              {businessName || 'Jawaid Jakwani & Sons'}
             </h1>
           </div>
 
@@ -2545,7 +2545,7 @@ export const BasicAccountReportPrint: React.FC = () => {
           }`}
         >
           <div>
-            <span>Audited Electronic Statement • System Master ID: {businessName || 'ZAC-ERP'}</span>
+            <span>Audited Electronic Statement • System Master ID: {businessName || 'J.J.S-ERP'}</span>
           </div>
           <div className="flex items-center gap-12 text-center">
             <div>

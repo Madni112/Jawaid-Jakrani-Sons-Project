@@ -114,7 +114,7 @@ export const printReturnChallanSlip = (returnRecord: ReturnSlipData) => {
       <body>
         <div class="header">
           <div>
-            <div class="company">ZOHAIB ALI AND COMPANY</div>
+            <div class="company">Jawaid Jakwani & Sons</div>
             <div class="title">CUSTOMER SALES RETURN & QC INWARD SLIP</div>
           </div>
           <div style="text-align: right;">

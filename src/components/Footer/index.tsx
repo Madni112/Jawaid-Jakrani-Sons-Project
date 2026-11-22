@@ -36,12 +36,12 @@ const Footer: React.FC = () => {
     };
   }, []);
 
-  const clientName = isRTL ? 'المحمّدی ٹائل ایمپوریم' : (businessName || 'ZOHAIB ALI AND COMPANY');
+  const clientName = isRTL ? 'المحمّدی ٹائل ایمپوریم' : (businessName || 'Jawaid Jakwani & Sons');
   const developerName = 'Abdul Sattar';
   const companyName = 'NHT ENTERPRISES';
   const phoneFormatted = '0312-8039911';
   const phoneIntl = '+923128039911';
-  const whatsappUrl = `https://wa.me/923128039911?text=${encodeURIComponent('Hello Abdul Sattar, reaching out from Zohaib Ali and Company ERP Portal.')}`;
+  const whatsappUrl = `https://wa.me/923128039911?text=${encodeURIComponent('Hello Abdul Sattar, reaching out from Jawaid Jakwani & Sons ERP Portal.')}`;
 
   const containerClasses = layoutMode === 'floating'
     ? 'mx-3 sm:mx-4.5 mb-3 rounded-2xl border border-slate-200/90 dark:border-white/10 shadow-lg shadow-slate-200/40 dark:shadow-black/50'

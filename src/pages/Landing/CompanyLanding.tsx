@@ -75,7 +75,7 @@ const CompanyLanding: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-1.5 font-black text-sm sm:text-base tracking-tight leading-tight">
-                <span className="text-emerald-600 dark:text-emerald-400">ZOHAIB ALI AND COMPANY</span>
+                <span className="text-emerald-600 dark:text-emerald-400">Jawaid Jakwani & Sons</span>
                 
               </div>
               <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono tracking-wider uppercase font-semibold">
@@ -136,7 +136,7 @@ const CompanyLanding: React.FC = () => {
             {/* Release Badge */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 text-emerald-700 dark:text-emerald-400 text-[11px] font-mono font-bold shadow-inner">
               <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-              <span>ZAC ERP ECOSYSTEM • RELEASE V2.4</span>
+              <span>J.J.S ERP ECOSYSTEM • RELEASE V2.4</span>
             </div>
 
             {/* H1 Headline */}
@@ -677,7 +677,7 @@ const CompanyLanding: React.FC = () => {
           </div>
 
           <div className="text-center sm:text-right text-[11px]">
-            Engineered and maintained natively by <span className="text-slate-700 dark:text-slate-300 font-semibold">NHT ENTERPRISES (Abdul Sattar)</span> for <span className="text-emerald-600 dark:text-emerald-400 font-semibold">ZOHAIB ALI AND COMPANY</span>.
+            Engineered and maintained natively by <span className="text-slate-700 dark:text-slate-300 font-semibold">NHT ENTERPRISES (Abdul Sattar)</span> for <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Jawaid Jakwani & Sons</span>.
           </div>
         </div>
       </footer>

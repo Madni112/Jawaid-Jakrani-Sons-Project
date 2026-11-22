@@ -1,10 +1,10 @@
 /**
- * Dynamic Enterprise Branding Configuration for ZOHAIB ALI AND COMPANY
+ * Dynamic Enterprise Branding Configuration for Jawaid Jakwani & Sons
  */
 
 export interface BrandConfig {
   isAlm: boolean;
-  code: 'ZAC' | 'ALM';
+  code: 'J.J.S' | 'ALM';
   name: string;
   fullName: string;
   brandWord1: string;
@@ -25,17 +25,17 @@ export function detectIsAlm(): boolean {
 export function getBrandConfig(): BrandConfig {
   return {
     isAlm: true,
-    code: 'ZAC',
-    name: 'Zohaib Ali Company',
-    fullName: 'Zohaib Ali Company',
-    brandWord1: 'ZOHAIB',
-    brandWord2: 'ALI',
-    brandSuffix: 'COMPANY',
-    shortName: 'ZAC',
-    portalName: 'Zohaib Ali Company (ZAC)',
-    adminEmail: 'admin@zohaibalicompany.com',
+    code: 'J.J.S',
+    name: 'Jawaid Jakwani & Sons',
+    fullName: 'Jawaid Jakwani & Sons',
+    brandWord1: 'JAWAID',
+    brandWord2: 'JAKWANI',
+    brandSuffix: '& SONS',
+    shortName: 'J.J.S',
+    portalName: 'Jawaid Jakwani & Sons (J.J.S)',
+    adminEmail: 'admin@jawaidjakwani.com',
     supportPhone: '0312-8039911',
     address: 'Main Showroom & Warehouse, Pakistan',
-    tagline: 'Tile Emporium & Sanitary Management Suite',
+    tagline: 'Cloth Retail & Wholesale Management Suite',
   };
 }

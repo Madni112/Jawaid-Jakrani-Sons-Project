@@ -1027,7 +1027,7 @@ const ReportDashboard: React.FC = () => {
       {/* ── BREADCRUMB & METADATA BAR ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] font-mono text-slate-500 border-b border-slate-200 dark:border-slate-800 pb-3">
         <div className="flex items-center gap-2 uppercase tracking-wider">
-          <span className="font-extrabold text-slate-900 dark:text-white">Zohaib Ali and Company</span>
+          <span className="font-extrabold text-slate-900 dark:text-white">Jawaid Jakwani & Sons</span>
           <span>&gt;</span>
           <span>Operational Ledger</span>
           <span>&gt;</span>

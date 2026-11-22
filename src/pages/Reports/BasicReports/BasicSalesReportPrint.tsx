@@ -858,7 +858,7 @@ export const BasicSalesReportPrint: React.FC = () => {
     if (isClassic) {
       return (
         <div className="border-b-2 border-black pb-3 mb-4 text-center">
-          <h1 className="text-xl font-black uppercase tracking-wider">{businessName || 'ZOHAIB ALI AND COMPANY'}</h1>
+          <h1 className="text-xl font-black uppercase tracking-wider">{businessName || 'Jawaid Jakwani & Sons'}</h1>
           <h2 className="text-sm font-bold uppercase underline mt-0.5">
             BASIC SALES REPORT — {criteria.reportType.toUpperCase()} REGISTER
           </h2>
@@ -894,7 +894,7 @@ export const BasicSalesReportPrint: React.FC = () => {
             </span>
           </div>
           <h1 className="text-2xl print:text-lg font-black text-black dark:text-white tracking-tight mt-1">
-            {businessName || 'Zohaib Ali & Company'}
+            {businessName || 'Jawaid Jakwani & Sons'}
           </h1>
         </div>
 
@@ -911,7 +911,7 @@ export const BasicSalesReportPrint: React.FC = () => {
     if (isClassic) {
       return (
         <div className="border-b border-black pb-1.5 mb-3 print:pb-1 print:mb-1.5 flex items-center justify-between text-xs font-mono">
-          <span className="font-bold uppercase tracking-wider">{businessName || 'ZOHAIB ALI AND COMPANY'} — BASIC SALES REPORT</span>
+          <span className="font-bold uppercase tracking-wider">{businessName || 'Jawaid Jakwani & Sons'} — BASIC SALES REPORT</span>
           <span>Page {pageNum} of {totalPages}</span>
         </div>
       );
@@ -921,7 +921,7 @@ export const BasicSalesReportPrint: React.FC = () => {
       <div className="flex items-center justify-between pb-2 mb-3 print:pb-1 print:mb-1.5 border-b border-stroke dark:border-strokedark text-xs">
         <div className="flex items-center gap-2">
           <span className="font-black text-black dark:text-white uppercase tracking-wider">
-            {businessName || 'Zohaib Ali & Company'}
+            {businessName || 'Jawaid Jakwani & Sons'}
           </span>
           <span className="text-gray-400">•</span>
           <span className="text-gray-500 dark:text-gray-400 font-semibold text-[11px]">
@@ -1003,7 +1003,7 @@ export const BasicSalesReportPrint: React.FC = () => {
   const renderAuditFooter = () => (
     <div className={`pt-6 mt-6 print:pt-2 print:mt-2 flex items-center justify-between text-[11px] print:text-[9px] text-gray-500 border-t ${isClassic ? 'border-black' : 'border-stroke dark:border-strokedark'}`}>
       <div>
-        <span>Audited Electronic Statement • System Master ID: {businessName || 'ZAC-ERP'}</span>
+        <span>Audited Electronic Statement • System Master ID: {businessName || 'J.J.S-ERP'}</span>
       </div>
       <div className="flex items-center gap-12 text-center">
         <div>

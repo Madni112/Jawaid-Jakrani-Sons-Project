@@ -3196,7 +3196,7 @@ export const ReportVisibilityTab: React.FC<ReportVisibilityTabProps> = ({
 
                           <div className={logoPosition === 'center' ? 'text-center' : ''}>
                             <h1 className="text-xl font-black uppercase tracking-tight text-slate-900">
-                              {businessName || 'ZOHAIB ALI AND COMPANY'}
+                              {businessName || 'Jawaid Jakwani & Sons'}
                             </h1>
                             <div className="text-xs font-bold text-slate-600 uppercase tracking-wider mt-0.5">
                               {activeReportForStudio.title}

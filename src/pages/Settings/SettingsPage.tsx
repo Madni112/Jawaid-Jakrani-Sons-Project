@@ -241,7 +241,7 @@ const SettingsPage: React.FC = () => {
           <WorkflowSettingsTab isRTL={isRTL} />
         )}
 
-        {/* TAB 8: ZOHAIB ALI AND COMPANY FACTORY RESET ERP */}
+        {/* TAB 8: Jawaid Jakwani & Sons FACTORY RESET ERP */}
         {activeTab === 'alm_factory_reset' && (
           <FactoryResetTab
             userEmail={userEmail}

@@ -1,5 +1,5 @@
-import React from 'react';
-import { MdPrecisionManufacturing, MdLayers, MdAdd, MdDelete } from 'react-icons/md';
+import React, { useMemo } from 'react';
+import { MdPrecisionManufacturing, MdLayers, MdAdd, MdDelete, MdScience, MdInventory2 } from 'react-icons/md';
 import SearchableProductSelect from '../../../../components/SearchableProductSelect';
 import SearchableUomDropdown from '../../../../components/SearchableUomDropdown';
 import { BomItem } from '../types/bomTypes';
@@ -33,6 +33,19 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
   onRemoveItemRow,
   onUpdateItem
 }) => {
+  // Categorize breakdown: Chemical / Bulk vs Packaging Material
+  const chemicalTotal = useMemo(() => {
+    return items
+      .filter(it => it.item_type !== 'Packaging')
+      .reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
+  }, [items]);
+
+  const packagingTotal = useMemo(() => {
+    return items
+      .filter(it => it.item_type === 'Packaging')
+      .reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
+  }, [items]);
+
   return (
     <div className="rounded-2xl border border-stroke bg-white p-5 shadow-sm dark:border-strokedark dark:bg-boxdark space-y-4">
       {/* Batch Production Target Card */}
@@ -47,8 +60,8 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
             </label>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
               {isRTL
-                ? `یہ نسخہ نیچے دیے گئے تمام خام مال سے تیار ہونے والی کل مقدار (${uom}) کو ظاہر کرتا ہے۔`
-                : `Total output produced by this recipe run. Raw materials below formulate this exact batch size.`}
+                ? `یہ نسخہ نیچے دیے گئے تمام خام کیمیکلز اور پیکجنگ سامان سے تیار ہونے والی کل مقدار (${uom}) کو ظاہر کرتا ہے۔`
+                : `Total output produced by this recipe run. Raw ingredients and packaging materials below formulate this exact batch size.`}
             </p>
           </div>
         </div>
@@ -75,12 +88,12 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
           <MdLayers className="text-xl text-primary" />
           <div>
             <h2 className="text-base font-semibold text-black dark:text-white">
-              {isRTL ? 'خام مال اور اجزائے ترکیبی (Raw Materials & Ingredients)' : '2. Raw Materials & Components'}
+              {isRTL ? '2. خام کیمیکلز اور پیکجنگ میٹریل (Raw Materials & Packaging)' : '2. Raw Chemicals & Packaging Materials'}
             </h2>
             <p className="text-xs text-gray-500">
               {isRTL
-                ? 'اس بیچ کی تیاری کے لیے درکار تمام خام اشیاء اور ان کا ضیاع درج کریں'
-                : 'List all raw materials, inputs, quantities, wastage allowances & unit costs for this batch'}
+                ? 'ہر آئٹم کو خام کیمیکل یا پیکجنگ (بوتلیں، کیپس، لیبلز، کارٹن) منتخب کریں'
+                : 'Categorize each row as Raw Chemical / Ingredient or Packaging Material with waste% and automated Line Total'}
             </p>
           </div>
         </div>
@@ -91,162 +104,223 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-xs font-semibold transition cursor-pointer"
         >
           <MdAdd className="text-base" />
-          <span>{isRTL ? '+ نیا خام مال شامل کریں' : '+ Add Material Item'}</span>
+          <span>{isRTL ? '+ نیا آئٹم شامل کریں' : '+ Add Material Item'}</span>
         </button>
       </div>
 
+      {/* Cost Split Badges Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-meta-4/30 border border-slate-200/80 dark:border-strokedark">
+        <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-boxdark rounded-lg border border-slate-200 dark:border-strokedark shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              <MdScience size={15} />
+            </span>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              {isRTL ? 'بلک کیمیکل لاگت:' : 'Bulk Liquid Chemical Cost:'}
+            </span>
+          </div>
+          <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400">
+            PKR {chemicalTotal.toLocaleString()}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-boxdark rounded-lg border border-slate-200 dark:border-strokedark shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              <MdInventory2 size={15} />
+            </span>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              {isRTL ? 'پیکجنگ سامان لاگت:' : 'Packaging Materials Cost:'}
+            </span>
+          </div>
+          <span className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400">
+            PKR {packagingTotal.toLocaleString()}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between px-3 py-2 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/30 shadow-2xs">
+          <span className="text-xs font-bold text-primary">
+            {isRTL ? 'کل مشترکہ لاگت:' : 'Combined Materials Total:'}
+          </span>
+          <span className="font-mono font-extrabold text-sm text-primary">
+            PKR {rawMaterialCost.toLocaleString()}
+          </span>
+        </div>
+      </div>
+
       <div className="overflow-x-auto min-h-[300px] pb-32">
-        <table className="w-full min-w-[1040px] table-fixed text-xs">
+        <table className="w-full min-w-[1140px] table-fixed text-xs">
           <thead>
             <tr className="bg-gray-100 dark:bg-meta-4 text-gray-600 dark:text-gray-300 uppercase font-semibold">
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[280px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[130px]`}>
+                {isRTL ? 'قسم (Type)' : 'Category / Type'}
+              </th>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[250px]`}>
                 {isRTL ? 'خام مال / جزو *' : 'Material / Component Name *'}
               </th>
-              <th className="p-2.5 text-center w-[110px]">
-                {isRTL ? 'مقدار *' : 'Quantity *'}
-              </th>
               <th className="p-2.5 text-center w-[100px]">
-                {isRTL ? 'اکائی (UOM)' : 'UOM'}
+                {isRTL ? 'مقدار (Qty) *' : 'Quantity *'}
               </th>
-              <th className="p-2.5 text-center w-[130px]">
-                {isRTL ? 'فی یونٹ ریٹ' : 'Unit Cost'}
+              <th className="p-2.5 text-center w-[95px]">
+                {isRTL ? 'اکائی (UOM) *' : 'UOM *'}
               </th>
-              <th className="p-2.5 text-center w-[90px]">
-                {isRTL ? 'ضیاع %' : 'Waste %'}
+              <th className="p-2.5 text-center w-[115px]">
+                {isRTL ? 'فی اکائی قیمت (Cost)' : 'Unit Cost (PKR)'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-left' : 'text-right'} w-[140px]`}>
-                {isRTL ? 'کل لاگت' : 'Total Cost'}
+              <th className="p-2.5 text-center w-[85px]">
+                {isRTL ? 'ضیاع (Waste%)' : 'Waste %'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[140px]`}>
-                {isRTL ? 'نوٹ' : 'Note'}
+              <th className={`p-2.5 ${isRTL ? 'text-left' : 'text-right'} w-[150px] bg-primary/5 dark:bg-primary/10 text-primary font-bold`}>
+                {isRTL ? 'لائن ٹوٹل (Line Total PKR)' : 'Line Total (PKR)'}
               </th>
-              <th className="p-2.5 text-center w-[50px]">
-                {isRTL ? 'حذف' : 'Del'}
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[130px]`}>
+                {isRTL ? 'تفصیل / نوٹس' : 'Notes / Specs'}
               </th>
+              <th className="p-2.5 text-center w-[45px]"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stroke dark:divide-strokedark">
-            {items.map((row, idx) => (
-              <tr key={row.id || idx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/20 relative z-10 focus-within:z-30 hover:z-20">
-                <td className="p-2 w-[280px] relative">
-                  <SearchableProductSelect
-                    products={catalogProducts}
-                    value={row.item_name}
-                    onChange={(name, selectedProd) => {
-                      onUpdateItem(idx, 'item_name', name);
-                      if (selectedProd) {
-                        if (selectedProd.purchase_price) {
-                          onUpdateItem(idx, 'unit_cost', Number(selectedProd.purchase_price));
+            {items.map((row, idx) => {
+              const isPackaging = row.item_type === 'Packaging';
+              const lineTotal = Number(row.total_cost || 0);
+
+              return (
+                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-meta-4/20 transition-colors">
+                  {/* Item Type: Chemical vs Packaging */}
+                  <td className="p-2 w-[130px]">
+                    <select
+                      value={row.item_type || 'Chemical'}
+                      onChange={e => onUpdateItem(idx, 'item_type', e.target.value as 'Chemical' | 'Packaging')}
+                      className={`w-full rounded-lg border py-1.5 px-2 text-[11px] font-bold outline-none cursor-pointer transition ${
+                        isPackaging
+                          ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                          : 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                      }`}
+                    >
+                      <option value="Chemical">🧪 Raw Chemical</option>
+                      <option value="Packaging">📦 Packaging Mat</option>
+                    </select>
+                  </td>
+
+                  {/* Material / Component Name Searchable */}
+                  <td className="p-2 w-[250px] relative">
+                    <SearchableProductSelect
+                      value={row.item_name}
+                      onChange={(productName, product) => {
+                        onUpdateItem(idx, 'item_name', productName);
+                        if (product) {
+                          if (product.item_sr_no) onUpdateItem(idx, 'item_code', product.item_sr_no);
+                          if (product.uom) onUpdateItem(idx, 'uom', product.uom);
+                          const cost = Number(product.purchase_price ?? product.cost_price ?? 0);
+                          if (cost > 0) onUpdateItem(idx, 'unit_cost', cost);
                         }
-                        if (selectedProd.item_sr_no) {
-                          onUpdateItem(idx, 'item_code', selectedProd.item_sr_no);
-                        }
-                        if (selectedProd.uom) {
-                          onUpdateItem(idx, 'uom', selectedProd.uom);
-                        }
-                        if (selectedProd.id) {
-                          onUpdateItem(idx, 'item_id', String(selectedProd.id));
-                        }
+                      }}
+                      products={catalogProducts}
+                      placeholder={
+                        isPackaging
+                          ? (isRTL ? 'بوتل، کیپ، لیبل تلاش کریں...' : 'Search Bottle, Pump, Cap, Label...')
+                          : (isRTL ? 'کیمیکل / جزو تلاش کریں...' : 'Search Chemical / Ingredient...')
                       }
-                    }}
-                    placeholder={
-                      isRTL
-                        ? 'خام مال تلاش کریں یا نیا نام لکھیں...'
-                        : 'Search or type raw material...'
-                    }
-                    allowCustom={true}
-                    priceType="purchase"
-                    isRTL={isRTL}
-                  />
-                </td>
+                      allowCustom={true}
+                      priceType="purchase"
+                      isRTL={isRTL}
+                    />
+                  </td>
 
-                <td className="p-2 w-[110px]">
-                  <input
-                    type="number"
-                    min="0.001"
-                    step="any"
-                    required
-                    value={row.quantity}
-                    onChange={e =>
-                      onUpdateItem(idx, 'quantity', parseFloat(e.target.value) || 0)
-                    }
-                    className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
-                  />
-                </td>
+                  <td className="p-2 w-[100px]">
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      required
+                      value={row.quantity}
+                      onChange={e =>
+                        onUpdateItem(idx, 'quantity', parseFloat(e.target.value) || 0)
+                      }
+                      className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
+                    />
+                  </td>
 
-                <td className="p-2 w-[100px] relative">
-                  <SearchableUomDropdown
-                    value={row.uom}
-                    onChange={val => onUpdateItem(idx, 'uom', val)}
-                    uoms={allUomsList.length > 0 ? allUomsList : availableUoms}
-                    compact={true}
-                    isRTL={isRTL}
-                  />
-                </td>
+                  <td className="p-2 w-[95px] relative">
+                    <SearchableUomDropdown
+                      value={row.uom}
+                      onChange={val => onUpdateItem(idx, 'uom', val)}
+                      uoms={allUomsList.length > 0 ? allUomsList : availableUoms}
+                      compact={true}
+                      isRTL={isRTL}
+                    />
+                  </td>
 
-                <td className="p-2 w-[130px]">
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={row.unit_cost}
-                    onChange={e =>
-                      onUpdateItem(idx, 'unit_cost', parseFloat(e.target.value) || 0)
-                    }
-                    className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
-                  />
-                </td>
+                  <td className="p-2 w-[115px]">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={row.unit_cost}
+                      onChange={e =>
+                        onUpdateItem(idx, 'unit_cost', parseFloat(e.target.value) || 0)
+                      }
+                      className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
+                    />
+                  </td>
 
-                <td className="p-2 w-[90px]">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="any"
-                    value={row.wastage_percentage}
-                    onChange={e =>
-                      onUpdateItem(idx, 'wastage_percentage', parseFloat(e.target.value) || 0)
-                    }
-                    className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
-                    placeholder="0"
-                  />
-                </td>
+                  <td className="p-2 w-[85px]">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="any"
+                      value={row.wastage_percentage}
+                      onChange={e =>
+                        onUpdateItem(idx, 'wastage_percentage', parseFloat(e.target.value) || 0)
+                      }
+                      className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
+                      placeholder="0"
+                    />
+                  </td>
 
-                <td
-                  className={`p-2 w-[140px] font-mono font-bold text-black dark:text-white ${
-                    isRTL ? 'text-left' : 'text-right'
-                  }`}
-                >
-                  PKR {row.total_cost.toLocaleString()}
-                </td>
-
-                <td className="p-2 w-[140px]">
-                  <input
-                    type="text"
-                    placeholder={isRTL ? 'نوٹ...' : 'scrap, color...'}
-                    value={row.notes || ''}
-                    onChange={e => onUpdateItem(idx, 'notes', e.target.value)}
-                    className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 outline-none focus:border-primary dark:border-strokedark"
-                  />
-                </td>
-
-                <td className="p-2 w-[50px] text-center">
-                  <button
-                    type="button"
-                    onClick={() => onRemoveItemRow(idx)}
-                    className="p-1 text-gray-400 hover:text-danger rounded hover:bg-gray-100 dark:hover:bg-meta-4 cursor-pointer"
-                    title={isRTL ? 'حذف کریں' : 'Remove row'}
+                  {/* Read-Only Explicit Line Total (PKR) column */}
+                  <td
+                    className={`p-2 w-[150px] font-mono font-bold bg-primary/5 dark:bg-primary/10 text-primary ${
+                      isRTL ? 'text-left' : 'text-right'
+                    }`}
                   >
-                    <MdDelete className="text-base" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                    <div className="flex flex-col items-end">
+                      <span className="text-xs font-extrabold">PKR {lineTotal.toLocaleString()}</span>
+                      <span className="text-[9px] text-gray-400 font-normal">
+                        ({row.quantity} × {row.unit_cost} + {row.wastage_percentage || 0}%)
+                      </span>
+                    </div>
+                  </td>
+
+                  <td className="p-2 w-[130px]">
+                    <input
+                      type="text"
+                      placeholder={isRTL ? 'نوٹ...' : 'fragrance, grade...'}
+                      value={row.notes || ''}
+                      onChange={e => onUpdateItem(idx, 'notes', e.target.value)}
+                      className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 outline-none focus:border-primary dark:border-strokedark text-xs"
+                    />
+                  </td>
+
+                  <td className="p-2 w-[45px] text-center">
+                    <button
+                      type="button"
+                      onClick={() => onRemoveItemRow(idx)}
+                      className="p-1 text-gray-400 hover:text-danger rounded hover:bg-gray-100 dark:hover:bg-meta-4 cursor-pointer transition"
+                      title={isRTL ? 'حذف کریں' : 'Remove row'}
+                    >
+                      <MdDelete className="text-base" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      <div className="flex justify-between items-center pt-2 border-t border-stroke dark:border-strokedark">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-stroke dark:border-strokedark">
         <button
           type="button"
           onClick={onAddItemRow}
@@ -256,10 +330,19 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
           <span>{isRTL ? '+ نئی قطار شامل کریں' : '+ Add Another Item'}</span>
         </button>
 
-        <div className="text-xs font-semibold text-black dark:text-white">
-          {isRTL ? 'خام مال کا میزان:' : 'Total Raw Materials:'}{' '}
-          <span className="font-mono text-primary text-sm mr-1 ml-1 font-bold">
-            PKR {rawMaterialCost.toLocaleString()}
+        <div className="flex items-center gap-4 text-xs font-semibold text-black dark:text-white">
+          <span>
+            {isRTL ? 'کیمیکل:' : 'Chemical:'} <span className="font-mono text-blue-600 font-bold">PKR {chemicalTotal.toLocaleString()}</span>
+          </span>
+          <span>
+            {isRTL ? 'پیکجنگ:' : 'Packaging:'} <span className="font-mono text-amber-600 font-bold">PKR {packagingTotal.toLocaleString()}</span>
+          </span>
+          <div className="h-4 w-px bg-stroke dark:bg-strokedark" />
+          <span>
+            {isRTL ? 'کل خام مال:' : 'Total Materials:'}{' '}
+            <span className="font-mono text-primary text-sm font-extrabold">
+              PKR {rawMaterialCost.toLocaleString()}
+            </span>
           </span>
         </div>
       </div>

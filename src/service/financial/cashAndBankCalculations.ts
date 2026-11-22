@@ -92,8 +92,20 @@ export const calculateCashAndBankFlows = ({
     }
   });
 
-  // Cash Purchases Outflow
+  // Cash Purchases Outflow (Voucher-Aware: skip if VPV voucher already posted)
+  const voucherCoveredPurchases = new Set<string>();
+  (vouchersList || []).forEach((v: any) => {
+    const pNo = String(v.metadata?.linkedPurchaseNo || v.metadata?.purchase_no || v.original_invoice_no || '').trim().toLowerCase();
+    if (pNo) voucherCoveredPurchases.add(pNo);
+  });
+
   purchasesList.forEach((pur: any) => {
+    const pNo = String(pur.purchase_no || pur.bill_number || pur.id || '').trim().toLowerCase();
+    if (voucherCoveredPurchases.has(pNo)) {
+      // VPV voucher already handles this cash outflow in section 2
+      return;
+    }
+
     const paid = Number(pur.amount_paid_now || pur.paid_amount || 0);
     const purDate = pur.created_at || pur.purchase_date;
     const purInThisMonth = isThisMonth(purDate);

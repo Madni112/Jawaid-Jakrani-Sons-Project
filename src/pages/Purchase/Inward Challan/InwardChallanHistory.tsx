@@ -272,7 +272,7 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, onE
       .join('');
 
     const gpVal = rec.gatePasses?.[rec.warehouse] || rec.gatePasses?.['DEFAULT'] || '';
-    const safePrefix = String(rec.warehouse || 'ZOHAIB ALI AND COMPANY').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const safePrefix = String(rec.warehouse || 'Jawaid Jakwani & Sons').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const fullGp = gpVal ? (gpVal.toUpperCase().startsWith(safePrefix) ? gpVal : `${safePrefix}-${gpVal}`) : '';
     const displayPurchaseRef = (rec.purchase_no && rec.purchase_no !== 'Unassigned' && rec.purchase_no !== rec.grn_no && rec.purchase_no !== 'Direct Inward')
       ? rec.purchase_no
@@ -306,7 +306,7 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView, onE
         <body>
           <div class="header">
             <div>
-              <div class="company">ZOHAIB ALI AND COMPANY</div>
+              <div class="company">Jawaid Jakwani & Sons</div>
               <div class="title">INWARD RECEIVING CHALLAN / GATE PASS</div>
             </div>
             <div style="text-align: right;">

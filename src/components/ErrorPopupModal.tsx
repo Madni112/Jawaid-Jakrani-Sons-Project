@@ -72,7 +72,7 @@ const ErrorPopupModal: React.FC = () => {
                 {modalData.title}
               </h3>
               <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
-                Zohaib Ali and Company ERP Notification
+                Jawaid Jakwani & Sons ERP Notification
               </p>
             </div>
           </div>

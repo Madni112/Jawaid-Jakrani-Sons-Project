@@ -101,8 +101,7 @@ export const QUICK_MAP: Record<string, string> = {
   'no transaction voucher slips documented inside system history logs': 'کوئی واؤچر ریکارڈ نہیں ملا۔',
 
   // Top Nav & Brand
-  'zohaib ali company': 'زوہیب علی اینڈ کمپنی',
-  'zohaib ali and company': 'المحمّدی ٹائل ایمپوریم',
+  'Jawaid Jakwani & Sons': 'جاوید جکوانی اینڈ سنز',
   'tile emporium': 'ٹائل ایمپوریم',
   'tile retail & wholesale': 'ٹائل ریٹیل اینڈ ہول سیل',
   'uzair jibran cloth': 'جاوید جکوانی اینڈ سنز',

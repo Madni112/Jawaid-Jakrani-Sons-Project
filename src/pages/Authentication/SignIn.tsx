@@ -33,22 +33,7 @@ const SignIn: React.FC = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Live 1-second ticker to check real-time lockout expiry and update countdown
-  useEffect(() => {
-    const updateStatus = () => {
-      const status = checkLoginSecurityStatus(formik.values.email);
-      setSecurityStatus(status);
-      if (!status.isLocked && authError && authError.includes('Security lockout triggered')) {
-        setAuthError(null);
-      }
-    };
-
-    updateStatus();
-    const interval = setInterval(updateStatus, 1000);
-    return () => clearInterval(interval);
-  }, [formik.values.email, authError]);
-
-  // Formik validation schema for login
+// Formik validation schema for login
   const validationSchema = Yup.object({
     email: Yup.string()
       .email('Invalid email format')
@@ -87,6 +72,21 @@ const SignIn: React.FC = () => {
       }
     },
   });
+
+  // Live 1-second ticker to check real-time lockout expiry and update countdown
+  useEffect(() => {
+    const updateStatus = () => {
+      const status = checkLoginSecurityStatus(formik.values.email);
+      setSecurityStatus(status);
+      if (!status.isLocked && authError && authError.includes('Security lockout triggered')) {
+        setAuthError(null);
+      }
+    };
+
+    updateStatus();
+    const interval = setInterval(updateStatus, 1000);
+    return () => clearInterval(interval);
+  }, [formik.values.email, authError]);
 
   return (
     <div className="bg-[#F8FAFC] dark:bg-[#070A10] min-h-screen flex flex-col font-sans selection:bg-emerald-600 selection:text-white relative overflow-hidden">

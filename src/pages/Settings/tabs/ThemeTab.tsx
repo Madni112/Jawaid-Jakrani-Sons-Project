@@ -1050,10 +1050,10 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
                                   style={{ backgroundColor: selectedAccentColor }}
                                   onClick={() => setSidebarPreviewMode(sidebarPreviewMode === 'opened' ? 'closed' : 'opened')}
                                   title="Toggle expanded/compact view"
-                                >ZAC</div>
+                                >J.J.S</div>
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs font-black tracking-wide truncate">
-                                    {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'ZOHAIB ALI AND COMPANY'}
+                                    {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'Jawaid Jakwani & Sons'}
                                   </div>
                                   <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: sidebarSubTextColor }}>
                                     {brand.brandSuffix || 'COMPANY'}
@@ -1070,7 +1070,7 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
                                   style={{ backgroundColor: selectedAccentColor }}
                                   onClick={() => setSidebarPreviewMode('opened')}
                                   title="Click to expand sidebar"
-                                >ZAC</div>
+                                >J.J.S</div>
                               </div>
                             )}
 
@@ -1571,7 +1571,7 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ isRTL = false }) => {
                                   title="Portal Active indicator"
                                 />
                                 <span className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-100 hidden sm:inline">
-                                  {portalCode || 'ZAC'} • Portal Active
+                                  {portalCode || 'J.J.S'} • Portal Active
                                 </span>
                                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                                   Theme Studio

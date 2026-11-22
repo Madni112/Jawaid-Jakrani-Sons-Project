@@ -109,13 +109,13 @@ export const printIsolatedElement = (
   const elem = document.getElementById(elementId);
   if (!elem) return;
 
-  const existingIframe = document.getElementById('zac-leave-att-print-frame');
+  const existingIframe = document.getElementById('jjs-leave-att-print-frame');
   if (existingIframe) {
     existingIframe.remove();
   }
 
   const iframe = document.createElement('iframe');
-  iframe.id = 'zac-leave-att-print-frame';
+  iframe.id = 'jjs-leave-att-print-frame';
   iframe.style.position = 'fixed';
   iframe.style.right = '0';
   iframe.style.bottom = '0';
