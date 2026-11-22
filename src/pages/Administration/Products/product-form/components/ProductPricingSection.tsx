@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { MdAttachMoney } from 'react-icons/md';
 import { FiTrash2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
@@ -56,6 +56,48 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
   editUomInput,
   setEditUomInput
 }) => {
+  // Synchronize loose purchase and sale prices live whenever purchasePrice, retailPrice, or looseConversionRatio changes
+  const prevPricingRef = useRef({
+    purchasePrice: values.purchasePrice,
+    retailPrice: values.retailPrice,
+    ratio: values.looseConversionRatio,
+    allowLoose: values.allowLooseSales
+  });
+
+  useEffect(() => {
+    if (!values.allowLooseSales || isTileCategory) return;
+    const ratio = Number(values.looseConversionRatio) || 1;
+    const pur = Number(values.purchasePrice) || 0;
+    const ret = Number(values.retailPrice) || 0;
+
+    const prev = prevPricingRef.current;
+    const priceChanged =
+      prev.purchasePrice !== values.purchasePrice ||
+      prev.retailPrice !== values.retailPrice ||
+      prev.ratio !== values.looseConversionRatio ||
+      prev.allowLoose !== values.allowLooseSales;
+
+    if (priceChanged && ratio > 0) {
+      const calcPur = pur > 0 ? Number((pur / ratio).toFixed(2)) : 0;
+      const calcRet = ret > 0 ? Number((ret / ratio).toFixed(2)) : 0;
+      setFieldValue('loosePurchasePrice', calcPur);
+      setFieldValue('looseSalePrice', calcRet);
+
+      prevPricingRef.current = {
+        purchasePrice: values.purchasePrice,
+        retailPrice: values.retailPrice,
+        ratio: values.looseConversionRatio,
+        allowLoose: values.allowLooseSales
+      };
+    }
+  }, [
+    values.purchasePrice,
+    values.retailPrice,
+    values.looseConversionRatio,
+    values.allowLooseSales,
+    isTileCategory,
+    setFieldValue
+  ]);
   return (
     <div className="bg-white dark:bg-boxdark rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-5 space-y-4">
       <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -221,12 +263,12 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                 type="button"
                 onClick={() => {
                   setFieldValue('allowLooseSales', true);
-                  if (!values.looseSalePrice) {
-                    const ppb = Number(values.piecesPerBox) || 1;
-                    const retP = Number(values.retailPrice) || 0;
-                    if (retP > 0 && ppb > 0) {
-                      setFieldValue('looseSalePrice', Number((retP / ppb).toFixed(2)));
-                    }
+                  const ratio = Number(values.looseConversionRatio) || 1;
+                  const purP = Number(values.purchasePrice) || 0;
+                  const retP = Number(values.retailPrice) || 0;
+                  if (ratio > 0) {
+                    setFieldValue('loosePurchasePrice', Number((purP / ratio).toFixed(2)));
+                    setFieldValue('looseSalePrice', Number((retP / ratio).toFixed(2)));
                   }
                 }}
                 className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer inline-flex items-center gap-1.5 ${
