@@ -12,6 +12,10 @@ export interface ProductionOrderMaterial {
   unit_cost: number;
   total_cost: number;
   item_type?: 'Chemical' | 'Packaging';
+  allow_loose?: boolean;
+  loose_uom?: string;
+  loose_ratio?: number;
+  loose_quantity?: number;
   wastage_percentage?: number;
   notes?: string;
 }

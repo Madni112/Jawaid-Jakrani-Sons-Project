@@ -38,17 +38,18 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = ({
       product.pieces_per_packing ||
       0
   );
-  const pcsPerBox = rawPcs > 1 ? rawPcs : isBoxItem ? 4 : 1;
-  const hasLooseConversion = isBoxItem && pcsPerBox > 1;
+  const looseUomName = product.loose_uom || (isBoxItem ? 'pcs' : 'ML');
+  const isGenericLoose = Boolean(product.allow_loose_sales || product.allow_loose) && rawPcs > 1;
+  const hasLooseConversion = (isBoxItem || isGenericLoose) && rawPcs > 1;
 
   const isNegative = currentStock < 0;
   const absStock = Math.abs(currentStock);
-  let tileBoxes = 0;
-  let tileLoosePcs = 0;
+  let mainUnits = 0;
+  let looseUnits = 0;
   if (hasLooseConversion) {
-    const totalPieces = Math.round(absStock * pcsPerBox);
-    tileBoxes = Math.floor(totalPieces / pcsPerBox);
-    tileLoosePcs = totalPieces % pcsPerBox;
+    const totalSubUnits = Math.round(absStock * rawPcs);
+    mainUnits = Math.floor(totalSubUnits / rawPcs);
+    looseUnits = totalSubUnits % rawPcs;
   }
 
   let badgeClass =
@@ -91,25 +92,25 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = ({
         <div className="inline-flex flex-col items-center">
           <span
             className={`font-black text-xs px-2.5 py-1 ${
-              hasLooseConversion && tileLoosePcs > 0 ? 'rounded-xl' : 'rounded-full'
+              hasLooseConversion && looseUnits > 0 ? 'rounded-xl' : 'rounded-full'
             } inline-flex items-center gap-1 ${badgeClass}`}
           >
             {hasLooseConversion ? (
               <span className="flex flex-col items-center leading-tight">
-                {tileBoxes === 0 && tileLoosePcs > 0 ? (
+                {mainUnits === 0 && looseUnits > 0 ? (
                   <span>
                     {isNegative ? '-' : ''}
-                    {tileLoosePcs} pcs
+                    {looseUnits.toLocaleString()} {looseUomName}
                   </span>
                 ) : (
                   <>
                     <span>
                       {isNegative ? '-' : ''}
-                      {tileBoxes.toLocaleString()} {tileBoxes === 1 ? 'Box' : 'Boxes'}
+                      {mainUnits.toLocaleString()} {product.uom || 'Pack'}
                     </span>
-                    {tileLoosePcs > 0 && (
+                    {looseUnits > 0 && (
                       <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                        {isNegative ? '-' : '+'} {tileLoosePcs} pcs
+                        {isNegative ? '-' : '+'} {looseUnits.toLocaleString()} {looseUomName}
                       </span>
                     )}
                   </>

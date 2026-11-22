@@ -135,7 +135,14 @@ export const JobCardPrintModal: React.FC<JobCardPrintModalProps> = ({
                       {mat.item_name}
                       {mat.item_code && <span className="block text-[10px] text-gray-500 font-normal">{mat.item_code}</span>}
                     </td>
-                    <td className="p-2 border border-black text-right font-black">{mat.required_qty.toLocaleString()}</td>
+                    <td className="p-2 border border-black text-right font-black">
+                      <span>{mat.required_qty.toLocaleString()}</span>
+                      {mat.allow_loose && mat.loose_ratio && (
+                        <span className="block text-[10px] text-gray-600 font-normal">
+                          {(mat.required_qty * mat.loose_ratio).toLocaleString()} {mat.loose_uom}
+                        </span>
+                      )}
+                    </td>
                     <td className="p-2 border border-black text-center font-bold">{mat.uom}</td>
                     <td className="p-2 border border-black text-right">Rs. {Number(mat.unit_cost || 0).toLocaleString()}</td>
                     <td className="p-2 border border-black text-center">

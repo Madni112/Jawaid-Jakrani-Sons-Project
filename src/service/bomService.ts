@@ -6,7 +6,11 @@ export interface BomItem {
   item_id?: string;
   item_name: string;
   item_code?: string;
-  item_type?: 'Chemical' | 'Packaging'; // "Raw Chemical / Ingredient" or "Packaging Material"
+  item_type?: 'Chemical' | 'Packaging';
+  allow_loose?: boolean;
+  loose_uom?: string;
+  loose_ratio?: number;
+  loose_quantity?: number; // "Raw Chemical / Ingredient" or "Packaging Material"
   quantity: number;
   uom: string;
   unit_cost: number;

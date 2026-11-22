@@ -152,6 +152,10 @@ const AddProductionOrder: React.FC = () => {
         unit_cost: unitCost,
         total_cost: totalCost,
         item_type: item.item_type || 'Chemical',
+        allow_loose: item.allow_loose,
+        loose_uom: item.loose_uom,
+        loose_ratio: item.loose_ratio,
+        loose_quantity: item.allow_loose && item.loose_ratio ? Math.round(scaledReq * item.loose_ratio) : undefined,
         wastage_percentage: item.wastage_percentage,
         notes: item.notes
       };
@@ -499,8 +503,15 @@ const AddProductionOrder: React.FC = () => {
                           {mat.item_name}
                           {mat.item_code && <span className="block text-[10px] text-gray-400 font-normal">{mat.item_code}</span>}
                         </td>
-                        <td className="py-3 px-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
-                          {mat.required_qty.toLocaleString()}
+                        <td className="py-3 px-3 text-right font-mono">
+                          <span className="font-black text-emerald-600 dark:text-emerald-400 block">
+                            {mat.required_qty.toLocaleString()}
+                          </span>
+                          {mat.allow_loose && mat.loose_ratio && (
+                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold block">
+                              {(mat.required_qty * mat.loose_ratio).toLocaleString()} {mat.loose_uom}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-center font-bold text-gray-500">
                           {mat.uom}

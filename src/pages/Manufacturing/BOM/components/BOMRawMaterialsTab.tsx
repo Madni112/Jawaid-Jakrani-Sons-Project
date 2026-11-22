@@ -92,8 +92,8 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
             </h2>
             <p className="text-xs text-gray-500">
               {isRTL
-                ? 'ہر آئٹم کو خام کیمیکل یا پیکجنگ (بوتلیں، کیپس، لیبلز، کارٹن) منتخب کریں'
-                : 'Categorize each row as Raw Chemical / Ingredient or Packaging Material with waste% and automated Line Total'}
+                ? 'ہر آئٹم کو خام کیمیکل یا پیکجنگ منتخب کریں، اور ضرورت پڑنے پر لوز اکائی (ML, GM, Pcs) استعمال کریں۔'
+                : 'Categorize each row as Raw Chemical or Packaging Material. Supports fine Loose sub-units (ML, GM, Pcs) with conversion.'}
             </p>
           </div>
         </div>
@@ -155,13 +155,13 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
               <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[130px]`}>
                 {isRTL ? 'قسم (Type)' : 'Category / Type'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[250px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[240px]`}>
                 {isRTL ? 'خام مال / جزو *' : 'Material / Component Name *'}
               </th>
-              <th className="p-2.5 text-center w-[100px]">
+              <th className="p-2.5 text-center w-[120px]">
                 {isRTL ? 'مقدار (Qty) *' : 'Quantity *'}
               </th>
-              <th className="p-2.5 text-center w-[95px]">
+              <th className="p-2.5 text-center w-[100px]">
                 {isRTL ? 'اکائی (UOM) *' : 'UOM *'}
               </th>
               <th className="p-2.5 text-center w-[115px]">
@@ -183,6 +183,9 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
             {items.map((row, idx) => {
               const isPackaging = row.item_type === 'Packaging';
               const lineTotal = Number(row.total_cost || 0);
+              const ratio = Number(row.loose_ratio || 0);
+              const looseUom = row.loose_uom || '';
+              const hasLoose = Boolean(row.allow_loose && ratio > 1 && looseUom);
 
               return (
                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-meta-4/20 transition-colors">
@@ -203,7 +206,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                   </td>
 
                   {/* Material / Component Name Searchable */}
-                  <td className="p-2 w-[250px] relative">
+                  <td className="p-2 w-[240px] relative">
                     <SearchableProductSelect
                       value={row.item_name}
                       onChange={(productName, product) => {
@@ -213,6 +216,13 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                           if (product.uom) onUpdateItem(idx, 'uom', product.uom);
                           const cost = Number(product.purchase_price ?? product.cost_price ?? 0);
                           if (cost > 0) onUpdateItem(idx, 'unit_cost', cost);
+
+                          // Populate loose configurations if product allows loose
+                          if (product.allow_loose_sales || product.allow_loose) {
+                            onUpdateItem(idx, 'allow_loose', true);
+                            onUpdateItem(idx, 'loose_uom', product.loose_uom || (product.uom === 'LTR' || product.uom === 'Liters' ? 'ML' : 'GM'));
+                            onUpdateItem(idx, 'loose_ratio', Number(product.loose_conversion_ratio || 1000));
+                          }
                         }
                       }}
                       products={catalogProducts}
@@ -225,23 +235,60 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                       priceType="purchase"
                       isRTL={isRTL}
                     />
+
+                    {/* Loose Unit Quick Converter Badge */}
+                    {hasLoose && (
+                      <div className="mt-1 flex items-center gap-1.5 text-[10px] text-blue-700 dark:text-blue-300 font-mono">
+                        <span className="font-bold">Loose:</span>
+                        <span>
+                          {(Number(row.quantity || 0) * ratio).toLocaleString()} {looseUom}
+                        </span>
+                        <span className="text-gray-400">({ratio} {looseUom}/{row.uom})</span>
+                      </div>
+                    )}
                   </td>
 
-                  <td className="p-2 w-[100px]">
-                    <input
-                      type="number"
-                      min="0.001"
-                      step="any"
-                      required
-                      value={row.quantity}
-                      onChange={e =>
-                        onUpdateItem(idx, 'quantity', parseFloat(e.target.value) || 0)
-                      }
-                      className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
-                    />
+                  {/* Quantity with Loose Input Option */}
+                  <td className="p-2 w-[120px]">
+                    <div className="flex flex-col gap-1">
+                      <input
+                        type="number"
+                        min="0.0001"
+                        step="any"
+                        required
+                        value={row.quantity}
+                        onChange={e => {
+                          const val = parseFloat(e.target.value) || 0;
+                          onUpdateItem(idx, 'quantity', val);
+                          if (hasLoose) {
+                            onUpdateItem(idx, 'loose_quantity', Math.round(val * ratio));
+                          }
+                        }}
+                        className="w-full rounded border border-stroke bg-white dark:bg-meta-4 py-1.5 px-2 font-mono text-center outline-none focus:border-primary dark:border-strokedark font-medium"
+                      />
+                      {hasLoose && (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            placeholder={looseUom}
+                            value={row.loose_quantity ?? Math.round(Number(row.quantity || 0) * ratio)}
+                            onChange={e => {
+                              const lVal = parseFloat(e.target.value) || 0;
+                              onUpdateItem(idx, 'loose_quantity', lVal);
+                              onUpdateItem(idx, 'quantity', Number((lVal / ratio).toFixed(4)));
+                            }}
+                            className="w-full text-[10px] font-mono text-center py-0.5 px-1 rounded border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 outline-none"
+                            title={`Type loose in ${looseUom} to auto-convert to ${row.uom}`}
+                          />
+                          <span className="text-[9px] font-bold text-gray-400 uppercase font-mono">{looseUom}</span>
+                        </div>
+                      )}
+                    </div>
                   </td>
 
-                  <td className="p-2 w-[95px] relative">
+                  <td className="p-2 w-[100px] relative">
                     <SearchableUomDropdown
                       value={row.uom}
                       onChange={val => onUpdateItem(idx, 'uom', val)}
