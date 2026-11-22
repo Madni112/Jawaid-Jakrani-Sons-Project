@@ -590,16 +590,49 @@ const AddStockTransfer = () => {
                                 {Number(item.availableQty || 0).toLocaleString()}
                               </td>
                               <td className="p-2 border border-stroke dark:border-strokedark text-gray-400 font-semibold w-28 uppercase">{currentUomString}</td>
-                              <td className="p-2 border border-stroke dark:border-strokedark w-32">
-                                <input
-                                  type="number"
-                                  name={`items.${index}.qty`}
-                                  disabled={isEditMode}
-                                  onKeyDown={blockInvalidChar}
-                                  onChange={handleChange}
-                                  value={item.qty}
-                                  className="w-full text-center outline-none border border-stroke rounded p-1 font-bold text-black dark:text-white bg-transparent focus:border-primary dark:border-strokedark"
-                                />
+                              <td className="p-2 border border-stroke dark:border-strokedark min-w-[200px]">
+                                {(() => {
+                                  const matched = products.find(p => p.product_name === item.itemName || p.item_sr_no === item.itemCode);
+                                  const hasMultiTiers = Array.isArray(matched?.multi_loose_units) && matched.multi_loose_units.length > 0;
+                                  const allowLoose = Boolean(matched?.allow_loose_sales || hasMultiTiers);
+                                  const looseRatio = Number(matched?.loose_conversion_ratio || matched?.pieces_per_box || 1);
+
+                                  if (allowLoose && (looseRatio > 1 || hasMultiTiers)) {
+                                    return (
+                                      <ChainedUomInputGrid
+                                        primaryUom={matched?.uom || currentUomString || 'Unit'}
+                                        primaryQuantity={Number(item.qty) || 0}
+                                        primaryRate={Number(matched?.cost_price || matched?.purchase_price) || 0}
+                                        tiers={
+                                          hasMultiTiers
+                                            ? matched.multi_loose_units
+                                            : [{ uom: matched?.loose_uom || 'Pcs', ratio: looseRatio }]
+                                        }
+                                        tierQuantities={item.tier_quantities}
+                                        tierRates={item.tier_rates}
+                                        mode="cost"
+                                        disabled={isEditMode}
+                                        onChange={({ primaryQuantity, tierQuantities, tierRates, totalConvertedPrimaryQty }) => {
+                                          setFieldValue(`items.${index}.qty`, totalConvertedPrimaryQty);
+                                          setFieldValue(`items.${index}.tier_quantities`, tierQuantities);
+                                          setFieldValue(`items.${index}.tier_rates`, tierRates);
+                                        }}
+                                      />
+                                    );
+                                  }
+
+                                  return (
+                                    <input
+                                      type="number"
+                                      name={`items.${index}.qty`}
+                                      disabled={isEditMode}
+                                      onKeyDown={blockInvalidChar}
+                                      onChange={handleChange}
+                                      value={item.qty}
+                                      className="w-full text-center outline-none border border-stroke rounded p-1 font-bold text-black dark:text-white bg-transparent focus:border-primary dark:border-strokedark"
+                                    />
+                                  );
+                                })()}
                               </td>
                               <td className="p-2 border border-stroke dark:border-strokedark text-center w-12">
                                 {!isEditMode && values.items.length > 1 && (
