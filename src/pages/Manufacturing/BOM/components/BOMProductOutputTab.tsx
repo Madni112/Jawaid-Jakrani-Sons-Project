@@ -246,8 +246,7 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
                       const cur = Array.isArray(multiLooseUnits) ? [...multiLooseUnits] : [];
                       const lastUnit = cur.length > 0 ? cur[cur.length - 1].uom : (looseUom || 'LTR');
                       const nextUom = lastUnit === 'LTR' ? 'ML' : (lastUnit === 'KG' ? 'GM' : 'PCS');
-                      const nextRatio = (nextUom === 'ML' || nextUom === 'GM') ? 1000 : 12;
-                      setMultiLooseUnits([...cur, { uom: nextUom, ratio: nextRatio }]);
+                      setMultiLooseUnits([...cur, { uom: nextUom, ratio: '' }]);
                     }}
                     className="px-2.5 py-1 text-[11px] font-bold bg-primary/10 hover:bg-primary/20 text-primary rounded-lg border border-primary/30 cursor-pointer"
                   >
@@ -287,18 +286,20 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
                           className="w-20 rounded border border-stroke dark:border-strokedark py-1 px-2 font-mono text-center font-bold outline-none focus:border-primary text-xs"
                           placeholder="1000"
                         />
-                        <input
-                          type="text"
-                          value={tier.uom}
-                          onChange={e => {
-                            const clean = e.target.value.toUpperCase();
-                            const updated = [...multiLooseUnits];
-                            updated[tIdx] = { ...tier, uom: clean };
-                            setMultiLooseUnits(updated);
-                          }}
-                          className="w-16 rounded border border-primary/40 py-1 px-2 font-mono text-center font-bold text-primary uppercase outline-none focus:border-primary text-xs"
-                          placeholder="ML"
-                        />
+                        <div className="w-28 relative">
+                          <SearchableUomDropdown
+                            value={tier.uom}
+                            onChange={(val) => {
+                              const clean = String(val || '').trim().toUpperCase();
+                              const updated = [...multiLooseUnits];
+                              updated[tIdx] = { ...tier, uom: clean };
+                              setMultiLooseUnits(updated);
+                            }}
+                            uoms={availableUoms && availableUoms.length > 0 ? availableUoms : ['ML', 'GM', 'PCS', 'LTR', 'KG', 'MTR']}
+                            compact={true}
+                            placeholder="UOM"
+                          />
+                        </div>
                         <button
                           type="button"
                           onClick={() => {
