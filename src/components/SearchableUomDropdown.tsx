@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { MdSearch, MdKeyboardArrowDown, MdCheck, MdClose } from 'react-icons/md';
-import { UomItem } from '../service/uomService';
+import { UomItem, createAndPersistUom } from '../service/uomService';
+import { toast } from 'react-hot-toast';
 
 interface SearchableUomDropdownProps {
   value: string;
@@ -80,9 +81,22 @@ export const SearchableUomDropdown: React.FC<SearchableUomDropdownProps> = ({
   }, [isOpen]);
 
   const handleSelect = (code: string) => {
-    onChange(code.toUpperCase());
+    const clean = code.toUpperCase();
+    onChange(clean);
     setIsOpen(false);
     setQuery('');
+  };
+
+  const handleAddCustomUom = async (customCode: string) => {
+    const clean = customCode.trim().toUpperCase();
+    if (!clean) return;
+    try {
+      await createAndPersistUom(clean, clean);
+      toast.success(`Unit "${clean}" saved to database!`);
+    } catch (e) {
+      console.warn('Could not persist UOM:', e);
+    }
+    handleSelect(clean);
   };
 
   const cleanQueryUpper = query.trim().toUpperCase();
@@ -110,11 +124,11 @@ export const SearchableUomDropdown: React.FC<SearchableUomDropdownProps> = ({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (showCustomOption && highlightedIndex === filtered.length) {
-        handleSelect(cleanQueryUpper);
+        handleAddCustomUom(cleanQueryUpper);
       } else if (filtered[highlightedIndex]) {
         handleSelect(filtered[highlightedIndex].short_code);
       } else if (showCustomOption) {
-        handleSelect(cleanQueryUpper);
+        handleAddCustomUom(cleanQueryUpper);
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -238,7 +252,7 @@ export const SearchableUomDropdown: React.FC<SearchableUomDropdownProps> = ({
               <div
                 onMouseDown={e => {
                   e.preventDefault();
-                  handleSelect(cleanQueryUpper);
+                  handleAddCustomUom(cleanQueryUpper);
                 }}
                 onMouseEnter={() => setHighlightedIndex(filtered.length)}
                 className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs border border-dashed border-primary/40 ${
@@ -249,13 +263,13 @@ export const SearchableUomDropdown: React.FC<SearchableUomDropdownProps> = ({
               >
                 <div className="truncate">
                   <span className="font-semibold block text-[11px]">
-                    {isRTL ? `کسٹم اکائی استعمال کریں: "${cleanQueryUpper}"` : `Use custom UOM: "${cleanQueryUpper}"`}
+                    {isRTL ? `کسٹم اکائی محفوظ اور استعمال کریں: "${cleanQueryUpper}"` : `Save & use custom UOM: "${cleanQueryUpper}"`}
                   </span>
                   <span className="text-[10px] text-gray-400">
-                    {isRTL ? 'Enter دبائیں یا کلک کریں' : 'Press Enter or click to use'}
+                    {isRTL ? 'ڈیٹابیس میں محفوظ کرنے کے لیے دبائیں' : 'Press Enter or click to save in database'}
                   </span>
                 </div>
-                <span className="text-xs font-mono font-bold bg-primary text-white px-1.5 py-0.5 rounded">
+                <span className="text-xs font-mono font-bold bg-primary text-white px-1.5 py-0.5 rounded shadow-xs">
                   + ADD
                 </span>
               </div>

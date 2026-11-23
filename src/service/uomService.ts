@@ -100,6 +100,55 @@ export const deleteCustomLocalUom = (idOrCode: string | number) => {
   }
 };
 
+/**
+ * Creates and persists a new UOM to Supabase database (inventory_uom table),
+ * with automatic fallback to localStorage and active status switches.
+ */
+export const createAndPersistUom = async (
+  shortCode: string,
+  fullName?: string,
+  category = 'Count & Units',
+  tenantId = 'bashir'
+): Promise<UomItem> => {
+  const code = String(shortCode || '').trim().toUpperCase();
+  const name = String(fullName || code).trim();
+  const activeTenant = tenantId || 'bashir';
+
+  const newUnit: UomItem = {
+    id: `custom-${Date.now()}`,
+    short_code: code,
+    full_name: name,
+    category: category,
+    tenant_id: activeTenant,
+    is_active: true
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from('inventory_uom')
+      .insert([{
+        short_code: code,
+        full_name: name,
+        category: category,
+        tenant_id: activeTenant
+      }])
+      .select('*')
+      .single();
+
+    if (!error && data) {
+      newUnit.id = data.id;
+    }
+  } catch (err) {
+    console.warn('Could not insert UOM into inventory_uom table, saved locally:', err);
+  }
+
+  // Persist locally & set active override
+  saveCustomLocalUom(newUnit);
+  setLocalActiveOverride(code, true);
+
+  return newUnit;
+};
+
 // Unified fetcher for UOMs that safely falls back when is_active column doesn't exist in Postgres
 export const fetchAllUomsSafe = async (tenantId?: string): Promise<UomItem[]> => {
   const activeOverrides = getLocalActiveOverrides();
