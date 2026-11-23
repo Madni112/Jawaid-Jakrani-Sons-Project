@@ -504,22 +504,41 @@ const AddProduct = () => {
 
                 if (
                   error &&
-                  (error.message?.includes('allow_loose_sales') ||
+                  (error.message?.includes('multi_loose_units') ||
+                    error.message?.includes('allow_loose_sales') ||
                     error.code === '42703' ||
                     error.message?.includes('schema cache'))
                 ) {
+                  // If multi_loose_units column does not exist yet in Supabase, strip it and retry
                   const {
-                    allow_loose_sales,
-                    loose_uom,
-                    loose_conversion_ratio,
-                    loose_purchase_price,
-                    loose_sale_price,
-                    ...cleanPayload
+                    multi_loose_units,
+                    ...withoutMulti
                   } = databasePayload;
-                  const retry = await supabase
+
+                  let retry = await supabase
                     .from('products')
-                    .update(cleanPayload)
+                    .update(withoutMulti)
                     .eq('id', editData.id);
+
+                  if (
+                    retry.error &&
+                    (retry.error.message?.includes('allow_loose_sales') ||
+                      retry.error.code === '42703' ||
+                      retry.error.message?.includes('schema cache'))
+                  ) {
+                    const {
+                      allow_loose_sales,
+                      loose_uom,
+                      loose_conversion_ratio,
+                      loose_purchase_price,
+                      loose_sale_price,
+                      ...cleanPayload
+                    } = withoutMulti;
+                    retry = await supabase
+                      .from('products')
+                      .update(cleanPayload)
+                      .eq('id', editData.id);
+                  }
                   error = retry.error;
                 }
 
@@ -539,25 +558,48 @@ const AddProduct = () => {
                   performedBy: user?.name || user?.email || 'User'
                 });
 
+                // Cache multi-tier loose units locally for Jawaid Jakwani & Sons
+                try {
+                  const multiMap = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
+                  multiMap[editData.id] = databasePayload.multi_loose_units || [];
+                  if (finalItemSrNo) multiMap[finalItemSrNo] = databasePayload.multi_loose_units || [];
+                  localStorage.setItem('jj_multi_loose_units', JSON.stringify(multiMap));
+                } catch (e) {}
                 toast.success('Product updated successfully!');
               } else {
                 let { error } = await supabase.from('products').insert([databasePayload]);
 
                 if (
                   error &&
-                  (error.message?.includes('allow_loose_sales') ||
+                  (error.message?.includes('multi_loose_units') ||
+                    error.message?.includes('allow_loose_sales') ||
                     error.code === '42703' ||
                     error.message?.includes('schema cache'))
                 ) {
+                  // If multi_loose_units column does not exist yet in Supabase, strip it and retry
                   const {
-                    allow_loose_sales,
-                    loose_uom,
-                    loose_conversion_ratio,
-                    loose_purchase_price,
-                    loose_sale_price,
-                    ...cleanPayload
+                    multi_loose_units,
+                    ...withoutMulti
                   } = databasePayload;
-                  const retry = await supabase.from('products').insert([cleanPayload]);
+
+                  let retry = await supabase.from('products').insert([withoutMulti]);
+
+                  if (
+                    retry.error &&
+                    (retry.error.message?.includes('allow_loose_sales') ||
+                      retry.error.code === '42703' ||
+                      retry.error.message?.includes('schema cache'))
+                  ) {
+                    const {
+                      allow_loose_sales,
+                      loose_uom,
+                      loose_conversion_ratio,
+                      loose_purchase_price,
+                      loose_sale_price,
+                      ...cleanPayload
+                    } = withoutMulti;
+                    retry = await supabase.from('products').insert([cleanPayload]);
+                  }
                   error = retry.error;
                 }
 
