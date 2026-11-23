@@ -227,7 +227,7 @@ export const GRNTilesSection: React.FC<GRNTilesSectionProps> = ({
                         <td className="p-3 w-52">
                           <WarehouseSelect
                             locations={locations}
-                            selectedWarehouse={tItem.warehouseName || locations[0]?.name || ''}
+                            selectedWarehouse={tItem.warehouseName || ''}
                             onSelect={(wh) => setFieldValue(`tileItems.${tIdx}.warehouseName`, wh)}
                             productName={tItem.itemName}
                             getLocationStock={getLocationStock}
@@ -293,7 +293,7 @@ export const GRNTilesSection: React.FC<GRNTilesSectionProps> = ({
                       id: `tile-${Date.now()}`,
                       itemName: '',
                       skuCode: '',
-                      warehouseName: locations[0]?.name || '',
+                      warehouseName: '',
                       boxQty: 1,
                       loosePcs: 0,
                       totalSqm: 1.44,

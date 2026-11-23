@@ -140,7 +140,7 @@ export const GRNHeaderSection: React.FC<GRNHeaderSectionProps> = ({
                   id: `tile-0-${Date.now()}`,
                   itemName: '',
                   skuCode: '',
-                  warehouseName: locations[0]?.name || '',
+                  warehouseName: '',
                   boxQty: 1,
                   loosePcs: 0,
                   totalSqm: 1.44,

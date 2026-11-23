@@ -173,7 +173,7 @@ export const GRNStandardItemsSection: React.FC<GRNStandardItemsSectionProps> = (
                   <td className="p-3 w-48">
                     <WarehouseSelect
                       locations={locations}
-                      selectedWarehouse={item.warehouseName || locations[0]?.name || ''}
+                      selectedWarehouse={item.warehouseName || ''}
                       onSelect={(wh) => setFieldValue(`items.${idx}.warehouseName`, wh)}
                       productName={item.itemName}
                       getLocationStock={getLocationStock}
