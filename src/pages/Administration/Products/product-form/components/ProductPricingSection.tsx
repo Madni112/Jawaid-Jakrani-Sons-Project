@@ -4,6 +4,7 @@ import { FiTrash2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { saveCustomLocalUom, deleteCustomLocalUom } from '../../../../../service/uomService';
 import { ProductFormValues, blockInvalidChar, LooseTier } from '../utils/productFormHelpers';
+import SearchableUomDropdown from '../../../../../components/SearchableUomDropdown';
 
 interface ProductPricingSectionProps {
   values: ProductFormValues;
@@ -697,9 +698,9 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                     const newTier: LooseTier = {
                       id: `tier-${Date.now()}`,
                       uom: defaultNextUom,
-                      ratio: defaultRatio,
-                      costPrice: newCost,
-                      salePrice: newSale
+                      ratio: '',
+                      costPrice: 0,
+                      salePrice: 0
                     };
 
                     setFieldValue('looseTiers', [...currentTiers, newTier]);
@@ -766,18 +767,20 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                             className="w-24 rounded-lg border border-slate-200 dark:border-slate-700 p-1.5 font-mono text-center font-bold text-xs outline-none focus:border-emerald-600 dark:bg-slate-900"
                             placeholder="1000"
                           />
-                          <input
-                            type="text"
-                            value={tier.uom}
-                            onChange={(e) => {
-                              const clean = e.target.value.toUpperCase();
-                              const updated = [...values.looseTiers];
-                              updated[idx] = { ...tier, uom: clean };
-                              setFieldValue('looseTiers', updated);
-                            }}
-                            className="w-20 rounded-lg border border-emerald-300 dark:border-emerald-700/60 p-1.5 font-mono font-black text-xs text-center text-emerald-700 dark:text-emerald-300 outline-none focus:border-emerald-600 dark:bg-slate-900 uppercase"
-                            placeholder="ML"
-                          />
+                          <div className="w-28 relative">
+                            <SearchableUomDropdown
+                              value={tier.uom}
+                              onChange={(val) => {
+                                const clean = String(val || '').trim().toUpperCase();
+                                const updated = [...values.looseTiers];
+                                updated[idx] = { ...tier, uom: clean };
+                                setFieldValue('looseTiers', updated);
+                              }}
+                              uoms={activeUomList.length > 0 ? activeUomList : ['ML', 'GM', 'PCS', 'LTR', 'KG', 'MTR']}
+                              compact={true}
+                              placeholder="UOM"
+                            />
+                          </div>
                         </div>
 
                         {/* Live Cost & Sale for this tier */}
