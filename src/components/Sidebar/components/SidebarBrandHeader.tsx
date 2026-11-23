@@ -56,7 +56,7 @@ export const SidebarBrandHeader: React.FC<SidebarBrandHeaderProps> = ({
                   >
                     {brand.brandWord1 && brand.brandWord2 ? `${brand.brandWord1} ${brand.brandWord2}` : 'Jawaid Jakwani & Sons'}
                   </span>
-                  <span className="px-1 py-0.5 rounded text-[8px] font-mono font-black tracking-wider bg-primary/20 text-primary dark:bg-white/10 dark:text-rose-300 uppercase shrink-0">
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black tracking-wider bg-rose-500/20 text-rose-300 border border-rose-400/40 shadow-xs uppercase shrink-0">
                     ERP
                   </span>
                 </div>
