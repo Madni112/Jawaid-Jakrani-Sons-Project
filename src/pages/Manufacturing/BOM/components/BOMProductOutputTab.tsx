@@ -39,6 +39,7 @@ interface BOMProductOutputTabProps {
 }
 
 export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
+
   isRTL,
   catalogProducts,
   finishedProductName,
@@ -65,6 +66,15 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
   multiLooseUnits,
   setMultiLooseUnits
 }) => {
+  // Check if finished product is an existing catalog product
+  const existingProduct = catalogProducts.find(
+    p => p.product_name?.toLowerCase() === (finishedProductName || '').toLowerCase()
+  );
+  const isCustomProduct = Boolean(finishedProductName?.trim()) && !existingProduct;
+  const existingHasLoose = Boolean(
+    existingProduct && (existingProduct.allow_loose_sales || (Array.isArray(existingProduct.multi_loose_units) && existingProduct.multi_loose_units.length > 0))
+  );
+
   return (
     <div className="rounded-2xl border border-stroke bg-white p-5 shadow-sm dark:border-strokedark dark:bg-boxdark space-y-4">
       <div className="flex items-center gap-2 border-b border-stroke pb-3 dark:border-strokedark">
@@ -130,7 +140,8 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
         </div>
 
         {/* FINISHED PRODUCT LOOSE SELLING & SUB-UOM HIERARCHY */}
-        <div className="sm:col-span-2 p-4 rounded-xl bg-slate-50 dark:bg-meta-4/30 border border-slate-200 dark:border-strokedark space-y-3">
+        {(isCustomProduct || existingHasLoose) && (
+          <div className="sm:col-span-2 p-4 rounded-xl bg-slate-50 dark:bg-meta-4/30 border border-slate-200 dark:border-strokedark space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stroke dark:border-strokedark pb-2.5">
             <div>
               <div className="flex items-center gap-2">
@@ -146,36 +157,42 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
               </p>
             </div>
 
-            <div className="inline-flex items-center p-0.5 bg-slate-200 dark:bg-meta-4 rounded-full border border-stroke dark:border-strokedark">
-              <button
-                type="button"
-                onClick={() => setAllowLoose(false)}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
-                  !allowLoose
-                    ? 'bg-white dark:bg-boxdark text-black dark:text-white shadow-2xs'
-                    : 'text-gray-500 hover:text-black dark:text-gray-400'
-                }`}
-              >
-                ✕ Full Bulk Only
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAllowLoose(true);
-                  if (!looseUom) {
-                    setLooseUom(uom === 'LTR' || uom === 'Liters' ? 'ML' : (uom === 'KG' ? 'GM' : 'PCS'));
-                    setLooseRatio(uom === 'LTR' || uom === 'KG' ? 1000 : 12);
-                  }
-                }}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer inline-flex items-center gap-1 ${
-                  allowLoose
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-gray-500 hover:text-black dark:text-gray-400'
-                }`}
-              >
-                ✓ Allow Loose Selling
-              </button>
-            </div>
+            {!isCustomProduct && existingHasLoose ? (
+              <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                ✓ Catalog Loose Configured
+              </span>
+            ) : (
+              <div className="inline-flex items-center p-0.5 bg-slate-200 dark:bg-meta-4 rounded-full border border-stroke dark:border-strokedark">
+                <button
+                  type="button"
+                  onClick={() => setAllowLoose(false)}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+                    !allowLoose
+                      ? 'bg-white dark:bg-boxdark text-black dark:text-white shadow-2xs'
+                      : 'text-gray-500 hover:text-black dark:text-gray-400'
+                  }`}
+                >
+                  ✕ Full Bulk Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAllowLoose(true);
+                    if (!looseUom) {
+                      setLooseUom(uom === 'LTR' || uom === 'Liters' ? 'ML' : (uom === 'KG' ? 'GM' : 'PCS'));
+                      setLooseRatio(uom === 'LTR' || uom === 'KG' ? 1000 : 12);
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer inline-flex items-center gap-1 ${
+                    allowLoose
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-gray-500 hover:text-black dark:text-gray-400'
+                  }`}
+                >
+                  ✓ Allow Loose Selling
+                </button>
+              </div>
+            )}
           </div>
 
           {allowLoose && (
@@ -295,6 +312,7 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* 3-LEVEL CASCADING CATEGORIES */}
         <div className="sm:col-span-2 pt-2 border-t border-stroke dark:border-strokedark">
