@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MdWarning } from 'react-icons/md';
 import TableActions from '../../../../../ui/TableActions';
 import { ProductCatalogItem } from '../types/productListTypes';
+import { decomposeStockIntoChain, LooseChainBadge } from '../../../../../utils/looseUomHelpers';
 
 interface ProductTableRowProps {
   product: ProductCatalogItem;
@@ -26,31 +27,9 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = ({
   const isZeroStock = currentStock <= 0;
   const isLowStock = minAlert > 0 && currentStock <= minAlert && !isZeroStock;
 
-  const isBoxItem =
-    String(product.uom || '').toLowerCase().includes('box') ||
-    String(product.category || '').toLowerCase().includes('tile') ||
-    String(product.scenario_name || '').toLowerCase().includes('tile');
-
-  const rawPcs = Number(
-    product.loose_conversion_ratio ||
-      product.pieces_per_box ||
-      product.pcs_per_box ||
-      product.pieces_per_packing ||
-      0
-  );
-  const looseUomName = product.loose_uom || (isBoxItem ? 'pcs' : 'ML');
-  const isGenericLoose = Boolean(product.allow_loose_sales || product.allow_loose) && rawPcs > 1;
-  const hasLooseConversion = (isBoxItem || isGenericLoose) && rawPcs > 1;
-
-  const isNegative = currentStock < 0;
-  const absStock = Math.abs(currentStock);
-  let mainUnits = 0;
-  let looseUnits = 0;
-  if (hasLooseConversion) {
-    const totalSubUnits = Math.round(absStock * rawPcs);
-    mainUnits = Math.floor(totalSubUnits / rawPcs);
-    looseUnits = totalSubUnits % rawPcs;
-  }
+  const decomposedStock = decomposeStockIntoChain(currentStock, product.uom || 'PCS', product);
+  const basePart = decomposedStock.parts[0];
+  const subParts = decomposedStock.parts.slice(1);
 
   let badgeClass =
     'bg-green-500/15 text-green-600 dark:bg-green-950/40 dark:text-green-400 border border-green-500/30';
@@ -72,7 +51,10 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = ({
         className="py-3.5 px-4 font-bold text-slate-900 dark:text-white hover:text-primary dark:hover:text-primary transition-colors cursor-pointer hover:underline"
         onClick={() => onOpenQuickView(product)}
       >
-        {product.product_name}
+        <div className="flex flex-col items-start gap-1">
+          <span>{product.product_name}</span>
+          <LooseChainBadge product={product} />
+        </div>
       </td>
       <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-medium">{product.category || '-'}</td>
       <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{product.sub_category || '-'}</td>
@@ -92,28 +74,18 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = ({
         <div className="inline-flex flex-col items-center">
           <span
             className={`font-black text-xs px-2.5 py-1 ${
-              hasLooseConversion && looseUnits > 0 ? 'rounded-xl' : 'rounded-full'
+              decomposedStock.hasLoose && subParts.length > 0 ? 'rounded-xl' : 'rounded-full'
             } inline-flex items-center gap-1 ${badgeClass}`}
           >
-            {hasLooseConversion ? (
+            {decomposedStock.hasLoose ? (
               <span className="flex flex-col items-center leading-tight">
-                {mainUnits === 0 && looseUnits > 0 ? (
-                  <span>
-                    {isNegative ? '-' : ''}
-                    {looseUnits.toLocaleString()} {looseUomName}
+                <span>
+                  {basePart ? `${basePart.qty.toLocaleString()} ${basePart.uom}` : `0 ${product.uom || 'PCS'}`}
+                </span>
+                {subParts.length > 0 && (
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                    {subParts.map(sp => `+${sp.qty.toLocaleString()} ${sp.uom}`).join(' ')}
                   </span>
-                ) : (
-                  <>
-                    <span>
-                      {isNegative ? '-' : ''}
-                      {mainUnits.toLocaleString()} {product.uom || 'Pack'}
-                    </span>
-                    {looseUnits > 0 && (
-                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                        {isNegative ? '-' : '+'} {looseUnits.toLocaleString()} {looseUomName}
-                      </span>
-                    )}
-                  </>
                 )}
               </span>
             ) : (

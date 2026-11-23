@@ -41,6 +41,122 @@ export const getLooseChainSummary = (
   return parts.join(' = ');
 };
 
+export interface ChainedStockPart {
+  uom: string;
+  qty: number;
+  isBase: boolean;
+}
+
+/**
+ * Decomposes a fractional base stock value (e.g. 2.45 DRUMS) into its exact chained parts:
+ * e.g. 2 DRUM + 45 LTR + 0 ML
+ */
+export const decomposeStockIntoChain = (
+  baseQty: number,
+  baseUom: string,
+  product: any
+): { parts: ChainedStockPart[]; formattedText: string; hasLoose: boolean } => {
+  const bUom = String(baseUom || product?.uom || 'Unit').trim().toUpperCase();
+  const isNegative = baseQty < 0;
+  let remainingBase = Math.abs(Number(baseQty) || 0);
+
+  const multiTiers: LooseTierItem[] =
+    product?.multi_loose_units || product?.looseTiers || [];
+  const primaryLooseUom = String(
+    product?.loose_uom || product?.looseUom || multiTiers[0]?.uom || ''
+  )
+    .trim()
+    .toUpperCase();
+  const primaryRatio = Number(
+    product?.loose_conversion_ratio ||
+      product?.looseConversionRatio ||
+      multiTiers[0]?.ratio ||
+      0
+  );
+
+  // If no loose configuration, return single base unit
+  if (!primaryLooseUom || primaryRatio <= 0) {
+    return {
+      parts: [{ uom: bUom, qty: baseQty, isBase: true }],
+      formattedText: `${baseQty.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${bUom}`,
+      hasLoose: false,
+    };
+  }
+
+  // Build the list of step tiers: Tier 1 (Base -> Loose1), Tier 2 (Loose1 -> Loose2), etc.
+  interface TierStep {
+    uom: string;
+    stepRatio: number; // Ratio of this unit per 1 of the immediate previous unit
+  }
+
+  const steps: TierStep[] = [
+    { uom: primaryLooseUom, stepRatio: primaryRatio },
+  ];
+
+  if (Array.isArray(multiTiers) && multiTiers.length > 0) {
+    multiTiers.forEach(t => {
+      const u = String(t.uom || '').trim().toUpperCase();
+      const r = Number(t.ratio) || 0;
+      if (u && r > 0 && u !== primaryLooseUom && !steps.some(s => s.uom === u)) {
+        steps.push({ uom: u, stepRatio: r });
+      }
+    });
+  }
+
+  // Calculate smallest unit multiplier: e.g. 1 Base = 100 LTR = 100,000 ML -> totalSmallestPerBase = 100,000
+  let totalSmallestPerBase = 1;
+  steps.forEach(s => {
+    totalSmallestPerBase *= s.stepRatio;
+  });
+
+  // Convert entire base quantity into smallest integer units to prevent floating point inaccuracies
+  let smallestUnits = Math.round(remainingBase * totalSmallestPerBase);
+
+  // Now decompose from highest (base) to lowest unit
+  const resultParts: ChainedStockPart[] = [];
+
+  // 1. Base unit
+  const wholeBase = Math.floor(smallestUnits / totalSmallestPerBase);
+  resultParts.push({ uom: bUom, qty: isNegative ? -wholeBase : wholeBase, isBase: true });
+  smallestUnits %= totalSmallestPerBase;
+
+  // 2. Intermediate tiers
+  let currentUnitMultiplier = totalSmallestPerBase;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    currentUnitMultiplier /= step.stepRatio;
+
+    if (i === steps.length - 1) {
+      // Smallest unit gets whatever remainder is left
+      if (smallestUnits > 0 || wholeBase === 0) {
+        resultParts.push({ uom: step.uom, qty: smallestUnits, isBase: false });
+      }
+    } else {
+      const count = Math.floor(smallestUnits / currentUnitMultiplier);
+      if (count > 0 || smallestUnits > 0) {
+        resultParts.push({ uom: step.uom, qty: count, isBase: false });
+      }
+      smallestUnits %= currentUnitMultiplier;
+    }
+  }
+
+  // Filter out zero intermediate parts unless everything is 0
+  const activeParts = resultParts.filter(
+    (p, idx) => idx === 0 || p.qty > 0
+  );
+
+  const textComponents = activeParts.map((p, idx) => {
+    const prefix = idx > 0 ? '+ ' : '';
+    return `${prefix}${p.qty.toLocaleString()} ${p.uom}`;
+  });
+
+  return {
+    parts: activeParts,
+    formattedText: textComponents.join(' '),
+    hasLoose: true,
+  };
+};
+
 /**
  * Formats line item compound quantities for printing.
  * E.g., if tier_quantities is { PCS: 1, LTR: 25 }, returns "1 PCS + 25 LTR"

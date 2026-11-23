@@ -119,22 +119,23 @@ const ProductList: React.FC = () => {
 
   const handleOpenBreakdown = async (product: ProductCatalogItem) => {
     setSelectedModalWarehouse('ALL');
+    const enrichedProduct = enrichProductsWithCachedLoose([product])[0];
     if (!serverMode) {
-      setSelectedStockBreakdown(product);
+      setSelectedStockBreakdown(enrichedProduct);
       return;
     }
-    setSelectedStockBreakdown({ ...product, _loading: true });
+    setSelectedStockBreakdown({ ...enrichedProduct, _loading: true });
     try {
       const detail = await getDetailedBreakdown(product.product_name, product.item_sr_no);
       setSelectedStockBreakdown({
-        ...product,
+        ...enrichedProduct,
         breakdown: detail.breakdown,
         warehouseBreakdowns: detail.warehouseBreakdowns,
         _loading: false,
       });
     } catch (err: any) {
       toast.error('Breakdown load failed: ' + err.message);
-      setSelectedStockBreakdown({ ...product, _loading: false });
+      setSelectedStockBreakdown({ ...enrichedProduct, _loading: false });
     }
   };
 

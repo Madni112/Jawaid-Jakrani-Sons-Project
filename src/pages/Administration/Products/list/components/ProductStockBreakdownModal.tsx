@@ -2,6 +2,11 @@ import React from 'react';
 import { MdInfoOutline, MdClose } from 'react-icons/md';
 import Spinner from '../../../../../ui/Spinner';
 import { ProductCatalogItem } from '../types/productListTypes';
+import {
+  decomposeStockIntoChain,
+  getProductLooseChainText,
+  LooseChainBadge,
+} from '../../../../../utils/looseUomHelpers';
 
 interface ProductStockBreakdownModalProps {
   selectedStockBreakdown: ProductCatalogItem | null;
@@ -46,10 +51,11 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                 )}
               </div>
               <p
-                className="text-xs font-semibold text-slate-600 dark:text-slate-400 truncate mt-1"
+                className="text-xs font-semibold text-slate-600 dark:text-slate-400 truncate mt-1 flex items-center gap-2"
                 title={selectedStockBreakdown.product_name}
               >
-                {selectedStockBreakdown.product_name}
+                <span>{selectedStockBreakdown.product_name}</span>
+                <LooseChainBadge product={selectedStockBreakdown} />
               </p>
             </div>
           </div>
@@ -142,45 +148,57 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
               Number(selectedStockBreakdown.loose_conversion_ratio || 0) > 1 ||
               isTile
           );
-          const rawPcs = Number(
-            selectedStockBreakdown.loose_conversion_ratio ||
-              selectedStockBreakdown.pieces_per_box ||
-              selectedStockBreakdown.pcs_per_box ||
-              0
-          );
-          const pcsPerBox = rawPcs > 1 ? rawPcs : isTile ? 4 : 1;
           const uomLabel = selectedStockBreakdown.uom || (isTile ? 'Boxes' : 'PCS');
-          const looseLabel = selectedStockBreakdown.loose_uom || 'Pcs';
+          const looseChainSummary = getProductLooseChainText(selectedStockBreakdown);
 
           const formatVal = (val: number) => {
-            if (isLoose && pcsPerBox > 1) {
-              const totalPieces = Math.round(val * pcsPerBox);
-              const b = Math.floor(totalPieces / pcsPerBox);
-              const p = totalPieces % pcsPerBox;
+            const num = Number(val) || 0;
+            const decomposed = decomposeStockIntoChain(num, uomLabel, selectedStockBreakdown);
+
+            if (decomposed.hasLoose) {
+              const basePart = decomposed.parts[0];
+              const subParts = decomposed.parts.slice(1);
+
               return (
                 <div className="text-right flex flex-col items-end leading-tight">
                   <span
                     className={`font-bold font-mono ${
-                      val > 0 ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
+                      num > 0
+                        ? 'text-slate-800 dark:text-slate-100'
+                        : num < 0
+                        ? 'text-rose-600 dark:text-rose-400'
+                        : 'text-slate-500 dark:text-slate-400'
                     }`}
                   >
-                    {b.toLocaleString()} {uomLabel}
+                    {basePart ? `${basePart.qty.toLocaleString()} ${basePart.uom}` : `0 ${uomLabel}`}
                   </span>
-                  {p > 0 && (
-                    <span className="text-[10px] font-bold font-mono text-teal-600 dark:text-teal-400">
-                      +{p} {looseLabel}
-                    </span>
+                  {subParts.length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap justify-end mt-0.5">
+                      {subParts.map((sp, sIdx) => (
+                        <span
+                          key={sIdx}
+                          className="text-[10px] font-bold font-mono text-teal-600 dark:text-teal-400 bg-teal-50/70 dark:bg-teal-950/40 px-1.5 py-0.2 rounded border border-teal-200/50 dark:border-teal-800/40"
+                        >
+                          +{sp.qty.toLocaleString()} {sp.uom}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
               );
             }
+
             return (
               <span
                 className={`font-bold font-mono ${
-                  val > 0 ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
+                  num > 0
+                    ? 'text-slate-800 dark:text-slate-100'
+                    : num < 0
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                {val.toLocaleString(undefined, { maximumFractionDigits: 2 })} {uomLabel}
+                {num.toLocaleString(undefined, { maximumFractionDigits: 2 })} {uomLabel}
               </span>
             );
           };
@@ -246,11 +264,15 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                         Inventory Inflow
                       </span>
-                      {selectedStockBreakdown.allow_loose_sales && (
-                        <span className="text-[9.5px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded">
-                          1 {uomLabel} = {pcsPerBox} {looseLabel}
+                      {looseChainSummary ? (
+                        <span className="text-[9.5px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded border border-teal-200/50 dark:border-teal-800/40 font-mono">
+                          {looseChainSummary}
                         </span>
-                      )}
+                      ) : selectedStockBreakdown.allow_loose_sales ? (
+                        <span className="text-[9.5px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded">
+                          1 {uomLabel}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="flex justify-between items-center py-1">
