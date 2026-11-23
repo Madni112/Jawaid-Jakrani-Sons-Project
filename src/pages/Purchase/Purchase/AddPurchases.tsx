@@ -245,7 +245,7 @@ const AddPurchases: React.FC = () => {
       {
         itemName: '',
         skuCode: '',
-        warehouse: locations[0]?.name || '',
+        warehouse: '',
         qty: 1,
         rate: 0,
         discountPer: 0,

@@ -226,7 +226,7 @@ export const PurchaseTileItemsTable: React.FC<PurchaseTileItemsTableProps> = ({
                         {/* Destination Warehouse */}
                         <td className="p-3 w-52">
                           <WarehouseSearchableSelect
-                            value={tItem.warehouse || locations[0]?.name || 'Main Warehouse'}
+                            value={tItem.warehouse || ''}
                             onChange={(val) => setFieldValue(`tileItems.${tIdx}.warehouse`, val)}
                             locations={locations}
                             selectedProductName={tItem.itemName}
@@ -353,7 +353,7 @@ export const PurchaseTileItemsTable: React.FC<PurchaseTileItemsTableProps> = ({
                       id: `tile-${Date.now()}`,
                       itemName: '',
                       skuCode: '',
-                      warehouse: locations[0]?.name || 'Main Warehouse',
+                      warehouse: '',
                       boxQty: 1,
                       loosePcs: 0,
                       totalSqm: 0,

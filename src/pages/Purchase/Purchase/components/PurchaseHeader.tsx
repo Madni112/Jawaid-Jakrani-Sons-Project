@@ -224,7 +224,7 @@ export const PurchaseHeader: React.FC<PurchaseHeaderProps> = ({
                     id: `tile-0-${Date.now()}`,
                     itemName: '',
                     skuCode: '',
-                    warehouse: locations[0]?.name || 'Main Warehouse',
+                    warehouse: '',
                     boxQty: 1,
                     loosePcs: 0,
                     totalSqm: 0,

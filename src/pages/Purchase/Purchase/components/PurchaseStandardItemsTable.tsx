@@ -238,7 +238,7 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                                   {/* ROW-LEVEL DESTINATION WAREHOUSE (SEARCHABLE WITH PER-LOCATION STOCK) */}
                                   <td className="p-3 w-52">
                                     <WarehouseSearchableSelect
-                                      value={item.warehouse || locations[0]?.name || ''}
+                                      value={item.warehouse || ''}
                                       onChange={(val) => {
                                         setFieldValue(`items.${idx}.warehouse`, val);
                                       }}
@@ -467,7 +467,7 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                       {({ push }) => (
                         <button
                           type="button"
-                          onClick={() => push({ itemName: '', skuCode: '', warehouse: locations[0]?.name || '', qty: 1, rate: 0, discountPer: 0, discountAmt: 0, gstRate: 18, gstAmt: 0 })}
+                          onClick={() => push({ itemName: '', skuCode: '', warehouse: '', qty: 1, rate: 0, discountPer: 0, discountAmt: 0, gstRate: 18, gstAmt: 0 })}
                           className="inline-flex items-center gap-1 bg-primary text-white font-bold py-1.5 px-3.5 rounded text-xs hover:bg-opacity-90 transition cursor-pointer shadow-xs"
                         >
                           <FiPlus size={12} /> Add Row Line

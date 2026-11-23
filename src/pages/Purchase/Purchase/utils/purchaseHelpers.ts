@@ -278,7 +278,7 @@ export const handleTileProductSelectionHelper = (
   setFieldValue(`tileItems.${tIdx}.loosePcs`, loosePcs);
   setFieldValue(`tileItems.${tIdx}.totalSqm`, lineSqm);
   setFieldValue(`tileItems.${tIdx}.totalAmount`, lineTotal);
-  if (!currentTileItem?.warehouse) {
+  if (!currentTileItem?.warehouse && isEditMode) {
     setFieldValue(`tileItems.${tIdx}.warehouse`, locations[0]?.name || 'Main Warehouse');
   }
 };
