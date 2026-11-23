@@ -243,7 +243,7 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
             <div key={row.id} className="flex flex-col gap-1">
               {/* Pill Capsule: [ Qty ] | [ UOM Dropdown ] [ ✕ ] */}
               <div className="flex items-center gap-1">
-                <div className="flex-1 flex items-center bg-white dark:bg-meta-4 border border-slate-300 dark:border-strokedark rounded-xl shadow-2xs overflow-hidden focus-within:border-primary transition">
+                <div className="group/capsule flex-1 flex items-center bg-white dark:bg-meta-4 border border-slate-300 dark:border-strokedark rounded-xl shadow-2xs overflow-hidden focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-500/20 transition-all duration-150">
                   {/* Quantity Input */}
                   <input
                     type="text"
@@ -257,11 +257,11 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
                         handleQtyChange(row.uom, raw);
                       }
                     }}
-                    className="w-full py-1.5 px-2 text-sm font-mono font-bold text-slate-900 dark:text-white bg-transparent outline-none text-center"
+                    className="w-full py-1.5 px-2 text-sm font-mono font-bold text-slate-900 dark:text-white bg-transparent outline-none text-center focus:bg-rose-50/30 dark:focus:bg-rose-950/20 transition"
                   />
 
-                  {/* Vertical Divider Line | */}
-                  <div className="w-[1px] h-6 bg-slate-300 dark:bg-strokedark shrink-0" />
+                  {/* Vertical Divider Line | (turns vibrant red when focused) */}
+                  <div className="w-[1.5px] h-6 bg-slate-300 dark:bg-strokedark group-focus-within/capsule:bg-rose-500 group-focus-within/capsule:shadow-[0_0_8px_rgba(244,63,94,0.6)] shrink-0 transition-all duration-150" />
 
                   {/* UOM Selector Dropdown */}
                   <div className="relative shrink-0 flex items-center pr-1.5">
@@ -272,7 +272,7 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
                       disabled={disabled}
                       value={row.uom}
                       onChange={e => handleRowUomChange(rIdx, e.target.value)}
-                      className="appearance-none bg-transparent py-1.5 pl-2 pr-5 text-xs font-mono font-black text-slate-800 dark:text-slate-100 outline-none cursor-pointer uppercase"
+                      className="appearance-none bg-transparent py-1.5 pl-2 pr-5 text-xs font-mono font-black text-slate-800 dark:text-slate-100 outline-none cursor-pointer uppercase focus:bg-rose-50/30 dark:focus:bg-rose-950/20 transition"
                     >
                       {allLevels.map(opt => (
                         <option
@@ -284,7 +284,7 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
                         </option>
                       ))}
                     </select>
-                    <MdKeyboardArrowDown className="absolute right-1 pointer-events-none text-slate-400 text-sm" />
+                    <MdKeyboardArrowDown className="absolute right-1 pointer-events-none text-slate-400 group-focus-within/capsule:text-rose-500 text-sm transition" />
                   </div>
                 </div>
 
@@ -302,8 +302,8 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
               </div>
 
               {/* Rate Pill Capsule: [ @ 0.00 ] | [ /UOM ] */}
-              <div className="flex items-center bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 rounded-xl px-2.5 py-1 text-xs font-mono text-rose-800 dark:text-rose-300 shadow-2xs">
-                <span className="text-[11px] font-sans font-bold text-rose-400 mr-1.5">@</span>
+              <div className="group/rate flex items-center bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-500/20 rounded-xl px-2.5 py-1 text-xs font-mono text-rose-800 dark:text-rose-300 shadow-2xs transition-all duration-150">
+                <span className="text-[11px] font-sans font-bold text-rose-400 group-focus-within/rate:text-rose-600 mr-1.5 transition">@</span>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -316,10 +316,10 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
                       handleRateChange(row.uom, raw);
                     }
                   }}
-                  className="w-full bg-transparent font-mono font-black text-xs text-rose-700 dark:text-rose-300 outline-none border-b border-dashed border-rose-300 dark:border-rose-700 text-center"
+                  className="w-full bg-transparent font-mono font-black text-xs text-rose-700 dark:text-rose-300 outline-none border-b border-dashed border-rose-300 dark:border-rose-700 group-focus-within/rate:border-rose-500 text-center"
                   title={`Editable Rate per ${row.uom}`}
                 />
-                <div className="w-[1px] h-3.5 bg-rose-200 dark:bg-rose-900/60 mx-1.5 shrink-0" />
+                <div className="w-[1.5px] h-3.5 bg-rose-200 dark:bg-rose-900/60 group-focus-within/rate:bg-rose-500 group-focus-within/rate:shadow-[0_0_6px_rgba(244,63,94,0.6)] mx-1.5 shrink-0 transition-all duration-150" />
                 <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400 uppercase select-none shrink-0">
                   /{row.uom}
                 </span>
