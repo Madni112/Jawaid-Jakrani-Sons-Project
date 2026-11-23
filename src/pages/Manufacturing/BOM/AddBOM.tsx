@@ -696,6 +696,14 @@ const AddBOM: React.FC = () => {
               setSubCategory={setSubCategory}
               category={category}
               setCategory={setCategory}
+              allowLoose={allowLoose}
+              setAllowLoose={setAllowLoose}
+              looseUom={looseUom}
+              setLooseUom={setLooseUom}
+              looseRatio={looseRatio}
+              setLooseRatio={setLooseRatio}
+              multiLooseUnits={multiLooseUnits}
+              setMultiLooseUnits={setMultiLooseUnits}
             />
           )}
 
