@@ -307,7 +307,7 @@ const AddProduct = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-12 font-sans">
-      <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-[#111827] overflow-hidden">
+      <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-[#111827]">
         {/* HEADER BAR */}
         <div className="border-b border-slate-100 py-4.5 px-6.5 dark:border-slate-800/80 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/40">
           <div>

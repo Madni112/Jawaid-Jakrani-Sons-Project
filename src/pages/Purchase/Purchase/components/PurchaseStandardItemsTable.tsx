@@ -59,8 +59,7 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                           <th className="p-3 w-10 text-center">S#</th>
                           <th className="p-3 min-w-[280px]">Product Code / Description</th>
                           <th className="p-3 w-52">Destination Warehouse</th>
-                          <th className="p-3 min-w-[260px] text-center">Arrived Qty (Boxes / Pcs / Sq.m)</th>
-                          <th className="p-3 w-36 text-right">Cost Price (PKR)</th>
+                          <th className="p-3 min-w-[320px] text-center">Qty & Pricing (UOM)</th>
                           {values.showDiscount && (
                             <>
                               <th className="p-3 w-20 text-center text-amber-700 bg-amber-50/40 dark:bg-amber-950/20">Disc %</th>
@@ -257,118 +256,8 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                                   </td>
 
                                   {/* Arrived Qty with Dedicated Boxes & Loose Pieces & Sq.Mtr for Tiles or Loose Products */}
-                                  <td className="p-3 min-w-[260px]">
-                                    {isTile ? (
-                                      (() => {
-                                        let tileWidthCm = 60;
-                                        let tileHeightCm = 60;
-                                        const desc = matchedProduct?.product_description || '';
-                                        const sku = matchedProduct?.item_sr_no || '';
-                                        const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
-                                          sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
-                                        if (sizeMatch) {
-                                          tileHeightCm = Number(sizeMatch[1]) || 60;
-                                          tileWidthCm = Number(sizeMatch[2]) || 60;
-                                        }
-                                        const perPieceSqm = (tileHeightCm * tileWidthCm) / 10000;
-                                        const perBoxSqm = perPieceSqm * pcsPerBox;
-
-                                        const currentQty = Number(item.qty || 0);
-                                        const boxes = Math.floor(currentQty);
-                                        const loosePcs = Math.round((currentQty - boxes) * pcsPerBox);
-                                        const totalLineSqm = (boxes * perBoxSqm) + (loosePcs * perPieceSqm);
-
-                                        return (
-                                          <div className="flex flex-col gap-1">
-                                            {/* ── TOP BADGES: Per Box Sq.Mtr & Per Piece Sq.Mtr ── */}
-                                            <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400 px-1 font-mono">
-                                              <span className="text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-stroke dark:border-strokedark font-bold">
-                                                Box: {perBoxSqm.toFixed(2)} sq.m
-                                              </span>
-                                              <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60 font-bold">
-                                                Pc: {perPieceSqm.toFixed(4)} sq.m
-                                              </span>
-                                            </div>
-
-                                            {/* ── INPUTS CONTAINER: BOXES + LOOSE PIECES ── */}
-                                            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-stroke dark:border-strokedark shadow-inner">
-                                              {/* BOXES INPUT */}
-                                              <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-primary shadow-sm">
-                                                <input
-                                                  type="text"
-                                                  inputMode="numeric"
-                                                  onKeyDown={blockInvalidChar}
-                                                  value={(() => {
-                                                    const b = Math.floor(Number(item.qty || 0));
-                                                    return b === 0 ? '' : b;
-                                                  })()}
-                                                  placeholder="0"
-                                                  onChange={(e) => {
-                                                    const val = e.target.value.trim();
-                                                    const newBoxes = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                                    const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
-                                                    const combinedQty = Number((newBoxes + currentLoose / pcsPerBox).toFixed(3));
-                                                    setFieldValue(`items.${idx}.qty`, combinedQty);
-
-                                                    const cost = combinedQty * (Number(item.rate) || 0);
-                                                    if (Number(item.discountPer) > 0) {
-                                                      setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
-                                                    }
-                                                  }}
-                                                  className="w-full bg-transparent text-center font-black text-sm text-primary outline-none min-w-[36px]"
-                                                />
-                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">Box</span>
-                                              </div>
-
-                                              <span className="text-gray-400 font-black text-sm select-none">+</span>
-
-                                              {/* LOOSE PIECES INPUT */}
-                                              <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-emerald-500 shadow-sm">
-                                                <input
-                                                  type="text"
-                                                  inputMode="numeric"
-                                                  onKeyDown={blockInvalidChar}
-                                                  value={(() => {
-                                                    const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
-                                                    return currentLoose === 0 ? '' : currentLoose;
-                                                  })()}
-                                                  placeholder="0"
-                                                  onChange={(e) => {
-                                                    const val = e.target.value.trim();
-                                                    const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                                    const currentBoxes = Math.floor(Number(item.qty || 0));
-
-                                                    // Auto carryover if loose pieces >= pcsPerBox
-                                                    const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
-                                                    const remLoose = enteredLoose % pcsPerBox;
-                                                    const finalBoxes = currentBoxes + extraBoxes;
-                                                    const combinedQty = remLoose > 0
-                                                      ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3))
-                                                      : finalBoxes;
-
-                                                    setFieldValue(`items.${idx}.qty`, combinedQty);
-
-                                                    const cost = combinedQty * (Number(item.rate) || 0);
-                                                    if (Number(item.discountPer) > 0) {
-                                                      setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
-                                                    }
-                                                  }}
-                                                  className="w-full bg-transparent text-center font-black text-sm text-emerald-600 dark:text-emerald-400 outline-none min-w-[36px]"
-                                                />
-                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">Pcs</span>
-                                              </div>
-                                            </div>
-
-                                            {/* ── BOTTOM TOTAL SQ.MTR CALCULATION ── */}
-                                            <div className="text-center font-mono text-[10px] font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded py-0.5 border border-stroke dark:border-strokedark">
-                                              Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
-                                              <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
-                                            </div>
-                                          </div>
-                                        );
-                                      })()
-                                    ) : (allowLoose && (pcsPerBox > 1 || (Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0))) ? (
-                                      /* DYNAMIC MULTI-TIER CHAINED UOM GRID (DRUM -> LTR -> ML, etc) */
+                                  <td className="p-3 min-w-[320px]">
+                                    {((isTile || allowLoose) && (pcsPerBox > 1 || (Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0))) ? (
                                       <ChainedUomInputGrid
                                         primaryUom={bulkUnitLabel || 'Unit'}
                                         primaryQuantity={Number(item.qty) || 0}
@@ -376,7 +265,7 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                                         tiers={
                                           Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0
                                             ? matchedProduct.multi_loose_units
-                                            : [{ uom: looseUnitLabel, ratio: looseRatio, costPrice: matchedProduct?.loose_purchase_price, salePrice: matchedProduct?.loose_sale_price }]
+                                            : [{ uom: looseUnitLabel, ratio: pcsPerBox, costPrice: matchedProduct?.loose_purchase_price, salePrice: matchedProduct?.loose_sale_price }]
                                         }
                                         tierQuantities={item.tier_quantities}
                                         tierRates={item.tier_rates}
@@ -397,108 +286,50 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                                         }}
                                       />
                                     ) : (
-                                      /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
-                                      (() => {
-                                        const u = String(uomString || item.uom || matchedProduct?.uom || '').trim().toUpperCase();
-                                        const isDecimalUom = [
-                                          'KG', 'KILOGRAM', 'GM', 'GRAM', 'TON', 'METRIC TON', 'LBS',
-                                          'LTR', 'LITER', 'LITRE', 'ML', 'GAL',
-                                          'MTR', 'METER', 'FT', 'FEET', 'INCH', 'CM', 'MM', 'YD',
-                                          'SQM', 'SQ.M', 'SQ.MTR', 'SQ.FT', 'SQF', 'SQY', 'SQUARE METER'
-                                        ].includes(u);
-
-                                        return (
-                                          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
-                                            <input
-                                              type="text"
-                                              inputMode={isDecimalUom ? "decimal" : "numeric"}
-                                              onKeyDown={(e) => {
-                                                blockInvalidChar(e);
-                                                if (!isDecimalUom && (e.key === '.' || e.key === 'Decimal')) {
-                                                  e.preventDefault();
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex-1 flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded-xl px-2 py-1.5 border border-stroke dark:border-strokedark">
+                                          <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            name={`items.${idx}.qty`}
+                                            value={item.qty === 0 ? '' : item.qty}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                setFieldValue(`items.${idx}.qty`, val);
+                                                const num = parseFloat(val) || 0;
+                                                const cost = num * (Number(item.rate) || 0);
+                                                if (Number(item.discountPer) > 0) {
+                                                  setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
                                                 }
-                                              }}
-                                              name={`items.${idx}.qty`}
-                                              value={item.qty === 0 ? '' : item.qty}
-                                              onChange={(e) => {
-                                                const val = e.target.value;
-                                                const regex = isDecimalUom ? /^\d*\.?\d*$/ : /^\d*$/;
-                                                if (val === '' || regex.test(val)) {
-                                                  setFieldValue(`items.${idx}.qty`, val);
-                                                  const num = parseFloat(val) || 0;
-                                                  const cost = num * (Number(item.rate) || 0);
-                                                  if (Number(item.discountPer) > 0) {
-                                                    setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
-                                                  }
-                                                }
-                                              }}
-                                              placeholder="1"
-                                              className="w-full bg-transparent text-center font-black text-xs text-primary outline-none"
-                                            />
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase select-none">{uomString}</span>
-                                          </div>
-                                        );
-                                      })()
-                                    )}
-                                  </td>
-
-                                  {/* Cost Price */}
-                                  <td className="p-3 w-40 min-w-[140px]">
-                                    <div className="flex flex-col gap-1.5">
-                                      {/* Bulk / Main Rate Input */}
-                                      <div className="relative">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          step="any"
-                                          onKeyDown={blockInvalidChar}
-                                          name={`items.${idx}.rate`}
-                                          value={item.rate}
-                                          onChange={(e) => {
-                                            const newRate = Math.max(0, Number(e.target.value) || 0);
-                                            setFieldValue(`items.${idx}.rate`, newRate);
-                                            const cost = (Number(item.qty) || 0) * newRate;
-                                            if (Number(item.discountPer) > 0) {
-                                              setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
-                                            }
-                                          }}
-                                          className="w-full rounded border border-stroke dark:border-strokedark p-1.5 bg-transparent font-black font-mono text-right outline-none focus:border-primary text-xs"
-                                        />
-                                        {((isTile || allowLoose) && pcsPerBox > 1) && (
-                                          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-400 select-none uppercase">
-                                            /{bulkUnitLabel}
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      {/* Loose Unit Price Editable Input */}
-                                      {((isTile || allowLoose) && pcsPerBox > 1) && (
-                                        <div className="flex items-center gap-1 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded px-1.5 py-0.5">
-                                          <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                                            /{looseUnitLabel}:
-                                          </span>
+                                              }
+                                            }}
+                                            placeholder="1"
+                                            className="w-full bg-transparent text-center font-black text-xs text-primary outline-none"
+                                          />
+                                          <span className="text-[10px] font-bold text-gray-500 uppercase select-none">{uomString}</span>
+                                        </div>
+                                        <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-strokedark rounded-xl px-2 py-1.5 w-28">
+                                          <span className="text-[10px] text-gray-400 font-sans mr-1">Rs.</span>
                                           <input
                                             type="number"
                                             min="0"
                                             step="any"
-                                            onKeyDown={blockInvalidChar}
-                                            value={item.pieceRate !== undefined && item.pieceRate !== '' ? item.pieceRate : (Number(matchedProduct?.loose_purchase_price) > 0 ? Number(matchedProduct.loose_purchase_price) : (pcsPerBox > 0 ? Number(((Number(item.rate) || 0) / pcsPerBox).toFixed(2)) : ''))}
+                                            name={`items.${idx}.rate`}
+                                            value={item.rate}
                                             onChange={(e) => {
-                                              const enteredLoosePrice = Math.max(0, Number(e.target.value) || 0);
-                                              setFieldValue(`items.${idx}.pieceRate`, enteredLoosePrice);
-                                              const bulkCount = Math.floor(Number(item.qty || 0));
-                                              const looseCount = Math.round((Number(item.qty || 0) - bulkCount) * pcsPerBox);
-                                              const gross = (bulkCount * Number(item.rate || 0)) + (looseCount * enteredLoosePrice);
+                                              const newRate = Math.max(0, Number(e.target.value) || 0);
+                                              setFieldValue(`items.${idx}.rate`, newRate);
+                                              const cost = (Number(item.qty) || 0) * newRate;
                                               if (Number(item.discountPer) > 0) {
-                                                setFieldValue(`items.${idx}.discountAmt`, Number(((gross * Number(item.discountPer)) / 100).toFixed(2)));
+                                                setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
                                               }
                                             }}
-                                            placeholder="0"
-                                            className="w-full bg-transparent font-mono font-bold text-[11px] text-right text-emerald-700 dark:text-emerald-400 outline-none"
+                                            className="w-full bg-transparent font-mono font-bold text-xs text-right outline-none text-slate-800 dark:text-slate-100"
                                           />
                                         </div>
-                                      )}
-                                    </div>
+                                      </div>
+                                    )}
                                   </td>
 
                                   {/* Discount Columns */}

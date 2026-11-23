@@ -714,7 +714,7 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
 
               {/* Tiers List */}
               {Array.isArray(values.looseTiers) && values.looseTiers.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2.5 pb-24">
                   {values.looseTiers.map((tier, idx) => {
                     const prevUnitName = idx === 0 
                       ? (values.looseUom || values.uom || 'Bulk') 
