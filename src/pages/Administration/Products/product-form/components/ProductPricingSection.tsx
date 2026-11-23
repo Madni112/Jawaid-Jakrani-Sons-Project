@@ -242,7 +242,6 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
           </label>
           <input
             type="number"
-            min="0"
             name="minStockAlert"
             onKeyDown={blockInvalidChar}
             value={values.minStockAlert}
@@ -564,13 +563,14 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                 <input
                   type="number"
                   step="any"
-                  min="1"
                   name="looseConversionRatio"
                   onKeyDown={blockInvalidChar}
                   value={values.looseConversionRatio}
                   onChange={(e) => {
-                    handleChange(e);
-                    const ratio = Number(e.target.value) || 1;
+                    const rawVal = e.target.value;
+                    setFieldValue('looseConversionRatio', rawVal);
+                    if (rawVal === '') return;
+                    const ratio = parseFloat(rawVal) || 0;
                     const purP = Number(values.purchasePrice) || 0;
                     const retP = Number(values.retailPrice) || 0;
                     if (purP > 0 && ratio > 0) {
@@ -681,7 +681,7 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                       : (values.looseUom || 'LTR');
 
                     const defaultNextUom = (lastUnit === 'LTR' || lastUnit === 'Liters') ? 'ML' : (lastUnit === 'KG' ? 'GM' : 'PCS');
-                    const defaultRatio = (defaultNextUom === 'ML' || defaultNextUom === 'GM') ? 1000 : 12;
+                    const defaultRatio = (defaultNextUom === 'ML' || defaultNextUom === 'GM') ? 1000 : 0;
 
                     // Calculate live cost & sale for this new tier
                     const lastCost = currentTiers.length > 0 
@@ -737,12 +737,17 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            min="1"
                             step="any"
                             value={tier.ratio}
                             onChange={(e) => {
-                              const r = parseFloat(e.target.value) || 1;
+                              const rawVal = e.target.value;
                               const updated = [...values.looseTiers];
+                              if (rawVal === '') {
+                                updated[idx] = { ...tier, ratio: '' };
+                                setFieldValue('looseTiers', updated);
+                                return;
+                              }
+                              const r = parseFloat(rawVal) || 0;
                               const prevCost = idx === 0 
                                 ? (Number(values.loosePurchasePrice) || (Number(values.purchasePrice) / (Number(values.looseConversionRatio) || 1)))
                                 : Number(updated[idx - 1].costPrice || 0);
@@ -752,7 +757,7 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
 
                               updated[idx] = {
                                 ...tier,
-                                ratio: r,
+                                ratio: rawVal,
                                 costPrice: r > 0 ? Number((prevCost / r).toFixed(4)) : 0,
                                 salePrice: r > 0 ? Number((prevSale / r).toFixed(4)) : 0
                               };

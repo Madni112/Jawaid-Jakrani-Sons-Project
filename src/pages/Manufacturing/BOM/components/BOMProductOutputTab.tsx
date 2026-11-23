@@ -220,7 +220,10 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
                     min="1"
                     step="any"
                     value={looseRatio}
-                    onChange={e => setLooseRatio(parseFloat(e.target.value) || 1)}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setLooseRatio(v === '' ? '' : parseFloat(v) || '');
+                    }}
                     placeholder="e.g. 100 or 1000"
                     className="w-full rounded-lg border border-stroke dark:border-strokedark bg-transparent py-1.5 px-3 font-mono font-bold text-xs outline-none focus:border-primary"
                   />
@@ -274,9 +277,9 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
                           step="any"
                           value={tier.ratio}
                           onChange={e => {
-                            const r = parseFloat(e.target.value) || 1;
+                            const raw = e.target.value;
                             const updated = [...multiLooseUnits];
-                            updated[tIdx] = { ...tier, ratio: r };
+                            updated[tIdx] = { ...tier, ratio: raw === '' ? '' : parseFloat(raw) || '' };
                             setMultiLooseUnits(updated);
                           }}
                           className="w-20 rounded border border-stroke dark:border-strokedark py-1 px-2 font-mono text-center font-bold outline-none focus:border-primary text-xs"
