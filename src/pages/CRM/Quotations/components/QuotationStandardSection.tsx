@@ -1,3 +1,4 @@
+import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
 import React from 'react';
 import { MdAdd, MdDeleteOutline, MdInventory2 } from 'react-icons/md';
 import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';

@@ -1,3 +1,5 @@
+import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
+import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
 import WarehouseSearchableSelect from './WarehouseSearchableSelect';
 import React, { useRef, useState } from 'react';
 import { FieldArray } from 'formik';
@@ -297,6 +299,11 @@ export const ReturnStandardItemsTable: React.FC<ReturnStandardItemsTableProps> =
                                     placeholder="Search Description..."
                                     className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
                                   />
+                                {selectedProd && (
+                                  <div className="mt-1">
+                                    <LooseChainBadge product={selectedProd} />
+                                  </div>
+                                )}
 
                                   {/* Rich Dropdown */}
                                   <DropdownPortal
