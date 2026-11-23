@@ -242,14 +242,7 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                                     setActiveProdNameIndex(idx);
                                     setHighlightedProdNameIndex(0);
 
-                                    // Exact Description match auto-sync
-                                    const matched = productsList.find(
-                                      p => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
-                                    );
-                                    if (matched) {
-                                      handleProductSelectionWithWH(matched, idx, values.dispatchWarehouse, setFieldValue, item);
-                                    }
-                                  }}
+                                    }}
                                   placeholder="Search Description..."
                                   className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-2 pr-7 outline-none text-xs text-black dark:text-white focus:border-primary shadow-sm"
                                 />

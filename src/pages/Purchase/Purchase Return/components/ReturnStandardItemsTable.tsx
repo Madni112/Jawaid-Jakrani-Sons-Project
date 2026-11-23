@@ -289,13 +289,7 @@ export const ReturnStandardItemsTable: React.FC<ReturnStandardItemsTableProps> =
                                       setActiveProdNameIndex(idx);
                                       setHighlightedProdNameIndex(0);
 
-                                      const matched = candidateProducts.find(
-                                        (p: any) => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
-                                      );
-                                      if (matched) {
-                                        handleProductSelection(matched, idx);
-                                      }
-                                    }}
+                                      }}
                                     placeholder="Search Description..."
                                     className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
                                   />

@@ -172,14 +172,7 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                                               setActiveProdNameIndex(idx);
                                               setHighlightedProdNameIndex(0);
 
-                                              const matched = productList.find(
-                                                p => (p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()) ||
-                                                     (p.item_sr_no && p.item_sr_no.toLowerCase() === typed.trim().toLowerCase())
-                                              );
-                                              if (matched) {
-                                                handleProductSelection(matched);
-                                              }
-                                            }}
+                                              }}
                                             placeholder="Search by code or product description..."
                                             className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
                                           />

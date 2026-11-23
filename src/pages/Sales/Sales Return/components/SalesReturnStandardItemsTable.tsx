@@ -292,14 +292,7 @@ export const SalesReturnStandardItemsTable: React.FC<SalesReturnStandardItemsTab
                                                 setFieldValue(`items.${idx}.itemName`, val);
                                                 setActiveProdNameIndex(idx);
                                                 setHighlightedProdNameIndex(0);
-                                                const matched = lookupItem(val);
-                                                if (matched) {
-                                                  setFieldValue(`items.${idx}.skuCode`, matched.item_sr_no);
-                                                  if (Number(matched.sale_price) > 0 || !item.rate) {
-                                                    setFieldValue(`items.${idx}.rate`, Number(matched.sale_price) || 0);
-                                                  }
-                                                  setFieldValue(`items.${idx}.uom`, matched.uom || 'Nos');
-                                                }
+                                                
                                               }}
                                               ref={(el) => {
                                                 prodRefs.current[idx] = el;
