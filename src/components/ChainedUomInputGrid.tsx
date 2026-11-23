@@ -195,20 +195,31 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
         })}
       </div>
 
-      {/* Matching Cascading Rates Row (Compact Display / Editable) */}
-      <div className="flex flex-wrap items-center gap-1 text-[9px] font-mono text-gray-500">
+      {/* Matching Cascading Rates Row (Compact Display & Click-to-Edit rate per sub-unit) */}
+      <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-gray-500 pt-0.5">
         {normalizedLevels.map((lvl) => {
           const rateVal = tierRates[lvl.uom] !== undefined 
             ? tierRates[lvl.uom] 
             : Number((lvl.unitCost || lvl.unitPrice || 0).toFixed(2));
           return (
-            <span
+            <div
               key={lvl.uom}
-              className="bg-primary/5 text-primary px-1.5 py-0.5 rounded border border-primary/20"
-              title={`Rate per ${lvl.uom}`}
+              className="inline-flex items-center gap-1 bg-primary/5 dark:bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20"
+              title={`Rate per ${lvl.uom} (Editable)`}
             >
-              @ {rateVal}/{lvl.uom}
-            </span>
+              <span className="text-[9px] font-sans text-gray-400">@</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                disabled={disabled}
+                value={rateVal === 0 ? '' : rateVal}
+                onChange={e => handleRateChange(lvl.uom, parseFloat(e.target.value) || 0)}
+                placeholder="0.00"
+                className="w-12 py-0 px-0.5 text-[10px] font-mono font-bold bg-transparent outline-none text-primary border-b border-dashed border-primary/40 focus:border-primary text-center"
+              />
+              <span className="text-[9px] font-black uppercase text-gray-500">/{lvl.uom}</span>
+            </div>
           );
         })}
       </div>

@@ -4,6 +4,7 @@ import { FiX, FiTrash2 } from 'react-icons/fi';
 import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';
 import { DropdownPortal } from './DropdownPortal';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
+import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
 
 interface InvoiceStandardItemsTableProps {
   values: any;
@@ -253,6 +254,11 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                                   placeholder="Search Description..."
                                   className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-2 pr-7 outline-none text-xs text-black dark:text-white focus:border-primary shadow-sm"
                                 />
+                                {selectedProd && (
+                                  <div className="mt-1">
+                                    <LooseChainBadge product={selectedProd} />
+                                  </div>
+                                )}
 
                                 {Boolean(item.itemName || item.skuCode) && (
                                   <button
@@ -323,6 +329,7 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                                                 {displaySku}
                                               </span>
                                               {p.category && <span>• {p.category}</span>}
+                                                <LooseChainBadge product={p} />
                                             </div>
                                           </div>
                                           {(() => {

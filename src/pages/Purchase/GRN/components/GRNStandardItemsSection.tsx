@@ -3,6 +3,7 @@ import { FieldArray, FormikErrors, FormikTouched } from 'formik';
 import { FiTrash2 } from 'react-icons/fi';
 import WarehouseSelect from './WarehouseSelect';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
+import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
 import { GRNFormValues, LocationItem, ProductItem } from '../types/grnTypes';
 import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';
 import { isTileProduct } from '../utils/grnHelpers';

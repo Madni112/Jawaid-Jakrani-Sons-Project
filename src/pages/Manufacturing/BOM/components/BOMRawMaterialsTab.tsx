@@ -4,6 +4,7 @@ import SearchableProductSelect from '../../../../components/SearchableProductSel
 import SearchableUomDropdown from '../../../../components/SearchableUomDropdown';
 import { BomItem } from '../types/bomTypes';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
+import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
 
 interface BOMRawMaterialsTabProps {
   isRTL: boolean;

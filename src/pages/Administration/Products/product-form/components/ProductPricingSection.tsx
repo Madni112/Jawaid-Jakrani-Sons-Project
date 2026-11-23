@@ -783,20 +783,48 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                           </div>
                         </div>
 
-                        {/* Live Cost & Sale for this tier */}
-                        <div className="flex items-center gap-3 text-xs font-mono">
-                          <div className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
-                            <span className="text-[10px] text-slate-400 block font-sans">Cost:</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-300">
-                              Rs. {Number(tier.costPrice || 0).toFixed(2)}
-                            </span>
+                        {/* Editable Cost & Sale Rates for this tier */}
+                        <div className="flex items-center gap-2 text-xs font-mono">
+                          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <span className="text-[10px] text-slate-500 font-sans font-semibold">Cost:</span>
+                            <span className="text-[10px] text-slate-400">Rs.</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={tier.costPrice ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                  const updated = [...values.looseTiers];
+                                  updated[idx] = { ...tier, costPrice: val };
+                                  setFieldValue('looseTiers', updated);
+                                }
+                              }}
+                              placeholder="0.00"
+                              className="w-16 rounded border border-slate-200 dark:border-slate-700 px-1 py-0.5 text-center font-mono font-bold text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 outline-none focus:border-primary"
+                              title="Override Cost Price for this tier"
+                            />
                           </div>
 
-                          <div className="bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">
-                            <span className="text-[10px] text-emerald-600 block font-sans">Sale Rate:</span>
-                            <span className="font-black text-emerald-700 dark:text-emerald-300">
-                              Rs. {Number(tier.salePrice || 0).toFixed(2)}
-                            </span>
+                          <div className="flex items-center gap-1 bg-emerald-50/70 dark:bg-emerald-950/40 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-sans font-bold">Sale:</span>
+                            <span className="text-[10px] text-emerald-600">Rs.</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={tier.salePrice ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                  const updated = [...values.looseTiers];
+                                  updated[idx] = { ...tier, salePrice: val };
+                                  setFieldValue('looseTiers', updated);
+                                }
+                              }}
+                              placeholder="0.00"
+                              className="w-16 rounded border border-emerald-400 dark:border-emerald-700 px-1 py-0.5 text-center font-mono font-bold text-xs bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 outline-none focus:border-emerald-600"
+                              title="Override Retail Sale Rate for this tier"
+                            />
                           </div>
 
                           <button

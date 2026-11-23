@@ -3,6 +3,7 @@ import { FieldArray } from 'formik';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
 import WarehouseSearchableSelect from './WarehouseSearchableSelect';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
+import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
 import { getAvailableStock } from '../../../../utils/stockCalculator';
 
 interface PurchaseStandardItemsTableProps {
