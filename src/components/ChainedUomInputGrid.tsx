@@ -212,115 +212,117 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
   const hasMoreTiersAvailable = activeRows.length < allLevels.length;
 
   return (
-    <div className="flex flex-col gap-2 w-full min-w-[210px] max-w-[260px]">
-      {/* Dynamic Rows */}
-      {activeRows.map((row, rIdx) => {
-        const lvl = allLevels.find(l => l.uom === row.uom) || {
-          uom: row.uom,
-          cumulativeRatio: 1,
-          defaultRate: 0
-        };
-        const currentQty = tierQuantities[row.uom] !== undefined
-          ? (tierQuantities[row.uom] === 0 ? '' : tierQuantities[row.uom])
-          : (rIdx === 0 && primaryQuantity > 0 ? primaryQuantity : '');
+    <div className="flex flex-col gap-2 w-full min-w-[280px]">
+      {/* Dynamic 2-inputs-per-row grid */}
+      <div className="grid grid-cols-2 gap-2">
+        {activeRows.map((row, rIdx) => {
+          const lvl = allLevels.find(l => l.uom === row.uom) || {
+            uom: row.uom,
+            cumulativeRatio: 1,
+            defaultRate: 0
+          };
+          const currentQty = tierQuantities[row.uom] !== undefined
+            ? (tierQuantities[row.uom] === 0 ? '' : tierQuantities[row.uom])
+            : (rIdx === 0 && primaryQuantity > 0 ? primaryQuantity : '');
 
-        const currentRate = tierRates[row.uom] !== undefined
-          ? tierRates[row.uom]
-          : lvl.defaultRate;
+          const currentRate = tierRates[row.uom] !== undefined
+            ? tierRates[row.uom]
+            : lvl.defaultRate;
 
-        const isLastRow = rIdx === activeRows.length - 1;
+          const isLastRow = rIdx === activeRows.length - 1;
 
-        return (
-          <div key={row.id} className="flex flex-col gap-1">
-            {/* Pill Capsule: [ Qty ] | [ UOM Dropdown ] [ ✕ ] */}
-            <div className="flex items-center gap-1">
-              <div className="flex-1 flex items-center bg-white dark:bg-meta-4 border border-slate-300 dark:border-strokedark rounded-xl shadow-2xs overflow-hidden focus-within:border-primary transition">
-                {/* Quantity Input */}
+          return (
+            <div key={row.id} className="flex flex-col gap-1">
+              {/* Pill Capsule: [ Qty ] | [ UOM Dropdown ] [ ✕ ] */}
+              <div className="flex items-center gap-1">
+                <div className="flex-1 flex items-center bg-white dark:bg-meta-4 border border-slate-300 dark:border-strokedark rounded-xl shadow-2xs overflow-hidden focus-within:border-primary transition">
+                  {/* Quantity Input */}
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    disabled={disabled}
+                    placeholder="0"
+                    value={currentQty}
+                    onChange={e => {
+                      const raw = e.target.value;
+                      if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
+                        handleQtyChange(row.uom, raw);
+                      }
+                    }}
+                    className="w-full py-1.5 px-2 text-sm font-mono font-bold text-slate-900 dark:text-white bg-transparent outline-none text-center"
+                  />
+
+                  {/* Vertical Divider Line | */}
+                  <div className="w-[1px] h-6 bg-slate-300 dark:bg-strokedark shrink-0" />
+
+                  {/* UOM Selector Dropdown */}
+                  <div className="relative shrink-0 flex items-center pr-1.5">
+                    <select
+                      ref={el => {
+                        if (isLastRow && rIdx > 0) nextDropdownRef.current = el;
+                      }}
+                      disabled={disabled}
+                      value={row.uom}
+                      onChange={e => handleRowUomChange(rIdx, e.target.value)}
+                      className="appearance-none bg-transparent py-1.5 pl-2 pr-5 text-xs font-mono font-black text-slate-800 dark:text-slate-100 outline-none cursor-pointer uppercase"
+                    >
+                      {allLevels.map(opt => (
+                        <option
+                          key={opt.uom}
+                          value={opt.uom}
+                          className="bg-white dark:bg-boxdark text-black dark:text-white font-mono"
+                        >
+                          {opt.uom}
+                        </option>
+                      ))}
+                    </select>
+                    <MdKeyboardArrowDown className="absolute right-1 pointer-events-none text-slate-400 text-sm" />
+                  </div>
+                </div>
+
+                {/* Remove button for sub-tiers */}
+                {rIdx > 0 && !disabled && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRow(rIdx)}
+                    className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition shrink-0"
+                    title="Remove this loose unit"
+                  >
+                    <MdClose className="text-sm" />
+                  </button>
+                )}
+              </div>
+
+              {/* Rate Pill Capsule: [ @ 0.00 ] | [ /UOM ] */}
+              <div className="flex items-center bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 rounded-xl px-2.5 py-1 text-xs font-mono text-rose-800 dark:text-rose-300 shadow-2xs">
+                <span className="text-[11px] font-sans font-bold text-rose-400 mr-1.5">@</span>
                 <input
                   type="text"
                   inputMode="decimal"
                   disabled={disabled}
-                  placeholder="0"
-                  value={currentQty}
+                  placeholder="0.00"
+                  value={currentRate === 0 ? '' : currentRate}
                   onChange={e => {
                     const raw = e.target.value;
                     if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
-                      handleQtyChange(row.uom, raw);
+                      handleRateChange(row.uom, raw);
                     }
                   }}
-                  className="w-full py-1.5 px-2 text-sm font-mono font-bold text-slate-900 dark:text-white bg-transparent outline-none text-center"
+                  className="w-full bg-transparent font-mono font-black text-xs text-rose-700 dark:text-rose-300 outline-none border-b border-dashed border-rose-300 dark:border-rose-700 text-center"
+                  title={`Editable Rate per ${row.uom}`}
                 />
-
-                {/* Vertical Divider Line | */}
-                <div className="w-[1px] h-6 bg-slate-300 dark:bg-strokedark shrink-0" />
-
-                {/* UOM Selector Dropdown */}
-                <div className="relative shrink-0 flex items-center pr-1.5">
-                  <select
-                    ref={el => {
-                      if (isLastRow && rIdx > 0) nextDropdownRef.current = el;
-                    }}
-                    disabled={disabled}
-                    value={row.uom}
-                    onChange={e => handleRowUomChange(rIdx, e.target.value)}
-                    className="appearance-none bg-transparent py-1.5 pl-2 pr-5 text-xs font-mono font-black text-slate-800 dark:text-slate-100 outline-none cursor-pointer uppercase"
-                  >
-                    {allLevels.map(opt => (
-                      <option
-                        key={opt.uom}
-                        value={opt.uom}
-                        className="bg-white dark:bg-boxdark text-black dark:text-white font-mono"
-                      >
-                        {opt.uom}
-                      </option>
-                    ))}
-                  </select>
-                  <MdKeyboardArrowDown className="absolute right-1 pointer-events-none text-slate-400 text-sm" />
-                </div>
+                <div className="w-[1px] h-3.5 bg-rose-200 dark:bg-rose-900/60 mx-1.5 shrink-0" />
+                <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400 uppercase select-none shrink-0">
+                  /{row.uom}
+                </span>
               </div>
-
-              {/* Remove button for sub-tiers */}
-              {rIdx > 0 && !disabled && (
-                <button
-                  type="button"
-                  onClick={() => handleRemoveRow(rIdx)}
-                  className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition shrink-0"
-                  title="Remove this loose unit"
-                >
-                  <MdClose className="text-sm" />
-                </button>
-              )}
             </div>
+          );
+        })}
+      </div>
 
-            {/* Rate Pill Capsule: [ @ 0.00 ] | [ /UOM ] */}
-            <div className="flex items-center bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 rounded-xl px-2.5 py-1 text-xs font-mono text-rose-800 dark:text-rose-300 shadow-2xs">
-              <span className="text-[11px] font-sans font-bold text-rose-400 mr-1.5">@</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                disabled={disabled}
-                placeholder="0.00"
-                value={currentRate === 0 ? '' : currentRate}
-                onChange={e => {
-                  const raw = e.target.value;
-                  if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
-                    handleRateChange(row.uom, raw);
-                  }
-                }}
-                className="w-full bg-transparent font-mono font-black text-xs text-rose-700 dark:text-rose-300 outline-none border-b border-dashed border-rose-300 dark:border-rose-700 text-center"
-                title={`Editable Rate per ${row.uom}`}
-              />
-              <div className="w-[1px] h-3.5 bg-rose-200 dark:bg-rose-900/60 mx-1.5 shrink-0" />
-              <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400 uppercase select-none shrink-0">
-                /{row.uom}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-
-      {/* Dynamic "+ Loose" Button (Appears if smaller tiers exist to chain) */}
-      {hasMoreTiersAvailable && !disabled && (
+      {/* Dynamic "+ Loose" Button (Always allows adding more sub-tiers) */}
+      {!disabled && (
         <button
           type="button"
           onClick={handleAddLooseRow}

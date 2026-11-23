@@ -544,6 +544,14 @@ const AddProduct = () => {
 
                 if (error) throw error;
 
+                // Cache multi-tier loose units locally for Jawaid Jakwani & Sons
+                try {
+                  const multiMap = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
+                  if (finalItemSrNo) multiMap[finalItemSrNo] = databasePayload.multi_loose_units || [];
+                  multiMap[values.productName] = databasePayload.multi_loose_units || [];
+                  localStorage.setItem('jj_multi_loose_units', JSON.stringify(multiMap));
+                } catch (e) {}
+
                 logActivity({
                   action: 'UPDATE',
                   tableName: 'products',
@@ -604,6 +612,14 @@ const AddProduct = () => {
                 }
 
                 if (error) throw error;
+
+                // Cache multi-tier loose units locally for Jawaid Jakwani & Sons
+                try {
+                  const multiMap = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
+                  if (finalItemSrNo) multiMap[finalItemSrNo] = databasePayload.multi_loose_units || [];
+                  multiMap[values.productName] = databasePayload.multi_loose_units || [];
+                  localStorage.setItem('jj_multi_loose_units', JSON.stringify(multiMap));
+                } catch (e) {}
 
                 logActivity({
                   action: 'INSERT',

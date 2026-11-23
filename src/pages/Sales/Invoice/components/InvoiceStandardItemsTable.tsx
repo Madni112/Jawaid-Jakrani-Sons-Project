@@ -94,8 +94,7 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                     <th className="p-2 min-w-[240px]">Product (Name / Code)</th>
                     <th className="p-2 w-44">Warehouse Zone Source</th>
                     <th className="p-2 w-32 text-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold">Available Stock</th>
-                    <th className="p-2 w-48 text-center">Qty (UOM)</th>
-                    <th className="p-2 w-28 text-right">Sale Price</th>
+                    <th className="p-2 min-w-[300px] text-center">Qty & Pricing (UOM)</th>
                     {showDiscount && (
                       <>
                         <th className="p-2 w-24 text-center bg-amber-50/80 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Discount %</th>
@@ -508,8 +507,8 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                           })()}
                         </td>
 
-                        {/* QTY (UOM) */}
-                        <td className="p-2 w-48">
+                        {/* QTY & PRICING (UOM) */}
+                        <td className="p-2 min-w-[320px]">
                           {((isTile || allowLoose) && (pcsPerBox > 1 || (Array.isArray(selectedProd?.multi_loose_units) && selectedProd.multi_loose_units.length > 0))) ? (
                             <ChainedUomInputGrid
                               primaryUom={bulkUnitLabel || 'Unit'}
@@ -549,38 +548,66 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                               const isOverStock = Boolean(item.itemName && Number(item.qty || 0) > totalAvailStock);
 
                               return (
-                                <div className="flex flex-col gap-1">
-                                  <div className={`flex items-center gap-1.5 rounded px-2 py-1.5 border transition ${isOverStock ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800 border-stroke dark:border-strokedark'}`}>
-                                    <input
-                                      type="text"
-                                      inputMode={isDecimalUom ? "decimal" : "numeric"}
-                                      onKeyDown={(e) => {
-                                        blockInvalidChar(e);
-                                        if (!isDecimalUom && (e.key === '.' || e.key === 'Decimal')) {
-                                          e.preventDefault();
-                                        }
-                                      }}
-                                      name={`items.${idx}.qty`}
-                                      value={item.qty === 0 ? '' : item.qty}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        const regex = isDecimalUom ? /^\d*\.?\d*$/ : /^\d*$/;
-                                        if (val === '' || regex.test(val)) {
-                                          setFieldValue(`items.${idx}.qty`, val);
-                                          const newQty = parseFloat(val) || 0;
-                                          const currentRp = Math.max(0, Number(item.rp) || 0);
-                                          const gross = newQty * currentRp;
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`flex-1 flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 border transition ${isOverStock ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 dark:border-rose-800' : 'bg-white dark:bg-meta-4 border-slate-300 dark:border-strokedark'}`}>
+                                      <input
+                                        type="text"
+                                        inputMode={isDecimalUom ? "decimal" : "numeric"}
+                                        onKeyDown={(e) => {
+                                          blockInvalidChar(e);
+                                          if (!isDecimalUom && (e.key === '.' || e.key === 'Decimal')) {
+                                            e.preventDefault();
+                                          }
+                                        }}
+                                        name={`items.${idx}.qty`}
+                                        value={item.qty === 0 ? '' : item.qty}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const regex = isDecimalUom ? /^\d*\.?\d*$/ : /^\d*$/;
+                                          if (val === '' || regex.test(val)) {
+                                            setFieldValue(`items.${idx}.qty`, val);
+                                            const newQty = parseFloat(val) || 0;
+                                            const currentRp = Math.max(0, Number(item.rp) || 0);
+                                            const gross = newQty * currentRp;
+                                            const disPer = Math.max(0, Number(item.discountPer) || 0);
+                                            if (disPer > 0) {
+                                              setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                            }
+                                          }
+                                        }}
+                                        placeholder="0"
+                                        className={`w-full bg-transparent font-black text-center text-xs outline-none ${isOverStock ? 'text-rose-600 dark:text-rose-400' : 'text-primary'}`}
+                                      />
+                                      <span className="text-gray-400 text-[10px] font-bold select-none">{uomName}</span>
+                                    </div>
+
+                                    {/* Standard Price Input */}
+                                    <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-strokedark rounded-xl px-2 py-1.5 w-28">
+                                      <span className="text-[10px] text-gray-400 font-sans mr-1">Rs.</span>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        onKeyDown={blockInvalidChar}
+                                        onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
+                                        name={`items.${idx}.rp`}
+                                        value={item.rp}
+                                        onChange={(e) => {
+                                          const newRp = Math.max(0, Number(e.target.value) || 0);
+                                          setFieldValue(`items.${idx}.rp`, newRp);
+                                          const q = parseFloat(item.qty) || 0;
+                                          const gross = q * newRp;
                                           const disPer = Math.max(0, Number(item.discountPer) || 0);
                                           if (disPer > 0) {
                                             setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
                                           }
-                                        }
-                                      }}
-                                      placeholder="0"
-                                      className={`w-full bg-transparent font-black text-center text-xs outline-none ${isOverStock ? 'text-rose-600 dark:text-rose-400' : 'text-primary'}`}
-                                    />
-                                    <span className="text-gray-400 text-[10px] font-bold select-none">{uomName}</span>
+                                        }}
+                                        className="w-full bg-transparent font-mono font-bold text-xs text-right outline-none text-slate-800 dark:text-slate-100"
+                                      />
+                                    </div>
                                   </div>
+
                                   {isOverStock && (
                                     <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 text-center leading-tight">
                                       entering more than stock amount
@@ -589,29 +616,6 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                                 </div>
                               );
                             })()
-                          )}
-                        </td>
-
-                        {/* SALE PRICE */}
-                        <td className="p-2">
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            onKeyDown={blockInvalidChar}
-                            onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
-                            name={`items.${idx}.rp`}
-                            value={item.rp}
-                            onChange={(e) => {
-                              const newRp = Math.max(0, Number(e.target.value) || 0);
-                              setFieldValue(`items.${idx}.rp`, newRp);
-                            }}
-                            className={`w-full bg-transparent text-right font-bold outline-none border rounded p-1 ${hasAttempted && (errors.items as any)?.[idx] && (!item.rp || item.rp < 0) ? 'border-red-500 bg-red-50/10' : 'border-transparent'}`}
-                          />
-                          {Number(item.itemServiceCharges) > 0 && (
-                            <div className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold text-right mt-0.5 whitespace-nowrap">
-                              Svc: Rs.{Number(item.itemServiceCharges).toFixed(0)}
-                            </div>
                           )}
                         </td>
 
