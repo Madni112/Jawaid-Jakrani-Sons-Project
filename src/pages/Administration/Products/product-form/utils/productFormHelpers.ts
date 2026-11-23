@@ -88,6 +88,22 @@ export const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) =>
 
 export const getProductInitialValues = (editData: any, isEditMode: boolean): ProductFormValues => {
   if (isEditMode && editData) {
+    const cachedMulti = (() => {
+      try {
+        const map = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
+        return map[editData.id] || (editData.item_sr_no && map[editData.item_sr_no]) || (editData.product_name && map[editData.product_name]) || null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const hasLoose = Boolean(
+      editData.allow_loose_sales ||
+      (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units.length > 0) ||
+      (Array.isArray(cachedMulti) && cachedMulti.length > 0) ||
+      (editData.loose_uom && editData.loose_conversion_ratio)
+    );
+
     return {
       productName: editData.product_name || '',
       category: editData.category || '',
@@ -123,12 +139,15 @@ export const getProductInitialValues = (editData: any, isEditMode: boolean): Pro
         return match ? match[1].trim() : '';
       })(),
       piecesPerBox: parsePiecesPerBox(editData),
-      allowLooseSales: editData.allow_loose_sales ?? false,
-      looseUom: editData.loose_uom || 'PCS',
-      looseConversionRatio: editData.loose_conversion_ratio || parsePiecesPerBox(editData) || 1,
+      allowLooseSales: hasLoose,
+      looseUom: editData.loose_uom || (cachedMulti && cachedMulti[0]?.uom) || 'PCS',
+      looseConversionRatio: editData.loose_conversion_ratio || (cachedMulti && cachedMulti[0]?.ratio) || parsePiecesPerBox(editData) || 1,
       loosePurchasePrice: editData.loose_purchase_price || '',
       looseSalePrice: editData.loose_sale_price || '',
       looseTiers: (() => {
+        if (Array.isArray(cachedMulti) && cachedMulti.length > 0) {
+          return cachedMulti;
+        }
         if (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units.length > 0) {
           return editData.multi_loose_units;
         }
