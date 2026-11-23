@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { catalogHasTileProducts } from '../../../utils/looseUomHelpers';
 import InvoiceHeader from './components/InvoiceHeader';
 import InvoiceTileItemsTable from './components/InvoiceTileItemsTable';
 import InvoiceStandardItemsTable from './components/InvoiceStandardItemsTable';
@@ -3189,6 +3190,7 @@ const NewInvoice = () => {
                   fetchCustomerPastSales={fetchCustomerPastSales}
                   handleOpenQuickCustomerModal={handleOpenQuickCustomerModal}
                   warehousesList={warehousesList}
+                  hasTileProducts={catalogHasTileProducts(productList)}
                   handleChange={handleChange}
                   setFieldValue={setFieldValue}
                 />

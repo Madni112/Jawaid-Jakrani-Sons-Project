@@ -18,6 +18,7 @@ import PurchaseSummaryFooter from './components/PurchaseSummaryFooter';
 // Hooks, Utils & Services
 import { usePurchaseMetadata } from './hooks/usePurchaseMetadata';
 import { handleSubmitPurchase } from './services/purchaseSubmitService';
+import { catalogHasTileProducts } from '../../../utils/looseUomHelpers';
 import {
   isTileProduct,
   calculatePurchaseLineTotals,
@@ -484,6 +485,7 @@ const AddPurchases: React.FC = () => {
                   hasAttempted={hasAttempted}
                   suppliers={suppliers}
                   locations={locations}
+                  hasTileProducts={catalogHasTileProducts(productList)}
                   isVendorDropdownOpen={isVendorDropdownOpen}
                   setIsVendorDropdownOpen={setIsVendorDropdownOpen}
                   highlightedVendorIndex={highlightedVendorIndex}

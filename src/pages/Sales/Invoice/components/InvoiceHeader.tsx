@@ -27,6 +27,7 @@ interface InvoiceHeaderProps {
   fetchCustomerPastSales: (customerName: string) => Promise<void>;
   handleOpenQuickCustomerModal: (query: string, setFieldValue: any) => void;
   warehousesList: string[];
+  hasTileProducts?: boolean;
   handleChange: (e: React.ChangeEvent<any>) => void;
   setFieldValue: (field: string, value: any, shouldValidate?: boolean) => void;
 }
@@ -57,6 +58,7 @@ export const InvoiceHeader: React.FC<InvoiceHeaderProps> = ({
   fetchCustomerPastSales,
   handleOpenQuickCustomerModal,
   warehousesList,
+  hasTileProducts = false,
   handleChange,
   setFieldValue,
 }) => {
@@ -469,79 +471,83 @@ export const InvoiceHeader: React.FC<InvoiceHeaderProps> = ({
             Return
           </div>
 
-          {/* Tile Products Toggle Pill */}
-          <div
-            onClick={() => {
-              const isChecked = !values.showTileSection;
-              setFieldValue('showTileSection', isChecked);
-              const defaultWh = values.dispatchWarehouse || warehousesList[0] || '';
-              if (!isChecked) {
-                setFieldValue('tileItems', []);
-              } else if ((values.tileItems || []).length === 0) {
-                setFieldValue('tileItems', [{
-                  id: Date.now(),
-                  itemName: '',
-                  skuCode: '',
-                  warehouse: defaultWh,
-                  availableQty: 0,
-                  boxQty: 1,
-                  loosePcs: 0,
-                  piecesPerBox: 4,
-                  sqmPerBox: 1.44,
-                  pricePerBox: 0,
-                  pricePerSqm: 0,
-                  pricePerPiece: 0,
-                  totalAmount: 0,
-                  totalSqm: 1.44,
-                  isTileItem: true
-                }]);
-              }
-            }}
-            className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
-              values.showTileSection
-                ? 'bg-slate-900 text-white border-slate-900 dark:bg-primary dark:border-primary shadow-xs'
-                : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
-            }`}
-          >
-            Tile
-          </div>
+          {/* Tile Products Toggle Pill (Only shown if catalog has tiles or tiles already added) */}
+          {(hasTileProducts || Boolean(values.showTileSection) || (values.tileItems && values.tileItems.length > 0)) && (
+            <div
+              onClick={() => {
+                const isChecked = !values.showTileSection;
+                setFieldValue('showTileSection', isChecked);
+                const defaultWh = values.dispatchWarehouse || warehousesList[0] || '';
+                if (!isChecked) {
+                  setFieldValue('tileItems', []);
+                } else if ((values.tileItems || []).length === 0) {
+                  setFieldValue('tileItems', [{
+                    id: Date.now(),
+                    itemName: '',
+                    skuCode: '',
+                    warehouse: defaultWh,
+                    availableQty: 0,
+                    boxQty: 1,
+                    loosePcs: 0,
+                    piecesPerBox: 4,
+                    sqmPerBox: 1.44,
+                    pricePerBox: 0,
+                    pricePerSqm: 0,
+                    pricePerPiece: 0,
+                    totalAmount: 0,
+                    totalSqm: 1.44,
+                    isTileItem: true
+                  }]);
+                }
+              }}
+              className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
+                values.showTileSection
+                  ? 'bg-slate-900 text-white border-slate-900 dark:bg-primary dark:border-primary shadow-xs'
+                  : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+              }`}
+            >
+              Tile
+            </div>
+          )}
 
-          {/* Return Tile Products Toggle Pill */}
-          <div
-            onClick={() => {
-              const isChecked = !values.showTileReturnSection;
-              setFieldValue('showTileReturnSection', isChecked);
-              const defaultReturnWh = values.dispatchWarehouse || warehousesList.find((w: string) => /fateh/i.test(w) || /a[-_ ]?39/i.test(w)) || warehousesList[0] || '';
-              if (!isChecked) {
-                setFieldValue('tileReturnItems', []);
-              } else if ((values.tileReturnItems || []).length === 0) {
-                setFieldValue('tileReturnItems', [{
-                  id: Date.now(),
-                  itemName: '',
-                  skuCode: '',
-                  warehouse: defaultReturnWh,
-                  availableQty: 0,
-                  boxQty: 1,
-                  loosePcs: 0,
-                  piecesPerBox: 4,
-                  sqmPerBox: 1.44,
-                  pricePerBox: 0,
-                  pricePerSqm: 0,
-                  pricePerPiece: 0,
-                  totalAmount: 0,
-                  totalSqm: 1.44,
-                  isTileItem: true
-                }]);
-              }
-            }}
-            className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
-              values.showTileReturnSection
-                ? 'bg-rose-600 text-white border-rose-600 dark:bg-rose-600 dark:border-rose-600 shadow-xs'
-                : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
-            }`}
-          >
-            Return Tile
-          </div>
+          {/* Return Tile Products Toggle Pill (Only shown if catalog has tiles or return tiles already added) */}
+          {(hasTileProducts || Boolean(values.showTileReturnSection) || (values.tileReturnItems && values.tileReturnItems.length > 0)) && (
+            <div
+              onClick={() => {
+                const isChecked = !values.showTileReturnSection;
+                setFieldValue('showTileReturnSection', isChecked);
+                const defaultReturnWh = values.dispatchWarehouse || warehousesList.find((w: string) => /fateh/i.test(w) || /a[-_ ]?39/i.test(w)) || warehousesList[0] || '';
+                if (!isChecked) {
+                  setFieldValue('tileReturnItems', []);
+                } else if ((values.tileReturnItems || []).length === 0) {
+                  setFieldValue('tileReturnItems', [{
+                    id: Date.now(),
+                    itemName: '',
+                    skuCode: '',
+                    warehouse: defaultReturnWh,
+                    availableQty: 0,
+                    boxQty: 1,
+                    loosePcs: 0,
+                    piecesPerBox: 4,
+                    sqmPerBox: 1.44,
+                    pricePerBox: 0,
+                    pricePerSqm: 0,
+                    pricePerPiece: 0,
+                    totalAmount: 0,
+                    totalSqm: 1.44,
+                    isTileItem: true
+                  }]);
+                }
+              }}
+              className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
+                values.showTileReturnSection
+                  ? 'bg-rose-600 text-white border-rose-600 dark:bg-rose-600 dark:border-rose-600 shadow-xs'
+                  : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+              }`}
+            >
+              Return Tile
+            </div>
+          )}
         </div>
 
         {values.applyFbrTax && (

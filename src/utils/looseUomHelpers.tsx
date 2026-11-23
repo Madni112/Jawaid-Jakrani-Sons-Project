@@ -262,4 +262,29 @@ export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({
   );
 };
 
+/**
+ * Checks whether a given product belongs to Tiles category or packaging
+ */
+export const isTileProductItem = (p: any): boolean => {
+  if (!p) return false;
+  if (p.isTileItem) return true;
+  const parent = String(p.sub_sub_category || p.parent_category || p.parentCat || '').toLowerCase().trim();
+  if (parent.includes('tile')) return true;
+  const cat = String(p.category || '').toLowerCase().trim();
+  if (cat.includes('tile')) return true;
+  const subCat = String(p.sub_category || p.subCategory || '').toLowerCase().trim();
+  if (subCat.includes('tile')) return true;
+  const name = String(p.product_name || p.itemName || p.name || '').toLowerCase().trim();
+  if (name.includes('tile')) return true;
+  return false;
+};
+
+/**
+ * Checks whether a catalog product list contains any tile products
+ */
+export const catalogHasTileProducts = (productList: any[] = []): boolean => {
+  if (!Array.isArray(productList) || productList.length === 0) return false;
+  return productList.some(p => isTileProductItem(p));
+};
+
 export default LooseChainBadge;

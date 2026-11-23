@@ -10,6 +10,7 @@ interface GRNHeaderSectionProps {
   handleChange: React.ChangeEventHandler<any>;
   vendors: VendorItem[];
   locations: LocationItem[];
+  hasTileProducts?: boolean;
   workflowSettings?: any;
 }
 
@@ -21,6 +22,7 @@ export const GRNHeaderSection: React.FC<GRNHeaderSectionProps> = ({
   handleChange,
   vendors,
   locations,
+  hasTileProducts = false,
   workflowSettings,
 }) => {
   const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
@@ -127,42 +129,44 @@ export const GRNHeaderSection: React.FC<GRNHeaderSectionProps> = ({
         </div>
       </div>
 
-      {/* TOP TOGGLE BUTTON FOR TILES */}
-      <div className="mb-4 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => {
-            const next = !values.showTileSection;
-            setFieldValue('showTileSection', next);
-            if (next && (!values.tileItems || values.tileItems.length === 0)) {
-              setFieldValue('tileItems', [
-                {
-                  id: `tile-0-${Date.now()}`,
-                  itemName: '',
-                  skuCode: '',
-                  warehouseName: '',
-                  boxQty: 1,
-                  loosePcs: 0,
-                  totalSqm: 1.44,
-                  costPricePerBox: 0,
-                  costPricePerSqm: 0,
-                  costPricePerPiece: 0,
-                  totalAmount: 0,
-                  piecesPerBox: 4,
-                  sqmPerBox: 1.44
-                }
-              ]);
-            }
-          }}
-          className={`px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-xs flex items-center gap-1.5 border cursor-pointer ${
-            values.showTileSection
-              ? 'bg-primary text-white border-primary shadow-sm'
-              : 'bg-white dark:bg-boxdark text-gray-700 dark:text-gray-200 border-stroke dark:border-strokedark hover:border-primary'
-          }`}
-        >
-          {values.showTileSection ? '✓ Tiles Enabled' : '+ Receive Tiles'}
-        </button>
-      </div>
+      {/* TOP TOGGLE BUTTON FOR TILES (Only shown if catalog has tile products or already has tile items) */}
+      {(hasTileProducts || Boolean(values.showTileSection) || (values.tileItems && values.tileItems.length > 0)) && (
+        <div className="mb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              const next = !values.showTileSection;
+              setFieldValue('showTileSection', next);
+              if (next && (!values.tileItems || values.tileItems.length === 0)) {
+                setFieldValue('tileItems', [
+                  {
+                    id: `tile-0-${Date.now()}`,
+                    itemName: '',
+                    skuCode: '',
+                    warehouseName: '',
+                    boxQty: 1,
+                    loosePcs: 0,
+                    totalSqm: 1.44,
+                    costPricePerBox: 0,
+                    costPricePerSqm: 0,
+                    costPricePerPiece: 0,
+                    totalAmount: 0,
+                    piecesPerBox: 4,
+                    sqmPerBox: 1.44
+                  }
+                ]);
+              }
+            }}
+            className={`px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-xs flex items-center gap-1.5 border cursor-pointer ${
+              values.showTileSection
+                ? 'bg-primary text-white border-primary shadow-sm'
+                : 'bg-white dark:bg-boxdark text-gray-700 dark:text-gray-200 border-stroke dark:border-strokedark hover:border-primary'
+            }`}
+          >
+            {values.showTileSection ? '✓ Tiles Enabled' : '+ Receive Tiles'}
+          </button>
+        </div>
+      )}
     </>
   );
 };

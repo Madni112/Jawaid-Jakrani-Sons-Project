@@ -8,6 +8,7 @@ interface PurchaseHeaderProps {
   hasAttempted: boolean;
   suppliers: any[];
   locations: any[];
+  hasTileProducts?: boolean;
   isVendorDropdownOpen: boolean;
   setIsVendorDropdownOpen: (val: boolean) => void;
   highlightedVendorIndex: number;
@@ -22,6 +23,7 @@ export const PurchaseHeader: React.FC<PurchaseHeaderProps> = ({
   hasAttempted,
   suppliers,
   locations,
+  hasTileProducts = false,
   isVendorDropdownOpen,
   setIsVendorDropdownOpen,
   highlightedVendorIndex,
@@ -213,39 +215,41 @@ export const PurchaseHeader: React.FC<PurchaseHeaderProps> = ({
             Freight Charges
           </div>
 
-          {/* + Purchase Tiles Toggle */}
-          <div
-            onClick={() => {
-              const nextVal = !values.showTileSection;
-              setFieldValue('showTileSection', nextVal);
-              if (nextVal && (!values.tileItems || values.tileItems.length === 0)) {
-                setFieldValue('tileItems', [
-                  {
-                    id: `tile-0-${Date.now()}`,
-                    itemName: '',
-                    skuCode: '',
-                    warehouse: '',
-                    boxQty: 1,
-                    loosePcs: 0,
-                    totalSqm: 0,
-                    costPricePerBox: 0,
-                    costPricePerPiece: 0,
-                    costPricePerSqm: 0,
-                    totalAmount: 0,
-                    piecesPerBox: 4,
-                    sqmPerBox: 1.44,
-                  },
-                ]);
-              }
-            }}
-            className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border shadow-xs ${
-              values.showTileSection
-                ? 'bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-700 shadow-slate-900/10'
-                : 'bg-white text-slate-700 border-stroke dark:bg-boxdark dark:text-slate-200 dark:border-strokedark hover:border-primary'
-            }`}
-          >
-            {values.showTileSection ? '✓ Tiles Enabled' : '+ Purchase Tiles'}
-          </div>
+          {/* + Purchase Tiles Toggle (Only shown if catalog has tile products or already has tile items) */}
+          {(hasTileProducts || Boolean(values.showTileSection) || (values.tileItems && values.tileItems.length > 0)) && (
+            <div
+              onClick={() => {
+                const nextVal = !values.showTileSection;
+                setFieldValue('showTileSection', nextVal);
+                if (nextVal && (!values.tileItems || values.tileItems.length === 0)) {
+                  setFieldValue('tileItems', [
+                    {
+                      id: `tile-0-${Date.now()}`,
+                      itemName: '',
+                      skuCode: '',
+                      warehouse: '',
+                      boxQty: 1,
+                      loosePcs: 0,
+                      totalSqm: 0,
+                      costPricePerBox: 0,
+                      costPricePerPiece: 0,
+                      costPricePerSqm: 0,
+                      totalAmount: 0,
+                      piecesPerBox: 4,
+                      sqmPerBox: 1.44,
+                    },
+                  ]);
+                }
+              }}
+              className={`cursor-pointer px-3.5 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border shadow-xs ${
+                values.showTileSection
+                  ? 'bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-700 shadow-slate-900/10'
+                  : 'bg-white text-slate-700 border-stroke dark:bg-boxdark dark:text-slate-200 dark:border-strokedark hover:border-primary'
+              }`}
+            >
+              {values.showTileSection ? '✓ Tiles Enabled' : '+ Purchase Tiles'}
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -1,4 +1,4 @@
-import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
+import { LooseChainBadge, catalogHasTileProducts } from '../../../../utils/looseUomHelpers';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
 import WarehouseSearchableSelect from './WarehouseSearchableSelect';
 import React, { useRef, useState } from 'react';
@@ -807,6 +807,7 @@ export const ReturnStandardItemsTable: React.FC<ReturnStandardItemsTableProps> =
 
       <div className="mt-4 flex items-center gap-3">
         {/* Tile Products Toggle Pill */}
+        {(catalogHasTileProducts(productList) || Boolean(values.showTileSection) || (values.tileItems && values.tileItems.length > 0)) && (
         <div
           onClick={() => {
             const nextVal = !values.showTileSection;
@@ -841,6 +842,7 @@ export const ReturnStandardItemsTable: React.FC<ReturnStandardItemsTableProps> =
         >
           Tile
         </div>
+        )}
 
         <button
           type="button"

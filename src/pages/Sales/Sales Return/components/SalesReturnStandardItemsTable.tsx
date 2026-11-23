@@ -1,4 +1,4 @@
-import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
+import { LooseChainBadge, catalogHasTileProducts } from '../../../../utils/looseUomHelpers';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
 import WarehouseSearchableSelect from './WarehouseSearchableSelect';
 import { DropdownPortal } from './DropdownPortal';
@@ -677,6 +677,7 @@ export const SalesReturnStandardItemsTable: React.FC<SalesReturnStandardItemsTab
 
                       <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                         {/* Tile Products Toggle Pill */}
+                        {(catalogHasTileProducts(productList) || Boolean(values.showTileSection) || (values.tileItems && values.tileItems.length > 0)) && (
                         <div
                           onClick={() => {
                             if (!values.customerName) {
@@ -713,6 +714,7 @@ export const SalesReturnStandardItemsTable: React.FC<SalesReturnStandardItemsTab
                         >
                           Tile
                         </div>
+                        )}
 
                         <button
                           type="button"

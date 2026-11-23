@@ -9,6 +9,7 @@ import { getWarehouseAvailableStock } from '../../../utils/stockCalculator';
 import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
 import { GRNFormValues, LocationItem, ProductItem, VendorItem } from './types/grnTypes';
 import { fetchGRNMetadata, submitGRN } from './services/grnService';
+import { catalogHasTileProducts } from '../../../utils/looseUomHelpers';
 import { GRNHeaderSection } from './components/GRNHeaderSection';
 import { GRNTilesSection } from './components/GRNTilesSection';
 import { GRNStandardItemsSection } from './components/GRNStandardItemsSection';
@@ -186,6 +187,7 @@ const AddGRN: React.FC = () => {
                   handleChange={handleChange}
                   vendors={vendors}
                   locations={locations}
+                  hasTileProducts={catalogHasTileProducts(productList)}
                   workflowSettings={workflowSettings}
                 />
 
