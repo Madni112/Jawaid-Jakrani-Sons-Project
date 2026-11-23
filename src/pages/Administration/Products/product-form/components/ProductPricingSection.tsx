@@ -736,9 +736,9 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                         {/* Ratio Input & Unit Select */}
                         <div className="flex items-center gap-2">
                           <input
-                            type="number"
-                            step="any"
-                            value={tier.ratio}
+                            type="text"
+                            inputMode="decimal"
+                            value={tier.ratio === 0 ? '' : tier.ratio}
                             onChange={(e) => {
                               const rawVal = e.target.value;
                               const updated = [...values.looseTiers];

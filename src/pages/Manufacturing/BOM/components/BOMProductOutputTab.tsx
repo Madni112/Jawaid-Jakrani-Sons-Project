@@ -216,13 +216,14 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
                     Units per 1 {uom || 'Bulk'}:
                   </label>
                   <input
-                    type="number"
-                    min="1"
-                    step="any"
-                    value={looseRatio}
+                    type="text"
+                    inputMode="decimal"
+                    value={looseRatio === 0 ? '' : looseRatio}
                     onChange={e => {
                       const v = e.target.value;
-                      setLooseRatio(v === '' ? '' : parseFloat(v) || '');
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                        setLooseRatio(v);
+                      }
                     }}
                     placeholder="e.g. 100 or 1000"
                     className="w-full rounded-lg border border-stroke dark:border-strokedark bg-transparent py-1.5 px-3 font-mono font-bold text-xs outline-none focus:border-primary"
@@ -272,15 +273,16 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
 
                       <div className="flex items-center gap-2">
                         <input
-                          type="number"
-                          min="1"
-                          step="any"
-                          value={tier.ratio}
+                          type="text"
+                          inputMode="decimal"
+                          value={tier.ratio === 0 ? '' : tier.ratio}
                           onChange={e => {
                             const raw = e.target.value;
-                            const updated = [...multiLooseUnits];
-                            updated[tIdx] = { ...tier, ratio: raw === '' ? '' : parseFloat(raw) || '' };
-                            setMultiLooseUnits(updated);
+                            if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
+                              const updated = [...multiLooseUnits];
+                              updated[tIdx] = { ...tier, ratio: raw };
+                              setMultiLooseUnits(updated);
+                            }
                           }}
                           className="w-20 rounded border border-stroke dark:border-strokedark py-1 px-2 font-mono text-center font-bold outline-none focus:border-primary text-xs"
                           placeholder="1000"
