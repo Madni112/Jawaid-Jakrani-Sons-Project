@@ -165,8 +165,24 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
 
   const handleRowUomChange = (rowIdx: number, newUom: string) => {
     const oldUom = activeRows[rowIdx]?.uom;
-    const newRows = [...activeRows];
+    let newRows = [...activeRows];
     newRows[rowIdx] = { ...newRows[rowIdx], uom: newUom };
+
+    // If changing the primary (first) row, only allow sub-units that strictly follow it in the chain
+    if (rowIdx === 0) {
+      const primaryLevelIdx = allLevels.findIndex(l => l.uom === newUom);
+      const validSubUoms = primaryLevelIdx >= 0 ? allLevels.slice(primaryLevelIdx + 1).map(l => l.uom) : [];
+      const seen = new Set<string>([newUom]);
+      const filtered = [newRows[0]];
+      activeRows.slice(1).forEach(r => {
+        if (validSubUoms.includes(r.uom) && !seen.has(r.uom)) {
+          seen.add(r.uom);
+          filtered.push(r);
+        }
+      });
+      newRows = filtered;
+    }
+
     setActiveRows(newRows);
 
     const updatedQtys = { ...tierQuantities };
@@ -184,11 +200,21 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
     recalculateAndNotify(newRows, updatedQtys, updatedRates);
   };
 
+  // Determine which sub-units can still be added below the primary unit
+  const primaryUomSelected = activeRows[0]?.uom || allLevels[0]?.uom;
+  const primaryIdx = allLevels.findIndex(l => l.uom === primaryUomSelected);
+  const remainingAllowedLevels = primaryIdx >= 0 ? allLevels.slice(primaryIdx + 1) : [];
+  const usedSubUoms = new Set(activeRows.slice(1).map(r => r.uom));
+  const availableSubLevels = remainingAllowedLevels.filter(l => !usedSubUoms.has(l.uom));
+  const canAddMoreLoose = availableSubLevels.length > 0;
+
   const handleAddLooseRow = () => {
-    // Determine which UOMs are not yet chosen
-    const usedUoms = new Set(activeRows.map(r => r.uom));
-    const nextAvail = allLevels.find(l => !usedUoms.has(l.uom));
-    const nextUom = nextAvail ? nextAvail.uom : (allLevels[1]?.uom || 'LTR');
+    if (!canAddMoreLoose) return;
+
+    // Pick the very next unused sub-tier in hierarchical order
+    const nextAvail = availableSubLevels[0];
+    if (!nextAvail) return;
+    const nextUom = nextAvail.uom;
 
     const newRowId = `row-${Date.now()}`;
     const newRows = [...activeRows, { id: newRowId, uom: nextUom }];
@@ -239,6 +265,12 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
 
           const isLastRow = rIdx === activeRows.length - 1;
 
+          // For sub-tier rows (rIdx > 0), only allow selecting units that are strictly below the primary unit
+          const selectableOptions =
+            rIdx === 0
+              ? allLevels
+              : allLevels.slice(primaryIdx + 1);
+
           return (
             <div key={row.id} className="flex flex-col gap-1">
               {/* Pill Capsule: [ Qty ] | [ UOM Dropdown ] [ ✕ ] */}
@@ -274,7 +306,7 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
                       onChange={e => handleRowUomChange(rIdx, e.target.value)}
                       className="appearance-none bg-transparent py-1.5 pl-2 pr-5 text-xs font-mono font-black text-slate-800 dark:text-slate-100 outline-none cursor-pointer uppercase focus:bg-rose-50/30 dark:focus:bg-rose-950/20 transition"
                     >
-                      {allLevels.map(opt => (
+                      {selectableOptions.map(opt => (
                         <option
                           key={opt.uom}
                           value={opt.uom}
@@ -329,16 +361,15 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
         })}
       </div>
 
-      {/* Dynamic "+ Loose" Button (Always allows adding more sub-tiers) */}
-      {!disabled && (
+      {/* Dynamic "+ Loose" Button (Only shows if more chained sub-units exist below the current selection) */}
+      {!disabled && canAddMoreLoose && (
         <button
           type="button"
           onClick={handleAddLooseRow}
           className="self-start inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 border border-emerald-300/70 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-mono font-bold cursor-pointer transition shadow-2xs mt-0.5"
-          title="Add another loose sub-unit"
+          title="Add next loose sub-unit"
         >
-          <MdAdd className="text-xs" />
-          <span>+ Loose</span>
+          <span className="font-bold text-xs">Loose +</span>
         </button>
       )}
     </div>
