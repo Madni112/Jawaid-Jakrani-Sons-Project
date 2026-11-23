@@ -209,7 +209,17 @@ const PrintInvoice = () => {
         qtyDisplay = `0 Box`;
       }
     } else {
-      qtyDisplay = `${qty} ${item.uom || prodMeta?.uom || 'Nos'}`;
+      // Check if compound multi-tier loose quantities exist
+      if (item.tier_quantities && typeof item.tier_quantities === 'object' && Object.keys(item.tier_quantities).length > 0) {
+        const parts: string[] = [];
+        Object.entries(item.tier_quantities).forEach(([u, q]) => {
+          const num = Number(q) || 0;
+          if (num > 0) parts.push(`${num} ${u.toUpperCase()}`);
+        });
+        qtyDisplay = parts.length > 0 ? parts.join(' + ') : `${qty} ${item.uom || prodMeta?.uom || 'Nos'}`;
+      } else {
+        qtyDisplay = `${qty} ${item.uom || prodMeta?.uom || 'Nos'}`;
+      }
     }
 
     computedTotalGross += grossAmount;

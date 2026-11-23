@@ -605,32 +605,9 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                             onChange={(e) => {
                               const newRp = Math.max(0, Number(e.target.value) || 0);
                               setFieldValue(`items.${idx}.rp`, newRp);
-                              if (!Number(selectedProd?.loose_sale_price) && pcsPerBox > 1) {
-                                setFieldValue(`items.${idx}.piecePrice`, Number((newRp / pcsPerBox).toFixed(2)));
-                              }
                             }}
                             className={`w-full bg-transparent text-right font-bold outline-none border rounded p-1 ${hasAttempted && (errors.items as any)?.[idx] && (!item.rp || item.rp < 0) ? 'border-red-500 bg-red-50/10' : 'border-transparent'}`}
                           />
-                          {((isTile || allowLoose) && pcsPerBox > 1) && (
-                            <div className="flex items-center gap-1 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded px-1.5 py-0.5 mt-1">
-                              <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                                /{looseUnitLabel}:
-                              </span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                onKeyDown={blockInvalidChar}
-                                value={item.piecePrice !== undefined && item.piecePrice !== '' ? item.piecePrice : (Number(selectedProd?.loose_sale_price) > 0 ? Number(selectedProd.loose_sale_price) : (pcsPerBox > 0 ? Number(((Number(item.rp) || 0) / pcsPerBox).toFixed(2)) : ''))}
-                                onChange={(e) => {
-                                  const enteredPrice = Math.max(0, Number(e.target.value) || 0);
-                                  setFieldValue(`items.${idx}.piecePrice`, enteredPrice);
-                                }}
-                                placeholder="0"
-                                className="w-full bg-transparent font-mono font-bold text-[11px] text-right text-emerald-700 dark:text-emerald-400 outline-none"
-                              />
-                            </div>
-                          )}
                           {Number(item.itemServiceCharges) > 0 && (
                             <div className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold text-right mt-0.5 whitespace-nowrap">
                               Svc: Rs.{Number(item.itemServiceCharges).toFixed(0)}

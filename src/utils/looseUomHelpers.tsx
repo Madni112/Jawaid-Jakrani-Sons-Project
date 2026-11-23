@@ -42,8 +42,28 @@ export const getLooseChainSummary = (
 };
 
 /**
- * Extracts loose chain parameters from any product object
+ * Formats line item compound quantities for printing.
+ * E.g., if tier_quantities is { PCS: 1, LTR: 25 }, returns "1 PCS + 25 LTR"
  */
+export const formatCompoundQtyForPrint = (
+  baseQty: number | string,
+  baseUom: string,
+  tierQuantities?: Record<string, number | string>
+): string => {
+  if (tierQuantities && typeof tierQuantities === 'object') {
+    const parts: string[] = [];
+    Object.entries(tierQuantities).forEach(([uom, q]) => {
+      const num = Number(q) || 0;
+      if (num > 0) {
+        parts.push(`${num} ${uom.toUpperCase()}`);
+      }
+    });
+    if (parts.length > 0) {
+      return parts.join(' + ');
+    }
+  }
+  return `${baseQty || 0} ${baseUom || 'PCS'}`;
+};
 export const getProductLooseChainText = (product: any): string => {
   if (!product) return '';
   const allowLoose = product.allow_loose_sales || product.allow_loose || false;
