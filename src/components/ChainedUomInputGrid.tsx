@@ -81,19 +81,27 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
   }, [primaryUom, primaryRate, tiers, mode]);
 
   // Track active rows: always starts with row 0 (primary UOM by default, but changeable)
-  const [activeRows, setActiveRows] = useState<ActiveRow[]>(() => {
-    const initial: ActiveRow[] = [{ id: 'row-0', uom: allLevels[0]?.uom || 'PCS' }];
-    // If incoming tierQuantities already has non-zero loose units, activate them
+  const [activeRows, setActiveRows] = useState<ActiveRow[]>(() => [
+    { id: 'row-0', uom: allLevels[0]?.uom || 'PCS' }
+  ]);
+
+  // When primaryUom, primaryRate or tiers change (e.g. user selects a different product), reset active rows
+  useEffect(() => {
+    const baseUom = allLevels[0]?.uom || 'PCS';
+    const initial: ActiveRow[] = [{ id: 'row-0', uom: baseUom }];
+    const seenUoms = new Set<string>([baseUom]);
+
     if (tierQuantities && typeof tierQuantities === 'object') {
       Object.keys(tierQuantities).forEach((k, idx) => {
         const uUpper = k.toUpperCase();
-        if (uUpper !== initial[0].uom && Number(tierQuantities[k]) > 0) {
+        if (!seenUoms.has(uUpper) && Number(tierQuantities[k]) > 0) {
+          seenUoms.add(uUpper);
           initial.push({ id: `row-init-${idx + 1}`, uom: uUpper });
         }
       });
     }
-    return initial;
-  });
+    setActiveRows(initial);
+  }, [primaryUom, primaryRate, JSON.stringify(tiers)]);
 
   const nextDropdownRef = useRef<HTMLSelectElement | null>(null);
   const shouldFocusNext = useRef(false);

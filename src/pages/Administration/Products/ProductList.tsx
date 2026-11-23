@@ -6,6 +6,7 @@ import TablePagination from '../../../components/TablePagination';
 import { getDetailedBreakdown } from '../../../utils/stockCalculator';
 import { useAuth } from '../../../Context/Auth';
 import { ProductCatalogItem, SortConfig } from './list/types/productListTypes';
+import { enrichProductsWithCachedLoose } from '../../../utils/looseUomHelpers';
 import {
   fetchInventoryProductsLegacy,
   loadServerPage,
@@ -46,7 +47,7 @@ const ProductList: React.FC = () => {
     try {
       setLoading(true);
       const unified = await fetchInventoryProductsLegacy(setMasterLocations);
-      setProducts(unified);
+      setProducts(enrichProductsWithCachedLoose(unified));
     } catch (err: any) {
       toast.error('Data Fetching Failure: ' + err.message);
     } finally {
@@ -66,7 +67,7 @@ const ProductList: React.FC = () => {
         serverBalances
       );
       setServerTotalEntries(total);
-      setProducts(serverRows);
+      setProducts(enrichProductsWithCachedLoose(serverRows));
     } catch (err: any) {
       toast.error('Data Fetching Failure: ' + err.message);
     } finally {

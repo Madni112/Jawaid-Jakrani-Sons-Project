@@ -3,6 +3,7 @@ import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { fetchWorkflowSettings } from '../../../../service/workflowSettingsService';
 import { fetchStockDataset } from '../../../../utils/stockCalculator';
+import { enrichProductsWithCachedLoose } from '../../../../utils/looseUomHelpers';
 
 export const useSalesReturnMetadata = (
   routeId?: string,
@@ -136,7 +137,7 @@ export const useSalesReturnMetadata = (
         }));
         setLocations(normalizedLocs.length > 0 ? normalizedLocs : [{ id: 1, name: 'Main Warehouse', code: 'MW' }]);
 
-        setProductList(prodRes.data || []);
+        setProductList(enrichProductsWithCachedLoose(prodRes.data || []));
         if (bankRes.data) setBankAccountsList(bankRes.data);
 
         if (currentEdit) {

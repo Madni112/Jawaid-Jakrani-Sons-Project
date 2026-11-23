@@ -3,6 +3,7 @@ import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { fetchWorkflowSettings } from '../../../../service/workflowSettingsService';
 import { fetchStockDataset, getTotalAvailableStock } from '../../../../utils/stockCalculator';
+import { enrichProductsWithCachedLoose } from '../../../../utils/looseUomHelpers';
 
 export const usePurchaseReturnMetadata = (
   editData: any,
@@ -61,7 +62,7 @@ export const usePurchaseReturnMetadata = (
         }));
         setLocations(normalizedLocs);
 
-        setProductList(prodRes.data || []);
+        setProductList(enrichProductsWithCachedLoose(prodRes.data || []));
         if (bankRes.data) setBankAccountsList(bankRes.data);
         if (purRes.data) setPurchaseOrdersList(purRes.data);
         if (pastPrRes.data) setPastPurchaseReturnsList(pastPrRes.data);

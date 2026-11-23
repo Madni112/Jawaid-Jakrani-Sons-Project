@@ -3,6 +3,7 @@ import { supabase, fetchAllPages } from '../../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { fetchWorkflowSettings } from '../../../../service/workflowSettingsService';
 import { fetchStockDataset, getTotalAvailableStock } from '../../../../utils/stockCalculator';
+import { enrichProductsWithCachedLoose } from '../../../../utils/looseUomHelpers';
 
 export const usePurchaseMetadata = (
   id?: string,
@@ -85,7 +86,7 @@ export const usePurchaseMetadata = (
           ));
           prodData = fallbackRes.data;
         }
-        if (prodData) setProductList(prodData);
+        if (prodData) setProductList(enrichProductsWithCachedLoose(prodData));
 
         fetchStockDataset().then(ds => {
           if (ds) setStockDataset(ds);

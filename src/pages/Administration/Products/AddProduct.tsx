@@ -547,7 +547,10 @@ const AddProduct = () => {
                 // Cache multi-tier loose units locally for Jawaid Jakwani & Sons
                 try {
                   const multiMap = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
+                  const pNameTrim = String(values.productName || '').trim();
+                  if (editData.id) multiMap[editData.id] = databasePayload.multi_loose_units || [];
                   if (finalItemSrNo) multiMap[finalItemSrNo] = databasePayload.multi_loose_units || [];
+                  if (pNameTrim) multiMap[pNameTrim] = databasePayload.multi_loose_units || [];
                   multiMap[values.productName] = databasePayload.multi_loose_units || [];
                   localStorage.setItem('jj_multi_loose_units', JSON.stringify(multiMap));
                 } catch (e) {}
@@ -566,13 +569,6 @@ const AddProduct = () => {
                   performedBy: user?.name || user?.email || 'User'
                 });
 
-                // Cache multi-tier loose units locally for Jawaid Jakwani & Sons
-                try {
-                  const multiMap = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
-                  multiMap[editData.id] = databasePayload.multi_loose_units || [];
-                  if (finalItemSrNo) multiMap[finalItemSrNo] = databasePayload.multi_loose_units || [];
-                  localStorage.setItem('jj_multi_loose_units', JSON.stringify(multiMap));
-                } catch (e) {}
                 toast.success('Product updated successfully!');
               } else {
                 let { error } = await supabase.from('products').insert([databasePayload]);
@@ -616,7 +612,9 @@ const AddProduct = () => {
                 // Cache multi-tier loose units locally for Jawaid Jakwani & Sons
                 try {
                   const multiMap = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
+                  const pNameTrim = String(values.productName || '').trim();
                   if (finalItemSrNo) multiMap[finalItemSrNo] = databasePayload.multi_loose_units || [];
+                  if (pNameTrim) multiMap[pNameTrim] = databasePayload.multi_loose_units || [];
                   multiMap[values.productName] = databasePayload.multi_loose_units || [];
                   localStorage.setItem('jj_multi_loose_units', JSON.stringify(multiMap));
                 } catch (e) {}
