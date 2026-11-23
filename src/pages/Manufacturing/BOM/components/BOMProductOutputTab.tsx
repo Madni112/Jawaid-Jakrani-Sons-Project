@@ -22,6 +22,20 @@ interface BOMProductOutputTabProps {
   setSubCategory: (val: string) => void;
   category: string;
   setCategory: (val: string) => void;
+  // Loose Selling Configuration for Finished Product
+  allowLoose: boolean;
+  setAllowLoose: (val: boolean) => void;
+  looseUom: string;
+  setLooseUom: (val: string) => void;
+  looseRatio: number | string;
+  setLooseRatio: (val: number | string) => void;
+  multiLooseUnits: Array<{
+    uom: string;
+    ratio: number | string;
+    costPrice?: number | string;
+    salePrice?: number | string;
+  }>;
+  setMultiLooseUnits: (val: any) => void;
 }
 
 export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
@@ -41,7 +55,15 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
   subCategory,
   setSubCategory,
   category,
-  setCategory
+  setCategory,
+  allowLoose,
+  setAllowLoose,
+  looseUom,
+  setLooseUom,
+  looseRatio,
+  setLooseRatio,
+  multiLooseUnits,
+  setMultiLooseUnits
 }) => {
   return (
     <div className="rounded-2xl border border-stroke bg-white p-5 shadow-sm dark:border-strokedark dark:bg-boxdark space-y-4">
@@ -105,6 +127,173 @@ export const BOMProductOutputTab: React.FC<BOMProductOutputTabProps> = ({
               isRTL={isRTL}
             />
           </div>
+        </div>
+
+        {/* FINISHED PRODUCT LOOSE SELLING & SUB-UOM HIERARCHY */}
+        <div className="sm:col-span-2 p-4 rounded-xl bg-slate-50 dark:bg-meta-4/30 border border-slate-200 dark:border-strokedark space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stroke dark:border-strokedark pb-2.5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-black dark:text-white">
+                  Allow Loose Selling for Finished Good
+                </span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  Sub-Units &amp; Breaking Drum/Box
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                Enable if this manufactured product can also be sold in broken units/liters/pieces.
+              </p>
+            </div>
+
+            <div className="inline-flex items-center p-0.5 bg-slate-200 dark:bg-meta-4 rounded-full border border-stroke dark:border-strokedark">
+              <button
+                type="button"
+                onClick={() => setAllowLoose(false)}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+                  !allowLoose
+                    ? 'bg-white dark:bg-boxdark text-black dark:text-white shadow-2xs'
+                    : 'text-gray-500 hover:text-black dark:text-gray-400'
+                }`}
+              >
+                ✕ Full Bulk Only
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAllowLoose(true);
+                  if (!looseUom) {
+                    setLooseUom(uom === 'LTR' || uom === 'Liters' ? 'ML' : (uom === 'KG' ? 'GM' : 'PCS'));
+                    setLooseRatio(uom === 'LTR' || uom === 'KG' ? 1000 : 12);
+                  }
+                }}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer inline-flex items-center gap-1 ${
+                  allowLoose
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-gray-500 hover:text-black dark:text-gray-400'
+                }`}
+              >
+                ✓ Allow Loose Selling
+              </button>
+            </div>
+          </div>
+
+          {allowLoose && (
+            <div className="space-y-3 pt-1 animate-fadeIn">
+              {/* Primary Loose Unit definition */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-white dark:bg-boxdark rounded-xl border border-emerald-300/60 dark:border-emerald-800/60">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Primary Loose Sub-UOM (e.g. LTR, ML, PCS):
+                  </label>
+                  <input
+                    type="text"
+                    value={looseUom}
+                    onChange={e => setLooseUom(e.target.value.toUpperCase())}
+                    placeholder="e.g. LTR, ML"
+                    className="w-full rounded-lg border border-stroke dark:border-strokedark bg-transparent py-1.5 px-3 font-mono font-bold text-xs uppercase outline-none focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Units per 1 {uom || 'Bulk'}:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={looseRatio}
+                    onChange={e => setLooseRatio(parseFloat(e.target.value) || 1)}
+                    placeholder="e.g. 100 or 1000"
+                    className="w-full rounded-lg border border-stroke dark:border-strokedark bg-transparent py-1.5 px-3 font-mono font-bold text-xs outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="sm:col-span-2 text-[11px] font-mono font-semibold text-emerald-700 dark:text-emerald-400">
+                  1 {uom || 'Bulk'} = <strong>{looseRatio || 1}</strong> {looseUom || 'Units'}
+                </div>
+              </div>
+
+              {/* Multi-tier loose units list */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
+                    Additional Sub-Units (Tier 2, 3...)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = Array.isArray(multiLooseUnits) ? [...multiLooseUnits] : [];
+                      const lastUnit = cur.length > 0 ? cur[cur.length - 1].uom : (looseUom || 'LTR');
+                      const nextUom = lastUnit === 'LTR' ? 'ML' : (lastUnit === 'KG' ? 'GM' : 'PCS');
+                      const nextRatio = (nextUom === 'ML' || nextUom === 'GM') ? 1000 : 12;
+                      setMultiLooseUnits([...cur, { uom: nextUom, ratio: nextRatio }]);
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold bg-primary/10 hover:bg-primary/20 text-primary rounded-lg border border-primary/30 cursor-pointer"
+                  >
+                    + Add Next Sub-Unit (e.g. ML, GM, Pcs)
+                  </button>
+                </div>
+
+                {Array.isArray(multiLooseUnits) && multiLooseUnits.map((tier, tIdx) => {
+                  const prevUnit = tIdx === 0 ? (looseUom || uom) : multiLooseUnits[tIdx - 1].uom;
+                  return (
+                    <div
+                      key={tIdx}
+                      className="p-2.5 bg-white dark:bg-boxdark rounded-lg border border-stroke dark:border-strokedark flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-mono font-bold text-[10px] flex items-center justify-center">
+                          {tIdx + 2}
+                        </span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          1 {prevUnit} contains:
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          step="any"
+                          value={tier.ratio}
+                          onChange={e => {
+                            const r = parseFloat(e.target.value) || 1;
+                            const updated = [...multiLooseUnits];
+                            updated[tIdx] = { ...tier, ratio: r };
+                            setMultiLooseUnits(updated);
+                          }}
+                          className="w-20 rounded border border-stroke dark:border-strokedark py-1 px-2 font-mono text-center font-bold outline-none focus:border-primary text-xs"
+                          placeholder="1000"
+                        />
+                        <input
+                          type="text"
+                          value={tier.uom}
+                          onChange={e => {
+                            const clean = e.target.value.toUpperCase();
+                            const updated = [...multiLooseUnits];
+                            updated[tIdx] = { ...tier, uom: clean };
+                            setMultiLooseUnits(updated);
+                          }}
+                          className="w-16 rounded border border-primary/40 py-1 px-2 font-mono text-center font-bold text-primary uppercase outline-none focus:border-primary text-xs"
+                          placeholder="ML"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMultiLooseUnits(multiLooseUnits.filter((_, i) => i !== tIdx));
+                          }}
+                          className="text-gray-400 hover:text-red-500 font-bold px-1"
+                          title="Remove"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3-LEVEL CASCADING CATEGORIES */}

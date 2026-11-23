@@ -52,6 +52,12 @@ const AddBOM: React.FC = () => {
   const [uom, setUom] = useState('PCS');
   const [status, setStatus] = useState<'Active' | 'Trial' | 'Draft'>('Active');
 
+  // Finished Good Loose Selling Configurations
+  const [allowLoose, setAllowLoose] = useState<boolean>(false);
+  const [looseUom, setLooseUom] = useState<string>('PCS');
+  const [looseRatio, setLooseRatio] = useState<number | string>(1);
+  const [multiLooseUnits, setMultiLooseUnits] = useState<Array<{ uom: string; ratio: number | string; costPrice?: number | string; salePrice?: number | string }>>([]);
+
   // Step 2: Raw Materials Table
   const [items, setItems] = useState<BomItem[]>([
     {
@@ -187,6 +193,23 @@ const AddBOM: React.FC = () => {
       if (found.uom) setUom(found.uom);
       const existingPrice = Number(found.retail_price ?? found.sales_price ?? 0);
       if (existingPrice > 0) setTargetSellingPrice(existingPrice);
+
+      // Auto-load loose selling hierarchy if product already has loose configured
+      const hasLoose = Boolean(found.allow_loose_sales || (Array.isArray(found.multi_loose_units) && found.multi_loose_units.length > 0));
+      setAllowLoose(hasLoose);
+      if (hasLoose) {
+        setLooseUom(found.loose_uom || (found.uom === 'LTR' ? 'ML' : 'PCS'));
+        setLooseRatio(found.loose_conversion_ratio || 1000);
+        if (Array.isArray(found.multi_loose_units)) {
+          setMultiLooseUnits(found.multi_loose_units);
+        } else {
+          setMultiLooseUnits([]);
+        }
+      } else {
+        setLooseUom('');
+        setLooseRatio(1);
+        setMultiLooseUnits([]);
+      }
     }
   };
 
@@ -500,7 +523,11 @@ const AddBOM: React.FC = () => {
             retail_price: Number(targetSellingPrice) || calculations.unitCost,
             product_description: `[Manufactured Good] ${cleanName} | Output UOM: ${uom} | Batch Size: ${batchQuantity}`,
             item_type: 'goods',
-            tenant_id: 'uzair'
+            tenant_id: 'uzair',
+            allow_loose_sales: Boolean(allowLoose),
+            loose_uom: allowLoose ? String(looseUom || 'PCS').toUpperCase() : null,
+            loose_conversion_ratio: allowLoose ? (Number(looseRatio) || 1) : null,
+            multi_loose_units: allowLoose && Array.isArray(multiLooseUnits) ? multiLooseUnits : []
           };
 
           const { data: newProd, error: prodErr } = await supabase
