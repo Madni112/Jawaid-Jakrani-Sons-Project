@@ -226,10 +226,10 @@ const AddPurchases: React.FC = () => {
           piecesPerBox: Number(t.piecesPerBox ?? 4),
           sqmPerBox: Number(t.sqmPerBox ?? 1.44)
         })),
-        items: (standardItems.length > 0 ? standardItems : [{ itemName: '', skuCode: '', warehouse: locations[0]?.name || '', qty: 1, rate: 0, discountPer: 0, discountAmt: 0, gstRate: 18, gstAmt: 0 }]).map((it: any) => ({
+        items: (standardItems.length > 0 ? standardItems : [{ itemName: '', skuCode: '', warehouse: '', qty: 1, rate: 0, discountPer: 0, discountAmt: 0, gstRate: 18, gstAmt: 0 }]).map((it: any) => ({
           ...it,
           skuCode: it.skuCode || it.item_sr_no || it.item_code || '',
-          warehouse: it.warehouse || it.target_warehouse || locations[0]?.name || '',
+          warehouse: it.warehouse || it.target_warehouse || '',
           rate: Number(it.rate ?? it.cost_price ?? 0),
           qty: Number(it.qty ?? it.quantity ?? 1),
           gstRate: Number(it.gstRate ?? it.gst_rate ?? 18),

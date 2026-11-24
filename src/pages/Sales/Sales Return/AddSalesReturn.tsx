@@ -299,7 +299,7 @@ const AddSalesReturn: React.FC = () => {
     return {
       returnNo: defaultReturnNo || 'RTN-0001',
       customerName: '',
-      sourceWarehouse: locations[0]?.name || 'Main Warehouse',
+      sourceWarehouse: '',
       invoiceNo: '',
       gatePassNo: '',
       gatePasses: {} as Record<string, string>,
@@ -315,7 +315,7 @@ const AddSalesReturn: React.FC = () => {
       items: [{
         skuCode: '',
         itemName: '',
-        warehouse: locations[0]?.name || 'Main Warehouse',
+        warehouse: '',
         qty: 1,
         rate: 0,
         uom: 'Nos'
