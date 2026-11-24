@@ -238,14 +238,14 @@ export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({
           setIsExpanded(prev => !prev);
         }
       }}
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300 text-[10px] font-mono font-bold tracking-tight select-none shadow-2xs transition-all no-underline w-max ${
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 dark:bg-primary/20 border border-primary/25 dark:border-primary/40 text-primary text-[10px] font-mono font-bold tracking-tight select-none shadow-2xs transition-all no-underline w-max ${
         isExpanded ? 'whitespace-normal max-w-[320px]' : 'whitespace-nowrap'
       } ${
-        hasMultipleTiers ? 'cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/40 hover:border-rose-300' : ''
+        hasMultipleTiers ? 'cursor-pointer hover:bg-primary/15 dark:hover:bg-primary/30 hover:border-primary/40' : ''
       } ${className}`}
       title={hasMultipleTiers ? (isExpanded ? 'Click to collapse units' : 'Click to expand all cascading units') : `Loose Hierarchy: ${text}`}
     >
-      <span className="text-[9px] text-rose-500 font-sans shrink-0">🔗</span>
+      <span className="text-[9px] text-primary font-sans shrink-0">🔗</span>
       
       {isExpanded || !hasMultipleTiers ? (
         <span className={isExpanded ? 'leading-snug text-[10px]' : 'whitespace-nowrap leading-none text-[10px]'}>
@@ -254,7 +254,7 @@ export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({
       ) : (
         <span className="inline-flex items-center gap-1 whitespace-nowrap leading-none text-[10px]">
           <span className="whitespace-nowrap">{firstTier}</span>
-          <span className="text-[9px] font-sans px-1.5 py-0.5 rounded bg-rose-200/70 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 whitespace-nowrap leading-none">
+          <span className="text-[9px] font-sans px-1.5 py-0.5 rounded bg-primary/15 dark:bg-primary/30 text-primary whitespace-nowrap leading-none">
             +{remainingCount} more
           </span>
         </span>
@@ -262,7 +262,7 @@ export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({
 
       {hasMultipleTiers && (
         <span
-          className={`text-[8px] text-rose-500 shrink-0 transition-transform duration-200 ${
+          className={`text-[8px] text-primary shrink-0 transition-transform duration-200 ${
             isExpanded ? 'rotate-180' : ''
           }`}
         >
