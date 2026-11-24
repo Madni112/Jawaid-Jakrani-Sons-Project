@@ -148,9 +148,16 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                   <tr>
                     <td
                       colSpan={11}
-                      className="py-2 px-4 bg-emerald-50 dark:bg-emerald-950/30 border-y border-emerald-200/60 dark:border-emerald-900/60"
+                      style={{
+                        backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 8%, transparent)',
+                        borderColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 20%, transparent)',
+                      }}
+                      className="py-2 px-4 border-y"
                     >
-                      <span className="text-[11px] font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span
+                        style={{ color: 'var(--color-primary, #0D1540)' }}
+                        className="text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5"
+                      >
                         📦 Goods Items <span className="font-normal opacity-60">({goodsItems.length})</span>
                       </span>
                     </td>
