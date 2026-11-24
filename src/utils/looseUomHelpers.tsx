@@ -247,17 +247,56 @@ export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({
   chainText,
   className = ''
 }) => {
+  const [isExpanded, setIsExpanded] = React.useState(false);
   const text = chainText || (product ? getProductLooseChainText(product) : '');
 
   if (!text) return null;
 
+  // Split chain parts: e.g. ["1 PCS", "100 LTR", "100,000 ML", "100,000,000 .ML"]
+  const parts = text.split(' = ').map(s => s.trim()).filter(Boolean);
+  const hasMultipleTiers = parts.length > 2;
+  
+  // Compact preview summary: e.g. "1 PCS = 100 LTR (+2 sub-units)"
+  const firstTier = parts.slice(0, 2).join(' = ');
+  const remainingCount = parts.length - 2;
+
   return (
     <div
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300/60 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-mono font-bold tracking-tight select-none shadow-2xs ${className}`}
-      title="Pack breakdown: Loose Units Chain"
+      onClick={(e) => {
+        if (hasMultipleTiers) {
+          e.stopPropagation();
+          setIsExpanded(prev => !prev);
+        }
+      }}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300 text-[10.5px] font-mono font-bold tracking-tight select-none shadow-2xs transition-all ${
+        hasMultipleTiers ? 'cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/40 hover:border-rose-300' : ''
+      } ${className}`}
+      title={hasMultipleTiers ? (isExpanded ? 'Click to collapse units' : 'Click to expand all cascading units') : `Loose Hierarchy: ${text}`}
     >
-      <span className="text-emerald-600 dark:text-emerald-400">🔗</span>
-      <span>{text}</span>
+      <span className="text-[9px] text-rose-500 font-sans">🔗</span>
+      
+      {isExpanded || !hasMultipleTiers ? (
+        <span className="truncate max-w-[340px] whitespace-normal leading-tight text-[10px]">
+          {text}
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-[10px]">
+          <span>{firstTier}</span>
+          <span className="text-[9px] font-sans px-1 py-0.2 rounded bg-rose-200/60 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200">
+            +{remainingCount} more
+          </span>
+        </span>
+      )}
+
+      {hasMultipleTiers && (
+        <span
+          className={`text-[9px] text-rose-500 transition-transform duration-200 ${
+            isExpanded ? 'rotate-180' : ''
+          }`}
+        >
+          ▼
+        </span>
+      )}
     </div>
   );
 };
