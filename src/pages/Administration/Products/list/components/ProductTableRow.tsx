@@ -48,11 +48,11 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = ({
         {product.item_sr_no || '-'}
       </td>
       <td
-        className="py-3.5 px-4 font-bold text-slate-900 dark:text-white hover:text-primary dark:hover:text-primary transition-colors cursor-pointer hover:underline"
+        className="py-3.5 px-4 font-bold text-slate-900 dark:text-white transition-colors cursor-pointer"
         onClick={() => onOpenQuickView(product)}
       >
         <div className="flex flex-col items-start gap-1">
-          <span>{product.product_name}</span>
+          <span className="hover:text-primary dark:hover:text-primary hover:underline">{product.product_name}</span>
           <LooseChainBadge product={product} />
         </div>
       </td>
