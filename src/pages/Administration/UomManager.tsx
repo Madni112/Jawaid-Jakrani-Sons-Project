@@ -346,7 +346,14 @@ const UomManager = () => {
         <span className="rounded-xl bg-gray-100 dark:bg-meta-4 px-3 py-1 font-semibold text-black dark:text-white">
           {isRTL ? "کل اکائیاں:" : "Total Units:"} {uoms.length}
         </span>
-        <span className="rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 px-3 py-1 font-semibold flex items-center gap-1.5">
+        <span
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 10%, transparent)',
+            borderColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 25%, transparent)',
+            color: 'var(--color-primary, #0D1540)',
+          }}
+          className="rounded-xl border px-3 py-1 font-semibold flex items-center gap-1.5"
+        >
           <MdCheckCircle size={14} />
           {isRTL ? "فعال اکائیاں:" : "Active Units:"} {activeCount}
         </span>
@@ -402,15 +409,24 @@ const UomManager = () => {
                         key={u.id}
                         className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
                           u.is_active
-                            ? 'border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:border-primary/50'
+                            ? 'border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:![border-color:color-mix(in_srgb,var(--color-primary,#0D1540)_55%,transparent)]'
                             : 'border-stroke/40 dark:border-strokedark/40 bg-gray-50/40 dark:bg-meta-4/10 opacity-60'
                         }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0 pr-2">
                           <span
+                            style={
+                              u.is_active
+                                ? {
+                                    backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 10%, transparent)',
+                                    borderColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 28%, transparent)',
+                                    color: 'var(--color-primary, #0D1540)',
+                                  }
+                                : undefined
+                            }
                             className={`font-mono font-bold text-[11px] px-2 py-0.5 rounded-lg border ${
                               u.is_active
-                                ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20'
+                                ? ''
                                 : 'bg-gray-100 text-gray-500 dark:bg-meta-4 border-stroke dark:border-strokedark'
                             }`}
                           >
@@ -421,7 +437,7 @@ const UomManager = () => {
                               {getUomLabel(u.full_name)}
                             </p>
                             {usage > 0 && (
-                              <p className="text-[10px] text-primary font-medium">
+                              <p style={{ color: 'var(--color-primary, #0D1540)' }} className="text-[10px] font-medium">
                                 {isRTL ? `پروڈکٹس میں استعمال: ${usage}` : `Used in ${usage} product(s)`}
                               </p>
                             )}
@@ -459,7 +475,12 @@ const UomManager = () => {
                               onChange={() => handleToggleState(u)}
                               className="sr-only peer"
                             />
-                            <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-meta-4 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                            <div
+                              style={{
+                                backgroundColor: u.is_active ? 'var(--color-primary, #0D1540)' : undefined,
+                              }}
+                              className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-meta-4 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600"
+                            ></div>
                           </label>
                         </div>
                       </div>
