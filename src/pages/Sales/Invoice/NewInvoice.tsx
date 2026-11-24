@@ -3190,7 +3190,7 @@ const NewInvoice = () => {
                   fetchCustomerPastSales={fetchCustomerPastSales}
                   handleOpenQuickCustomerModal={handleOpenQuickCustomerModal}
                   warehousesList={warehousesList}
-                  hasTileProducts={catalogHasTileProducts(productList)}
+                  hasTileProducts={catalogHasTileProducts(productsList)}
                   handleChange={handleChange}
                   setFieldValue={setFieldValue}
                 />
