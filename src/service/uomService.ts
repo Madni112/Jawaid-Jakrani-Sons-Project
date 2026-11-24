@@ -118,16 +118,28 @@ export const fetchAllUomsSafe = async (tenantId?: string): Promise<UomItem[]> =>
   const activeTenant = tenantId || 'bashir';
 
   try {
-    // 1. Fetch available rows from Supabase (safe select of core standard columns)
-    const { data: dbRows, error } = await supabase
+    // 1. Fetch available rows from Supabase (including is_active)
+    let { data: dbRows, error } = await supabase
       .from('inventory_uom')
-      .select('id, short_code, full_name, category')
+      .select('id, short_code, full_name, category, is_active')
       .order('id', { ascending: true });
+
+    if (error && (error.message?.includes('is_active') || error.code === '42703')) {
+      const fallback = await supabase
+        .from('inventory_uom')
+        .select('id, short_code, full_name, category')
+        .order('id', { ascending: true });
+      dbRows = fallback.data as any;
+      error = fallback.error;
+    }
 
     let baseList: any[] = [];
 
     if (!error && dbRows && dbRows.length > 0) {
-      baseList = [...dbRows];
+      baseList = dbRows.map((row: any) => ({
+        ...row,
+        is_active: row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true,
+      }));
     } else {
       // Seed with default templates if database is empty or errored
       baseList = DEFAULT_UOM_TEMPLATES.map((t, idx) => ({
