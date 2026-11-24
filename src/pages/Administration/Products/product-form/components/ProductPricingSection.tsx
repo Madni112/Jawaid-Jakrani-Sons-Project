@@ -768,18 +768,39 @@ export const ProductPricingSection: React.FC<ProductPricingSectionProps> = ({
                             placeholder="1000"
                           />
                           <div className="w-28 relative">
-                            <SearchableUomDropdown
-                              value={tier.uom}
-                              onChange={(val) => {
-                                const clean = String(val || '').trim().toUpperCase();
-                                const updated = [...values.looseTiers];
-                                updated[idx] = { ...tier, uom: clean };
-                                setFieldValue('looseTiers', updated);
-                              }}
-                              uoms={activeUomList.length > 0 ? activeUomList : ['ML', 'GM', 'PCS', 'LTR', 'KG', 'MTR']}
-                              compact={true}
-                              placeholder="UOM"
-                            />
+                            {(() => {
+                              // Filter out UOMs already used by higher levels
+                              const baseUom = String(values.uom || '').trim().toUpperCase();
+                              const level1Uom = String(values.looseUom || '').trim().toUpperCase();
+                              const usedUoms = new Set<string>([baseUom, level1Uom]);
+                              for (let i = 0; i < idx; i++) {
+                                if (values.looseTiers[i]?.uom) {
+                                  usedUoms.add(String(values.looseTiers[i].uom).trim().toUpperCase());
+                                }
+                              }
+
+                              const rawList = activeUomList.length > 0 ? activeUomList : ['ML', 'GM', 'PCS', 'LTR', 'KG', 'MTR'];
+                              const selectableUoms = rawList.filter((u) => !usedUoms.has(String(u).trim().toUpperCase()) || String(u).trim().toUpperCase() === String(tier.uom).trim().toUpperCase());
+
+                              return (
+                                <SearchableUomDropdown
+                                  value={tier.uom}
+                                  onChange={(val) => {
+                                    const clean = String(val || '').trim().toUpperCase();
+                                    if (usedUoms.has(clean) && clean !== String(tier.uom).trim().toUpperCase()) {
+                                      toast.error(`Unit "${clean}" is already used in a previous level of this product!`);
+                                      return;
+                                    }
+                                    const updated = [...values.looseTiers];
+                                    updated[idx] = { ...tier, uom: clean };
+                                    setFieldValue('looseTiers', updated);
+                                  }}
+                                  uoms={selectableUoms.length > 0 ? selectableUoms : ['ML', 'GM', 'PCS', 'LTR', 'KG', 'MTR']}
+                                  compact={true}
+                                  placeholder="UOM"
+                                />
+                              );
+                            })()}
                           </div>
                         </div>
 

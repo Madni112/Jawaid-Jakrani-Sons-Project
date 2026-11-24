@@ -145,22 +145,18 @@ export const getProductInitialValues = (editData: any, isEditMode: boolean): Pro
       loosePurchasePrice: editData.loose_purchase_price || '',
       looseSalePrice: editData.loose_sale_price || '',
       looseTiers: (() => {
-        if (Array.isArray(cachedMulti) && cachedMulti.length > 0) {
-          return cachedMulti;
-        }
-        if (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units.length > 0) {
-          return editData.multi_loose_units;
-        }
-        if (editData.loose_uom && editData.loose_conversion_ratio) {
-          return [
-            {
-              id: 'tier-1',
-              uom: editData.loose_uom,
-              ratio: editData.loose_conversion_ratio,
-              costPrice: editData.loose_purchase_price || '',
-              salePrice: editData.loose_sale_price || ''
-            }
-          ];
+        const fullChain = Array.isArray(cachedMulti) && cachedMulti.length > 0
+          ? cachedMulti
+          : (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units.length > 0 ? editData.multi_loose_units : []);
+        
+        if (fullChain.length > 1) {
+          // If first tier matches top looseUom, the cascading tiers are the remaining items (index 1+)
+          const firstUom = String(fullChain[0]?.uom || '').trim().toUpperCase();
+          const topUom = String(editData.loose_uom || firstUom).trim().toUpperCase();
+          if (firstUom === topUom) {
+            return fullChain.slice(1);
+          }
+          return fullChain.slice(1);
         }
         return [];
       })(),

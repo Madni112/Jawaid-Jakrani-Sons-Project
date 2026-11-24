@@ -395,6 +395,35 @@ const AddProduct = () => {
               saveNewProductColor(String(values.color).trim()).catch(() => {});
             }
 
+            if (!isTileCategory && values.allowLooseSales) {
+              const baseUom = String(values.uom || '').trim().toUpperCase();
+              const level1Uom = String(values.looseUom || '').trim().toUpperCase();
+              const subTiers = Array.isArray(values.looseTiers) ? values.looseTiers : [];
+
+              const allChainUoms = [
+                { label: `Main Bulk Unit (${baseUom || 'Bulk'})`, uom: baseUom },
+                { label: `Level 1 Loose Unit (${level1Uom || 'Level 1'})`, uom: level1Uom },
+                ...subTiers.map((t, i) => ({
+                  label: `Cascading Level ${i + 2} (${t.uom || `Level ${i + 2}`})`,
+                  uom: String(t.uom || '').trim().toUpperCase()
+                }))
+              ];
+
+              const seenUoms = new Map<string, string>();
+              for (const item of allChainUoms) {
+                if (!item.uom) continue;
+                if (seenUoms.has(item.uom)) {
+                  toast.error(
+                    `Duplicate unit "${item.uom}" detected! "${item.label}" cannot have the same UOM as "${seenUoms.get(item.uom)}". Each cascading level must have a unique unit.`,
+                    { duration: 6000 }
+                  );
+                  setLoading(false);
+                  return;
+                }
+                seenUoms.set(item.uom, item.label);
+              }
+            }
+
             const databasePayload = {
               item_type: values.itemType || 'goods',
               product_name: String(values.productName || '').replace(/\s+/g, ' ').trim(),
@@ -454,17 +483,16 @@ const AddProduct = () => {
                     }
                   ]
                 : values.allowLooseSales
-                ? (values.looseTiers && values.looseTiers.length > 0
-                    ? values.looseTiers
-                    : [
-                        {
-                          id: 'tier-1',
-                          uom: String(values.looseUom || 'PCS').trim().toUpperCase(),
-                          ratio: rawLooseRatio > 0 ? rawLooseRatio : pcs,
-                          costPrice: values.loosePurchasePrice || 0,
-                          salePrice: values.looseSalePrice || 0
-                        }
-                      ])
+                ? [
+                    {
+                      id: 'tier-1',
+                      uom: String(values.looseUom || 'PCS').trim().toUpperCase(),
+                      ratio: rawLooseRatio > 0 ? rawLooseRatio : 1,
+                      costPrice: values.loosePurchasePrice || 0,
+                      salePrice: values.looseSalePrice || 0
+                    },
+                    ...(Array.isArray(values.looseTiers) ? values.looseTiers : [])
+                  ].filter(t => t && t.uom && Number(t.ratio) > 0)
                 : [],
               hs_code: finalHsCode,
               item_sr_no: finalItemSrNo,
