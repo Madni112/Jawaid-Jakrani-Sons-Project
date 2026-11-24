@@ -88,19 +88,9 @@ export const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) =>
 
 export const getProductInitialValues = (editData: any, isEditMode: boolean): ProductFormValues => {
   if (isEditMode && editData) {
-    const cachedMulti = (() => {
-      try {
-        const map = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
-        return map[editData.id] || (editData.item_sr_no && map[editData.item_sr_no]) || (editData.product_name && map[editData.product_name]) || null;
-      } catch {
-        return null;
-      }
-    })();
-
     const hasLoose = Boolean(
       editData.allow_loose_sales ||
       (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units.length > 0) ||
-      (Array.isArray(cachedMulti) && cachedMulti.length > 0) ||
       (editData.loose_uom && editData.loose_conversion_ratio)
     );
 
@@ -140,22 +130,16 @@ export const getProductInitialValues = (editData: any, isEditMode: boolean): Pro
       })(),
       piecesPerBox: parsePiecesPerBox(editData),
       allowLooseSales: hasLoose,
-      looseUom: editData.loose_uom || (cachedMulti && cachedMulti[0]?.uom) || 'PCS',
-      looseConversionRatio: editData.loose_conversion_ratio || (cachedMulti && cachedMulti[0]?.ratio) || parsePiecesPerBox(editData) || 1,
+      looseUom: editData.loose_uom || (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units[0]?.uom) || 'PCS',
+      looseConversionRatio: editData.loose_conversion_ratio || (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units[0]?.ratio) || parsePiecesPerBox(editData) || 1,
       loosePurchasePrice: editData.loose_purchase_price || '',
       looseSalePrice: editData.loose_sale_price || '',
       looseTiers: (() => {
-        const fullChain = Array.isArray(cachedMulti) && cachedMulti.length > 0
-          ? cachedMulti
-          : (Array.isArray(editData.multi_loose_units) && editData.multi_loose_units.length > 0 ? editData.multi_loose_units : []);
+        const fullChain = Array.isArray(editData.multi_loose_units) && editData.multi_loose_units.length > 0
+          ? editData.multi_loose_units
+          : [];
         
         if (fullChain.length > 1) {
-          // If first tier matches top looseUom, the cascading tiers are the remaining items (index 1+)
-          const firstUom = String(fullChain[0]?.uom || '').trim().toUpperCase();
-          const topUom = String(editData.loose_uom || firstUom).trim().toUpperCase();
-          if (firstUom === topUom) {
-            return fullChain.slice(1);
-          }
           return fullChain.slice(1);
         }
         return [];

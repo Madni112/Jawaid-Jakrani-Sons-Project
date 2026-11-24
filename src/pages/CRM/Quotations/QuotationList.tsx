@@ -73,30 +73,15 @@ const QuotationList: React.FC = () => {
       if (error) {
         console.warn('crm_quotations cloud query note:', error.message);
         setIsCloudTableAvailable(false);
-        try {
-          const cached = localStorage.getItem('zac_quotations_records');
-          if (cached) {
-            setQuotations(JSON.parse(cached));
-          } else {
-            setQuotations([]);
-          }
-        } catch (_) {
-          setQuotations([]);
-        }
+        setQuotations([]);
       } else {
         setIsCloudTableAvailable(true);
         setQuotations(data || []);
-        try {
-          localStorage.setItem('zac_quotations_records', JSON.stringify(data || []));
-        } catch (_) {}
       }
     } catch (err: any) {
       console.warn('Error fetching quotations:', err);
       setIsCloudTableAvailable(false);
-      try {
-        const cached = localStorage.getItem('zac_quotations_records');
-        if (cached) setQuotations(JSON.parse(cached));
-      } catch (_) {}
+      setQuotations([]);
     } finally {
       setLoading(false);
     }
@@ -116,9 +101,6 @@ const QuotationList: React.FC = () => {
 
     const updated = quotations.filter(q => q.id !== id);
     setQuotations(updated);
-    try {
-      localStorage.setItem('zac_quotations_records', JSON.stringify(updated));
-    } catch (_) {}
     toast.success('Quotation deleted successfully');
   };
 
@@ -132,9 +114,6 @@ const QuotationList: React.FC = () => {
 
     const updated = quotations.map(q => q.id === id ? { ...q, status: newStatus } : q);
     setQuotations(updated);
-    try {
-      localStorage.setItem('zac_quotations_records', JSON.stringify(updated));
-    } catch (_) {}
     toast.success(`Quotation marked as ${newStatus}`);
   };
 

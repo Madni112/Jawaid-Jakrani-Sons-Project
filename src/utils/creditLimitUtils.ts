@@ -26,7 +26,6 @@ export const fetchCustomerCreditLimits = async (): Promise<Record<string, number
       try {
         const parsed = JSON.parse(data.seller_address);
         if (parsed && typeof parsed === 'object') {
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(parsed));
           return parsed;
         }
       } catch (e) {
@@ -36,14 +35,6 @@ export const fetchCustomerCreditLimits = async (): Promise<Record<string, number
   } catch (err) {
     console.warn('Error fetching credit limits from Supabase:', err);
   }
-
-  // Fallback to local storage cache
-  try {
-    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-  } catch (_) {}
 
   return {};
 };
@@ -76,7 +67,6 @@ export const saveCustomerCreditLimit = async (
 
     if (error) throw error;
 
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(
       new CustomEvent('erp_credit_limits_updated', {
         detail: { customerId: String(customerId), limit: Number(limit) || 0 },
@@ -85,16 +75,6 @@ export const saveCustomerCreditLimit = async (
     return { success: true };
   } catch (err: any) {
     console.error('Failed to save customer credit limit:', err);
-    // Local fallback
-    const currentLimits = (() => {
-      try {
-        return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '{}');
-      } catch (_) {
-        return {};
-      }
-    })();
-    currentLimits[String(customerId)] = Number(limit) || 0;
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentLimits));
     return { success: false, error: err.message || 'Failed to update credit limit' };
   }
 };

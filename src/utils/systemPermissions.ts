@@ -153,7 +153,6 @@ export const DEFAULT_SYSTEM_CONFIG: SystemMasterConfig = {
             ...DEFAULT_SYSTEM_CONFIG,
             ...parsed,
           };
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
           return merged;
         } catch (parseErr) {
           console.warn('Failed to parse system master permissions from cloud:', parseErr);
@@ -163,19 +162,11 @@ export const DEFAULT_SYSTEM_CONFIG: SystemMasterConfig = {
       console.warn('Error fetching system permissions from Supabase:', err);
     }
 
-    // Fallback to local storage cache
-    try {
-      const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (cached) {
-        return { ...DEFAULT_SYSTEM_CONFIG, ...JSON.parse(cached) };
-      }
-    } catch (_) {}
-
     return { ...DEFAULT_SYSTEM_CONFIG };
 };
 
 /**
- * Save master system permissions to both Supabase cloud and local storage
+ * Save master system permissions to Supabase cloud
  */
 export const saveSystemMasterConfig = async (
   config: SystemMasterConfig
@@ -195,14 +186,10 @@ export const saveSystemMasterConfig = async (
 
     if (error) throw error;
 
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
     window.dispatchEvent(new CustomEvent('erp_system_permissions_updated', { detail: config }));
     return { success: true };
   } catch (err: any) {
     console.error('Failed to save system permissions:', err);
-    // Still save locally so dev settings work immediately
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
-    window.dispatchEvent(new CustomEvent('erp_system_permissions_updated', { detail: config }));
     return { success: false, error: err.message || 'Failed to sync to database' };
   }
 };
@@ -329,7 +316,6 @@ if (typeof window !== 'undefined') {
           if (payload?.new?.seller_address) {
             try {
               const updatedConfig = JSON.parse(payload.new.seller_address);
-              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedConfig));
               window.dispatchEvent(
                 new CustomEvent('erp_system_permissions_updated', { detail: updatedConfig })
               );

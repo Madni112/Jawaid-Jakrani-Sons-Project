@@ -43,61 +43,23 @@ export const DEFAULT_UOM_TEMPLATES = [
 ];
 
 export const getLocalActiveOverrides = (): Record<string, boolean> => {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = localStorage.getItem(STORAGE_ACTIVE_OVERRIDES_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  return {};
 };
 
-export const setLocalActiveOverride = (code: string, isActive: boolean) => {
-  if (typeof window === 'undefined') return;
-  try {
-    const current = getLocalActiveOverrides();
-    current[code.toUpperCase()] = isActive;
-    localStorage.setItem(STORAGE_ACTIVE_OVERRIDES_KEY, JSON.stringify(current));
-  } catch (err) {
-    console.warn('Error saving local active override:', err);
-  }
+export const setLocalActiveOverride = (_code: string, _isActive: boolean) => {
+  // No-op: UOM status is persisted in Supabase inventory_uom
 };
 
 export const getCustomLocalUoms = (): any[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_CUSTOM_UOMS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 };
 
-export const saveCustomLocalUom = (uom: any) => {
-  if (typeof window === 'undefined') return;
-  try {
-    const current = getCustomLocalUoms();
-    const idx = current.findIndex(u => String(u.id) === String(uom.id) || u.short_code.toUpperCase() === uom.short_code.toUpperCase());
-    if (idx >= 0) {
-      current[idx] = { ...current[idx], ...uom };
-    } else {
-      current.push(uom);
-    }
-    localStorage.setItem(STORAGE_CUSTOM_UOMS_KEY, JSON.stringify(current));
-  } catch (err) {
-    console.warn('Error saving custom local uom:', err);
-  }
+export const saveCustomLocalUom = (_uom: any) => {
+  // No-op: UOMs are persisted in Supabase inventory_uom
 };
 
-export const deleteCustomLocalUom = (idOrCode: string | number) => {
-  if (typeof window === 'undefined') return;
-  try {
-    const current = getCustomLocalUoms();
-    const filtered = current.filter(u => String(u.id) !== String(idOrCode) && u.short_code.toUpperCase() !== String(idOrCode).toUpperCase());
-    localStorage.setItem(STORAGE_CUSTOM_UOMS_KEY, JSON.stringify(filtered));
-  } catch (err) {
-    console.warn('Error deleting custom local uom:', err);
-  }
+export const deleteCustomLocalUom = (_idOrCode: string | number) => {
+  // No-op: UOMs are persisted in Supabase inventory_uom
 };
 
 /**

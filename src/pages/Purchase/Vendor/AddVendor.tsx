@@ -66,27 +66,12 @@ const AddVendor = () => {
     navigate('/Purchase/Vendor/List');
   };
 
-  // Custom added Sub Areas (Cities) - shared with Customers via localStorage
-  const [subAreaOptions, setSubAreaOptions] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('uj_custom_sub_areas');
-      const customList: string[] = saved ? JSON.parse(saved) : [];
-      return Array.from(new Set([...DEFAULT_SUB_AREAS, ...customList])).sort();
-    } catch {
-      return DEFAULT_SUB_AREAS;
-    }
-  });
+  const [subAreaOptions, setSubAreaOptions] = useState<string[]>(() => [...DEFAULT_SUB_AREAS].sort());
 
   // Mapping of Sub Area (City) -> List of Areas saved under it
-  const [subAreaToAreasMap, setSubAreaToAreasMap] = useState<Record<string, string[]>>(() => {
-    try {
-      const saved = localStorage.getItem('uj_subarea_areas_map');
-      const customMap = saved ? JSON.parse(saved) : {};
-      return { ...DEFAULT_SUBAREA_AREAS_MAP, ...customMap };
-    } catch {
-      return DEFAULT_SUBAREA_AREAS_MAP;
-    }
-  });
+  const [subAreaToAreasMap, setSubAreaToAreasMap] = useState<Record<string, string[]>>(() => ({
+    ...DEFAULT_SUBAREA_AREAS_MAP,
+  }));
 
   // Fetch initial metadata and calculate next suggested vendor code (2010-xxx)
   useEffect(() => {
@@ -135,19 +120,7 @@ const AddVendor = () => {
   const handleAddCustomSubArea = (newVal: string) => {
     const clean = newVal.trim();
     if (!clean) return;
-    setSubAreaOptions((prev) => {
-      const updated = Array.from(new Set([clean, ...prev])).sort();
-      try {
-        const saved = localStorage.getItem('uj_custom_sub_areas');
-        const customList: string[] = saved ? JSON.parse(saved) : [];
-        if (!customList.includes(clean)) {
-          localStorage.setItem('uj_custom_sub_areas', JSON.stringify([...customList, clean]));
-        }
-      } catch (e) {
-        console.error('Failed to save custom sub area:', e);
-      }
-      return updated;
-    });
+    setSubAreaOptions((prev) => Array.from(new Set([clean, ...prev])).sort());
     toast.success(`Added "${clean}" to Cities`);
   };
 
@@ -159,15 +132,7 @@ const AddVendor = () => {
     setSubAreaToAreasMap((prev) => {
       const existing = prev[cleanSub] || DEFAULT_AREAS;
       const updatedList = Array.from(new Set([cleanArea, ...existing])).sort();
-      const nextMap = { ...prev, [cleanSub]: updatedList };
-
-      try {
-        localStorage.setItem('uj_subarea_areas_map', JSON.stringify(nextMap));
-      } catch (e) {
-        console.error('Failed to save subarea-areas map:', e);
-      }
-
-      return nextMap;
+      return { ...prev, [cleanSub]: updatedList };
     });
 
     toast.success(`Saved Area "${cleanArea}" under "${cleanSub}"`);

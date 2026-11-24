@@ -728,12 +728,6 @@ const AddQuotation: React.FC = () => {
             .eq('id', id);
         } catch (_) {}
 
-        try {
-          const cached = JSON.parse(localStorage.getItem('zac_quotations_records') || '[]');
-          const updated = cached.map((q: any) => String(q.id) === String(id) ? { ...q, ...payload } : q);
-          localStorage.setItem('zac_quotations_records', JSON.stringify(updated));
-        } catch (_) {}
-
         toast.success('Quotation updated successfully!');
       } else {
         let cloudId = null;
@@ -751,11 +745,6 @@ const AddQuotation: React.FC = () => {
 
         savedId = cloudId || `LOCAL-${Date.now()}`;
         payload.id = savedId;
-
-        try {
-          const cached = JSON.parse(localStorage.getItem('zac_quotations_records') || '[]');
-          localStorage.setItem('zac_quotations_records', JSON.stringify([payload, ...cached]));
-        } catch (_) {}
 
         toast.success('Quotation generated successfully!');
       }

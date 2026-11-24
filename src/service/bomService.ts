@@ -262,30 +262,9 @@ const DEFAULT_SAMPLE_BOMS: BomHeader[] = [
   }
 ];
 
-const getLocalBoms = (): BomHeader[] => {
-  if (typeof window === 'undefined') return DEFAULT_SAMPLE_BOMS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SAMPLE_BOMS));
-      return DEFAULT_SAMPLE_BOMS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SAMPLE_BOMS;
-  } catch (err) {
-    console.warn('Error reading local BOMs:', err);
-    return DEFAULT_SAMPLE_BOMS;
-  }
-};
+const getLocalBoms = (): BomHeader[] => [];
 
-const setLocalBoms = (boms: BomHeader[]) => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(boms));
-  } catch (err) {
-    console.warn('Error saving local BOMs:', err);
-  }
-};
+const setLocalBoms = (_boms: BomHeader[]) => {};
 
 export const bomService = {
   // Fetch all BOM recipes (with Supabase fallback to local storage)

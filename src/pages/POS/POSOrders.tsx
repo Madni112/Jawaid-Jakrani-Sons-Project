@@ -213,9 +213,6 @@ export const POSOrders: React.FC<POSOrdersProps> = ({ embedded, defaultStatus, i
     });
 
     setOrders(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('uj_pos_orders_v1', JSON.stringify(updated));
-    }
 
     // Deduct cash from active drawer shift if paying cash
     if (refundPaymentMethod === 'Cash') {

@@ -81,18 +81,6 @@ const AddProduct = () => {
       }
     } catch (e) {}
 
-    // Fallback to localStorage if table not yet created
-    try {
-      const saved =
-        localStorage.getItem('zac_tile_prints') || localStorage.getItem('zac_tile_prints');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setTilePrints(parsed.map((p: any) => (typeof p === 'string' ? { name: p } : p)));
-          return;
-        }
-      }
-    } catch (e) {}
     setTilePrints([]);
   };
 
@@ -133,10 +121,6 @@ const AddProduct = () => {
 
     const updated = [...tilePrints, insertedItem];
     setTilePrints(updated);
-    try {
-      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
-      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
-    } catch (err) {}
 
     if (setFieldValue) {
       setFieldValue('tilePrint', clean);
@@ -181,10 +165,6 @@ const AddProduct = () => {
 
     const updated = tilePrints.map((p) => (p.name === oldItem.name ? { ...p, name: clean } : p));
     setTilePrints(updated);
-    try {
-      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
-      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
-    } catch (err) {}
 
     if (setFieldValue) {
       setFieldValue('tilePrint', clean);
@@ -228,10 +208,6 @@ const AddProduct = () => {
 
     const updated = tilePrints.filter((p) => p.name !== itemToDelete.name);
     setTilePrints(updated);
-    try {
-      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
-      localStorage.setItem('zac_tile_prints', JSON.stringify(updated));
-    } catch (err) {}
 
     if (setFieldValue && currentVal === itemToDelete.name) {
       setFieldValue('tilePrint', '');
@@ -257,14 +233,8 @@ const AddProduct = () => {
             .order('name', { ascending: true });
           if (finishData && finishData.length > 0) {
             setSurfaceFinishes(finishData);
-          } else {
-            const local = localStorage.getItem('zac_surface_finishes');
-            if (local) setSurfaceFinishes(JSON.parse(local));
           }
-        } catch (e) {
-          const local = localStorage.getItem('zac_surface_finishes');
-          if (local) setSurfaceFinishes(JSON.parse(local));
-        }
+        } catch (e) {}
 
         const uomAll = await fetchAllUomsSafe(tenantId);
         const uomData = uomAll.filter((u) => u.is_active);
@@ -572,17 +542,6 @@ const AddProduct = () => {
 
                 if (error) throw error;
 
-                // Cache multi-tier loose units locally for Jawaid Jakwani & Sons
-                try {
-                  const multiMap = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
-                  const pNameTrim = String(values.productName || '').trim();
-                  if (editData.id) multiMap[editData.id] = databasePayload.multi_loose_units || [];
-                  if (finalItemSrNo) multiMap[finalItemSrNo] = databasePayload.multi_loose_units || [];
-                  if (pNameTrim) multiMap[pNameTrim] = databasePayload.multi_loose_units || [];
-                  multiMap[values.productName] = databasePayload.multi_loose_units || [];
-                  localStorage.setItem('jj_multi_loose_units', JSON.stringify(multiMap));
-                } catch (e) {}
-
                 logActivity({
                   action: 'UPDATE',
                   tableName: 'products',
@@ -636,16 +595,6 @@ const AddProduct = () => {
                 }
 
                 if (error) throw error;
-
-                // Cache multi-tier loose units locally for Jawaid Jakwani & Sons
-                try {
-                  const multiMap = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
-                  const pNameTrim = String(values.productName || '').trim();
-                  if (finalItemSrNo) multiMap[finalItemSrNo] = databasePayload.multi_loose_units || [];
-                  if (pNameTrim) multiMap[pNameTrim] = databasePayload.multi_loose_units || [];
-                  multiMap[values.productName] = databasePayload.multi_loose_units || [];
-                  localStorage.setItem('jj_multi_loose_units', JSON.stringify(multiMap));
-                } catch (e) {}
 
                 logActivity({
                   action: 'INSERT',

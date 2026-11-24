@@ -209,37 +209,7 @@ interface LooseChainBadgeProps {
  * Subtle, high-visibility UI badge showing product loose hierarchy
  */
 export const enrichProductsWithCachedLoose = <T extends any>(products: T[]): T[] => {
-  if (!Array.isArray(products) || products.length === 0) return products;
-  try {
-    const raw = localStorage.getItem('jj_multi_loose_units');
-    if (!raw) return products;
-    const multiMap = JSON.parse(raw);
-    if (!multiMap || typeof multiMap !== 'object' || Object.keys(multiMap).length === 0) return products;
-
-    return products.map((p: any) => {
-      if (!p) return p;
-      const cached =
-        (p.id && multiMap[p.id]) ||
-        (p.item_sr_no && multiMap[p.item_sr_no]) ||
-        (p.product_name && multiMap[p.product_name]) ||
-        (p.product_name && multiMap[String(p.product_name).trim()]);
-
-      if (Array.isArray(cached) && cached.length > 0) {
-        return {
-          ...p,
-          allow_loose_sales: true,
-          multi_loose_units: cached,
-          loose_uom: p.loose_uom || cached[0]?.uom,
-          loose_conversion_ratio: p.loose_conversion_ratio || cached[0]?.ratio,
-          loose_sale_price: p.loose_sale_price || cached[0]?.salePrice,
-          loose_purchase_price: p.loose_purchase_price || cached[0]?.costPrice,
-        };
-      }
-      return p;
-    });
-  } catch {
-    return products;
-  }
+  return products;
 };
 
 export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({

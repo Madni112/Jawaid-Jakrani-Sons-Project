@@ -718,19 +718,6 @@ const NewInvoice = () => {
           }
         }
 
-        // Merge locally cached multi-tier loose units for Jawaid Jakwani & Sons
-        try {
-          const localMulti = JSON.parse(localStorage.getItem('jj_multi_loose_units') || '{}');
-          if (Array.isArray(prod) && Object.keys(localMulti).length > 0) {
-            prod = prod.map((p: any) => {
-              const cached = localMulti[p.id] || (p.item_sr_no && localMulti[p.item_sr_no]) || (p.product_name && localMulti[p.product_name]);
-              if (cached && Array.isArray(cached) && cached.length > 0) {
-                return { ...p, multi_loose_units: cached, allow_loose_sales: true };
-              }
-              return p;
-            });
-          }
-        } catch (e) {}
         const { data: sm } = await fetchAllPages(supabase.from('salesmen').select('id, name, invoice_name, invoice_names'));
         const { data: trans } = await fetchAllPages(supabase.from('logistics_transportation').select('id, name, base_charges'));
         const { data: locMaster } = await fetchAllPages(supabase.from('inventory_locations').select('name'));

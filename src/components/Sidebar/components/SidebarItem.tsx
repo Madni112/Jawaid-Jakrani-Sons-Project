@@ -61,16 +61,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   const isReportsItem = depth === 0 && (rawItem?.label || '').toLowerCase().trim() === 'reports';
 
   // Real-time synchronization with system permissions hidden_reports
-  const [hiddenReports, setHiddenReports] = useState<string[]>(() => {
-    try {
-      const cached = localStorage.getItem('erp_system_master_permissions_cache');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        return Array.isArray(parsed?.hidden_reports) ? parsed.hidden_reports : [];
-      }
-    } catch {}
-    return [];
-  });
+  const [hiddenReports, setHiddenReports] = useState<string[]>([]);
 
   useEffect(() => {
     fetchSystemMasterConfig().then((cfg) => {

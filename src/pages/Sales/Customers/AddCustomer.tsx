@@ -31,72 +31,26 @@ const AddCustomer: React.FC = () => {
   const [companies, setCompanies] = useState<any[]>([]);
   const [suggestedCode, setSuggestedCode] = useState<string>('');
 
-  const [tierOptions, setTierOptions] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('uj_custom_tiers');
-      const customList: string[] = saved ? JSON.parse(saved) : [];
-      return Array.from(new Set([...TIER_OPTIONS, ...customList]));
-    } catch {
-      return TIER_OPTIONS;
-    }
-  });
+  const [tierOptions, setTierOptions] = useState<string[]>(TIER_OPTIONS);
 
   const handleAddCustomTier = (newTier: string) => {
     const clean = newTier.trim();
     if (!clean) return;
-    setTierOptions((prev) => {
-      const updated = Array.from(new Set([clean, ...prev]));
-      try {
-        const saved = localStorage.getItem('uj_custom_tiers');
-        const customList: string[] = saved ? JSON.parse(saved) : [];
-        if (!customList.includes(clean)) {
-          localStorage.setItem('uj_custom_tiers', JSON.stringify([...customList, clean]));
-        }
-      } catch (e) {
-        console.error('Failed to save custom tier:', e);
-      }
-      return updated;
-    });
+    setTierOptions((prev) => Array.from(new Set([clean, ...prev])));
     toast.success(`Added "${clean}" to Customer Tiers`);
   };
 
-  const [subAreaOptions, setSubAreaOptions] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('uj_custom_sub_areas');
-      const customList: string[] = saved ? JSON.parse(saved) : [];
-      return Array.from(new Set([...DEFAULT_SUB_AREAS, ...customList])).sort();
-    } catch {
-      return DEFAULT_SUB_AREAS;
-    }
-  });
+  const [subAreaOptions, setSubAreaOptions] = useState<string[]>(() => [...DEFAULT_SUB_AREAS].sort());
 
   // Mapping of Sub Area -> List of Areas saved under it
-  const [subAreaToAreasMap, setSubAreaToAreasMap] = useState<Record<string, string[]>>(() => {
-    try {
-      const saved = localStorage.getItem('uj_subarea_areas_map');
-      const customMap = saved ? JSON.parse(saved) : {};
-      return { ...DEFAULT_SUBAREA_AREAS_MAP, ...customMap };
-    } catch {
-      return DEFAULT_SUBAREA_AREAS_MAP;
-    }
-  });
+  const [subAreaToAreasMap, setSubAreaToAreasMap] = useState<Record<string, string[]>>(() => ({
+    ...DEFAULT_SUBAREA_AREAS_MAP,
+  }));
 
   const handleAddCustomSubArea = (newVal: string) => {
     const clean = newVal.trim();
     if (!clean) return;
-    setSubAreaOptions((prev) => {
-      const updated = Array.from(new Set([clean, ...prev])).sort();
-      try {
-        const saved = localStorage.getItem('uj_custom_sub_areas');
-        const customList: string[] = saved ? JSON.parse(saved) : [];
-        if (!customList.includes(clean)) {
-          localStorage.setItem('uj_custom_sub_areas', JSON.stringify([...customList, clean]));
-        }
-      } catch (e) {
-        console.error('Failed to save custom sub area:', e);
-      }
-      return updated;
-    });
+    setSubAreaOptions((prev) => Array.from(new Set([clean, ...prev])).sort());
     toast.success(`Added "${clean}" to Cities`);
   };
 
@@ -109,15 +63,7 @@ const AddCustomer: React.FC = () => {
     setSubAreaToAreasMap((prev) => {
       const existing = prev[cleanSub] || DEFAULT_AREAS;
       const updatedList = Array.from(new Set([cleanArea, ...existing])).sort();
-      const nextMap = { ...prev, [cleanSub]: updatedList };
-
-      try {
-        localStorage.setItem('uj_subarea_areas_map', JSON.stringify(nextMap));
-      } catch (e) {
-        console.error('Failed to save subarea-areas map:', e);
-      }
-
-      return nextMap;
+      return { ...prev, [cleanSub]: updatedList };
     });
 
     toast.success(`Saved Area "${cleanArea}" under "${cleanSub}"`);

@@ -227,27 +227,11 @@ const DEFAULT_SAMPLE_ORDERS: ProductionOrder[] = [
 ];
 
 const getLocalOrders = (): ProductionOrder[] => {
-  if (typeof window === 'undefined') return DEFAULT_SAMPLE_ORDERS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SAMPLE_ORDERS));
-      return DEFAULT_SAMPLE_ORDERS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SAMPLE_ORDERS;
-  } catch {
-    return DEFAULT_SAMPLE_ORDERS;
-  }
+  return [];
 };
 
-const setLocalOrders = (orders: ProductionOrder[]): void => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
-  } catch (e) {
-    console.warn('Local storage write warning:', e);
-  }
+const setLocalOrders = (_orders: ProductionOrder[]): void => {
+  // No-op: Production orders are persisted in Supabase production_orders
 };
 
 export const productionOrderService = {

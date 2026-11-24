@@ -135,24 +135,7 @@ export const fetchProductColors = async (): Promise<string[]> => {
     console.warn('Failed to query products for colors:', err);
   }
 
-  // 3. LocalStorage fallback cache
-  try {
-    const cached = localStorage.getItem(LOCAL_COLOR_CACHE_KEY);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((c) => {
-          if (typeof c === 'string' && c.trim()) gathered.add(c.trim());
-        });
-      }
-    }
-  } catch (_) {}
-
   const sorted = Array.from(gathered).sort((a, b) => a.localeCompare(b));
-  try {
-    localStorage.setItem(LOCAL_COLOR_CACHE_KEY, JSON.stringify(sorted));
-  } catch (_) {}
-
   return sorted;
 };
 
@@ -189,12 +172,9 @@ export const saveNewProductColor = async (
     };
 
     const res = await saveSystemMasterConfig(updatedConfig);
-    try {
-      localStorage.setItem(LOCAL_COLOR_CACHE_KEY, JSON.stringify(updatedList));
-      window.dispatchEvent(
-        new CustomEvent('zac_colors_updated', { detail: { colors: updatedList, added: clean } })
-      );
-    } catch (_) {}
+    window.dispatchEvent(
+      new CustomEvent('zac_colors_updated', { detail: { colors: updatedList, added: clean } })
+    );
 
     return {
       success: res.success,
@@ -225,14 +205,11 @@ export const deleteProductColor = async (
     };
 
     const res = await saveSystemMasterConfig(updatedConfig);
-    try {
-      localStorage.setItem(LOCAL_COLOR_CACHE_KEY, JSON.stringify(updatedList));
-      window.dispatchEvent(
-        new CustomEvent('zac_colors_updated', {
-          detail: { colors: updatedList, deleted: colorToDelete },
-        })
-      );
-    } catch (_) {}
+    window.dispatchEvent(
+      new CustomEvent('zac_colors_updated', {
+        detail: { colors: updatedList, deleted: colorToDelete },
+      })
+    );
 
     return {
       success: res.success,

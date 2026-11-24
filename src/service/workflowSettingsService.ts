@@ -54,14 +54,7 @@ export const DEFAULT_WORKFLOW_SETTINGS: WorkflowSettings = {
 };
 
 export const getLocalWorkflowSettings = (): WorkflowSettings => {
-  if (typeof window === 'undefined') return DEFAULT_WORKFLOW_SETTINGS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_WORKFLOW_SETTINGS;
-    return { ...DEFAULT_WORKFLOW_SETTINGS, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULT_WORKFLOW_SETTINGS;
-  }
+  return DEFAULT_WORKFLOW_SETTINGS;
 };
 
 export const fetchWorkflowSettings = async (): Promise<WorkflowSettings> => {
@@ -104,23 +97,19 @@ export const fetchWorkflowSettings = async (): Promise<WorkflowSettings> => {
           settings.allow_duplicate_challan_sales_return = Boolean(row.is_enabled);
         }
       });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-      }
       return settings;
     }
   } catch (e) {
-    console.warn('Failed to load workflow settings from cloud, falling back to local:', e);
+    console.warn('Failed to load workflow settings from cloud:', e);
   }
-  return getLocalWorkflowSettings();
+  return DEFAULT_WORKFLOW_SETTINGS;
 };
 
 export const saveWorkflowSettings = async (settings: Partial<WorkflowSettings>): Promise<WorkflowSettings> => {
-  const current = getLocalWorkflowSettings();
+  const current = await fetchWorkflowSettings();
   const updated: WorkflowSettings = { ...current, ...settings };
 
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent('workflow_settings_updated', { detail: updated }));
   }
 

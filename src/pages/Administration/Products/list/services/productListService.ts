@@ -3,7 +3,7 @@ import { logActivity } from '../../../../../service/auditLogger';
 import { ProductCatalogItem, SortConfig } from '../types/productListTypes';
 
 export const PRODUCT_PAGE_COLS =
-  'id, product_name, item_sr_no, category, sub_category, sub_sub_category, bin, uom, retail_price, purchase_price, mrp, min_stock_alert, product_description, item_type, pieces_per_box, pcs_per_box, pieces_per_packing, scenario_name, service_charges';
+  'id, product_name, item_sr_no, category, sub_category, sub_sub_category, bin, uom, retail_price, purchase_price, mrp, min_stock_alert, product_description, item_type, pieces_per_box, pcs_per_box, pieces_per_packing, scenario_name, service_charges, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_purchase_price, loose_sale_price, multi_loose_units';
 
 export const stockForProduct = (productName: string, serverBalances: any[] | null) => {
   const n = String(productName || '').trim().toLowerCase();

@@ -322,19 +322,12 @@ export const monthNamed = (isoMonth: string) => {
 // -------------------------------------------------------------
 // LOCAL STORAGE CACHE HELPERS FOR INSTANT RESPONSIVENESS
 // -------------------------------------------------------------
-const getLocal = <T>(key: string, fallback: T): T => {
-  try {
-    const raw = localStorage.getItem(`zac_hr_${key}`);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+const getLocal = <T>(_key: string, fallback: T): T => {
+  return fallback;
 };
 
-const setLocal = (key: string, val: any) => {
-  try {
-    localStorage.setItem(`zac_hr_${key}`, JSON.stringify(val));
-  } catch (_) {}
+const setLocal = (_key: string, _val: any) => {
+  // No-op: HR data is persisted in Supabase
 };
 
 // Seed initial default pay heads if empty
@@ -902,8 +895,7 @@ export const saveStructure = async (employeeId: number, lines: StructureLine[], 
   return { success: true };
 };
 
-export const resetStructure = async (employeeId: number, _tenantSlug?: string, _branchId?: number) => {
-  localStorage.removeItem(`zac_hr_struct_${employeeId}`);
+export const resetStructure = async (_employeeId: number, _tenantSlug?: string, _branchId?: number) => {
   return { success: true };
 };
 
@@ -1529,7 +1521,6 @@ export const deleteSheet = async (arg1: any, _arg2?: any, arg3?: any) => {
   const id = typeof arg1 === 'number' ? arg1 : Number(arg3 || arg1);
   const sheets = (await getSheets()).data;
   setLocal('salary_sheets', sheets.filter(s => s.id !== id));
-  localStorage.removeItem(`zac_hr_sheet_lines_${id}`);
   return { success: true };
 };
 

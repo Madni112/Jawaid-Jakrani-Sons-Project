@@ -290,27 +290,11 @@ export const SAMPLE_RECIPES: DedicatedRecipe[] = [
 ];
 
 const getLocalRecipes = (): DedicatedRecipe[] => {
-  if (typeof window === 'undefined') return SAMPLE_RECIPES;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_RECIPES));
-      return SAMPLE_RECIPES;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : SAMPLE_RECIPES;
-  } catch {
-    return SAMPLE_RECIPES;
-  }
+  return [];
 };
 
-const setLocalRecipes = (recipes: DedicatedRecipe[]) => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
-  } catch (e) {
-    console.warn('Could not save local recipes:', e);
-  }
+const setLocalRecipes = (_recipes: DedicatedRecipe[]) => {
+  // No-op: Recipes are persisted in Supabase bom_recipes
 };
 
 export const recipeService = {

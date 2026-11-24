@@ -1,5 +1,12 @@
 import { supabase } from '../Context/supabaseClient';
 
+const posMemoryStore: Record<string, string> = {};
+const memoryStorage = {
+  getItem: (k: string) => (Object.prototype.hasOwnProperty.call(posMemoryStore, k) ? posMemoryStore[k] : null),
+  setItem: (k: string, v: string) => { posMemoryStore[k] = String(v); },
+  removeItem: (k: string) => { delete posMemoryStore[k]; },
+};
+
 export interface PosOrderItem {
   id?: string;
   order_id?: string;
@@ -210,7 +217,7 @@ const STORAGE_CATEGORY_META = 'uj_pos_category_meta_v1';
 const getStoredProductMeta = (): Record<string, PosProductMeta> => {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = localStorage.getItem(STORAGE_PRODUCT_META);
+    const raw = memoryStorage.getItem(STORAGE_PRODUCT_META);
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -219,14 +226,14 @@ const getStoredProductMeta = (): Record<string, PosProductMeta> => {
 
 const saveStoredProductMeta = (metaMap: Record<string, PosProductMeta>) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_PRODUCT_META, JSON.stringify(metaMap));
+    memoryStorage.setItem(STORAGE_PRODUCT_META, JSON.stringify(metaMap));
   }
 };
 
 const getStoredCategoryMeta = (): Record<string, PosCategoryMeta> => {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = localStorage.getItem(STORAGE_CATEGORY_META);
+    const raw = memoryStorage.getItem(STORAGE_CATEGORY_META);
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -235,7 +242,7 @@ const getStoredCategoryMeta = (): Record<string, PosCategoryMeta> => {
 
 const saveStoredCategoryMeta = (metaMap: Record<string, PosCategoryMeta>) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_CATEGORY_META, JSON.stringify(metaMap));
+    memoryStorage.setItem(STORAGE_CATEGORY_META, JSON.stringify(metaMap));
   }
 };
 
@@ -615,7 +622,7 @@ export const posService = {
   getTerminals(): PosTerminalCounter[] {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem(STORAGE_TERMINALS);
+      const raw = memoryStorage.getItem(STORAGE_TERMINALS);
       if (raw) {
         const list = JSON.parse(raw);
         if (Array.isArray(list) && list.length > 0) return list;
@@ -638,7 +645,7 @@ export const posService = {
         active: true,
         created_at: new Date().toISOString()
       };
-      localStorage.setItem(STORAGE_TERMINALS, JSON.stringify([defaultTerminal]));
+      memoryStorage.setItem(STORAGE_TERMINALS, JSON.stringify([defaultTerminal]));
       return [defaultTerminal];
     } catch {
       return [];
@@ -662,7 +669,7 @@ export const posService = {
       updated = [terminal, ...all];
     }
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_TERMINALS, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_TERMINALS, JSON.stringify(updated));
     }
     return terminal;
   },
@@ -671,14 +678,14 @@ export const posService = {
     const all = this.getTerminals();
     const updated = all.filter(t => t.id !== id);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_TERMINALS, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_TERMINALS, JSON.stringify(updated));
     }
   },
 
   getLoggedInCashier(slug: string): PosCashierUser | null {
     if (typeof window === 'undefined') return null;
     try {
-      const raw = localStorage.getItem(`uj_pos_cashier_${slug.toLowerCase()}`);
+      const raw = memoryStorage.getItem(`uj_pos_cashier_${slug.toLowerCase()}`);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -687,20 +694,20 @@ export const posService = {
 
   setLoggedInCashier(slug: string, cashier: PosCashierUser): void {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(`uj_pos_cashier_${slug.toLowerCase()}`, JSON.stringify(cashier));
+      memoryStorage.setItem(`uj_pos_cashier_${slug.toLowerCase()}`, JSON.stringify(cashier));
     }
   },
 
   clearLoggedInCashier(slug: string): void {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(`uj_pos_cashier_${slug.toLowerCase()}`);
+      memoryStorage.removeItem(`uj_pos_cashier_${slug.toLowerCase()}`);
     }
   },
 
   getGlobalManagerPassword(): string {
     if (typeof window === 'undefined') return '7788';
     try {
-      return localStorage.getItem('uj_pos_global_manager_password') || '7788';
+      return memoryStorage.getItem('uj_pos_global_manager_password') || '7788';
     } catch {
       return '7788';
     }
@@ -708,7 +715,7 @@ export const posService = {
 
   setGlobalManagerPassword(newPass: string): void {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('uj_pos_global_manager_password', newPass.trim());
+      memoryStorage.setItem('uj_pos_global_manager_password', newPass.trim());
     }
   },
 
@@ -729,7 +736,7 @@ export const posService = {
   getSettings(): PosSettings {
     if (typeof window === 'undefined') return DEFAULT_POS_SETTINGS;
     try {
-      const raw = localStorage.getItem(STORAGE_SETTINGS);
+      const raw = memoryStorage.getItem(STORAGE_SETTINGS);
       if (!raw) return DEFAULT_POS_SETTINGS;
       return { ...DEFAULT_POS_SETTINGS, ...JSON.parse(raw) };
     } catch {
@@ -741,7 +748,7 @@ export const posService = {
     const current = this.getSettings();
     const updated = { ...current, ...settings };
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_SETTINGS, JSON.stringify(updated));
     }
     try {
       await supabase.from('pos_settings').upsert({
@@ -776,7 +783,7 @@ export const posService = {
   getActiveShift(terminalCode?: string): PosShift | null {
     if (typeof window === 'undefined') return null;
     try {
-      const raw = localStorage.getItem(STORAGE_SHIFTS);
+      const raw = memoryStorage.getItem(STORAGE_SHIFTS);
       const list: PosShift[] = raw ? JSON.parse(raw) : [];
       if (terminalCode) {
         return list.find(s => s.status === 'Open' && this.matchesTerminal(s.terminal_code, terminalCode)) || null;
@@ -790,7 +797,7 @@ export const posService = {
   getAllShifts(): PosShift[] {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem(STORAGE_SHIFTS);
+      const raw = memoryStorage.getItem(STORAGE_SHIFTS);
       let list: PosShift[] = raw ? JSON.parse(raw) : [];
       // Reconcile Session 402 with the consolidated sales on 2026-11-01
       const s402 = list.find(s => s.session_number === 402 || (s.business_date === '2026-11-01' && s.session_number));
@@ -801,7 +808,7 @@ export const posService = {
         s402.expected_cash = (s402.opening_float || 5000) + 27400 - 2500;
         s402.closing_petty_cash = (s402.opening_petty_cash || 5000) + 27400 - 2500;
         s402.closing_notes = 'Consolidated session on 01-11-2026 with Uzair, Jibran, Uzair Jibran sales & refund';
-        localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(list));
+        memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(list));
       }
       return list;
     } catch {
@@ -881,7 +888,7 @@ export const posService = {
 
     all[existingIndex] = reopened;
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(all));
+      memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(all));
     }
     try {
       await supabase.from('pos_shifts').update(reopened).eq('id', shiftId);
@@ -924,7 +931,7 @@ export const posService = {
 
     // If today's date and localStorage has cached closing petty cash, check if it fits
     if (typeof window !== 'undefined' && targetDate >= new Date().toISOString().split('T')[0]) {
-      const saved = localStorage.getItem('pos_last_closing_petty_cash');
+      const saved = memoryStorage.getItem('pos_last_closing_petty_cash');
       if (saved !== null) {
         return {
           amount: Number(saved) || 0,
@@ -983,7 +990,7 @@ export const posService = {
 
       const updated = all.map(s => s.id === closedShiftForDate.id ? reopenedShift : s);
       if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
+        memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
       }
       try {
         await supabase.from('pos_shifts').update(reopenedShift).eq('id', closedShiftForDate.id);
@@ -1023,7 +1030,7 @@ export const posService = {
 
     const updated = [newShift, ...all];
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
     }
 
     try {
@@ -1077,9 +1084,9 @@ export const posService = {
     };
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('pos_last_closing_petty_cash', String(closingPettyCash));
+      memoryStorage.setItem('pos_last_closing_petty_cash', String(closingPettyCash));
       const updated = all.map(s => (s.id === params.shiftId ? updatedShift : s));
-      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
     }
 
     try {
@@ -1116,7 +1123,7 @@ export const posService = {
 
     const updated = [newShift, ...all];
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
     }
 
     try {
@@ -1148,7 +1155,7 @@ export const posService = {
 
     const updated = all.map(s => (s.id === shiftId ? updatedShift : s));
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(updated));
     }
 
     try {
@@ -1173,7 +1180,7 @@ export const posService = {
     shift.expected_cash = Number(shift.opening_float) + Number(shift.cash_sales) + Number(shift.cash_in) - Number(shift.cash_out);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(all));
+      memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(all));
     }
   },
 
@@ -1227,7 +1234,7 @@ export const posService = {
   getAllOrders(): PosOrder[] {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem(STORAGE_ORDERS);
+      const raw = memoryStorage.getItem(STORAGE_ORDERS);
       let list: PosOrder[] = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(list) || list.length === 0) {
         list = [...SAMPLE_POS_ORDERS];
@@ -1237,7 +1244,7 @@ export const posService = {
       if (nonDemo.length !== list.length) {
         list = nonDemo;
         try {
-          localStorage.setItem(STORAGE_ORDERS, JSON.stringify(list));
+          memoryStorage.setItem(STORAGE_ORDERS, JSON.stringify(list));
         } catch {}
       }
       // Ensure Nov 1 demo orders exist in the orders list
@@ -1281,13 +1288,13 @@ export const posService = {
 
       const allShifts = this.getAllShifts().map(s => (s.id === activeShift.id ? activeShift : s));
       if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(allShifts));
+        memoryStorage.setItem(STORAGE_SHIFTS, JSON.stringify(allShifts));
       }
     }
 
     const updated = [fullOrder, ...orders];
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_ORDERS, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_ORDERS, JSON.stringify(updated));
     }
 
     // Try cloud persist
@@ -1309,7 +1316,7 @@ export const posService = {
   getHeldOrders(): PosHeldOrder[] {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem(STORAGE_HELD);
+      const raw = memoryStorage.getItem(STORAGE_HELD);
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -1347,7 +1354,7 @@ export const posService = {
     };
     const updated = [newHeld, ...list];
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_HELD, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_HELD, JSON.stringify(updated));
     }
     return newHeld;
   },
@@ -1360,7 +1367,7 @@ export const posService = {
     const list = this.getHeldOrders();
     const updated = list.filter(h => h.id !== id);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_HELD, JSON.stringify(updated));
+      memoryStorage.setItem(STORAGE_HELD, JSON.stringify(updated));
     }
   },
 
@@ -1683,7 +1690,7 @@ export const posService = {
     // 2. Read custom local products (created directly in POS)
     let localCustom: PosProductItem[] = [];
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('uj_custom_pos_products');
+      const saved = memoryStorage.getItem('uj_custom_pos_products');
       if (saved) {
         try {
           localCustom = JSON.parse(saved);
@@ -1779,10 +1786,10 @@ export const posService = {
     // 2. Save into local products cache
     if (typeof window !== 'undefined') {
       try {
-        const raw = localStorage.getItem('uj_custom_pos_products');
+        const raw = memoryStorage.getItem('uj_custom_pos_products');
         const list = raw ? JSON.parse(raw) : [...SAMPLE_POS_PRODUCTS];
         const updated = [newProduct, ...list.filter((p: any) => p.id !== newProduct.id)];
-        localStorage.setItem('uj_custom_pos_products', JSON.stringify(updated));
+        memoryStorage.setItem('uj_custom_pos_products', JSON.stringify(updated));
       } catch (_) {}
     }
 
@@ -1925,7 +1932,7 @@ export const posService = {
   getPaymentAccounts(): POSPaymentAccount[] {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem('pos_payment_accounts');
+      const raw = memoryStorage.getItem('pos_payment_accounts');
       if (!raw) return [];
       const parsed: POSPaymentAccount[] = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
@@ -1937,7 +1944,7 @@ export const posService = {
         !a.id.startsWith('acc-hbl')
       );
       if (cleaned.length !== parsed.length) {
-        localStorage.setItem('pos_payment_accounts', JSON.stringify(cleaned));
+        memoryStorage.setItem('pos_payment_accounts', JSON.stringify(cleaned));
       }
       return cleaned;
     } catch {
@@ -1952,7 +1959,7 @@ export const posService = {
 
   savePaymentAccounts(accounts: POSPaymentAccount[]): void {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('pos_payment_accounts', JSON.stringify(accounts));
+      memoryStorage.setItem('pos_payment_accounts', JSON.stringify(accounts));
     }
   },
 
