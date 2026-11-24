@@ -97,7 +97,8 @@ export const ProductTableRow: React.FC<ProductTableRowProps> = ({
           </span>
           <button
             onClick={() => onOpenBreakdown(product)}
-            className="text-[9px] font-sans text-green-600 dark:text-green-400 hover:underline cursor-pointer block mx-auto mt-0.5"
+            style={{ color: 'var(--color-primary, #0D1540)' }}
+            className="text-[9px] font-sans font-semibold hover:underline cursor-pointer block mx-auto mt-0.5"
           >
             View Breakdown
           </button>

@@ -238,14 +238,19 @@ export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({
           setIsExpanded(prev => !prev);
         }
       }}
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 dark:bg-primary/20 border border-primary/25 dark:border-primary/40 text-primary text-[10px] font-mono font-bold tracking-tight select-none shadow-2xs transition-all no-underline w-max ${
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 10%, transparent)',
+        borderColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 28%, transparent)',
+        color: 'var(--color-primary, #0D1540)',
+      }}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] font-mono font-bold tracking-tight select-none shadow-2xs transition-all no-underline w-max ${
         isExpanded ? 'whitespace-normal max-w-[320px]' : 'whitespace-nowrap'
       } ${
-        hasMultipleTiers ? 'cursor-pointer hover:bg-primary/15 dark:hover:bg-primary/30 hover:border-primary/40' : ''
+        hasMultipleTiers ? 'cursor-pointer hover:opacity-85' : ''
       } ${className}`}
       title={hasMultipleTiers ? (isExpanded ? 'Click to collapse units' : 'Click to expand all cascading units') : `Loose Hierarchy: ${text}`}
     >
-      <span className="text-[9px] text-primary font-sans shrink-0">🔗</span>
+      <span className="text-[9px] font-sans shrink-0">🔗</span>
       
       {isExpanded || !hasMultipleTiers ? (
         <span className={isExpanded ? 'leading-snug text-[10px]' : 'whitespace-nowrap leading-none text-[10px]'}>
@@ -254,7 +259,13 @@ export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({
       ) : (
         <span className="inline-flex items-center gap-1 whitespace-nowrap leading-none text-[10px]">
           <span className="whitespace-nowrap">{firstTier}</span>
-          <span className="text-[9px] font-sans px-1.5 py-0.5 rounded bg-primary/15 dark:bg-primary/30 text-primary whitespace-nowrap leading-none">
+          <span
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 16%, transparent)',
+              color: 'var(--color-primary, #0D1540)',
+            }}
+            className="text-[9px] font-sans px-1.5 py-0.5 rounded whitespace-nowrap leading-none"
+          >
             +{remainingCount} more
           </span>
         </span>
@@ -262,7 +273,7 @@ export const LooseChainBadge: React.FC<LooseChainBadgeProps> = ({
 
       {hasMultipleTiers && (
         <span
-          className={`text-[8px] text-primary shrink-0 transition-transform duration-200 ${
+          className={`text-[8px] shrink-0 transition-transform duration-200 ${
             isExpanded ? 'rotate-180' : ''
           }`}
         >
