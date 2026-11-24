@@ -48,9 +48,9 @@ const variantConfig: Record<
     icon: MdEdit,
     defaultTitle: 'Edit Record',
     classes:
-      'bg-amber-50 hover:bg-amber-100/90 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 dark:text-amber-300 dark:border-amber-800/60 shadow-xs hover:border-amber-300',
+      'shadow-xs hover:opacity-80',
     menuItemClasses:
-      'text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40',
+      'hover:bg-slate-100 dark:hover:bg-slate-800',
   },
   delete: {
     icon: MdDelete,
@@ -77,6 +77,15 @@ export const TableActionButton: React.FC<TableActionButtonProps> = ({
       disabled={disabled}
       onClick={onClick}
       title={title || config.defaultTitle}
+      style={
+        type === 'edit'
+          ? {
+              backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 10%, transparent)',
+              borderColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 28%, transparent)',
+              color: 'var(--color-primary, #0D1540)',
+            }
+          : undefined
+      }
       className={`inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border text-xs transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer ${config.classes}`}
     >
       <IconComponent size={15} />
@@ -246,6 +255,11 @@ export const TableActions: React.FC<TableActionsProps> = ({
                 <button
                   key={action.type}
                   type="button"
+                  style={
+                    action.type === 'edit'
+                      ? { color: 'var(--color-primary, #0D1540)' }
+                      : undefined
+                  }
                   onClick={(e) => {
                     setIsOpen(false);
                     action.handler(e);
