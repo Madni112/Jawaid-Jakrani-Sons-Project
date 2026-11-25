@@ -673,10 +673,10 @@ const AddBOM: React.FC = () => {
         finishedProductName={finishedProductName}
       />
 
-      {/* Main Layout: Full width on Raw Materials tab so the wide table fits cleanly; 2-column on other tabs */}
+      {/* Main Layout: Full width on Steps 1 & 2; 2-column with Cost & Margin Summary on Step 3 (Last Step) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Pane: Active Tab Panel */}
-        <div className={`${activeTab === 2 ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col gap-6`}>
+        {/* Left/Main Pane: Active Tab Panel */}
+        <div className={`${activeTab === 3 ? 'lg:col-span-8' : 'lg:col-span-12'} flex flex-col gap-6`}>
           {activeTab === 1 && (
             <BOMProductOutputTab
               isRTL={isRTL}
@@ -752,18 +752,20 @@ const AddBOM: React.FC = () => {
           />
         </div>
 
-        {/* Right/Bottom Pane: Sticky Cost & Margin Summary Card */}
-        <div className={activeTab === 2 ? 'lg:col-span-12' : 'lg:col-span-4'}>
-          <BOMCostSummaryCard
-            isRTL={isRTL}
-            uom={uom}
-            calculations={calculations}
-            targetSellingPrice={targetSellingPrice}
-            setTargetSellingPrice={setTargetSellingPrice}
-            syncCatalogPrice={syncCatalogPrice}
-            setSyncCatalogPrice={setSyncCatalogPrice}
-          />
-        </div>
+        {/* Right Pane: Sticky Cost & Margin Summary Card (shown on the final step) */}
+        {activeTab === 3 && (
+          <div className="lg:col-span-4">
+            <BOMCostSummaryCard
+              isRTL={isRTL}
+              uom={uom}
+              calculations={calculations}
+              targetSellingPrice={targetSellingPrice}
+              setTargetSellingPrice={setTargetSellingPrice}
+              syncCatalogPrice={syncCatalogPrice}
+              setSyncCatalogPrice={setSyncCatalogPrice}
+            />
+          </div>
+        )}
       </div>
 
       {/* Save Recipe Modal */}
