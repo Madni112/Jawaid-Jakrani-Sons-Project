@@ -257,49 +257,18 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                       isRTL={isRTL}
                     />
 
-                    {/* Loose Unit Quick Converter Badge or Configure Loose Trigger */}
-                    {hasLoose ? (
-                      <div className="mt-1 flex items-center justify-between gap-1 text-[10px] text-blue-700 dark:text-blue-300 font-mono bg-blue-50/60 dark:bg-blue-950/30 px-1.5 py-0.5 rounded border border-blue-200/50 dark:border-blue-800/40">
-                        <span className="font-bold">
-                          Loose: {(Number(row.quantity || 0) * ratio).toLocaleString()} {looseUom}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400">({ratio} {looseUom}/{row.uom || 'Bulk'})</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onUpdateItem(idx, {
-                                allow_loose: false,
-                                loose_uom: undefined,
-                                loose_ratio: undefined,
-                                loose_quantity: undefined
-                              });
-                            }}
-                            className="text-gray-400 hover:text-red-500 font-bold ml-1"
-                            title="Remove loose unit conversion"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-1 flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const defaultLooseUom = row.uom === 'LTR' || row.uom === 'Liters' ? 'ML' : (row.uom === 'KG' ? 'GM' : 'PCS');
-                            const defaultRatio = (defaultLooseUom === 'ML' || defaultLooseUom === 'GM') ? 1000 : 12;
-                            onUpdateItem(idx, {
-                              allow_loose: true,
-                              loose_uom: defaultLooseUom,
-                              loose_ratio: defaultRatio,
-                              loose_quantity: Math.round(Number(row.quantity || 1) * defaultRatio)
-                            });
+                    {/* Compact Theme-Synced Loose Chain Badge */}
+                    {(hasLoose || (Array.isArray(row.multi_loose_units) && row.multi_loose_units.length > 0)) && (
+                      <div className="mt-1.5">
+                        <LooseChainBadge
+                          product={{
+                            uom: row.uom,
+                            allow_loose: true,
+                            loose_uom: row.loose_uom,
+                            loose_conversion_ratio: row.loose_ratio,
+                            multi_loose_units: row.multi_loose_units,
                           }}
-                          className="text-[10px] font-semibold text-primary hover:text-primary/80 inline-flex items-center gap-0.5 hover:underline cursor-pointer"
-                        >
-                          + Enable Loose (ML/GM/Pcs)
-                        </button>
+                        />
                       </div>
                     )}
                   </td>
