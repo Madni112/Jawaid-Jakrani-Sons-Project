@@ -59,7 +59,7 @@ const PurchaseStandardItemsTable: React.FC<PurchaseStandardItemsTableProps> = ({
                           <th className="p-3 w-10 text-center">S#</th>
                           <th className="p-3 min-w-[280px]">Product Code / Description</th>
                           <th className="p-3 w-52">Destination Warehouse</th>
-                          <th className="p-3 min-w-[320px] text-center">Qty & Pricing (UOM)</th>
+                          <th className="p-3 min-w-[320px] text-center">Quantity (UOM)</th>
                           {values.showDiscount && (
                             <>
                               <th className="p-3 w-20 text-center text-amber-700 bg-amber-50/40 dark:bg-amber-950/20">Disc %</th>

@@ -1,4 +1,4 @@
-import { LooseChainBadge, catalogHasTileProducts } from '../../../../utils/looseUomHelpers';
+import { LooseChainBadge, catalogHasTileProducts, decomposeStockForActiveUoms } from '../../../../utils/looseUomHelpers';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
 import WarehouseSearchableSelect from './WarehouseSearchableSelect';
 import React, { useRef, useState } from 'react';
@@ -67,7 +67,7 @@ export const ReturnStandardItemsTable: React.FC<ReturnStandardItemsTableProps> =
                       <th className="p-2 w-36">Code (Search)</th>
                       <th className="p-2 min-w-[200px]">Product Description</th>
                       <th className="p-2 w-36">Destination Warehouse</th>
-                      <th className="p-2 w-32 text-center">Return Qty (Boxes / Pcs)</th>
+                      <th className="p-2 min-w-[300px] text-center">Quantity (UOM)</th>
                       <th className="p-2 w-28 text-right">Cost Price (PKR)</th>
                       {hasDiscount && (
                         <>
@@ -293,9 +293,9 @@ export const ReturnStandardItemsTable: React.FC<ReturnStandardItemsTableProps> =
                                     placeholder="Search Description..."
                                     className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
                                   />
-                                {selectedProd && (
+                                {matchedProduct && (
                                   <div className="mt-1">
-                                    <LooseChainBadge product={selectedProd} />
+                                    <LooseChainBadge product={matchedProduct} />
                                   </div>
                                 )}
 
@@ -393,13 +393,28 @@ export const ReturnStandardItemsTable: React.FC<ReturnStandardItemsTableProps> =
                               const matchedProd = productList.find(
                                 (p: any) => p.product_name === item.itemName || p.item_sr_no === item.skuCode
                               );
+                              const hasLooseProd = Boolean(matchedProd?.allow_loose_sales || (Array.isArray(matchedProd?.multi_loose_units) && matchedProd.multi_loose_units.length > 0));
+                              const availText = hasLooseProd && matchedProd
+                                ? (() => {
+                                    const uoms: string[] = [matchedProd.uom || 'PCS'];
+                                    if (Array.isArray(matchedProd.multi_loose_units) && matchedProd.multi_loose_units.length > 0) {
+                                      matchedProd.multi_loose_units.forEach((t: any) => { if (t?.uom) uoms.push(String(t.uom).toUpperCase()); });
+                                    } else if (matchedProd.loose_uom) {
+                                      uoms.push(String(matchedProd.loose_uom).toUpperCase());
+                                    }
+                                    return decomposeStockForActiveUoms(curWhStock, uoms, matchedProd)
+                                      .map((p, i) => `${i > 0 ? '+' : ''}${p.qty.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${p.uom}`)
+                                      .join(' ');
+                                  })()
+                                : formatStockWithBoxesAndPcs(curWhStock, matchedProd).inlineText;
                               return (
                                 <div
                                   className={`text-[10px] font-mono font-bold mt-0.5 truncate ${
                                     curWhStock > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'
                                   }`}
+                                  title={availText}
                                 >
-                                  Avail: {formatStockWithBoxesAndPcs(curWhStock, matchedProd).inlineText}
+                                  Avail: {availText}
                                 </div>
                               );
                             })()}
@@ -548,92 +563,38 @@ export const ReturnStandardItemsTable: React.FC<ReturnStandardItemsTableProps> =
                                 );
                               }
 
-                              if (allowLoose && pcsPerBox > 1) {
-                                const currentQty = Number(item.qty || 0);
-                                const bulkCount = Math.floor(currentQty);
-                                const looseCount = Math.round((currentQty - bulkCount) * pcsPerBox);
-
+                              if ((allowLoose && pcsPerBox > 1) || (Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0)) {
                                 return (
                                   <div className="flex flex-col gap-1">
-                                    <div
-                                      className={`flex items-center gap-1.5 p-1.5 rounded-lg border shadow-inner transition-colors ${
-                                        isRowExceeding
-                                          ? 'bg-red-50/90 dark:bg-red-950/40 border-red-500 ring-2 ring-red-500/50'
-                                          : 'bg-slate-50 dark:bg-slate-800/90 border-stroke dark:border-strokedark'
-                                      }`}
-                                    >
-                                      <div
-                                        className={`flex-1 flex items-center bg-white dark:bg-boxdark border rounded-md px-2 py-1 shadow-sm ${
-                                          isRowExceeding ? 'border-red-400 dark:border-red-600' : 'border-stroke dark:border-strokedark focus-within:border-primary'
-                                        }`}
-                                      >
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          onKeyDown={blockInvalidChar}
-                                          value={bulkCount === 0 ? '' : bulkCount}
-                                          placeholder="0"
-                                          onChange={(e) => {
-                                            const val = e.target.value.trim();
-                                            const newBulk = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                            const currentLoose = Math.round(
-                                              (Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox
-                                            );
-                                            const combinedQty = Number((newBulk + currentLoose / pcsPerBox).toFixed(3));
-                                            setFieldValue(`items.${idx}.qty`, combinedQty);
-                                          }}
-                                          className={`w-full bg-transparent text-center font-black text-sm outline-none min-w-[36px] ${
-                                            isRowExceeding ? 'text-red-600 dark:text-red-400' : 'text-primary'
-                                          }`}
-                                        />
-                                        <span className={`text-[11px] font-bold pl-1 select-none ${isRowExceeding ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                                          {bulkUnitLabel}
-                                        </span>
-                                      </div>
-
-                                      <span className={`font-black text-sm select-none ${isRowExceeding ? 'text-red-500' : 'text-gray-400'}`}>+</span>
-
-                                      <div
-                                        className={`flex-1 flex items-center bg-white dark:bg-boxdark border rounded-md px-2 py-1 shadow-sm ${
-                                          isRowExceeding ? 'border-red-400 dark:border-red-600' : 'border-stroke dark:border-strokedark focus-within:border-emerald-500'
-                                        }`}
-                                      >
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          onKeyDown={blockInvalidChar}
-                                          value={looseCount === 0 ? '' : looseCount}
-                                          placeholder="0"
-                                          onChange={(e) => {
-                                            const val = e.target.value.trim();
-                                            const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                            const currentBulk = Math.floor(Number(item.qty || 0));
-
-                                            const extraBulk = Math.floor(enteredLoose / pcsPerBox);
-                                            const remLoose = enteredLoose % pcsPerBox;
-                                            const finalBulk = currentBulk + extraBulk;
-                                            const combinedQty = remLoose > 0 ? Number((finalBulk + remLoose / pcsPerBox).toFixed(3)) : finalBulk;
-
-                                            setFieldValue(`items.${idx}.qty`, combinedQty);
-                                          }}
-                                          className={`w-full bg-transparent text-center font-black text-sm outline-none min-w-[36px] ${
-                                            isRowExceeding ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
-                                          }`}
-                                        />
-                                        <span className={`text-[11px] font-bold pl-1 select-none ${isRowExceeding ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                                          {looseUnitLabel}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    <div className="text-center font-mono text-[10px] text-slate-500 dark:text-slate-400">
-                                      Total: <strong>{currentQty}</strong> {bulkUnitLabel} ({bulkCount} {bulkUnitLabel} + {looseCount} {looseUnitLabel})
-                                    </div>
-
+                                    <ChainedUomInputGrid
+                                      primaryUom={bulkUnitLabel || 'Unit'}
+                                      primaryQuantity={Number(item.qty) || 0}
+                                      primaryRate={Number(item.rate) || 0}
+                                      tiers={
+                                        Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0
+                                          ? matchedProduct.multi_loose_units
+                                          : [{ uom: looseUnitLabel, ratio: pcsPerBox, costPrice: matchedProduct?.loose_purchase_price, salePrice: matchedProduct?.loose_sale_price }]
+                                      }
+                                      tierQuantities={item.tier_quantities}
+                                      tierRates={item.tier_rates}
+                                      mode="purchase"
+                                      onChange={({ tierQuantities, tierRates, totalConvertedPrimaryQty, totalLineAmount }) => {
+                                        setFieldValue(`items.${idx}.qty`, totalConvertedPrimaryQty);
+                                        setFieldValue(`items.${idx}.tier_quantities`, tierQuantities);
+                                        setFieldValue(`items.${idx}.tier_rates`, tierRates);
+                                        if (totalConvertedPrimaryQty > 0 && totalLineAmount > 0) {
+                                          setFieldValue(`items.${idx}.rate`, Number((totalLineAmount / totalConvertedPrimaryQty).toFixed(2)));
+                                        }
+                                        const disPer = Math.max(0, Number(item.discountPer) || 0);
+                                        if (disPer > 0) {
+                                          setFieldValue(`items.${idx}.discountAmt`, Number(((totalLineAmount * disPer) / 100).toFixed(2)));
+                                        }
+                                      }}
+                                    />
                                     {isRowExceeding && (
                                       <div className="flex items-center gap-1.5 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-100/80 dark:bg-red-950/60 border border-red-300 dark:border-red-800 rounded px-2 py-1 mt-1 leading-tight shadow-xs">
                                         <span className="text-xs">⚠️</span>
-                                        <span>Exceeds available stock ({formatStockWithBoxesAndPcs(curWhStock, matchedProduct).inlineText} available in {itemWh})</span>
+                                        <span>Exceeds available stock in {itemWh}</span>
                                       </div>
                                     )}
                                   </div>

@@ -160,23 +160,20 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
       </div>
 
       <div className="overflow-x-auto min-h-[300px] pb-32">
-        <table className="w-full min-w-[1320px] table-fixed text-xs">
+        <table className="w-full min-w-[1240px] table-fixed text-xs">
           <thead>
             <tr className="bg-gray-100 dark:bg-meta-4 text-gray-600 dark:text-gray-300 uppercase font-semibold">
               <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[140px]`}>
                 {isRTL ? 'قسم (Type)' : 'Category / Type'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[215px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[230px]`}>
                 {isRTL ? 'خام مال / جزو *' : 'Material / Component Name *'}
               </th>
-              <th className="p-2.5 text-center w-[145px] bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">
+              <th className="p-2.5 text-center w-[150px] bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">
                 {isRTL ? 'موجودہ اسٹاک' : 'Available Stock'}
               </th>
-              <th className="p-2.5 text-center w-[290px]">
-                {isRTL ? 'مقدار (Qty) *' : 'Quantity *'}
-              </th>
-              <th className="p-2.5 text-center w-[80px]">
-                {isRTL ? 'اکائی (UOM) *' : 'UOM *'}
+              <th className="p-2.5 text-center w-[310px]">
+                {isRTL ? 'مقدار (UOM) *' : 'Quantity (UOM) *'}
               </th>
               <th className="p-2.5 text-center w-[100px]">
                 {isRTL ? 'فی اکائی قیمت (Cost)' : 'Unit Cost (PKR)'}
@@ -227,7 +224,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                   </td>
 
                   {/* Material / Component Name Searchable */}
-                  <td className="p-2 w-[215px] relative">
+                  <td className="p-2 w-[230px] relative">
                     <SearchableProductSelect
                       value={row.item_name}
                       onChange={(productName, product) => {
@@ -293,7 +290,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                   </td>
 
                   {/* Available Stock (Linked to active UOMs in Quantity column, matching Sales Invoice) */}
-                  <td className="p-2 w-[145px] text-center bg-emerald-50/30 dark:bg-emerald-950/10">
+                  <td className="p-2 w-[150px] text-center bg-emerald-50/30 dark:bg-emerald-950/10">
                     {!row.item_name ? (
                       <span className="text-[11px] text-slate-400 font-mono">—</span>
                     ) : (() => {
@@ -386,7 +383,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                   </td>
 
                   {/* Quantity with Chained Dynamic Multi-Tier UOM Grid */}
-                  <td className="p-2 w-[290px] align-top">
+                  <td className="p-2 w-[310px] align-top">
                     <ChainedUomInputGrid
                       primaryUom={row.uom || 'Unit'}
                       primaryQuantity={Number(row.quantity) || 0}
@@ -416,16 +413,6 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                           total_cost: calculatedLineCost
                         });
                       }}
-                    />
-                  </td>
-
-                  <td className="p-2 w-[80px] relative">
-                    <SearchableUomDropdown
-                      value={row.uom}
-                      onChange={val => onUpdateItem(idx, 'uom', val)}
-                      uoms={allUomsList.length > 0 ? allUomsList : availableUoms}
-                      compact={true}
-                      isRTL={isRTL}
                     />
                   </td>
 

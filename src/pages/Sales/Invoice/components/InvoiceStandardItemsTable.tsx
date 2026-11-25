@@ -95,7 +95,7 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                     <th className="p-2 min-w-[240px]">Product (Name / Code)</th>
                     <th className="p-2 w-44">Warehouse Zone Source</th>
                     <th className="p-2 w-32 text-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold">Available Stock</th>
-                    <th className="p-2 min-w-[300px] text-center">Qty & Pricing (UOM)</th>
+                    <th className="p-2 min-w-[300px] text-center">Quantity (UOM)</th>
                     {showDiscount && (
                       <>
                         <th className="p-2 w-24 text-center bg-amber-50/80 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Discount %</th>

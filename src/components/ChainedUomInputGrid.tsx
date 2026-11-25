@@ -413,7 +413,7 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
                 }}
                 className="group/rate flex items-center border focus-within:![border-color:var(--color-primary,#0D1540)] focus-within:![box-shadow:0_0_0_2px_color-mix(in_srgb,var(--color-primary,#0D1540)_20%,transparent)] rounded-xl px-2.5 py-1 text-xs font-mono shadow-2xs transition-all duration-150"
               >
-                <span className="text-[11px] font-sans font-bold opacity-70 group-focus-within/rate:opacity-100 mr-1.5 transition">@</span>
+                <span className="text-[10px] font-sans font-bold opacity-75 group-focus-within/rate:opacity-100 mr-1.5 transition shrink-0">Rs.</span>
                 <input
                   type="text"
                   inputMode="decimal"

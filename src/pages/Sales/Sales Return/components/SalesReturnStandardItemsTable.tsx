@@ -1,4 +1,4 @@
-import { LooseChainBadge, catalogHasTileProducts } from '../../../../utils/looseUomHelpers';
+import { LooseChainBadge, catalogHasTileProducts, decomposeStockForActiveUoms } from '../../../../utils/looseUomHelpers';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
 import WarehouseSearchableSelect from './WarehouseSearchableSelect';
 import { DropdownPortal } from './DropdownPortal';
@@ -89,7 +89,7 @@ export const SalesReturnStandardItemsTable: React.FC<SalesReturnStandardItemsTab
                                 <th className="p-3 w-36">Return Warehouse</th>
                                 <th className="p-3 w-20 text-center">UOM</th>
                                 <th className="p-3 w-28 text-right">Sale Price (PKR)</th>
-                                <th className="p-3 min-w-[220px] text-center">Return Qty (Boxes / Pcs / Sq.M)</th>
+                                <th className="p-3 min-w-[300px] text-center">Quantity (UOM)</th>
                                 <th className="p-3 w-32 text-right">Amount (PKR)</th>
                                 <th className="p-3 w-12 text-center">Action</th>
                               </tr>
@@ -397,8 +397,25 @@ export const SalesReturnStandardItemsTable: React.FC<SalesReturnStandardItemsTab
                                         isTile={isTile}
                                       />
                                       {item.itemName && (
-                                        <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                                          Avail Stock: <span className="font-bold text-slate-700 dark:text-slate-300">{formatStockWithBoxesAndPcs(whStock, matchedProduct).inlineText}</span>
+                                        <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium font-mono">
+                                          Avail Stock:{' '}
+                                          <span className="font-bold text-slate-700 dark:text-slate-300">
+                                            {(() => {
+                                              const hasLooseProd = Boolean(matchedProduct?.allow_loose_sales || (Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0));
+                                              if (hasLooseProd && matchedProduct) {
+                                                const uoms: string[] = [matchedProduct.uom || 'PCS'];
+                                                if (Array.isArray(matchedProduct.multi_loose_units) && matchedProduct.multi_loose_units.length > 0) {
+                                                  matchedProduct.multi_loose_units.forEach((t: any) => { if (t?.uom) uoms.push(String(t.uom).toUpperCase()); });
+                                                } else if (matchedProduct.loose_uom) {
+                                                  uoms.push(String(matchedProduct.loose_uom).toUpperCase());
+                                                }
+                                                return decomposeStockForActiveUoms(whStock, uoms, matchedProduct)
+                                                  .map((p, i) => `${i > 0 ? '+' : ''}${p.qty.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${p.uom}`)
+                                                  .join(' ');
+                                              }
+                                              return formatStockWithBoxesAndPcs(whStock, matchedProduct).inlineText;
+                                            })()}
+                                          </span>
                                         </div>
                                       )}
                                     </td>
@@ -519,77 +536,35 @@ export const SalesReturnStandardItemsTable: React.FC<SalesReturnStandardItemsTab
                                             <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
                                           </div>
                                         </div>
-                                      ) : allowLoose && pcsPerBox > 1 ? (
-                                        /* DUAL UNIT INPUT FOR GENERAL LOOSE SELLABLE PRODUCTS (KG+GM, LTR+ML, BOX+PCS) */
-                                        (() => {
-                                          const currentQty = Number(item.qty || 0);
-                                          const bulkCount = Math.floor(currentQty);
-                                          const looseCount = Math.round((currentQty - bulkCount) * pcsPerBox);
-
-                                          return (
-                                            <div className="flex flex-col gap-1">
-                                              <div className={`flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border shadow-inner ${isExceeded ? 'border-red-500 bg-red-50/90 ring-2 ring-red-500/50' : 'border-slate-200 dark:border-slate-700'}`}>
-                                                {/* BULK UNIT INPUT */}
-                                                <div className="flex-1 flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 focus-within:border-emerald-600 shadow-xs">
-                                                  <input
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    onKeyDown={blockInvalidChar}
-                                                    value={bulkCount === 0 ? '' : bulkCount}
-                                                    placeholder="0"
-                                                    onChange={(e) => {
-                                                      const val = e.target.value.trim();
-                                                      const newBulk = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                                      const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
-                                                      const combinedQty = Number((newBulk + currentLoose / pcsPerBox).toFixed(3));
-                                                      setFieldValue(`items.${idx}.qty`, combinedQty);
-                                                    }}
-                                                    className="w-full bg-transparent text-center font-black text-xs text-emerald-700 dark:text-emerald-400 outline-none min-w-[32px]"
-                                                  />
-                                                  <span className="text-[10px] font-bold text-slate-400 pl-1 select-none">{bulkUnitLabel}</span>
-                                                </div>
-
-                                                <span className="text-slate-400 font-black text-xs select-none">+</span>
-
-                                                {/* LOOSE SUB-UNIT INPUT */}
-                                                <div className="flex-1 flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 focus-within:border-emerald-600 shadow-xs">
-                                                  <input
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    onKeyDown={blockInvalidChar}
-                                                    value={looseCount === 0 ? '' : looseCount}
-                                                    placeholder="0"
-                                                    onChange={(e) => {
-                                                      const val = e.target.value.trim();
-                                                      const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
-                                                      const currentBulk = Math.floor(Number(item.qty || 0));
-
-                                                      const extraBulk = Math.floor(enteredLoose / pcsPerBox);
-                                                      const remLoose = enteredLoose % pcsPerBox;
-                                                      const finalBulk = currentBulk + extraBulk;
-                                                      const combinedQty = remLoose > 0 
-                                                        ? Number((finalBulk + remLoose / pcsPerBox).toFixed(3)) 
-                                                        : finalBulk;
-
-                                                      setFieldValue(`items.${idx}.qty`, combinedQty);
-                                                    }}
-                                                    className="w-full bg-transparent text-center font-black text-xs text-emerald-600 dark:text-emerald-400 outline-none min-w-[32px]"
-                                                  />
-                                                  <span className="text-[10px] font-bold text-slate-400 pl-1 select-none">{looseUnitLabel}</span>
-                                                </div>
-                                              </div>
-
-                                              <div className="text-center font-mono text-[10px] text-slate-500 dark:text-slate-400">
-                                                Total: <strong>{currentQty}</strong> {bulkUnitLabel} ({bulkCount} {bulkUnitLabel} + {looseCount} {looseUnitLabel})
-                                              </div>
-                                              {isExceeded && (
-                                                <div className="mt-1 text-[10px] text-red-600 dark:text-red-400 font-bold text-center">
-                                                  ⚠️ Entered return quantity is more than the sale to {values.customerName || 'customer'}
-                                                </div>
-                                              )}
+                                      ) : ((allowLoose && pcsPerBox > 1) || (Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0)) ? (
+                                        <div className="flex flex-col gap-1">
+                                          <ChainedUomInputGrid
+                                            primaryUom={bulkUnitLabel || 'Unit'}
+                                            primaryQuantity={Number(item.qty) || 0}
+                                            primaryRate={Number(item.rate) || 0}
+                                            tiers={
+                                              Array.isArray(matchedProduct?.multi_loose_units) && matchedProduct.multi_loose_units.length > 0
+                                                ? matchedProduct.multi_loose_units
+                                                : [{ uom: looseUnitLabel, ratio: pcsPerBox, costPrice: matchedProduct?.loose_purchase_price, salePrice: matchedProduct?.loose_sale_price }]
+                                            }
+                                            tierQuantities={item.tier_quantities}
+                                            tierRates={item.tier_rates}
+                                            mode="sale"
+                                            onChange={({ tierQuantities, tierRates, totalConvertedPrimaryQty, totalLineAmount }) => {
+                                              setFieldValue(`items.${idx}.qty`, totalConvertedPrimaryQty);
+                                              setFieldValue(`items.${idx}.tier_quantities`, tierQuantities);
+                                              setFieldValue(`items.${idx}.tier_rates`, tierRates);
+                                              if (totalConvertedPrimaryQty > 0 && totalLineAmount > 0) {
+                                                setFieldValue(`items.${idx}.rate`, Number((totalLineAmount / totalConvertedPrimaryQty).toFixed(2)));
+                                              }
+                                            }}
+                                          />
+                                          {isExceeded && (
+                                            <div className="mt-1 text-[10px] text-red-600 dark:text-red-400 font-bold text-center">
+                                              ⚠️ Entered return quantity is more than the sale to {values.customerName || 'customer'}
                                             </div>
-                                          );
-                                        })()
+                                          )}
+                                        </div>
                                       ) : (
                                         (() => {
                                           const u = String(item.uom || matchedProduct?.uom || '').trim().toUpperCase();

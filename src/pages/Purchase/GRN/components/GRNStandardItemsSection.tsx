@@ -38,7 +38,7 @@ export const GRNStandardItemsSection: React.FC<GRNStandardItemsSectionProps> = (
             <th className="p-3 w-10 text-center">S#</th>
             <th className="p-3 w-80 min-w-[280px]">Product Code / Description</th>
             <th className="p-3 w-56">Receiving Warehouse</th>
-            <th className="p-3 w-36 text-right">Quantity</th>
+            <th className="p-3 min-w-[300px] text-center">Quantity (UOM)</th>
             <th className="p-3 w-24 text-center">UOM</th>
             <th className="p-3 w-10 text-center"></th>
           </tr>
