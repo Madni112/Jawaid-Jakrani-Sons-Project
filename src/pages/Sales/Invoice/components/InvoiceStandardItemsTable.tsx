@@ -4,7 +4,7 @@ import { FiX, FiTrash2 } from 'react-icons/fi';
 import { formatStockWithBoxesAndPcs } from '../../../../utils/stockCalculator';
 import { DropdownPortal } from './DropdownPortal';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
-import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
+import { LooseChainBadge, decomposeStockForActiveUoms } from '../../../../utils/looseUomHelpers';
 
 interface InvoiceStandardItemsTableProps {
   values: any;
@@ -79,6 +79,7 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
 }) => {
   const prodNameRefs = useRef<{ [key: number]: HTMLInputElement | null }>({});
   const whRefs = useRef<{ [key: number]: HTMLInputElement | null }>({});
+  const [rowActiveUoms, setRowActiveUoms] = React.useState<Record<number, string[]>>({});
 
   return (
     <div className={`border border-stroke dark:border-strokedark rounded-sm mt-4 relative ${activeProdNameIndex !== null || activeSkuIndex !== null || activeWhIndex !== null ? 'z-[60]' : 'z-10'} overflow-visible pb-4`}>
@@ -139,8 +140,12 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                     const looseUnitLabel = selectedProd?.loose_uom || 'Pcs';
                     const uomName = item.uom || selectedProd?.uom || 'MTR';
 
-                    // Calculate available stock breakdown
-                    let effectiveAvailStock = Number(item.availableQty || 0);
+                    // Calculate available stock breakdown (Overall stock before warehouse is selected; warehouse-specific after)
+                    const hasSelectedWh = Boolean(String(currentWh || '').trim());
+                    const overallStock = selectedProd ? getProductOverallStock(selectedProd) : 0;
+                    let effectiveAvailStock = hasSelectedWh
+                      ? Number(item.availableQty ?? getItemWarehouseStock(item.itemName, currentWh, item.skuCode) ?? 0)
+                      : overallStock;
                     if (editData && editData.items) {
                       const oldItems = typeof editData.items === 'string' ? JSON.parse(editData.items || '[]') : (editData.items || []);
                       const original = oldItems.find((oi: any) => oi.skuCode === item.skuCode && (oi.warehouse || editData.dispatch_warehouse || 'Main Warehouse') === (item.warehouse || values.dispatchWarehouse || 'Main Warehouse'));
@@ -475,8 +480,69 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                         </td>
 
                         {/* AVAILABLE STOCK */}
-                        <td className="p-2 text-center bg-success/5 text-xs w-[140px]">
+                        <td className="p-2 text-center bg-success/5 text-xs w-[150px]">
                           {(() => {
+                            const hasLooseGrid = (isTile || allowLoose) && (pcsPerBox > 1 || (Array.isArray(selectedProd?.multi_loose_units) && selectedProd.multi_loose_units.length > 0));
+                            const isOverStock = Boolean(item.itemName && Number(item.qty || 0) > totalAvailStock);
+
+                            if (hasLooseGrid && selectedProd) {
+                              const activeUomsForRow =
+                                rowActiveUoms[idx] && rowActiveUoms[idx].length > 0
+                                  ? rowActiveUoms[idx]
+                                  : [bulkUnitLabel];
+                              const parts = decomposeStockForActiveUoms(
+                                totalAvailStock,
+                                activeUomsForRow,
+                                selectedProd
+                              );
+                              const primaryPart = parts[0];
+                              const subParts = parts.slice(1);
+
+                              return (
+                                <div className="flex flex-col items-center justify-center font-mono gap-0.5">
+                                  <span
+                                    className={`font-black text-xs ${
+                                      isOverStock || totalAvailStock <= 0
+                                        ? 'text-rose-600 dark:text-rose-400'
+                                        : 'text-emerald-600 dark:text-emerald-400'
+                                    }`}
+                                  >
+                                    {primaryPart
+                                      ? `${primaryPart.qty.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${primaryPart.uom}`
+                                      : `${totalAvailStock.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${bulkUnitLabel}`}
+                                  </span>
+                                  {subParts.length > 0 && (
+                                    <div className="flex items-center justify-center gap-1 flex-wrap">
+                                      {subParts.map((sp, sIdx) => (
+                                        <span
+                                          key={sIdx}
+                                          style={{
+                                            backgroundColor:
+                                              sp.qty > 0
+                                                ? 'color-mix(in srgb, var(--color-primary, #0D1540) 12%, transparent)'
+                                                : 'color-mix(in srgb, var(--color-primary, #0D1540) 5%, transparent)',
+                                            borderColor:
+                                              sp.qty > 0
+                                                ? 'color-mix(in srgb, var(--color-primary, #0D1540) 28%, transparent)'
+                                                : 'color-mix(in srgb, var(--color-primary, #0D1540) 15%, transparent)',
+                                            color: 'var(--color-primary, #0D1540)',
+                                          }}
+                                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                                            sp.qty === 0 ? 'opacity-65' : ''
+                                          }`}
+                                        >
+                                          +{sp.qty.toLocaleString(undefined, { maximumFractionDigits: 4 })} {sp.uom}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <span className="text-[9.5px] font-sans text-slate-400 dark:text-slate-500">
+                                    {hasSelectedWh ? currentWh : 'Overall Stock'}
+                                  </span>
+                                </div>
+                              );
+                            }
+
                             const sInfo = formatStockWithBoxesAndPcs(totalAvailStock, selectedProd, item.uom);
                             if (sInfo.isBoxProduct && sInfo.piecesPerBox > 1) {
                               return (
@@ -494,6 +560,9 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                               <div className="flex flex-col items-center justify-center font-mono">
                                 <span className={`font-black text-xs ${totalAvailStock > 0 ? 'text-success' : 'text-danger'}`}>
                                   {totalAvailStock.toFixed(2)} {uomName}
+                                </span>
+                                <span className="text-[9.5px] font-sans text-slate-400 dark:text-slate-500">
+                                  {hasSelectedWh ? currentWh : 'Overall Stock'}
                                 </span>
                               </div>
                             );
@@ -515,6 +584,15 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                               tierQuantities={item.tier_quantities}
                               tierRates={item.tier_rates}
                               mode="sale"
+                              onActiveUomsChange={(uoms) => {
+                                setRowActiveUoms(prev => {
+                                  const existing = prev[idx];
+                                  if (existing && existing.length === uoms.length && existing.every((v, i) => v === uoms[i])) {
+                                    return prev;
+                                  }
+                                  return { ...prev, [idx]: uoms };
+                                });
+                              }}
                               onChange={({ primaryQuantity, tierQuantities, tierRates, totalConvertedPrimaryQty, totalLineAmount }) => {
                                 setFieldValue(`items.${idx}.qty`, totalConvertedPrimaryQty);
                                 setFieldValue(`items.${idx}.tier_quantities`, tierQuantities);

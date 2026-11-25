@@ -158,6 +158,86 @@ export const decomposeStockIntoChain = (
 };
 
 /**
+ * Decomposes a base stock quantity across ONLY the specified active UOMs (e.g. ['PCS'], ['LTR', 'ML'], ['PCS', 'LTR', 'ML', '.ML']).
+ * Keeps integer parts for all tiers except the last active UOM, which receives the full remainder (up to 4 decimals).
+ */
+export const decomposeStockForActiveUoms = (
+  baseQty: number,
+  activeUoms: string[],
+  product: any
+): ChainedStockPart[] => {
+  const baseUom = String(product?.uom || product?.unit || 'PCS').trim().toUpperCase();
+  const num = Number(baseQty) || 0;
+  const isNegative = num < 0;
+  const absBase = Math.abs(num);
+
+  // Build full cumulative ratio map from product hierarchy
+  const levelMap = new Map<string, number>();
+  levelMap.set(baseUom, 1);
+  const levelOrder: string[] = [baseUom];
+
+  const multiTiers: LooseTierItem[] = product?.multi_loose_units || product?.looseTiers || [];
+  let runningRatio = 1;
+
+  if (Array.isArray(multiTiers) && multiTiers.length > 0) {
+    multiTiers.forEach((t) => {
+      const u = String(t?.uom || '').trim().toUpperCase();
+      const r = Number(t?.ratio) || 0;
+      if (!u || r <= 0 || levelMap.has(u)) return;
+      runningRatio *= r;
+      levelMap.set(u, runningRatio);
+      levelOrder.push(u);
+    });
+  } else if (product?.loose_uom && Number(product?.loose_conversion_ratio || 0) > 1) {
+    const u = String(product.loose_uom).trim().toUpperCase();
+    const r = Number(product.loose_conversion_ratio);
+    if (u && !levelMap.has(u)) {
+      levelMap.set(u, r);
+      levelOrder.push(u);
+    }
+  }
+
+  // Normalize & order active UOMs by hierarchy
+  const seen = new Set<string>();
+  const targetUoms = (activeUoms && activeUoms.length > 0 ? activeUoms : [baseUom])
+    .map((u) => String(u || '').trim().toUpperCase())
+    .filter((u) => {
+      if (!u || seen.has(u) || !levelMap.has(u)) return false;
+      seen.add(u);
+      return true;
+    })
+    .sort((a, b) => levelOrder.indexOf(a) - levelOrder.indexOf(b));
+
+  const finalUoms = targetUoms.length > 0 ? targetUoms : [baseUom];
+  const maxRatio = Math.max(...Array.from(levelMap.values()), 1);
+  let remainingSmallest = Math.round(absBase * maxRatio);
+
+  return finalUoms.map((u, idx) => {
+    const cumRatio = levelMap.get(u) || 1;
+    const relFactor = maxRatio / cumRatio;
+    const isLast = idx === finalUoms.length - 1;
+
+    let qty = 0;
+    if (isLast) {
+      qty = Number((remainingSmallest / relFactor).toFixed(4));
+    } else {
+      qty = Math.floor(remainingSmallest / relFactor);
+      remainingSmallest -= qty * relFactor;
+    }
+
+    if (idx === 0 && isNegative && qty > 0) {
+      qty = -qty;
+    }
+
+    return {
+      uom: u,
+      qty,
+      isBase: u === baseUom,
+    };
+  });
+};
+
+/**
  * Formats line item compound quantities for printing.
  * E.g., if tier_quantities is { PCS: 1, LTR: 25 }, returns "1 PCS + 25 LTR"
  */

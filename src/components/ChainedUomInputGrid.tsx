@@ -18,6 +18,7 @@ export interface ChainedUomInputGridProps {
   tierRates?: Record<string, number>;
   mode?: 'sale' | 'purchase';
   disabled?: boolean;
+  onActiveUomsChange?: (uoms: string[]) => void;
   onChange: (data: {
     primaryQuantity: number;
     tierQuantities: Record<string, number>;
@@ -47,6 +48,7 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
   tierRates = {},
   mode = 'sale',
   disabled = false,
+  onActiveUomsChange,
   onChange
 }) => {
   // Build entire linear hierarchy of available levels: Base + all chained tiers (deduplicated)
@@ -112,6 +114,9 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
     if (shouldFocusNext.current && nextDropdownRef.current) {
       nextDropdownRef.current.focus();
       shouldFocusNext.current = false;
+    }
+    if (onActiveUomsChange) {
+      onActiveUomsChange(activeRows.map(r => r.uom));
     }
   }, [activeRows]);
 
