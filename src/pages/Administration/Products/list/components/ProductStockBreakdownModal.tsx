@@ -263,7 +263,16 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
 
             if (decomposed.hasLoose) {
               const basePart = decomposed.parts[0];
-              const subParts = decomposed.parts.slice(1);
+              const decomposedSubMap = new Map(
+                decomposed.parts.slice(1).map((p) => [p.uom.toUpperCase(), p.qty])
+              );
+              const allSubParts =
+                num !== 0 && uomOptions.length > 1
+                  ? uomOptions.slice(1).map((opt) => ({
+                      uom: opt.uom,
+                      qty: decomposedSubMap.get(opt.uom.toUpperCase()) ?? 0,
+                    }))
+                  : decomposed.parts.slice(1);
 
               return (
                 <div className="text-right flex flex-col items-end leading-tight">
@@ -278,12 +287,25 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                   >
                     {basePart ? `${basePart.qty.toLocaleString()} ${basePart.uom}` : `0 ${uomLabel}`}
                   </span>
-                  {subParts.length > 0 && (
+                  {allSubParts.length > 0 && (
                     <div className="flex items-center gap-1 flex-wrap justify-end mt-0.5">
-                      {subParts.map((sp, sIdx) => (
+                      {allSubParts.map((sp, sIdx) => (
                         <span
                           key={sIdx}
-                          className="text-[10px] font-bold font-mono text-teal-600 dark:text-teal-400 bg-teal-50/70 dark:bg-teal-950/40 px-1.5 py-0.2 rounded border border-teal-200/50 dark:border-teal-800/40"
+                          style={{
+                            backgroundColor:
+                              sp.qty > 0
+                                ? 'color-mix(in srgb, var(--color-primary, #0D1540) 12%, transparent)'
+                                : 'color-mix(in srgb, var(--color-primary, #0D1540) 5%, transparent)',
+                            borderColor:
+                              sp.qty > 0
+                                ? 'color-mix(in srgb, var(--color-primary, #0D1540) 30%, transparent)'
+                                : 'color-mix(in srgb, var(--color-primary, #0D1540) 15%, transparent)',
+                            color: 'var(--color-primary, #0D1540)',
+                          }}
+                          className={`text-[10px] font-bold font-mono px-1.5 py-0.2 rounded border ${
+                            sp.qty === 0 ? 'opacity-65' : ''
+                          }`}
                         >
                           +{sp.qty.toLocaleString()} {sp.uom}
                         </span>
