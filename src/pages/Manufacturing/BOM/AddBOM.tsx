@@ -628,7 +628,7 @@ const AddBOM: React.FC = () => {
   }
 
   return (
-    <div className={`mx-auto max-w-7xl p-4 md:p-6 ${isRTL ? 'font-urdu' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className={`mx-auto max-w-[1600px] p-4 md:p-6 ${isRTL ? 'font-urdu' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
       <Breadcrumb
         pageName={
           isRTL
@@ -673,10 +673,10 @@ const AddBOM: React.FC = () => {
         finishedProductName={finishedProductName}
       />
 
-      {/* Main Two-Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      {/* Main Layout: Full width on Raw Materials tab so the wide table fits cleanly; 2-column on other tabs */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Pane: Active Tab Panel */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
+        <div className={`${activeTab === 2 ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col gap-6`}>
           {activeTab === 1 && (
             <BOMProductOutputTab
               isRTL={isRTL}
@@ -752,16 +752,18 @@ const AddBOM: React.FC = () => {
           />
         </div>
 
-        {/* Right Pane: Sticky Cost & Margin Summary Card */}
-        <BOMCostSummaryCard
-          isRTL={isRTL}
-          uom={uom}
-          calculations={calculations}
-          targetSellingPrice={targetSellingPrice}
-          setTargetSellingPrice={setTargetSellingPrice}
-          syncCatalogPrice={syncCatalogPrice}
-          setSyncCatalogPrice={setSyncCatalogPrice}
-        />
+        {/* Right/Bottom Pane: Sticky Cost & Margin Summary Card */}
+        <div className={activeTab === 2 ? 'lg:col-span-12' : 'lg:col-span-4'}>
+          <BOMCostSummaryCard
+            isRTL={isRTL}
+            uom={uom}
+            calculations={calculations}
+            targetSellingPrice={targetSellingPrice}
+            setTargetSellingPrice={setTargetSellingPrice}
+            syncCatalogPrice={syncCatalogPrice}
+            setSyncCatalogPrice={setSyncCatalogPrice}
+          />
+        </div>
       </div>
 
       {/* Save Recipe Modal */}

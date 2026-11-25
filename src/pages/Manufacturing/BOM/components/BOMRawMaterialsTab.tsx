@@ -103,82 +103,82 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
         <button
           type="button"
           onClick={onAddItemRow}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-xs font-semibold transition cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary px-3.5 py-2 text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
         >
-          <MdAdd className="text-base" />
-          <span>{isRTL ? '+ نیا آئٹم شامل کریں' : '+ Add Material Item'}</span>
+          <MdAdd className="text-base shrink-0" />
+          <span>{isRTL ? '+ نیا آئٹم شامل کریں' : 'Add Material Item'}</span>
         </button>
       </div>
 
       {/* Cost Split Badges Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-meta-4/30 border border-slate-200/80 dark:border-strokedark">
-        <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-boxdark rounded-lg border border-slate-200 dark:border-strokedark shadow-2xs">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-boxdark rounded-lg border border-slate-200 dark:border-strokedark shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="p-1.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">
               <MdScience size={15} />
             </span>
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              {isRTL ? 'بلک کیمیکل لاگت:' : 'Bulk Liquid Chemical Cost:'}
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+              {isRTL ? 'بلک کیمیکل لاگت:' : 'Bulk Liquid Chemical:'}
             </span>
           </div>
-          <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400">
+          <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400 whitespace-nowrap shrink-0">
             PKR {chemicalTotal.toLocaleString()}
           </span>
         </div>
 
-        <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-boxdark rounded-lg border border-slate-200 dark:border-strokedark shadow-2xs">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-boxdark rounded-lg border border-slate-200 dark:border-strokedark shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="p-1.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 shrink-0">
               <MdInventory2 size={15} />
             </span>
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              {isRTL ? 'پیکجنگ سامان لاگت:' : 'Packaging Materials Cost:'}
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+              {isRTL ? 'پیکجنگ سامان لاگت:' : 'Packaging Materials:'}
             </span>
           </div>
-          <span className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400">
+          <span className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap shrink-0">
             PKR {packagingTotal.toLocaleString()}
           </span>
         </div>
 
-        <div className="flex items-center justify-between px-3 py-2 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/30 shadow-2xs">
-          <span className="text-xs font-bold text-primary">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/30 shadow-2xs">
+          <span className="text-xs font-bold text-primary truncate">
             {isRTL ? 'کل مشترکہ لاگت:' : 'Combined Materials Total:'}
           </span>
-          <span className="font-mono font-extrabold text-sm text-primary">
+          <span className="font-mono font-extrabold text-sm text-primary whitespace-nowrap shrink-0">
             PKR {rawMaterialCost.toLocaleString()}
           </span>
         </div>
       </div>
 
       <div className="overflow-x-auto min-h-[300px] pb-32">
-        <table className="w-full min-w-[1340px] table-fixed text-xs">
+        <table className="w-full min-w-[1220px] table-fixed text-xs">
           <thead>
             <tr className="bg-gray-100 dark:bg-meta-4 text-gray-600 dark:text-gray-300 uppercase font-semibold">
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[130px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[150px]`}>
                 {isRTL ? 'قسم (Type)' : 'Category / Type'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[240px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[230px]`}>
                 {isRTL ? 'خام مال / جزو *' : 'Material / Component Name *'}
               </th>
-              <th className="p-2.5 text-center w-[320px]">
+              <th className="p-2.5 text-center w-[300px]">
                 {isRTL ? 'مقدار (Qty) *' : 'Quantity *'}
               </th>
-              <th className="p-2.5 text-center w-[100px]">
+              <th className="p-2.5 text-center w-[90px]">
                 {isRTL ? 'اکائی (UOM) *' : 'UOM *'}
               </th>
-              <th className="p-2.5 text-center w-[115px]">
+              <th className="p-2.5 text-center w-[105px]">
                 {isRTL ? 'فی اکائی قیمت (Cost)' : 'Unit Cost (PKR)'}
               </th>
-              <th className="p-2.5 text-center w-[85px]">
+              <th className="p-2.5 text-center w-[72px]">
                 {isRTL ? 'ضیاع (Waste%)' : 'Waste %'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-left' : 'text-right'} w-[150px] bg-primary/5 dark:bg-primary/10 text-primary font-bold`}>
+              <th className={`p-2.5 ${isRTL ? 'text-left' : 'text-right'} w-[135px] bg-primary/5 dark:bg-primary/10 text-primary font-bold`}>
                 {isRTL ? 'لائن ٹوٹل (Line Total PKR)' : 'Line Total (PKR)'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[130px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[120px]`}>
                 {isRTL ? 'تفصیل / نوٹس' : 'Notes / Specs'}
               </th>
-              <th className="p-2.5 text-center w-[45px]"></th>
+              <th className="p-2.5 text-center w-[40px]"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stroke dark:divide-strokedark">
@@ -190,9 +190,9 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
               const hasLoose = Boolean(row.allow_loose && ratio > 1 && looseUom);
 
               return (
-                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-meta-4/20 transition-colors">
+                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-meta-4/20 transition-colors align-top">
                   {/* Item Type: Chemical vs Packaging */}
-                  <td className="p-2 w-[130px]">
+                  <td className="p-2 w-[150px]">
                     <select
                       value={row.item_type || 'Chemical'}
                       onChange={e => onUpdateItem(idx, 'item_type', e.target.value as 'Chemical' | 'Packaging')}
@@ -208,7 +208,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                   </td>
 
                   {/* Material / Component Name Searchable */}
-                  <td className="p-2 w-[240px] relative">
+                  <td className="p-2 w-[230px] relative">
                     <SearchableProductSelect
                       value={row.item_name}
                       onChange={(productName, product) => {
@@ -305,7 +305,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                   </td>
 
                   {/* Quantity with Chained Dynamic Multi-Tier UOM Grid */}
-                  <td className="p-2 w-[320px] align-top">
+                  <td className="p-2 w-[300px] align-top">
                     <ChainedUomInputGrid
                       primaryUom={row.uom || 'Unit'}
                       primaryQuantity={Number(row.quantity) || 0}
@@ -329,7 +329,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     />
                   </td>
 
-                  <td className="p-2 w-[100px] relative">
+                  <td className="p-2 w-[90px] relative">
                     <SearchableUomDropdown
                       value={row.uom}
                       onChange={val => onUpdateItem(idx, 'uom', val)}
@@ -339,7 +339,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     />
                   </td>
 
-                  <td className="p-2 w-[115px]">
+                  <td className="p-2 w-[105px]">
                     <input
                       type="number"
                       min="0"
@@ -352,7 +352,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     />
                   </td>
 
-                  <td className="p-2 w-[85px]">
+                  <td className="p-2 w-[72px]">
                     <input
                       type="number"
                       min="0"
@@ -369,7 +369,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
 
                   {/* Read-Only Explicit Line Total (PKR) column */}
                   <td
-                    className={`p-2 w-[150px] font-mono font-bold bg-primary/5 dark:bg-primary/10 text-primary ${
+                    className={`p-2 w-[135px] font-mono font-bold bg-primary/5 dark:bg-primary/10 text-primary ${
                       isRTL ? 'text-left' : 'text-right'
                     }`}
                   >
@@ -381,7 +381,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     </div>
                   </td>
 
-                  <td className="p-2 w-[130px]">
+                  <td className="p-2 w-[120px]">
                     <input
                       type="text"
                       placeholder={isRTL ? 'نوٹ...' : 'fragrance, grade...'}
@@ -391,7 +391,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     />
                   </td>
 
-                  <td className="p-2 w-[45px] text-center">
+                  <td className="p-2 w-[40px] text-center">
                     <button
                       type="button"
                       onClick={() => onRemoveItemRow(idx)}
