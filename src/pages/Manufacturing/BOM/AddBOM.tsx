@@ -284,30 +284,36 @@ const AddBOM: React.FC = () => {
         (row as any)[field] = val;
       }
 
-      // Recalculate line total: Qty * UnitCost * (1 + Wastage% / 100)
-      const qty = Number(row.quantity) || 0;
-      const uCost = Number(row.unit_cost) || 0;
-      const waste = Number(row.wastage_percentage) || 0;
-      row.total_cost = Math.round(qty * uCost * (1 + waste / 100));
+      // Recalculate per-unit line total unless caller already computed exact multi-tier total_cost
+      if (!(typeof field === 'object' && field !== null && 'total_cost' in field)) {
+        const qty = Number(row.quantity) || 0;
+        const uCost = Number(row.unit_cost) || 0;
+        const waste = Number(row.wastage_percentage) || 0;
+        row.total_cost = Math.round(qty * uCost * (1 + waste / 100) * 100) / 100;
+      }
 
       updated[index] = row;
       return updated;
     });
   };
 
-  // Live Cost & Margin Calculations
+  // Live Cost & Margin Calculations (raw material rows define per-1-unit consumption and scale by batchQuantity)
   const calculations: BomCalculations = useMemo(() => {
-    const chemicalCost = items
-      .filter(it => it.item_type !== 'Packaging')
-      .reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
-    const itemsPackagingCost = items
-      .filter(it => it.item_type === 'Packaging')
-      .reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
-    const rawMaterialCost = chemicalCost + itemsPackagingCost;
+    const batchQty = Number(batchQuantity) > 0 ? Number(batchQuantity) : 1;
+    const chemicalCost = Math.round(
+      items
+        .filter(it => it.item_type !== 'Packaging')
+        .reduce((sum, it) => sum + (Number(it.total_cost) || 0) * batchQty, 0) * 100
+    ) / 100;
+    const itemsPackagingCost = Math.round(
+      items
+        .filter(it => it.item_type === 'Packaging')
+        .reduce((sum, it) => sum + (Number(it.total_cost) || 0) * batchQty, 0) * 100
+    ) / 100;
+    const rawMaterialCost = Math.round((chemicalCost + itemsPackagingCost) * 100) / 100;
     const totalOverheads =
       (Number(laborCost) || 0) + (Number(overheadCost) || 0) + (Number(packagingCost) || itemsPackagingCost);
     const totalBatchCost = rawMaterialCost + totalOverheads;
-    const batchQty = Number(batchQuantity) > 0 ? Number(batchQuantity) : 1;
     const unitCost = Math.round((totalBatchCost / batchQty) * 100) / 100;
 
     const targetPrice = Number(targetSellingPrice) || 0;

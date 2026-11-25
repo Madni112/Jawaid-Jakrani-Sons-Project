@@ -38,18 +38,24 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
   onUpdateItem
 }) => {
   const [rowActiveUoms, setRowActiveUoms] = React.useState<Record<number, string[]>>({});
-  // Categorize breakdown: Chemical / Bulk vs Packaging Material
+  const effectiveBatchQty = Number(batchQuantity) > 0 ? Number(batchQuantity) : 1;
+
+  // Categorize breakdown: Chemical / Bulk vs Packaging Material (scaled by Batch Production Quantity)
   const chemicalTotal = useMemo(() => {
-    return items
-      .filter(it => it.item_type !== 'Packaging')
-      .reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
-  }, [items]);
+    return Math.round(
+      items
+        .filter(it => it.item_type !== 'Packaging')
+        .reduce((sum, it) => sum + (Number(it.total_cost) || 0) * effectiveBatchQty, 0) * 100
+    ) / 100;
+  }, [items, effectiveBatchQty]);
 
   const packagingTotal = useMemo(() => {
-    return items
-      .filter(it => it.item_type === 'Packaging')
-      .reduce((sum, it) => sum + (Number(it.total_cost) || 0), 0);
-  }, [items]);
+    return Math.round(
+      items
+        .filter(it => it.item_type === 'Packaging')
+        .reduce((sum, it) => sum + (Number(it.total_cost) || 0) * effectiveBatchQty, 0) * 100
+    ) / 100;
+  }, [items, effectiveBatchQty]);
 
   return (
     <div className="rounded-2xl border border-stroke bg-white p-5 shadow-sm dark:border-strokedark dark:bg-boxdark space-y-4">
@@ -65,8 +71,8 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
             </label>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
               {isRTL
-                ? `یہ نسخہ نیچے دیے گئے تمام خام کیمیکلز اور پیکجنگ سامان سے تیار ہونے والی کل مقدار (${uom}) کو ظاہر کرتا ہے۔`
-                : `Total output produced by this recipe run. Raw ingredients and packaging materials below formulate this exact batch size.`}
+                ? `نیچے دیے گئے خام کیمیکلز اور پیکجنگ سامان کی مقدار فی 1 یونٹ (${uom}) کے حساب سے درج کریں — کل بیچ خودکار ضرب ہو جائے گا۔`
+                : `Enter each raw ingredient & packaging quantity per 1 ${uom || 'unit'} below — totals & stock checks scale automatically by this batch size.`}
             </p>
           </div>
         </div>
@@ -292,7 +298,8 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                       <span className="text-[11px] text-slate-400 font-mono">—</span>
                     ) : (() => {
                       const hasLooseGrid = hasLoose || (Array.isArray(row.multi_loose_units) && row.multi_loose_units.length > 0);
-                      const isOverStock = Number(row.quantity || 0) > availStock;
+                      const batchConsumedQty = Number(row.quantity || 0) * effectiveBatchQty;
+                      const isOverStock = batchConsumedQty > availStock;
                       const prodForDecomp = matchedProduct || {
                         uom: row.uom || 'PCS',
                         loose_uom: row.loose_uom,
@@ -450,16 +457,20 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     />
                   </td>
 
-                  {/* Read-Only Explicit Line Total (PKR) column */}
+                  {/* Read-Only Explicit Line Total (PKR) column (scaled by batch size) */}
                   <td
                     className={`p-2 w-[130px] font-mono font-bold bg-primary/5 dark:bg-primary/10 text-primary ${
                       isRTL ? 'text-left' : 'text-right'
                     }`}
                   >
                     <div className="flex flex-col items-end">
-                      <span className="text-xs font-extrabold">PKR {lineTotal.toLocaleString()}</span>
+                      <span className="text-xs font-extrabold">
+                        PKR {(Math.round(lineTotal * effectiveBatchQty * 100) / 100).toLocaleString()}
+                      </span>
                       <span className="text-[9px] text-gray-400 font-normal">
-                        ({row.quantity} × {row.unit_cost} + {row.wastage_percentage || 0}%)
+                        {effectiveBatchQty > 1
+                          ? `(PKR ${lineTotal.toLocaleString()} × ${effectiveBatchQty} ${uom || 'batch'})`
+                          : `(${row.quantity} × ${row.unit_cost} + ${row.wastage_percentage || 0}%)`}
                       </span>
                     </div>
                   </td>
