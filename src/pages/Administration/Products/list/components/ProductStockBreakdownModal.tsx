@@ -266,8 +266,9 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
               const decomposedSubMap = new Map(
                 decomposed.parts.slice(1).map((p) => [p.uom.toUpperCase(), p.qty])
               );
+              // Always show all UOM tier pills in compound view, even when stock is a whole number
               const allSubParts =
-                num !== 0 && uomOptions.length > 1
+                uomOptions.length > 1
                   ? uomOptions.slice(1).map((opt) => ({
                       uom: opt.uom,
                       qty: decomposedSubMap.get(opt.uom.toUpperCase()) ?? 0,
