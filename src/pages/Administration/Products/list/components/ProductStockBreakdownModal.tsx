@@ -71,7 +71,13 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-strokedark bg-slate-50 dark:bg-meta-4/30">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300 rounded-xl">
+            <div
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 12%, transparent)',
+                color: 'var(--color-primary, #0D1540)',
+              }}
+              className="p-2.5 rounded-xl"
+            >
               <MdInfoOutline size={22} />
             </div>
             <div className="flex-1 min-w-0">
@@ -85,7 +91,14 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                   </span>
                 )}
                 {selectedStockBreakdown.category && (
-                  <span className="text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                  <span
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 10%, transparent)',
+                      borderColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 25%, transparent)',
+                      color: 'var(--color-primary, #0D1540)',
+                    }}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded border"
+                  >
                     {selectedStockBreakdown.category}
                   </span>
                 )}
@@ -166,10 +179,19 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                   <button
                     key={tab}
                     onClick={() => setSelectedModalWarehouse(tab)}
+                    style={
+                      isSelected
+                        ? {
+                            backgroundColor: 'var(--color-primary, #0D1540)',
+                            borderColor: 'var(--color-primary, #0D1540)',
+                            color: '#ffffff',
+                          }
+                        : undefined
+                    }
                     className={`whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
                       isSelected
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                        : 'bg-white dark:bg-boxdark border-slate-200 dark:border-strokedark text-slate-600 dark:text-slate-300 hover:border-emerald-300 dark:hover:border-emerald-700 hover:text-emerald-600'
+                        ? 'shadow-sm'
+                        : 'bg-white dark:bg-boxdark border-slate-200 dark:border-strokedark text-slate-600 dark:text-slate-300 hover:![border-color:color-mix(in_srgb,var(--color-primary,#0D1540)_45%,transparent)] hover:![color:var(--color-primary,#0D1540)]'
                     }`}
                   >
                     <span>{tab === 'Global / Unassigned' ? 'Unassigned' : tab}</span>
@@ -177,7 +199,7 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                       <span
                         className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
                           isSelected
-                            ? 'bg-emerald-700/60 text-white'
+                            ? 'bg-white/20 text-white'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                         }`}
                       >
@@ -343,17 +365,36 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Left: Inventory Inflow */}
                   <div className="rounded-xl border border-slate-200 dark:border-strokedark p-4 bg-white dark:bg-boxdark space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-strokedark">
-                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-strokedark">
+                      <span
+                        style={{ color: 'var(--color-primary, #0D1540)' }}
+                        className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0"
+                      >
+                        <span
+                          style={{ backgroundColor: 'var(--color-primary, #0D1540)' }}
+                          className="w-2 h-2 rounded-full"
+                        ></span>
                         Inventory Inflow
                       </span>
                       {looseChainSummary ? (
-                        <span className="text-[9.5px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded border border-teal-200/50 dark:border-teal-800/40 font-mono">
+                        <span
+                          style={{
+                            backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 8%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 22%, transparent)',
+                            color: 'var(--color-primary, #0D1540)',
+                          }}
+                          className="text-[9.5px] font-bold px-2 py-0.5 rounded border font-mono"
+                        >
                           {looseChainSummary}
                         </span>
                       ) : selectedStockBreakdown.allow_loose_sales ? (
-                        <span className="text-[9.5px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded">
+                        <span
+                          style={{
+                            backgroundColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 8%, transparent)',
+                            color: 'var(--color-primary, #0D1540)',
+                          }}
+                          className="text-[9.5px] font-bold px-2 py-0.5 rounded"
+                        >
                           1 {uomLabel}
                         </span>
                       ) : null}
