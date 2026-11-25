@@ -78,9 +78,9 @@ export const usePurchaseMetadata = (
         if (bankRes.data) setBankAccountsList(bankRes.data);
 
         let { data: prodData, error: prodErr } = await fetchAllPages(supabase.from('products').select(
-          'id, product_name, purchase_price, uom, current_stock, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price, loose_purchase_price'
+          'id, product_name, purchase_price, uom, current_stock, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price, loose_purchase_price, multi_loose_units'
         ));
-        if (prodErr && (prodErr.message?.includes('allow_loose_sales') || prodErr.code === '42703')) {
+        if (prodErr && (prodErr.message?.includes('multi_loose_units') || prodErr.message?.includes('allow_loose_sales') || prodErr.code === '42703')) {
           const fallbackRes = await fetchAllPages(supabase.from('products').select(
             'id, product_name, purchase_price, uom, current_stock, item_sr_no, pieces_per_box, pcs_per_box, pieces_per_packing, category, sub_category, sub_sub_category, scenario_name, product_description'
           ));

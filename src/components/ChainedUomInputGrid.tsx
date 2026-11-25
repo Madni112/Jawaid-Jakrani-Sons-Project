@@ -157,6 +157,45 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
     recalculateAndNotify(activeRows, updatedQtys, tierRates);
   };
 
+  // Dynamic cascading carry-over: rolls excess quantity from any sub-row up into parent rows
+  const handleQtyNormalize = (startRowIdx: number) => {
+    if (startRowIdx <= 0) return;
+
+    const nextQtys: Record<string, number> = { ...tierQuantities };
+    const row0Uom = activeRows[0]?.uom;
+    if (row0Uom && nextQtys[row0Uom] === undefined && primaryQuantity > 0) {
+      nextQtys[row0Uom] = primaryQuantity;
+    }
+
+    let changed = false;
+
+    for (let i = startRowIdx; i >= 1; i--) {
+      const childUom = activeRows[i]?.uom;
+      const parentUom = activeRows[i - 1]?.uom;
+      if (!childUom || !parentUom) continue;
+
+      const childDef = allLevels.find(l => l.uom === childUom);
+      const parentDef = allLevels.find(l => l.uom === parentUom);
+      if (!childDef || !parentDef || parentDef.cumulativeRatio <= 0) continue;
+
+      const relRatio = childDef.cumulativeRatio / parentDef.cumulativeRatio;
+      if (relRatio <= 1) continue;
+
+      const childQty = Number(nextQtys[childUom]) || 0;
+      if (childQty >= relRatio) {
+        const carry = Math.floor(childQty / relRatio);
+        const remainder = Number((childQty % relRatio).toFixed(4));
+        nextQtys[childUom] = remainder;
+        nextQtys[parentUom] = Number(((Number(nextQtys[parentUom]) || 0) + carry).toFixed(4));
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      recalculateAndNotify(activeRows, nextQtys, tierRates);
+    }
+  };
+
   const handleRateChange = (uom: string, rawVal: string) => {
     const val = rawVal === '' ? 0 : parseFloat(rawVal) || 0;
     const updatedRates = { ...tierRates, [uom]: val };
@@ -287,6 +326,12 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
                       const raw = e.target.value;
                       if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
                         handleQtyChange(row.uom, raw);
+                      }
+                    }}
+                    onBlur={() => handleQtyNormalize(rIdx)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        handleQtyNormalize(rIdx);
                       }
                     }}
                     className="w-full py-1.5 px-2 text-sm font-mono font-bold text-slate-900 dark:text-white bg-transparent outline-none text-center focus:bg-rose-50/30 dark:focus:bg-rose-950/20 transition"

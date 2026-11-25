@@ -57,7 +57,9 @@ const AddStockTransfer = () => {
       try {
         setMetadataLoading(true);
         const { data: locData } = await supabase.from('inventory_locations').select('id, name').order('name', { ascending: true });
-        const { data: prodData } = await fetchAllPages(supabase.from('products').select('id, product_name, item_sr_no, current_stock, uom'));
+        const { data: prodData } = await fetchAllPages(
+          supabase.from('products').select('id, product_name, item_sr_no, current_stock, uom, purchase_price, retail_price, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_sale_price, loose_purchase_price, multi_loose_units')
+        );
 
         if (locData) setLocations(locData);
         if (prodData) setProductList(prodData);
