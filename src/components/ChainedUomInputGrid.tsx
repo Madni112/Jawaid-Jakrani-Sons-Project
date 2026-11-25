@@ -49,9 +49,10 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
   disabled = false,
   onChange
 }) => {
-  // Build entire linear hierarchy of available levels: Base + all chained tiers
+  // Build entire linear hierarchy of available levels: Base + all chained tiers (deduplicated)
   const allLevels: LevelDef[] = useMemo(() => {
     const baseCode = String(primaryUom || 'PCS').trim().toUpperCase();
+    const seen = new Set<string>([baseCode]);
     const list: LevelDef[] = [
       {
         uom: baseCode,
@@ -64,7 +65,8 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
     (tiers || []).forEach(t => {
       const u = String(t.uom || '').trim().toUpperCase();
       const r = Number(t.ratio) || 1;
-      if (!u || r <= 0) return;
+      if (!u || r <= 0 || seen.has(u)) return;
+      seen.add(u);
       runningRatio = runningRatio * r;
       const rate = mode === 'sale'
         ? (Number(t.salePrice) > 0 ? Number(t.salePrice) : (Number(primaryRate) / runningRatio))
@@ -202,6 +204,23 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
     recalculateAndNotify(activeRows, tierQuantities, updatedRates);
   };
 
+  // Helper to sort rows in strict allLevels hierarchy order and remove any invalid/duplicate UOMs
+  const sortAndDedupeRows = (rows: ActiveRow[]): ActiveRow[] => {
+    const seen = new Set<string>();
+    const valid = rows.filter(r => {
+      const u = String(r.uom || '').trim().toUpperCase();
+      if (!u || seen.has(u)) return false;
+      if (!allLevels.some(l => l.uom === u)) return false;
+      seen.add(u);
+      return true;
+    });
+    return valid.sort((a, b) => {
+      const idxA = allLevels.findIndex(l => l.uom === a.uom);
+      const idxB = allLevels.findIndex(l => l.uom === b.uom);
+      return idxA - idxB;
+    });
+  };
+
   const handleRowUomChange = (rowIdx: number, newUom: string) => {
     const oldUom = activeRows[rowIdx]?.uom;
     let newRows = [...activeRows];
@@ -222,6 +241,7 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
       newRows = filtered;
     }
 
+    newRows = sortAndDedupeRows(newRows);
     setActiveRows(newRows);
 
     const updatedQtys = { ...tierQuantities };
@@ -256,7 +276,7 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
     const nextUom = nextAvail.uom;
 
     const newRowId = `row-${Date.now()}`;
-    const newRows = [...activeRows, { id: newRowId, uom: nextUom }];
+    const newRows = sortAndDedupeRows([...activeRows, { id: newRowId, uom: nextUom }]);
     setActiveRows(newRows);
     shouldFocusNext.current = true;
 
@@ -304,11 +324,12 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
 
           const isLastRow = rIdx === activeRows.length - 1;
 
-          // For sub-tier rows (rIdx > 0), only allow selecting units that are strictly below the primary unit
+          // For sub-tier rows (rIdx > 0), only allow selecting units strictly below the primary unit and not used in other rows
+          const otherSelectedUoms = new Set(activeRows.filter((_, idx) => idx !== rIdx).map(r => r.uom));
           const selectableOptions =
             rIdx === 0
               ? allLevels
-              : allLevels.slice(primaryIdx + 1);
+              : allLevels.slice(primaryIdx + 1).filter(opt => !otherSelectedUoms.has(opt.uom));
 
           return (
             <div key={row.id} className="flex flex-col gap-1">
