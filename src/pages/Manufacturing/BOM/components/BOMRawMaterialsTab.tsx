@@ -151,7 +151,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
       </div>
 
       <div className="overflow-x-auto min-h-[300px] pb-32">
-        <table className="w-full min-w-[1140px] table-fixed text-xs">
+        <table className="w-full min-w-[1340px] table-fixed text-xs">
           <thead>
             <tr className="bg-gray-100 dark:bg-meta-4 text-gray-600 dark:text-gray-300 uppercase font-semibold">
               <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[130px]`}>
@@ -160,7 +160,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
               <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[240px]`}>
                 {isRTL ? 'خام مال / جزو *' : 'Material / Component Name *'}
               </th>
-              <th className="p-2.5 text-center w-[120px]">
+              <th className="p-2.5 text-center w-[320px]">
                 {isRTL ? 'مقدار (Qty) *' : 'Quantity *'}
               </th>
               <th className="p-2.5 text-center w-[100px]">
@@ -305,7 +305,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                   </td>
 
                   {/* Quantity with Chained Dynamic Multi-Tier UOM Grid */}
-                  <td className="p-2 w-[180px]">
+                  <td className="p-2 w-[320px] align-top">
                     <ChainedUomInputGrid
                       primaryUom={row.uom || 'Unit'}
                       primaryQuantity={Number(row.quantity) || 0}
@@ -313,8 +313,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                       tiers={row.multi_loose_units || (hasLoose ? [{ uom: looseUom, ratio: ratio }] : [])}
                       tierQuantities={row.tier_quantities}
                       tierRates={row.tier_rates}
-                      mode="cost"
-                      isRTL={isRTL}
+                      mode="purchase"
                       onChange={({ primaryQuantity, tierQuantities, tierRates, totalConvertedPrimaryQty, totalLineAmount }) => {
                         const waste = Number(row.wastage_percentage) || 0;
                         const wasteMultiplier = 1 + (waste / 100);
