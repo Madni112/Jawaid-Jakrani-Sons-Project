@@ -486,10 +486,22 @@ export const InvoiceStandardItemsTable: React.FC<InvoiceStandardItemsTableProps>
                             const isOverStock = Boolean(item.itemName && Number(item.qty || 0) > totalAvailStock);
 
                             if (hasLooseGrid && selectedProd) {
-                              const activeUomsForRow =
-                                rowActiveUoms[idx] && rowActiveUoms[idx].length > 0
-                                  ? rowActiveUoms[idx]
-                                  : [bulkUnitLabel];
+                              const allProductUoms: string[] = [bulkUnitLabel];
+                              if (Array.isArray(selectedProd?.multi_loose_units) && selectedProd.multi_loose_units.length > 0) {
+                                selectedProd.multi_loose_units.forEach((t: any) => {
+                                  if (t?.uom) allProductUoms.push(String(t.uom).trim().toUpperCase());
+                                });
+                              } else if (looseUnitLabel) {
+                                allProductUoms.push(looseUnitLabel);
+                              }
+
+                              // Before warehouse is selected: show overall stock across ALL product UOM tiers.
+                              // Once warehouse is selected: link stock breakdown to the active inputs in QTY & PRICING (UOM).
+                              const activeUomsForRow = !hasSelectedWh
+                                ? allProductUoms
+                                : rowActiveUoms[idx] && rowActiveUoms[idx].length > 0
+                                ? rowActiveUoms[idx]
+                                : [bulkUnitLabel];
                               const parts = decomposeStockForActiveUoms(
                                 totalAvailStock,
                                 activeUomsForRow,
