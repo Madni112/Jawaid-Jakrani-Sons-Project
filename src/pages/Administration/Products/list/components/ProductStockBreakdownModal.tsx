@@ -23,6 +23,46 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
   setSelectedModalWarehouse,
   masterLocations,
 }) => {
+  const [selectedViewUom, setSelectedViewUom] = React.useState<string>('ALL');
+
+  React.useEffect(() => {
+    setSelectedViewUom('ALL');
+  }, [selectedStockBreakdown?.id, selectedStockBreakdown?.product_name]);
+
+  const uomOptions = React.useMemo(() => {
+    if (!selectedStockBreakdown) return [];
+    const baseUom = String(selectedStockBreakdown.uom || 'PCS').trim().toUpperCase();
+    const seen = new Set<string>([baseUom]);
+    const list: { uom: string; cumulativeRatio: number }[] = [{ uom: baseUom, cumulativeRatio: 1 }];
+
+    const multi = Array.isArray(selectedStockBreakdown.multi_loose_units)
+      ? selectedStockBreakdown.multi_loose_units
+      : [];
+
+    if (multi.length > 0) {
+      let runningRatio = 1;
+      multi.forEach((t: any) => {
+        const u = String(t?.uom || '').trim().toUpperCase();
+        const r = Number(t?.ratio) || 0;
+        if (!u || r <= 0 || seen.has(u)) return;
+        seen.add(u);
+        runningRatio *= r;
+        list.push({ uom: u, cumulativeRatio: runningRatio });
+      });
+    } else if (
+      selectedStockBreakdown.allow_loose_sales &&
+      selectedStockBreakdown.loose_uom &&
+      Number(selectedStockBreakdown.loose_conversion_ratio || 0) > 1
+    ) {
+      const u = String(selectedStockBreakdown.loose_uom).trim().toUpperCase();
+      if (u && !seen.has(u)) {
+        list.push({ uom: u, cumulativeRatio: Number(selectedStockBreakdown.loose_conversion_ratio) });
+      }
+    }
+
+    return list;
+  }, [selectedStockBreakdown]);
+
   if (!selectedStockBreakdown) return null;
 
   return (
@@ -70,13 +110,37 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
 
         {/* Warehouse Switcher */}
         <div className="px-6 pt-3.5 pb-2.5 bg-slate-50/50 dark:bg-meta-4/10 border-b border-slate-100 dark:border-strokedark/50">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
             <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Select Location:
             </label>
-            <span className="text-[11px] text-slate-400 font-medium">
-              Active Filter: <strong className="text-slate-700 dark:text-slate-200">{selectedModalWarehouse}</strong>
-            </span>
+            <div className="flex items-center gap-3">
+              {uomOptions.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-400 font-medium">View UOM:</span>
+                  <select
+                    value={selectedViewUom}
+                    onChange={(e) => setSelectedViewUom(e.target.value)}
+                    style={{
+                      borderColor: 'color-mix(in srgb, var(--color-primary, #0D1540) 35%, transparent)',
+                      color: 'var(--color-primary, #0D1540)',
+                    }}
+                    className="rounded-lg border bg-white dark:bg-boxdark px-2 py-0.5 text-[11px] font-mono font-bold outline-none cursor-pointer shadow-2xs"
+                    title="Convert all breakdown figures to a specific UOM"
+                  >
+                    <option value="ALL">All (Compound)</option>
+                    {uomOptions.map((opt) => (
+                      <option key={opt.uom} value={opt.uom}>
+                        {opt.uom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <span className="text-[11px] text-slate-400 font-medium">
+                Active Filter: <strong className="text-slate-700 dark:text-slate-200">{selectedModalWarehouse}</strong>
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-hide">
             {(() => {
@@ -153,6 +217,26 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
 
           const formatVal = (val: number) => {
             const num = Number(val) || 0;
+
+            if (selectedViewUom !== 'ALL') {
+              const targetOpt = uomOptions.find((o) => o.uom === selectedViewUom);
+              const ratio = targetOpt?.cumulativeRatio || 1;
+              const converted = Number((num * ratio).toFixed(4));
+              return (
+                <span
+                  className={`font-bold font-mono ${
+                    num > 0
+                      ? 'text-slate-800 dark:text-slate-100'
+                      : num < 0
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  {converted.toLocaleString(undefined, { maximumFractionDigits: 4 })} {selectedViewUom}
+                </span>
+              );
+            }
+
             const decomposed = decomposeStockIntoChain(num, uomLabel, selectedStockBreakdown);
 
             if (decomposed.hasLoose) {
