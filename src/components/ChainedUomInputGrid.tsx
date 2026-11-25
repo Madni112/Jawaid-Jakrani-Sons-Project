@@ -150,10 +150,10 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
     const isFirstBase = firstRowUom === allLevels[0]?.uom;
 
     onChange({
-      primaryQuantity: isFirstBase ? (Number(updatedQtys[firstRowUom]) || 0) : Number(totalBaseQty.toFixed(4)),
+      primaryQuantity: isFirstBase ? (Number(updatedQtys[firstRowUom]) || 0) : Number(totalBaseQty.toFixed(10)),
       tierQuantities: updatedQtys,
       tierRates: updatedRates,
-      totalConvertedPrimaryQty: Number(totalBaseQty.toFixed(5)),
+      totalConvertedPrimaryQty: Number(totalBaseQty.toFixed(10)),
       totalLineAmount: Number(totalLineAmount.toFixed(2))
     });
   };

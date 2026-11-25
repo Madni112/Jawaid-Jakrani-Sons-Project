@@ -335,7 +335,7 @@ function buildBreakdown(
 
   const totalManufactured = 0;
   const rawTotalAvail = (totalOpening + totalPurchased + totalManufactured + totalSalesReturned) - totalSold - totalPurchaseReturned - totalRejected;
-  const totalAvailable = Math.abs(rawTotalAvail) < 0.0001 ? 0 : Number(rawTotalAvail.toFixed(4));
+  const totalAvailable = Math.abs(rawTotalAvail) < 1e-10 ? 0 : Number(rawTotalAvail.toFixed(10));
 
   const byWarehouse: Record<string, WarehouseBreakdown> = {};
   Object.keys(whBreakdowns).forEach((key) => {
@@ -343,21 +343,21 @@ function buildBreakdown(
     const tIn = w.transferredIn || 0;
     const tOut = w.transferredOut || 0;
     const rawAvail = (w.opening + w.purchased + (w.manufactured || 0) + w.salesReturned + tIn) - w.sold - w.purchaseReturned - (w.rejected || 0) - tOut;
-    const avail = Math.abs(rawAvail) < 0.0001 ? 0 : Number(rawAvail.toFixed(4));
+    const avail = Math.abs(rawAvail) < 1e-10 ? 0 : Number(rawAvail.toFixed(10));
     byWarehouse[key] = {
-      opening: Number((w.opening || 0).toFixed(4)),
-      purchased: Number((w.purchased || 0).toFixed(4)),
-      manufactured: Number((w.manufactured || 0).toFixed(4)),
-      sold: Number((w.sold || 0).toFixed(4)),
-      salesReturned: Number((w.salesReturned || 0).toFixed(4)),
-      purchaseReturned: Number((w.purchaseReturned || 0).toFixed(4)),
-      rejected: Number((w.rejected || 0).toFixed(4)),
-      transferredIn: Number(tIn.toFixed(4)),
-      transferredOut: Number(tOut.toFixed(4)),
-      hold: Number((w.hold || 0).toFixed(4)),
-      purchaseHold: Number((w.purchaseHold || 0).toFixed(4)),
+      opening: Number((w.opening || 0).toFixed(10)),
+      purchased: Number((w.purchased || 0).toFixed(10)),
+      manufactured: Number((w.manufactured || 0).toFixed(10)),
+      sold: Number((w.sold || 0).toFixed(10)),
+      salesReturned: Number((w.salesReturned || 0).toFixed(10)),
+      purchaseReturned: Number((w.purchaseReturned || 0).toFixed(10)),
+      rejected: Number((w.rejected || 0).toFixed(10)),
+      transferredIn: Number(tIn.toFixed(10)),
+      transferredOut: Number(tOut.toFixed(10)),
+      hold: Number((w.hold || 0).toFixed(10)),
+      purchaseHold: Number((w.purchaseHold || 0).toFixed(10)),
       available: avail,
-      onHand: Math.abs(avail + (w.hold || 0)) < 0.0001 ? 0 : Number((avail + (w.hold || 0)).toFixed(4)),
+      onHand: Math.abs(avail + (w.hold || 0)) < 1e-10 ? 0 : Number((avail + (w.hold || 0)).toFixed(10)),
     };
   });
 
@@ -442,7 +442,7 @@ export function getWarehouseAvailableStock(productName: string, warehouseName: s
   if (isBalancesDataset(dataset)) {
     const row = (dataset.balances || []).find(balancesMatch(productName, warehouseName));
     const q = Number(row ? row.quantity : 0) || 0;
-    return Math.abs(q) < 0.0001 ? 0 : Number(q.toFixed(4));
+    return Math.abs(q) < 1e-10 ? 0 : Number(q.toFixed(10));
   }
 
   try {
@@ -451,7 +451,7 @@ export function getWarehouseAvailableStock(productName: string, warehouseName: s
       (k) => k.toLowerCase() === warehouseName.trim().toLowerCase()
     );
     const val = matchKey ? result.byWarehouse[matchKey].available : 0;
-    return Math.abs(val) < 0.0001 ? 0 : Number(val.toFixed(4));
+    return Math.abs(val) < 1e-10 ? 0 : Number(val.toFixed(10));
   } catch {
     return 0;
   }
