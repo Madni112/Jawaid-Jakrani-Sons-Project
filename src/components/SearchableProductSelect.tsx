@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MdSearch,
   MdClose,
@@ -46,15 +47,43 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync portal dropdown position when open / scrolled / resized
+  useEffect(() => {
+    if (!isOpen) return;
+    const updatePosition = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropdownRect({
+        top: rect.bottom + 6,
+        left: rect.left,
+        width: Math.max(rect.width, 280),
+      });
+    };
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen]);
 
   // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
         setIsOpen(false);
       }
     };
@@ -218,9 +247,19 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
         </div>
       </div>
 
-      {/* Dropdown Options List */}
-      {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 z-[9999] rounded-xl border border-stroke bg-white p-1.5 shadow-2xl dark:border-strokedark dark:bg-boxdark animate-fadeIn min-w-[280px]">
+      {/* Dropdown Options List (Portaled above tables/scroll containers) */}
+      {isOpen && dropdownRect && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'fixed',
+            top: dropdownRect.top,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+            zIndex: 99999,
+          }}
+          className="rounded-xl border border-stroke bg-white p-1.5 shadow-2xl dark:border-strokedark dark:bg-boxdark animate-fadeIn"
+        >
           <div
             ref={listRef}
             className="max-h-60 overflow-y-auto space-y-0.5 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-meta-4"
@@ -308,7 +347,8 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
