@@ -4,7 +4,7 @@ import SearchableProductSelect from '../../../../components/SearchableProductSel
 import SearchableUomDropdown from '../../../../components/SearchableUomDropdown';
 import { BomItem } from '../types/bomTypes';
 import ChainedUomInputGrid from '../../../../components/ChainedUomInputGrid';
-import { LooseChainBadge } from '../../../../utils/looseUomHelpers';
+import { LooseChainBadge, decomposeStockForActiveUoms } from '../../../../utils/looseUomHelpers';
 
 interface BOMRawMaterialsTabProps {
   isRTL: boolean;
@@ -13,6 +13,7 @@ interface BOMRawMaterialsTabProps {
   setBatchQuantity: (qty: number) => void;
   items: BomItem[];
   catalogProducts: any[];
+  stockMap?: Record<string, number>;
   allUomsList: any[];
   availableUoms: string[];
   rawMaterialCost: number;
@@ -28,6 +29,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
   setBatchQuantity,
   items,
   catalogProducts,
+  stockMap = {},
   allUomsList,
   availableUoms,
   rawMaterialCost,
@@ -35,6 +37,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
   onRemoveItemRow,
   onUpdateItem
 }) => {
+  const [rowActiveUoms, setRowActiveUoms] = React.useState<Record<number, string[]>>({});
   // Categorize breakdown: Chemical / Bulk vs Packaging Material
   const chemicalTotal = useMemo(() => {
     return items
@@ -151,31 +154,34 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
       </div>
 
       <div className="overflow-x-auto min-h-[300px] pb-32">
-        <table className="w-full min-w-[1220px] table-fixed text-xs">
+        <table className="w-full min-w-[1320px] table-fixed text-xs">
           <thead>
             <tr className="bg-gray-100 dark:bg-meta-4 text-gray-600 dark:text-gray-300 uppercase font-semibold">
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[150px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[140px]`}>
                 {isRTL ? 'قسم (Type)' : 'Category / Type'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[230px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[215px]`}>
                 {isRTL ? 'خام مال / جزو *' : 'Material / Component Name *'}
               </th>
-              <th className="p-2.5 text-center w-[300px]">
+              <th className="p-2.5 text-center w-[145px] bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">
+                {isRTL ? 'موجودہ اسٹاک' : 'Available Stock'}
+              </th>
+              <th className="p-2.5 text-center w-[290px]">
                 {isRTL ? 'مقدار (Qty) *' : 'Quantity *'}
               </th>
-              <th className="p-2.5 text-center w-[90px]">
+              <th className="p-2.5 text-center w-[80px]">
                 {isRTL ? 'اکائی (UOM) *' : 'UOM *'}
               </th>
-              <th className="p-2.5 text-center w-[105px]">
+              <th className="p-2.5 text-center w-[100px]">
                 {isRTL ? 'فی اکائی قیمت (Cost)' : 'Unit Cost (PKR)'}
               </th>
-              <th className="p-2.5 text-center w-[72px]">
+              <th className="p-2.5 text-center w-[70px]">
                 {isRTL ? 'ضیاع (Waste%)' : 'Waste %'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-left' : 'text-right'} w-[135px] bg-primary/5 dark:bg-primary/10 text-primary font-bold`}>
+              <th className={`p-2.5 ${isRTL ? 'text-left' : 'text-right'} w-[130px] bg-primary/5 dark:bg-primary/10 text-primary font-bold`}>
                 {isRTL ? 'لائن ٹوٹل (Line Total PKR)' : 'Line Total (PKR)'}
               </th>
-              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[120px]`}>
+              <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'} w-[105px]`}>
                 {isRTL ? 'تفصیل / نوٹس' : 'Notes / Specs'}
               </th>
               <th className="p-2.5 text-center w-[40px]"></th>
@@ -188,11 +194,18 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
               const ratio = Number(row.loose_ratio || 0);
               const looseUom = row.loose_uom || '';
               const hasLoose = Boolean(row.allow_loose && ratio > 1 && looseUom);
+              const matchedProduct = catalogProducts.find(
+                p => String(p.product_name || '').trim().toLowerCase() === String(row.item_name || '').trim().toLowerCase()
+              );
+              const itemKey = String(row.item_name || '').trim().toLowerCase();
+              const availStock = itemKey
+                ? (stockMap[itemKey] !== undefined ? stockMap[itemKey] : Number(matchedProduct?.current_stock || 0))
+                : 0;
 
               return (
                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-meta-4/20 transition-colors align-top">
                   {/* Item Type: Chemical vs Packaging */}
-                  <td className="p-2 w-[150px]">
+                  <td className="p-2 w-[140px]">
                     <select
                       value={row.item_type || 'Chemical'}
                       onChange={e => onUpdateItem(idx, 'item_type', e.target.value as 'Chemical' | 'Packaging')}
@@ -208,7 +221,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                   </td>
 
                   {/* Material / Component Name Searchable */}
-                  <td className="p-2 w-[230px] relative">
+                  <td className="p-2 w-[215px] relative">
                     <SearchableProductSelect
                       value={row.item_name}
                       onChange={(productName, product) => {
@@ -273,8 +286,100 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     )}
                   </td>
 
+                  {/* Available Stock (Linked to active UOMs in Quantity column, matching Sales Invoice) */}
+                  <td className="p-2 w-[145px] text-center bg-emerald-50/30 dark:bg-emerald-950/10">
+                    {!row.item_name ? (
+                      <span className="text-[11px] text-slate-400 font-mono">—</span>
+                    ) : (() => {
+                      const hasLooseGrid = hasLoose || (Array.isArray(row.multi_loose_units) && row.multi_loose_units.length > 0);
+                      const isOverStock = Number(row.quantity || 0) > availStock;
+                      const prodForDecomp = matchedProduct || {
+                        uom: row.uom || 'PCS',
+                        loose_uom: row.loose_uom,
+                        loose_conversion_ratio: row.loose_ratio,
+                        multi_loose_units: row.multi_loose_units,
+                      };
+                      const baseUomLabel = row.uom || matchedProduct?.uom || 'PCS';
+
+                      if (hasLooseGrid) {
+                        const activeUomsForRow =
+                          rowActiveUoms[idx] && rowActiveUoms[idx].length > 0
+                            ? rowActiveUoms[idx]
+                            : [baseUomLabel];
+                        const parts = decomposeStockForActiveUoms(
+                          availStock,
+                          activeUomsForRow,
+                          prodForDecomp
+                        );
+                        const primaryPart = parts[0];
+                        const subParts = parts.slice(1);
+
+                        return (
+                          <div className="flex flex-col items-center justify-center font-mono gap-0.5">
+                            <span
+                              className={`font-black text-xs ${
+                                isOverStock || availStock <= 0
+                                  ? 'text-rose-600 dark:text-rose-400'
+                                  : 'text-emerald-600 dark:text-emerald-400'
+                              }`}
+                            >
+                              {primaryPart
+                                ? `${primaryPart.qty.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${primaryPart.uom}`
+                                : `${availStock.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${baseUomLabel}`}
+                            </span>
+                            {subParts.length > 0 && (
+                              <div className="flex items-center justify-center gap-1 flex-wrap">
+                                {subParts.map((sp, sIdx) => (
+                                  <span
+                                    key={sIdx}
+                                    style={{
+                                      backgroundColor:
+                                        sp.qty > 0
+                                          ? 'color-mix(in srgb, var(--color-primary, #0D1540) 12%, transparent)'
+                                          : 'color-mix(in srgb, var(--color-primary, #0D1540) 5%, transparent)',
+                                      borderColor:
+                                        sp.qty > 0
+                                          ? 'color-mix(in srgb, var(--color-primary, #0D1540) 28%, transparent)'
+                                          : 'color-mix(in srgb, var(--color-primary, #0D1540) 15%, transparent)',
+                                      color: 'var(--color-primary, #0D1540)',
+                                    }}
+                                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                                      sp.qty === 0 ? 'opacity-65' : ''
+                                    }`}
+                                  >
+                                    +{sp.qty.toLocaleString(undefined, { maximumFractionDigits: 4 })} {sp.uom}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <span className="text-[9.5px] font-sans text-slate-400 dark:text-slate-500">
+                              Overall Stock
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="flex flex-col items-center justify-center font-mono">
+                          <span
+                            className={`font-black text-xs ${
+                              isOverStock || availStock <= 0
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : 'text-emerald-600 dark:text-emerald-400'
+                            }`}
+                          >
+                            {availStock.toLocaleString(undefined, { maximumFractionDigits: 4 })} {baseUomLabel}
+                          </span>
+                          <span className="text-[9.5px] font-sans text-slate-400 dark:text-slate-500">
+                            Overall Stock
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </td>
+
                   {/* Quantity with Chained Dynamic Multi-Tier UOM Grid */}
-                  <td className="p-2 w-[300px] align-top">
+                  <td className="p-2 w-[290px] align-top">
                     <ChainedUomInputGrid
                       primaryUom={row.uom || 'Unit'}
                       primaryQuantity={Number(row.quantity) || 0}
@@ -283,6 +388,15 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                       tierQuantities={row.tier_quantities}
                       tierRates={row.tier_rates}
                       mode="purchase"
+                      onActiveUomsChange={(uoms) => {
+                        setRowActiveUoms(prev => {
+                          const existing = prev[idx];
+                          if (existing && existing.length === uoms.length && existing.every((v, i) => v === uoms[i])) {
+                            return prev;
+                          }
+                          return { ...prev, [idx]: uoms };
+                        });
+                      }}
                       onChange={({ primaryQuantity, tierQuantities, tierRates, totalConvertedPrimaryQty, totalLineAmount }) => {
                         const waste = Number(row.wastage_percentage) || 0;
                         const wasteMultiplier = 1 + (waste / 100);
@@ -298,7 +412,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     />
                   </td>
 
-                  <td className="p-2 w-[90px] relative">
+                  <td className="p-2 w-[80px] relative">
                     <SearchableUomDropdown
                       value={row.uom}
                       onChange={val => onUpdateItem(idx, 'uom', val)}
@@ -308,7 +422,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     />
                   </td>
 
-                  <td className="p-2 w-[105px]">
+                  <td className="p-2 w-[100px]">
                     <input
                       type="number"
                       min="0"
@@ -321,7 +435,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     />
                   </td>
 
-                  <td className="p-2 w-[72px]">
+                  <td className="p-2 w-[70px]">
                     <input
                       type="number"
                       min="0"
@@ -338,7 +452,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
 
                   {/* Read-Only Explicit Line Total (PKR) column */}
                   <td
-                    className={`p-2 w-[135px] font-mono font-bold bg-primary/5 dark:bg-primary/10 text-primary ${
+                    className={`p-2 w-[130px] font-mono font-bold bg-primary/5 dark:bg-primary/10 text-primary ${
                       isRTL ? 'text-left' : 'text-right'
                     }`}
                   >
@@ -350,7 +464,7 @@ export const BOMRawMaterialsTab: React.FC<BOMRawMaterialsTabProps> = ({
                     </div>
                   </td>
 
-                  <td className="p-2 w-[120px]">
+                  <td className="p-2 w-[105px]">
                     <input
                       type="text"
                       placeholder={isRTL ? 'نوٹ...' : 'fragrance, grade...'}

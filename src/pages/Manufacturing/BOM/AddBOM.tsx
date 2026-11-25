@@ -6,6 +6,7 @@ import { bomService } from '../../../service/bomService';
 import { recipeService } from '../../../service/recipeService';
 import Breadcrumb from '../../../components/Breadcrumbs/Breadcrumb';
 import { fetchAllUomsSafe, UomItem } from '../../../service/uomService';
+import { fetchStockDataset, getTotalAvailableStock } from '../../../utils/stockCalculator';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { BomHeader, BomItem, DedicatedRecipe, BomCalculations } from './types/bomTypes';
@@ -33,6 +34,7 @@ const AddBOM: React.FC = () => {
 
   // Master lists from database
   const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
+  const [stockMap, setStockMap] = useState<Record<string, number>>({});
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [availableUoms, setAvailableUoms] = useState<string[]>([]);
   const [allUomsList, setAllUomsList] = useState<UomItem[]>([]);
@@ -98,23 +100,52 @@ const AddBOM: React.FC = () => {
   useEffect(() => {
     const fetchMasterData = async () => {
       try {
-        const [prodRes, catRes, uomsList, recList] = await Promise.all([
+        const [prodRes, catRes, uomsList, recList, stockDataset] = await Promise.all([
           supabase
             .from('products')
-            .select('id, product_name, item_sr_no, purchase_price, sales_price, retail_price, uom, category, sub_category, sub_sub_category, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_purchase_price, loose_sale_price, multi_loose_units')
+            .select('id, product_name, item_sr_no, purchase_price, sales_price, retail_price, uom, category, sub_category, sub_sub_category, current_stock, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_purchase_price, loose_sale_price, multi_loose_units')
             .limit(1000),
           supabase
             .from('inventory_categories')
             .select('id, name, parent_id')
             .order('name', { ascending: true }),
           fetchAllUomsSafe(),
-          recipeService.getAll()
+          recipeService.getAll(),
+          fetchStockDataset().catch(() => null)
         ]);
 
         if (prodRes.data) setCatalogProducts(prodRes.data);
         if (catRes.data) setAllCategories(catRes.data);
         if (uomsList) setAllUomsList(uomsList.filter(u => u.is_active));
         if (recList) setSavedRecipes(recList);
+
+        // Build live overall stock map keyed by lowercase product_name
+        const nextStockMap: Record<string, number> = {};
+        if (stockDataset) {
+          if (stockDataset.balancesMode && Array.isArray(stockDataset.balances)) {
+            stockDataset.balances.forEach((r: any) => {
+              const name = String(r.product_name || '').toLowerCase().trim();
+              if (name) nextStockMap[name] = (nextStockMap[name] || 0) + (Number(r.quantity) || 0);
+            });
+          } else if (prodRes.data) {
+            for (const p of prodRes.data) {
+              const name = String(p.product_name || '').toLowerCase().trim();
+              if (!name) continue;
+              try {
+                nextStockMap[name] = await getTotalAvailableStock(p.product_name, stockDataset);
+              } catch {
+                nextStockMap[name] = Number(p.current_stock || 0);
+              }
+            }
+          }
+        }
+        (prodRes.data || []).forEach((p: any) => {
+          const name = String(p.product_name || '').toLowerCase().trim();
+          if (name && nextStockMap[name] === undefined) {
+            nextStockMap[name] = Number(p.current_stock || 0);
+          }
+        });
+        setStockMap(nextStockMap);
 
         const activeUomCodes = uomsList
           .filter(u => u.is_active)
@@ -715,6 +746,7 @@ const AddBOM: React.FC = () => {
               setBatchQuantity={setBatchQuantity}
               items={items}
               catalogProducts={catalogProducts}
+              stockMap={stockMap}
               allUomsList={allUomsList}
               availableUoms={availableUoms}
               rawMaterialCost={calculations.rawMaterialCost}
