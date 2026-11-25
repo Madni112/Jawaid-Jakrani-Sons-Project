@@ -101,7 +101,7 @@ const AddBOM: React.FC = () => {
         const [prodRes, catRes, uomsList, recList] = await Promise.all([
           supabase
             .from('products')
-            .select('id, product_name, item_sr_no, purchase_price, sales_price, retail_price, uom, category, sub_category, sub_sub_category, allow_loose_sales, loose_uom, loose_conversion_ratio')
+            .select('id, product_name, item_sr_no, purchase_price, sales_price, retail_price, uom, category, sub_category, sub_sub_category, allow_loose_sales, loose_uom, loose_conversion_ratio, loose_purchase_price, loose_sale_price, multi_loose_units')
             .limit(1000),
           supabase
             .from('inventory_categories')
