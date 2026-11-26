@@ -18,6 +18,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { bomService, BomHeader } from '../../../service/bomService';
 import { decomposeStockIntoChain } from '../../../utils/looseUomHelpers';
 import { fetchStockDataset, getWarehouseAvailableStock } from '../../../utils/stockCalculator';
+import { fetchWorkflowSettings } from '../../../service/workflowSettingsService';
 import {
   productionOrderService,
   ProductionOrder,
@@ -35,6 +36,7 @@ const AddProductionOrder: React.FC = () => {
   const [boms, setBoms] = useState<BomHeader[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
   const [stockDataset, setStockDataset] = useState<any>(null);
+  const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(true);
   const [shortagePopupItems, setShortagePopupItems] = useState<Array<{
     itemName: string;
     requiredText: string;
@@ -68,15 +70,19 @@ const AddProductionOrder: React.FC = () => {
       try {
         setLoading(true);
 
-        // Fetch BOMs, Warehouses, and Stock Balances in parallel
-        const [loadedBoms, locRes, dataset] = await Promise.all([
+        // Fetch BOMs, Warehouses, Stock Balances, and Workflow Settings in parallel
+        const [loadedBoms, locRes, dataset, wfSettings] = await Promise.all([
           bomService.getAll(),
           supabase.from('inventory_locations').select('name').order('name', { ascending: true }),
-          fetchStockDataset().catch(() => null)
+          fetchStockDataset().catch(() => null),
+          fetchWorkflowSettings().catch(() => null)
         ]);
 
         setBoms(loadedBoms);
         setStockDataset(dataset);
+        if (wfSettings) {
+          setAllowNegativeStock(wfSettings.allow_negative_stock !== false);
+        }
 
         const extractedLocations = Array.from(
           new Set(
@@ -849,7 +855,7 @@ const AddProductionOrder: React.FC = () => {
             </div>
 
             <div className="px-5 py-3.5 bg-slate-50 dark:bg-meta-4/30 border-t border-slate-100 dark:border-strokedark flex items-center justify-end gap-2">
-              {pendingSubmitStatus !== 'In Progress' && (
+              {(pendingSubmitStatus !== 'In Progress' || allowNegativeStock) && (
                 <button
                   type="button"
                   onClick={() => {
@@ -857,17 +863,26 @@ const AddProductionOrder: React.FC = () => {
                     setShortagePopupItems(null);
                     handleSubmit(st, true);
                   }}
-                  className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-strokedark bg-white dark:bg-boxdark text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition cursor-pointer"
+                  style={allowNegativeStock && pendingSubmitStatus === 'In Progress' ? { backgroundColor: 'var(--color-primary, #0D1540)' } : undefined}
+                  className={
+                    allowNegativeStock && pendingSubmitStatus === 'In Progress'
+                      ? 'px-4 py-2 rounded-xl text-white text-xs font-bold hover:opacity-90 transition cursor-pointer shadow-xs'
+                      : 'px-3.5 py-2 rounded-xl border border-slate-300 dark:border-strokedark bg-white dark:bg-boxdark text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition cursor-pointer'
+                  }
                 >
-                  Save Plan Anyway
+                  {pendingSubmitStatus === 'In Progress' ? 'Launch Anyway (Negative Stock)' : 'Save Plan Anyway'}
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => setShortagePopupItems(null)}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+                className={
+                  pendingSubmitStatus === 'In Progress' && !allowNegativeStock
+                    ? 'px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition cursor-pointer shadow-xs'
+                    : 'px-4 py-2 rounded-xl border border-slate-300 dark:border-strokedark bg-white dark:bg-boxdark text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-100 transition cursor-pointer'
+                }
               >
-                {pendingSubmitStatus === 'In Progress' ? 'Cannot Launch — Purchase Stock First' : 'Close & Adjust'}
+                {pendingSubmitStatus === 'In Progress' && !allowNegativeStock ? 'Cannot Launch — Purchase Stock First' : 'Cancel'}
               </button>
             </div>
           </div>
