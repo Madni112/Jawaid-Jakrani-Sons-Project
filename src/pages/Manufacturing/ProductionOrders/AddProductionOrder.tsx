@@ -61,7 +61,7 @@ const AddProductionOrder: React.FC = () => {
         // Fetch BOMs and Warehouses in parallel
         const [loadedBoms, locRes] = await Promise.all([
           bomService.getAll(),
-          supabase.from('inventory_locations').select('name, location_name')
+          supabase.from('inventory_locations').select('name').order('name', { ascending: true })
         ]);
 
         setBoms(loadedBoms);
