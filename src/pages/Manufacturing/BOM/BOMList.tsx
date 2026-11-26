@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../../Context/LanguageContext';
 import { bomService, BomHeader } from '../../../service/bomService';
+import { formatCompoundQtyForPrint } from '../../../utils/looseUomHelpers';
 import TablePagination from '../../../components/TablePagination';
 import Breadcrumb from '../../../components/Breadcrumbs/Breadcrumb';
 import { toast } from 'react-hot-toast';
@@ -613,8 +614,7 @@ const BOMList: React.FC = () => {
                         <th className={`p-2.5 ${isRTL ? 'text-right' : 'text-left'}`}>
                           {isRTL ? 'خام مال' : 'Raw Material Item'}
                         </th>
-                        <th className="p-2.5 text-center">{isRTL ? 'مقدار' : 'Quantity'}</th>
-                        <th className="p-2.5 text-center">{isRTL ? 'اکائی' : 'UOM'}</th>
+                        <th className="p-2.5 text-center">{isRTL ? 'مقدار (UOM)' : 'Quantity (UOM)'}</th>
                         <th className="p-2.5 text-center">{isRTL ? 'فی یونٹ ریٹ' : 'Unit Cost'}</th>
                         <th className="p-2.5 text-center">{isRTL ? 'ضیاع' : 'Waste %'}</th>
                         <th className={`p-2.5 ${isRTL ? 'text-left' : 'text-right'}`}>
@@ -623,31 +623,41 @@ const BOMList: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stroke dark:divide-strokedark">
-                      {selectedBomForView.items.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-meta-4/20">
-                          <td className="p-2.5 font-medium text-black dark:text-white">
-                            {item.item_name}
-                            {item.notes && (
-                              <div className="text-[10px] text-gray-400 mt-0.5">{item.notes}</div>
-                            )}
-                          </td>
-                          <td className="p-2.5 text-center font-mono">{item.quantity}</td>
-                          <td className="p-2.5 text-center">{item.uom}</td>
-                          <td className="p-2.5 text-center font-mono">
-                            PKR {item.unit_cost.toLocaleString()}
-                          </td>
-                          <td className="p-2.5 text-center font-mono">
-                            {item.wastage_percentage}%
-                          </td>
-                          <td
-                            className={`p-2.5 font-mono font-semibold text-black dark:text-white ${
-                              isRTL ? 'text-left' : 'text-right'
-                            }`}
-                          >
-                            PKR {item.total_cost.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
+                      {selectedBomForView.items.map((item, idx) => {
+                        const bQty = Number(selectedBomForView.batch_quantity) || 1;
+                        const batchLineTotal = Math.round((Number(item.total_cost) || 0) * bQty * 100) / 100;
+                        return (
+                          <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-meta-4/20">
+                            <td className="p-2.5 font-medium text-black dark:text-white">
+                              {item.item_name}
+                              {item.notes && (
+                                <div className="text-[10px] text-gray-400 mt-0.5">{item.notes}</div>
+                              )}
+                            </td>
+                            <td className="p-2.5 text-center font-mono font-semibold text-black dark:text-white">
+                              {formatCompoundQtyForPrint(item.quantity, item.uom, item.tier_quantities)}
+                            </td>
+                            <td className="p-2.5 text-center font-mono">
+                              PKR {item.unit_cost.toLocaleString()}
+                            </td>
+                            <td className="p-2.5 text-center font-mono">
+                              {item.wastage_percentage}%
+                            </td>
+                            <td
+                              className={`p-2.5 font-mono font-semibold text-black dark:text-white ${
+                                isRTL ? 'text-left' : 'text-right'
+                              }`}
+                            >
+                              <div>PKR {batchLineTotal.toLocaleString()}</div>
+                              {bQty > 1 && (
+                                <div className="text-[10px] font-normal text-gray-400">
+                                  (PKR {item.total_cost.toLocaleString()} × {bQty})
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
