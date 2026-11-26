@@ -387,13 +387,27 @@ export const productionOrderService = {
         updated_at: now
       };
 
-      if (isEdit) {
-        await supabase.from('production_orders').update(payload).eq('id', id);
+      const isRealUuid = Boolean(order.id && !String(order.id).startsWith('wo-') && !String(order.id).startsWith('po-'));
+      if (isRealUuid) {
+        const { data: updData, error: updErr } = await supabase
+          .from('production_orders')
+          .update(payload)
+          .eq('id', order.id)
+          .select()
+          .single();
+        if (updErr) throw new Error(`Failed to update production order: ${updErr.message}`);
+        fullOrder.id = String(updData.id);
       } else {
-        await supabase.from('production_orders').insert([{ ...payload, id, created_at: now }]);
+        const { data: insData, error: insErr } = await supabase
+          .from('production_orders')
+          .insert([{ ...payload, created_at: now }])
+          .select()
+          .single();
+        if (insErr) throw new Error(`Failed to save production order: ${insErr.message}`);
+        fullOrder.id = String(insData.id);
       }
-    } catch (e) {
-      console.warn('Database work order note:', e);
+    } catch (e: any) {
+      throw new Error(e?.message || 'Failed to save production order to database');
     }
 
     // 2. Always persist in Local Storage

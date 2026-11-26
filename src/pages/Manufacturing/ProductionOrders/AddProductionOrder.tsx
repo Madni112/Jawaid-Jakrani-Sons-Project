@@ -14,6 +14,7 @@ import {
 } from 'react-icons/md';
 import { supabase } from '../../../Context/supabaseClient';
 import { bomService, BomHeader } from '../../../service/bomService';
+import { decomposeStockIntoChain } from '../../../utils/looseUomHelpers';
 import {
   productionOrderService,
   ProductionOrder,
@@ -127,19 +128,21 @@ const AddProductionOrder: React.FC = () => {
     return boms.find(b => String(b.id) === String(selectedBomId)) || null;
   }, [boms, selectedBomId]);
 
-  // Scaling Factor based on target batch vs BOM base batch
+  // Overhead/Labor scaling vs BOM batch size, while BOM items are per-1-unit and scale by targetQuantity
   const scalingFactor = useMemo(() => {
     if (!selectedBom || !selectedBom.batch_quantity || selectedBom.batch_quantity <= 0) return 1;
     return targetQuantity / selectedBom.batch_quantity;
   }, [selectedBom, targetQuantity]);
 
-  // Dynamically scaled materials
+  // Dynamically scaled materials (BOM items define consumption per 1 unit, so multiply by targetQuantity)
   const scaledMaterials: ProductionOrderMaterial[] = useMemo(() => {
     if (!selectedBom) return [];
+    const qtyScale = Number(targetQuantity) > 0 ? Number(targetQuantity) : 1;
     return (selectedBom.items || []).map((item, idx) => {
-      const scaledReq = Number((item.quantity * scalingFactor).toFixed(2));
+      const scaledReq = Number((Number(item.quantity || 0) * qtyScale).toFixed(10));
       const unitCost = Number(item.unit_cost || 0);
-      const totalCost = Number((scaledReq * unitCost).toFixed(2));
+      const perUnitCost = Number(item.total_cost || 0) > 0 ? Number(item.total_cost) : Number(item.quantity || 0) * unitCost;
+      const totalCost = Number((perUnitCost * qtyScale).toFixed(2));
 
       return {
         id: `mat-${idx}-${item.id || item.item_code}`,
@@ -155,12 +158,13 @@ const AddProductionOrder: React.FC = () => {
         allow_loose: item.allow_loose,
         loose_uom: item.loose_uom,
         loose_ratio: item.loose_ratio,
+        multi_loose_units: item.multi_loose_units,
         loose_quantity: item.allow_loose && item.loose_ratio ? Math.round(scaledReq * item.loose_ratio) : undefined,
         wastage_percentage: item.wastage_percentage,
         notes: item.notes
       };
     });
-  }, [selectedBom, scalingFactor]);
+  }, [selectedBom, targetQuantity]);
 
   // Financial Cost Breakdown
   const financialTotals = useMemo(() => {
@@ -504,14 +508,30 @@ const AddProductionOrder: React.FC = () => {
                           {mat.item_code && <span className="block text-[10px] text-gray-400 font-normal">{mat.item_code}</span>}
                         </td>
                         <td className="py-3 px-3 text-right font-mono">
-                          <span className="font-black text-emerald-600 dark:text-emerald-400 block">
-                            {mat.required_qty.toLocaleString()}
-                          </span>
-                          {mat.allow_loose && mat.loose_ratio && (
-                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold block">
-                              {(mat.required_qty * mat.loose_ratio).toLocaleString()} {mat.loose_uom}
-                            </span>
-                          )}
+                          {(() => {
+                            const hasLooseInfo = Boolean(
+                              mat.allow_loose ||
+                              (Array.isArray((mat as any).multi_loose_units) && (mat as any).multi_loose_units.length > 0)
+                            );
+                            if (hasLooseInfo) {
+                              const decomp = decomposeStockIntoChain(mat.required_qty, mat.uom, {
+                                uom: mat.uom,
+                                loose_uom: mat.loose_uom,
+                                loose_conversion_ratio: mat.loose_ratio,
+                                multi_loose_units: (mat as any).multi_loose_units,
+                              });
+                              return (
+                                <span className="font-black text-emerald-600 dark:text-emerald-400 block">
+                                  {decomp.formattedText}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="font-black text-emerald-600 dark:text-emerald-400 block">
+                                {Number(mat.required_qty.toFixed(4)).toLocaleString()} {mat.uom}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="py-3 px-3 text-center font-bold text-gray-500">
                           {mat.uom}
