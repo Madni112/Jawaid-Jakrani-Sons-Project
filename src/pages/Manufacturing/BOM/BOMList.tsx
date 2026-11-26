@@ -144,9 +144,10 @@ const BOMList: React.FC = () => {
 
   return (
     <div className={`mx-auto max-w-7xl p-4 md:p-6 ${isRTL ? 'font-urdu' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
-      <Breadcrumb
-        pageName={isRTL ? 'بل آف میٹریلز (BOM)' : 'Bill of Materials (BOM)'}
-      />
+      <div className={selectedBomForView ? 'print:hidden' : ''}>
+        <Breadcrumb
+          pageName={isRTL ? 'بل آف میٹریلز (BOM)' : 'Bill of Materials (BOM)'}
+        />
 
       {/* Header Banner */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-boxdark p-5 rounded-xl shadow-sm border border-stroke dark:border-strokedark">
@@ -525,12 +526,13 @@ const BOMList: React.FC = () => {
           </div>
         )}
       </div>
+      </div>
 
       {/* Quick View Recipe Modal */}
       {selectedBomForView && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto print:static print:inset-auto print:bg-white print:p-0 print:overflow-visible">
           <div
-            className={`w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-boxdark border border-stroke dark:border-strokedark my-8 ${
+            className={`w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-boxdark border border-stroke dark:border-strokedark my-8 print:shadow-none print:border-0 print:max-w-full print:my-0 ${
               isRTL ? 'font-urdu' : ''
             }`}
             dir={isRTL ? 'rtl' : 'ltr'}
@@ -561,7 +563,7 @@ const BOMList: React.FC = () => {
               </div>
               <button
                 onClick={() => setSelectedBomForView(null)}
-                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-black dark:hover:bg-meta-4 dark:hover:text-white"
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-black dark:hover:bg-meta-4 dark:hover:text-white print:hidden"
               >
                 <MdClose className="text-xl" />
               </button>
@@ -673,7 +675,7 @@ const BOMList: React.FC = () => {
             </div>
 
             {/* Modal Actions */}
-            <div className="mt-4 flex items-center justify-between border-t border-stroke pt-4 dark:border-strokedark">
+            <div className="mt-4 flex items-center justify-between border-t border-stroke pt-4 dark:border-strokedark print:hidden">
               <button
                 onClick={() => window.print()}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-black dark:text-gray-300 dark:hover:text-white"
