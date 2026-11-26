@@ -104,6 +104,11 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
         }
       });
     }
+    initial.sort((a, b) => {
+      const idxA = allLevels.findIndex(l => l.uom === a.uom);
+      const idxB = allLevels.findIndex(l => l.uom === b.uom);
+      return idxA - idxB;
+    });
     setActiveRows(initial);
   }, [primaryUom, primaryRate, JSON.stringify(tiers)]);
 
@@ -319,9 +324,10 @@ export const ChainedUomInputGrid: React.FC<ChainedUomInputGridProps> = ({
             cumulativeRatio: 1,
             defaultRate: 0
           };
+          const hasTierKeys = Object.keys(tierQuantities || {}).length > 0;
           const currentQty = tierQuantities[row.uom] !== undefined
             ? (tierQuantities[row.uom] === 0 ? '' : tierQuantities[row.uom])
-            : (rIdx === 0 && primaryQuantity > 0 ? primaryQuantity : '');
+            : (rIdx === 0 && !hasTierKeys && primaryQuantity > 0 ? primaryQuantity : '');
 
           const currentRate = tierRates[row.uom] !== undefined
             ? tierRates[row.uom]
