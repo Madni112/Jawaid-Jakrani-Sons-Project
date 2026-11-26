@@ -293,6 +293,13 @@ export const bomService = {
           item_id: it.item_id,
           item_name: it.item_name,
           item_code: it.item_code,
+          item_type: it.item_type || 'Chemical',
+          allow_loose: Boolean(it.allow_loose),
+          loose_uom: it.loose_uom || undefined,
+          loose_ratio: it.loose_ratio ? Number(it.loose_ratio) : undefined,
+          multi_loose_units: Array.isArray(it.multi_loose_units) ? it.multi_loose_units : [],
+          tier_quantities: it.tier_quantities || undefined,
+          tier_rates: it.tier_rates || undefined,
           quantity: Number(it.quantity) || 0,
           uom: it.uom || 'PCS',
           unit_cost: Number(it.unit_cost) || 0,
@@ -343,13 +350,10 @@ export const bomService = {
 
   // Save or update BOM
   async save(bom: Partial<BomHeader> & { items: BomItem[] }): Promise<BomHeader> {
-    const isEdit = Boolean(bom.id);
-    const id = bom.id || `bom-${Date.now()}`;
+    const isEdit = Boolean(bom.id && !String(bom.id).startsWith('bom-'));
     const now = new Date().toISOString();
 
-    const fullBom: BomHeader = {
-      id,
-      tenant_id: bom.tenant_id || 'uzair',
+    const headerRow = {
       bom_number: bom.bom_number || `BOM-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
       finished_product_id: bom.finished_product_id || '',
       finished_product_name: bom.finished_product_name || 'Custom Assembly Product',
@@ -367,75 +371,67 @@ export const bomService = {
       margin_percentage: Number(bom.margin_percentage) || 0,
       status: bom.status || 'Active',
       notes: bom.notes || '',
-      created_at: bom.created_at || now,
-      updated_at: now,
-      items: (bom.items || []).map((it, idx) => ({
-        ...it,
-        id: it.id || `item-${Date.now()}-${idx}`,
-        bom_id: id
-      }))
+      updated_at: now
     };
 
-    // 1. Try Supabase save
-    try {
-      const headerRow = {
-        bom_number: fullBom.bom_number,
-        finished_product_id: fullBom.finished_product_id,
-        finished_product_name: fullBom.finished_product_name,
-        finished_product_code: fullBom.finished_product_code,
-        category: fullBom.category,
-        batch_quantity: fullBom.batch_quantity,
-        uom: fullBom.uom,
-        raw_material_cost: fullBom.raw_material_cost,
-        labor_cost: fullBom.labor_cost,
-        overhead_cost: fullBom.overhead_cost,
-        packaging_cost: fullBom.packaging_cost,
-        total_cost: fullBom.total_cost,
-        unit_cost: fullBom.unit_cost,
-        target_selling_price: fullBom.target_selling_price,
-        margin_percentage: fullBom.margin_percentage,
-        status: fullBom.status,
-        notes: fullBom.notes,
-        updated_at: now
-      };
+    let savedId = bom.id ? String(bom.id) : '';
+    let savedHeader: any = null;
 
-      if (isEdit) {
-        await supabase.from('bom_headers').update(headerRow).eq('id', id);
-        await supabase.from('bom_items').delete().eq('bom_id', id);
-      } else {
-        await supabase.from('bom_headers').insert([{ ...headerRow, id, created_at: now }]);
-      }
-
-      if (fullBom.items.length > 0) {
-        const itemRows = fullBom.items.map(it => ({
-          bom_id: id,
-          item_id: it.item_id,
-          item_name: it.item_name,
-          item_code: it.item_code,
-          quantity: it.quantity,
-          uom: it.uom,
-          unit_cost: it.unit_cost,
-          wastage_percentage: it.wastage_percentage,
-          total_cost: it.total_cost,
-          notes: it.notes
-        }));
-        await supabase.from('bom_items').insert(itemRows);
-      }
-    } catch {
-      // Supabase tables might not exist yet; gracefully fallback
-    }
-
-    // 2. Always persist locally
-    const existing = getLocalBoms();
-    let updated: BomHeader[];
     if (isEdit) {
-      updated = existing.map(b => (b.id === id ? fullBom : b));
-    } else {
-      updated = [fullBom, ...existing];
-    }
-    setLocalBoms(updated);
+      const { data: updData, error: updErr } = await supabase
+        .from('bom_headers')
+        .update(headerRow)
+        .eq('id', savedId)
+        .select()
+        .single();
+      if (updErr) throw new Error(`Failed to update BOM: ${updErr.message}`);
+      savedHeader = updData;
 
-    return fullBom;
+      const { error: delErr } = await supabase.from('bom_items').delete().eq('bom_id', savedId);
+      if (delErr) throw new Error(`Failed to clear BOM items: ${delErr.message}`);
+    } else {
+      const { data: insData, error: insErr } = await supabase
+        .from('bom_headers')
+        .insert([{ ...headerRow, created_at: now }])
+        .select()
+        .single();
+      if (insErr) throw new Error(`Failed to save BOM: ${insErr.message}`);
+      savedHeader = insData;
+      savedId = String(insData.id);
+    }
+
+    const items = bom.items || [];
+    if (items.length > 0) {
+      const itemRows = items.map(it => ({
+        bom_id: savedId,
+        item_id: it.item_id || '',
+        item_name: it.item_name,
+        item_code: it.item_code || '',
+        item_type: it.item_type || 'Chemical',
+        quantity: Number(it.quantity) || 0,
+        uom: it.uom || 'PCS',
+        unit_cost: Number(it.unit_cost) || 0,
+        wastage_percentage: Number(it.wastage_percentage) || 0,
+        total_cost: Number(it.total_cost) || 0,
+        allow_loose: Boolean(it.allow_loose),
+        loose_uom: it.loose_uom || null,
+        loose_ratio: it.loose_ratio ? Number(it.loose_ratio) : null,
+        multi_loose_units: it.multi_loose_units || [],
+        tier_quantities: it.tier_quantities || {},
+        tier_rates: it.tier_rates || {},
+        notes: it.notes || ''
+      }));
+      const { error: itemsErr } = await supabase.from('bom_items').insert(itemRows);
+      if (itemsErr) throw new Error(`Failed to save BOM items: ${itemsErr.message}`);
+    }
+
+    return {
+      ...headerRow,
+      id: savedId,
+      tenant_id: savedHeader?.tenant_id || bom.tenant_id,
+      created_at: savedHeader?.created_at || now,
+      items: items.map((it, idx) => ({ ...it, id: it.id || `item-${idx}`, bom_id: savedId }))
+    };
   },
 
   // Delete BOM

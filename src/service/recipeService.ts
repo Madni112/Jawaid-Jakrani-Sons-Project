@@ -341,15 +341,12 @@ export const recipeService = {
     }
   },
 
-  // Save new recipe or update existing in Supabase + Local Storage
+  // Save new recipe or update existing in Supabase
   async save(recipe: Partial<DedicatedRecipe> & { recipe_name: string; raw_materials: BomItem[] }): Promise<DedicatedRecipe> {
-    const isEdit = Boolean(recipe.id && !recipe.id.startsWith('rec-new-'));
-    const id = isEdit ? (recipe.id as string) : `rec-${Date.now()}`;
+    const isEdit = Boolean(recipe.id && !String(recipe.id).startsWith('rec-'));
     const now = new Date().toISOString();
 
-    const fullRecipe: DedicatedRecipe = {
-      id,
-      tenant_id: recipe.tenant_id || 'uzair',
+    const payload: any = {
       recipe_name: recipe.recipe_name.trim(),
       finished_product_name: recipe.finished_product_name || recipe.recipe_name,
       finished_product_code: recipe.finished_product_code || '',
@@ -373,56 +370,27 @@ export const recipeService = {
         ...m,
         id: m.id || `rm-${Date.now()}-${idx}`
       })),
-      created_at: recipe.created_at || now,
       updated_at: now
     };
 
-    // 1. Try Supabase insert/update
-    try {
-      const payload: any = {
-        recipe_name: fullRecipe.recipe_name,
-        finished_product_name: fullRecipe.finished_product_name,
-        finished_product_code: fullRecipe.finished_product_code,
-        finished_product_id: fullRecipe.finished_product_id,
-        category: fullRecipe.category,
-        sub_category: fullRecipe.sub_category,
-        sub_sub_category: fullRecipe.sub_sub_category,
-        batch_quantity: fullRecipe.batch_quantity,
-        uom: fullRecipe.uom,
-        raw_material_cost: fullRecipe.raw_material_cost,
-        labor_cost: fullRecipe.labor_cost,
-        overhead_cost: fullRecipe.overhead_cost,
-        packaging_cost: fullRecipe.packaging_cost,
-        total_cost: fullRecipe.total_cost,
-        unit_cost: fullRecipe.unit_cost,
-        target_selling_price: fullRecipe.target_selling_price,
-        margin_percentage: fullRecipe.margin_percentage,
-        status: fullRecipe.status,
-        notes: fullRecipe.notes,
-        raw_materials: fullRecipe.raw_materials,
-        updated_at: now
-      };
-
-      if (isEdit) {
-        await supabase.from('bom_recipes').update(payload).eq('id', id);
-      } else {
-        await supabase.from('bom_recipes').insert([{ ...payload, id, created_at: now }]);
-      }
-    } catch (dbErr) {
-      console.warn('Database recipe save note (using local storage backup):', dbErr);
-    }
-
-    // 2. Always persist locally for offline/resilience
-    const localList = getLocalRecipes();
-    let updatedList: DedicatedRecipe[];
     if (isEdit) {
-      updatedList = localList.map(r => (r.id === id ? fullRecipe : r));
+      const { data, error } = await supabase
+        .from('bom_recipes')
+        .update(payload)
+        .eq('id', recipe.id)
+        .select()
+        .single();
+      if (error) throw new Error(`Failed to update recipe: ${error.message}`);
+      return { ...payload, id: String(data.id), tenant_id: data.tenant_id, created_at: data.created_at };
     } else {
-      updatedList = [fullRecipe, ...localList.filter(r => r.id !== id)];
+      const { data, error } = await supabase
+        .from('bom_recipes')
+        .insert([{ ...payload, created_at: now }])
+        .select()
+        .single();
+      if (error) throw new Error(`Failed to save recipe: ${error.message}`);
+      return { ...payload, id: String(data.id), tenant_id: data.tenant_id, created_at: data.created_at };
     }
-    setLocalRecipes(updatedList);
-
-    return fullRecipe;
   },
 
   // Delete recipe
