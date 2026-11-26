@@ -41,8 +41,8 @@ const AddProductionOrder: React.FC = () => {
     new Date(Date.now() + 86400000 * 365 * 2).toISOString().split('T')[0]
   );
   const [targetQuantity, setTargetQuantity] = useState<number>(1000);
-  const [sourceWarehouse, setSourceWarehouse] = useState<string>('Chemical Bulk Tank Area');
-  const [destinationWarehouse, setDestinationWarehouse] = useState<string>('Finished Goods Warehouse');
+  const [sourceWarehouse, setSourceWarehouse] = useState<string>('');
+  const [destinationWarehouse, setDestinationWarehouse] = useState<string>('');
   const [plannedStartDate, setPlannedStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [plannedCompletionDate, setPlannedCompletionDate] = useState<string>(
     new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]
@@ -66,19 +66,18 @@ const AddProductionOrder: React.FC = () => {
 
         setBoms(loadedBoms);
 
-        const extractedLocations = (locRes.data || [])
-          .map((l: any) => l.name || l.location_name)
-          .filter(Boolean);
-
-        const defaultWhs = [
-          'Chemical Bulk Tank Area',
-          'Finished Goods Warehouse',
-          'Raw Materials Warehouse',
-          'Packaging Materials Yard',
-          'Main Warehouse'
-        ];
-        const allWhs = Array.from(new Set([...extractedLocations, ...defaultWhs]));
-        setLocations(allWhs);
+        const extractedLocations = Array.from(
+          new Set(
+            (locRes.data || [])
+              .map((l: any) => l.name || l.location_name)
+              .filter(Boolean)
+          )
+        );
+        setLocations(extractedLocations);
+        if (!isEditMode && extractedLocations.length > 0) {
+          setSourceWarehouse(prev => prev || extractedLocations[0]);
+          setDestinationWarehouse(prev => prev || extractedLocations[0]);
+        }
 
         if (isEditMode && id) {
           const existing = await productionOrderService.getById(id);
