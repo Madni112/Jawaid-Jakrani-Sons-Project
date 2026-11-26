@@ -10,11 +10,14 @@ import {
   MdLocationOn,
   MdDateRange,
   MdScience,
-  MdOutlineQrCode
+  MdOutlineQrCode,
+  MdWarningAmber,
+  MdClose
 } from 'react-icons/md';
 import { supabase } from '../../../Context/supabaseClient';
 import { bomService, BomHeader } from '../../../service/bomService';
 import { decomposeStockIntoChain } from '../../../utils/looseUomHelpers';
+import { fetchStockDataset, getWarehouseAvailableStock } from '../../../utils/stockCalculator';
 import {
   productionOrderService,
   ProductionOrder,
@@ -31,6 +34,13 @@ const AddProductionOrder: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [boms, setBoms] = useState<BomHeader[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
+  const [stockDataset, setStockDataset] = useState<any>(null);
+  const [shortagePopupItems, setShortagePopupItems] = useState<Array<{
+    itemName: string;
+    requiredText: string;
+    availableText: string;
+  }> | null>(null);
+  const [pendingSubmitStatus, setPendingSubmitStatus] = useState<'Draft' | 'Planned' | 'In Progress'>('Planned');
 
   // Form State
   const [selectedBomId, setSelectedBomId] = useState<string>('');
@@ -58,13 +68,15 @@ const AddProductionOrder: React.FC = () => {
       try {
         setLoading(true);
 
-        // Fetch BOMs and Warehouses in parallel
-        const [loadedBoms, locRes] = await Promise.all([
+        // Fetch BOMs, Warehouses, and Stock Balances in parallel
+        const [loadedBoms, locRes, dataset] = await Promise.all([
           bomService.getAll(),
-          supabase.from('inventory_locations').select('name').order('name', { ascending: true })
+          supabase.from('inventory_locations').select('name').order('name', { ascending: true }),
+          fetchStockDataset().catch(() => null)
         ]);
 
         setBoms(loadedBoms);
+        setStockDataset(dataset);
 
         const extractedLocations = Array.from(
           new Set(
@@ -182,8 +194,36 @@ const AddProductionOrder: React.FC = () => {
     };
   }, [scaledMaterials, selectedBom, scalingFactor, targetQuantity]);
 
+  // Check per-material availability in the selected sourceWarehouse
+  const materialAvailability = useMemo(() => {
+    return scaledMaterials.map(mat => {
+      const availQty =
+        sourceWarehouse && stockDataset
+          ? getWarehouseAvailableStock(mat.item_name, sourceWarehouse, stockDataset, mat.item_code)
+          : 0;
+      const hasLooseInfo = Boolean(
+        mat.allow_loose ||
+        (Array.isArray((mat as any).multi_loose_units) && (mat as any).multi_loose_units.length > 0)
+      );
+      const prodMeta = {
+        uom: mat.uom,
+        loose_uom: mat.loose_uom,
+        loose_conversion_ratio: mat.loose_ratio,
+        multi_loose_units: (mat as any).multi_loose_units,
+      };
+      const requiredText = hasLooseInfo
+        ? decomposeStockIntoChain(mat.required_qty, mat.uom, prodMeta).formattedText
+        : `${Number(mat.required_qty.toFixed(4)).toLocaleString()} ${mat.uom}`;
+      const availableText = hasLooseInfo
+        ? decomposeStockIntoChain(availQty, mat.uom, prodMeta).formattedText
+        : `${Number(availQty.toFixed(4)).toLocaleString()} ${mat.uom}`;
+      const isShort = availQty + 1e-10 < mat.required_qty;
+      return { availQty, requiredText, availableText, isShort };
+    });
+  }, [scaledMaterials, sourceWarehouse, stockDataset]);
+
   // Handle Saving / Starting
-  const handleSubmit = async (targetStatus?: 'Draft' | 'Planned' | 'In Progress') => {
+  const handleSubmit = async (targetStatus?: 'Draft' | 'Planned' | 'In Progress', bypassStockCheck = false) => {
     if (!selectedBom) {
       toast.error('Please select an active BOM formulation');
       return;
@@ -199,6 +239,24 @@ const AddProductionOrder: React.FC = () => {
     if (!sourceWarehouse || !destinationWarehouse) {
       toast.error('Please choose source and destination warehouses');
       return;
+    }
+
+    const chosenStatus = targetStatus || status;
+    if (!bypassStockCheck) {
+      const shortList = scaledMaterials
+        .map((mat, idx) => ({ mat, info: materialAvailability[idx] }))
+        .filter(x => x.info?.isShort)
+        .map(x => ({
+          itemName: x.mat.item_name,
+          requiredText: x.info.requiredText,
+          availableText: x.info.availableText,
+        }));
+
+      if (shortList.length > 0) {
+        setPendingSubmitStatus(chosenStatus);
+        setShortagePopupItems(shortList);
+        return;
+      }
     }
 
     try {
@@ -480,6 +538,7 @@ const AddProductionOrder: React.FC = () => {
                   <tr className="border-b border-stroke dark:border-strokedark font-black text-[10px] uppercase text-gray-500 bg-gray-50 dark:bg-meta-4/20">
                     <th className="py-2.5 px-3">Type</th>
                     <th className="py-2.5 px-3">Item Name</th>
+                    <th className="py-2.5 px-3 text-right">Available ({sourceWarehouse || 'WH'})</th>
                     <th className="py-2.5 px-3 text-right">Required Qty</th>
                     <th className="py-2.5 px-3 text-center">UOM</th>
                     <th className="py-2.5 px-3 text-right">Unit Rate</th>
@@ -489,6 +548,7 @@ const AddProductionOrder: React.FC = () => {
                 <tbody className="divide-y divide-stroke dark:divide-strokedark">
                   {scaledMaterials.map((mat, idx) => {
                     const isPkg = mat.item_type === 'Packaging';
+                    const availInfo = materialAvailability[idx];
                     return (
                       <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-meta-4/10">
                         <td className="py-3 px-3">
@@ -505,6 +565,22 @@ const AddProductionOrder: React.FC = () => {
                         <td className="py-3 px-3 font-bold text-black dark:text-white">
                           {mat.item_name}
                           {mat.item_code && <span className="block text-[10px] text-gray-400 font-normal">{mat.item_code}</span>}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono">
+                          <span
+                            className={`font-bold block ${
+                              availInfo?.isShort
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : 'text-emerald-600 dark:text-emerald-400'
+                            }`}
+                          >
+                            {availInfo?.availableText || `0 ${mat.uom}`}
+                          </span>
+                          {availInfo?.isShort && (
+                            <span className="text-[10px] text-rose-500 font-sans font-bold">
+                              Shortage
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-right font-mono">
                           {(() => {
@@ -697,6 +773,93 @@ const AddProductionOrder: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Insufficient Raw Material Stock Popup Modal */}
+      {shortagePopupItems && shortagePopupItems.length > 0 && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-boxdark border border-rose-200 dark:border-rose-900/60 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 bg-rose-50 dark:bg-rose-950/40 border-b border-rose-200/70 dark:border-rose-900/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400">
+                  <MdWarningAmber className="text-xl" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-rose-900 dark:text-rose-200">
+                    Insufficient Raw Material Stock
+                  </h3>
+                  <p className="text-[11px] text-rose-700/80 dark:text-rose-300/80">
+                    Location: <strong>{sourceWarehouse}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShortagePopupItems(null)}
+                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition cursor-pointer"
+              >
+                <MdClose className="text-lg" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                The following recipe items do not have enough stock in <strong>{sourceWarehouse}</strong> for{' '}
+                <strong>{targetQuantity} {selectedBom?.uom || 'Units'}</strong>:
+              </p>
+
+              <div className="rounded-xl border border-slate-200 dark:border-strokedark overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 dark:bg-meta-4/40 text-[10px] uppercase font-black text-slate-500">
+                    <tr>
+                      <th className="py-2 px-3">Material</th>
+                      <th className="py-2 px-3 text-right">Available</th>
+                      <th className="py-2 px-3 text-right">Required</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-strokedark font-mono">
+                    {shortagePopupItems.map((s, idx) => (
+                      <tr key={idx}>
+                        <td className="py-2.5 px-3 font-sans font-bold text-slate-800 dark:text-white">
+                          {s.itemName}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
+                          {s.availableText}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-800 dark:text-slate-200">
+                          {s.requiredText}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="px-5 py-3.5 bg-slate-50 dark:bg-meta-4/30 border-t border-slate-100 dark:border-strokedark flex items-center justify-end gap-2">
+              {pendingSubmitStatus !== 'In Progress' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const st = pendingSubmitStatus;
+                    setShortagePopupItems(null);
+                    handleSubmit(st, true);
+                  }}
+                  className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-strokedark bg-white dark:bg-boxdark text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Save Plan Anyway
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShortagePopupItems(null)}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                {pendingSubmitStatus === 'In Progress' ? 'Cannot Launch — Purchase Stock First' : 'Close & Adjust'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
