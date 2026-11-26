@@ -349,27 +349,6 @@ const AddProductionOrder: React.FC = () => {
             </h1>
           </div>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => handleSubmit('Planned')}
-            className="px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-50 dark:hover:bg-meta-4 text-black dark:text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs disabled:opacity-50"
-          >
-            <MdSave className="text-base text-gray-500" />
-            <span>Save Plan</span>
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => handleSubmit('In Progress')}
-            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition shadow-sm cursor-pointer disabled:opacity-50"
-          >
-            {saving ? <Spinner color="border-white" size="w-3.5 h-3.5" /> : <MdPlayArrow className="text-lg" />}
-            <span>Issue & Launch Run</span>
-          </button>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -771,6 +750,40 @@ const AddProductionOrder: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Bottom Action Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-boxdark p-4 rounded-2xl border border-stroke dark:border-strokedark shadow-default">
+        <button
+          type="button"
+          onClick={() => navigate('/Manufacturing/production-orders')}
+          className="px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-50 dark:hover:bg-meta-4 text-gray-600 dark:text-gray-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+        >
+          <MdArrowBack className="text-base" />
+          <span>Back to List</span>
+        </button>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => handleSubmit('Planned')}
+            className="px-4 py-2.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:bg-gray-50 dark:hover:bg-meta-4 text-black dark:text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs disabled:opacity-50"
+          >
+            <MdSave className="text-base text-gray-500" />
+            <span>Save Plan</span>
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => handleSubmit('In Progress')}
+            style={{ backgroundColor: 'var(--color-primary, #0D1540)' }}
+            className="px-5 py-2.5 rounded-xl hover:opacity-90 text-white font-bold text-xs flex items-center gap-2 transition shadow-sm cursor-pointer disabled:opacity-50"
+          >
+            {saving ? <Spinner color="border-white" size="w-3.5 h-3.5" /> : <MdPlayArrow className="text-lg" />}
+            <span>Issue & Launch Run</span>
+          </button>
         </div>
       </div>
 
