@@ -566,12 +566,11 @@ export const productionOrderService = {
     }
   },
 
-  // Generates next available sequence order number
+  // Generates next available sequence order number (WO-0001, WO-0002, ...)
   async generateNextOrderNumber(): Promise<string> {
     const orders = await this.getAll();
-    const currentYear = new Date().getFullYear();
-    const pattern = new RegExp(`^WO-${currentYear}-(\\d+)$`);
-    
+    const pattern = /^WO-(?:\d{4}-)?(\d+)$/;
+
     let maxNum = 0;
     orders.forEach(o => {
       const match = String(o.order_number || '').match(pattern);
@@ -582,7 +581,7 @@ export const productionOrderService = {
     });
 
     const nextSeq = String(maxNum + 1).padStart(4, '0');
-    return `WO-${currentYear}-${nextSeq}`;
+    return `WO-${nextSeq}`;
   },
 
   // Generates traceable batch number: BATCH-YYYYMM-XXX
