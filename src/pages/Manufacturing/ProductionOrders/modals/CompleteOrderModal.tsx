@@ -39,6 +39,9 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
 
   const [stockDataset, setStockDataset] = useState<any>(null);
   const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(true);
+  const [requiresInwardChallan, setRequiresInwardChallan] = useState<boolean>(false);
+  const [requiresManualGatePass, setRequiresManualGatePass] = useState<boolean>(false);
+  const [gatePassNo, setGatePassNo] = useState<string>('');
   const [shortagePopupItems, setShortagePopupItems] = useState<Array<{
     itemName: string;
     availableText: string;
@@ -59,12 +62,22 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
     if (!isOpen || !order) return;
     setCompletedQty(order.target_quantity || 1);
     setShortagePopupItems(null);
+    setGatePassNo('');
     Promise.all([
       fetchStockDataset().catch(() => null),
       fetchWorkflowSettings().catch(() => null),
     ]).then(([ds, wf]) => {
       setStockDataset(ds);
-      if (wf) setAllowNegativeStock(wf.allow_negative_stock !== false);
+      if (wf) {
+        setAllowNegativeStock(wf.allow_negative_stock !== false);
+        const destWh = (order.destination_warehouse || '').trim();
+        setRequiresInwardChallan(
+          Boolean(wf.require_inward_challan && (wf.inward_challan_locations || []).includes(destWh))
+        );
+        setRequiresManualGatePass(
+          Boolean(wf.require_manual_gatepass_purchase && (wf.manual_gatepass_locations_purchase || []).includes(destWh))
+        );
+      }
     });
   }, [isOpen, order?.id]);
 
@@ -87,10 +100,17 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
         qc_remarks: qcRemarks.trim() || undefined
       };
 
+      const finalNotes = [
+        notes.trim(),
+        requiresManualGatePass && gatePassNo.trim()
+          ? `[Gate Pass: ${gatePassNo.trim()}]`
+          : `[Ref: ${order.order_number}]`
+      ].filter(Boolean).join(' ');
+
       await onConfirm({
         completed_quantity: completedQty,
         wastage_quantity: wastageQty,
-        notes: notes.trim(),
+        notes: finalNotes,
         qc_checklist: qcData
       });
       onClose();
@@ -103,6 +123,10 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
     e.preventDefault();
     if (qcStatus === 'Failed') {
       alert('QC Status is marked as Failed. Finished goods cannot be deposited into Main Inventory until approved.');
+      return;
+    }
+    if (requiresManualGatePass && !gatePassNo.trim()) {
+      alert(`Manual Gate Pass # is required for ${order.destination_warehouse}.`);
       return;
     }
 
@@ -360,6 +384,22 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
             </div>
           </div>
 
+          {requiresManualGatePass && (
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                Receiving Gate Pass / Slip # ({order.destination_warehouse}) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={gatePassNo}
+                onChange={e => setGatePassNo(e.target.value)}
+                placeholder="Enter physical inward gate pass / slip number..."
+                className="w-full text-xs font-mono font-bold px-3 py-2 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark text-black dark:text-white focus:border-primary outline-none"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
               Production Execution & Batch Notes
@@ -376,7 +416,20 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-amber-900 dark:text-amber-300 text-[11px] leading-relaxed">
             <MdWarningAmber className="text-lg shrink-0 mt-0.5" />
             <span>
-              Confirming will automatically add <strong>{completedQty.toLocaleString()} {order.uom}</strong> (Batch: <strong>{order.batch_number}</strong>) into <strong>{order.destination_warehouse}</strong>, trigger an Inward Stock Gatepass record, and deduct consumed raw materials.
+              {requiresInwardChallan ? (
+                <>
+                  Confirming will create a <strong>Pending Inward Challan</strong> for{' '}
+                  <strong>{completedQty.toLocaleString()} {order.uom}</strong> (Batch: <strong>{order.batch_number}</strong>) in{' '}
+                  <strong>{order.destination_warehouse}</strong> (held for warehouse inspection) and deduct consumed raw materials from{' '}
+                  <strong>{order.source_warehouse}</strong>.
+                </>
+              ) : (
+                <>
+                  Confirming will directly add <strong>{completedQty.toLocaleString()} {order.uom}</strong> (Batch:{' '}
+                  <strong>{order.batch_number}</strong>) into <strong>{order.destination_warehouse}</strong> and deduct consumed raw materials from{' '}
+                  <strong>{order.source_warehouse}</strong>.
+                </>
+              )}
             </span>
           </div>
 

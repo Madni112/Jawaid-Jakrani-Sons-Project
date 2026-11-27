@@ -1,5 +1,6 @@
 import { supabase } from '../Context/supabaseClient';
 import { bomService, BomHeader } from './bomService';
+import { fetchWorkflowSettings } from './workflowSettingsService';
 
 export interface ProductionOrderMaterial {
   id?: string;
@@ -469,49 +470,85 @@ export const productionOrderService = {
     return await this.save(order);
   },
 
-  // Automatically update stock balances on completion
+  // Automatically update stock balances on completion (respecting Inventory & Stock Governance)
   async syncInventoryOnCompletion(order: ProductionOrder): Promise<void> {
     try {
       const fgName = order.finished_product_name;
-      const targetWh = order.destination_warehouse || 'Main Warehouse';
+      const targetWh = (order.destination_warehouse || 'Main Warehouse').trim();
       const addQty = order.completed_quantity || order.target_quantity;
 
       if (!fgName || addQty <= 0) return;
 
-      // 1. Try updating stock_balances for finished product
-      const { data: existingStock } = await supabase
-        .from('stock_balances')
-        .select('*')
-        .ilike('product_name', fgName.trim())
-        .ilike('warehouse_name', targetWh.trim())
-        .maybeSingle();
+      const wf = await fetchWorkflowSettings().catch(() => null);
+      const allowNegative = wf?.allow_negative_stock !== false;
+      const isWhRequireInward = Boolean(
+        wf?.require_inward_challan &&
+        (wf?.inward_challan_locations || []).includes(targetWh)
+      );
 
-      if (existingStock) {
-        const currentQty = Number(existingStock.quantity || 0);
-        await supabase
-          .from('stock_balances')
-          .update({
-            quantity: currentQty + addQty,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingStock.id);
-      } else {
-        await supabase
-          .from('stock_balances')
-          .insert({
+      if (isWhRequireInward) {
+        // 2-Step Governance: create a Pending Inward Challan (held for warehouse QC inspection)
+        const today = new Date().toISOString().split('T')[0];
+        const { data: grnHdr } = await supabase
+          .from('grn_receipts')
+          .insert([{
+            grn_no: `MFG-${order.order_number}`,
+            vendor_name: 'Internal Manufacturing',
+            receipt_date: today,
+            status: 'Pending Inward',
+            remarks: `Production Order ${order.order_number} [Batch: ${order.batch_number}] ${order.notes || ''}`.trim()
+          }])
+          .select('id')
+          .single();
+
+        if (grnHdr?.id) {
+          await supabase.from('grn_items').insert([{
+            grn_id: grnHdr.id,
             product_name: fgName.trim(),
-            warehouse_name: targetWh.trim(),
-            quantity: addQty,
-            updated_at: new Date().toISOString()
-          });
+            warehouse_name: targetWh,
+            qty: addQty,
+            uom: order.uom || 'PCS',
+            accepted_qty: 0,
+            rejected_qty: 0,
+            hold_qty: addQty
+          }]);
+        }
+      } else {
+        // 1-Step Governance: directly add finished product to stock_balances
+        const { data: existingStock } = await supabase
+          .from('stock_balances')
+          .select('*')
+          .ilike('product_name', fgName.trim())
+          .ilike('warehouse_name', targetWh)
+          .maybeSingle();
+
+        if (existingStock) {
+          const currentQty = Number(existingStock.quantity || 0);
+          await supabase
+            .from('stock_balances')
+            .update({
+              quantity: currentQty + addQty,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingStock.id);
+        } else {
+          await supabase
+            .from('stock_balances')
+            .insert({
+              product_name: fgName.trim(),
+              warehouse_name: targetWh,
+              quantity: addQty,
+              updated_at: new Date().toISOString()
+            });
+        }
       }
 
-      // 2. Log stock movement record for finished good (Inward Gatepass linked)
+      // 2. Log stock movement record for finished good
       await supabase
         .from('stock_movements')
         .insert({
           product_name: fgName.trim(),
-          warehouse_name: targetWh.trim(),
+          warehouse_name: targetWh,
           movement_type: 'MANUFACTURING_OUTPUT',
           quantity: addQty,
           reference_no: order.order_number,
@@ -527,23 +564,34 @@ export const productionOrderService = {
       for (const mat of order.materials) {
         const matQty = Number(mat.consumed_qty || mat.required_qty || 0);
         if (matQty > 0) {
-          const srcWh = order.source_warehouse || 'Raw Material Yard';
+          const srcWh = (order.source_warehouse || 'Raw Material Yard').trim();
           const { data: currentMatStock } = await supabase
             .from('stock_balances')
             .select('*')
             .ilike('product_name', mat.item_name.trim())
-            .ilike('warehouse_name', srcWh.trim())
+            .ilike('warehouse_name', srcWh)
             .maybeSingle();
 
           if (currentMatStock) {
             const cur = Number(currentMatStock.quantity || 0);
+            const nextQty = allowNegative ? cur - matQty : Math.max(0, cur - matQty);
             await supabase
               .from('stock_balances')
               .update({
-                quantity: Math.max(0, cur - matQty),
+                quantity: nextQty,
                 updated_at: new Date().toISOString()
               })
               .eq('id', currentMatStock.id)
+              .catch(() => {});
+          } else if (allowNegative) {
+            await supabase
+              .from('stock_balances')
+              .insert({
+                product_name: mat.item_name.trim(),
+                warehouse_name: srcWh,
+                quantity: -matQty,
+                updated_at: new Date().toISOString()
+              })
               .catch(() => {});
           }
 
