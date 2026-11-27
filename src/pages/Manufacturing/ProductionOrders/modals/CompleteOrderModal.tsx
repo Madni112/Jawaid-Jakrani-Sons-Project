@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MdCheckCircle,
   MdClose,
@@ -10,6 +10,9 @@ import {
 } from 'react-icons/md';
 import { ProductionOrder, QCInspectionChecklist } from '../../../../service/productionOrderService';
 import Spinner from '../../../../ui/Spinner';
+import { fetchStockDataset, getWarehouseAvailableStock } from '../../../../utils/stockCalculator';
+import { fetchWorkflowSettings } from '../../../../service/workflowSettingsService';
+import { decomposeStockIntoChain } from '../../../../utils/looseUomHelpers';
 
 interface CompleteOrderModalProps {
   order: ProductionOrder | null;
@@ -29,16 +32,21 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
   onClose,
   onConfirm
 }) => {
-  if (!isOpen || !order) return null;
-
-  const defaultPh = order.finished_product_name.toLowerCase().includes('phenyl') ? 9.5 : 6.0;
-
-  const [completedQty, setCompletedQty] = useState<number>(order.target_quantity);
+  const [completedQty, setCompletedQty] = useState<number>(order?.target_quantity || 1);
   const [wastageQty, setWastageQty] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  const [stockDataset, setStockDataset] = useState<any>(null);
+  const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(true);
+  const [shortagePopupItems, setShortagePopupItems] = useState<Array<{
+    itemName: string;
+    availableText: string;
+    requiredText: string;
+  }> | null>(null);
+
   // Quality Control Checklist State
+  const defaultPh = order?.finished_product_name?.toLowerCase().includes('phenyl') ? 9.5 : 6.0;
   const [phLevel, setPhLevel] = useState<number>(defaultPh);
   const [viscosityCps, setViscosityCps] = useState<number>(120);
   const [fragranceColorPass, setFragranceColorPass] = useState<boolean>(true);
@@ -47,13 +55,22 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
   const [qcInspector, setQcInspector] = useState<string>('QC Lab Analyst');
   const [qcRemarks, setQcRemarks] = useState<string>('Color, scent, viscosity & pH within standard specification.');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (qcStatus === 'Failed') {
-      alert('QC Status is marked as Failed. Finished goods cannot be deposited into Main Inventory until approved.');
-      return;
-    }
+  useEffect(() => {
+    if (!isOpen || !order) return;
+    setCompletedQty(order.target_quantity || 1);
+    setShortagePopupItems(null);
+    Promise.all([
+      fetchStockDataset().catch(() => null),
+      fetchWorkflowSettings().catch(() => null),
+    ]).then(([ds, wf]) => {
+      setStockDataset(ds);
+      if (wf) setAllowNegativeStock(wf.allow_negative_stock !== false);
+    });
+  }, [isOpen, order?.id]);
 
+  if (!isOpen || !order) return null;
+
+  const executeCompletion = async () => {
     try {
       setIsSubmitting(true);
       const qcData: QCInspectionChecklist = {
@@ -80,6 +97,53 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (qcStatus === 'Failed') {
+      alert('QC Status is marked as Failed. Finished goods cannot be deposited into Main Inventory until approved.');
+      return;
+    }
+
+    // Check raw material availability in source_warehouse before deducting
+    const srcWh = order.source_warehouse || '';
+    const shortList: Array<{ itemName: string; availableText: string; requiredText: string }> = [];
+    for (const mat of order.materials || []) {
+      const reqQty = Number(mat.consumed_qty || mat.required_qty || 0);
+      if (reqQty <= 0) continue;
+      const availQty = srcWh && stockDataset
+        ? getWarehouseAvailableStock(mat.item_name, srcWh, stockDataset, mat.item_code)
+        : 0;
+      if (availQty + 1e-10 < reqQty) {
+        const hasLooseInfo = Boolean(
+          mat.allow_loose ||
+          (Array.isArray((mat as any).multi_loose_units) && (mat as any).multi_loose_units.length > 0)
+        );
+        const prodMeta = {
+          uom: mat.uom,
+          loose_uom: mat.loose_uom,
+          loose_conversion_ratio: mat.loose_ratio,
+          multi_loose_units: (mat as any).multi_loose_units,
+        };
+        shortList.push({
+          itemName: mat.item_name,
+          availableText: hasLooseInfo
+            ? decomposeStockIntoChain(availQty, mat.uom, prodMeta).formattedText
+            : `${Number(availQty.toFixed(4)).toLocaleString()} ${mat.uom}`,
+          requiredText: hasLooseInfo
+            ? decomposeStockIntoChain(reqQty, mat.uom, prodMeta).formattedText
+            : `${Number(reqQty.toFixed(4)).toLocaleString()} ${mat.uom}`,
+        });
+      }
+    }
+
+    if (shortList.length > 0) {
+      setShortagePopupItems(shortList);
+      return;
+    }
+
+    await executeCompletion();
   };
 
   const yieldPercentage = order.target_quantity > 0 
@@ -337,6 +401,97 @@ export const CompleteOrderModal: React.FC<CompleteOrderModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Insufficient Raw Material Stock Popup */}
+      {shortagePopupItems && shortagePopupItems.length > 0 && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-boxdark border border-rose-200 dark:border-rose-900/60 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 bg-rose-50 dark:bg-rose-950/40 border-b border-rose-200/70 dark:border-rose-900/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400">
+                  <MdWarningAmber className="text-xl" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-rose-900 dark:text-rose-200">
+                    Insufficient Raw Material Stock
+                  </h3>
+                  <p className="text-[11px] text-rose-700/80 dark:text-rose-300/80">
+                    Location: <strong>{order.source_warehouse || 'N/A'}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShortagePopupItems(null)}
+                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition cursor-pointer"
+              >
+                <MdClose className="text-lg" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                Not enough raw material stock in <strong>{order.source_warehouse}</strong> to complete{' '}
+                <strong>{completedQty.toLocaleString()} {order.uom}</strong>:
+              </p>
+
+              <div className="rounded-xl border border-slate-200 dark:border-strokedark overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 dark:bg-meta-4/40 text-[10px] uppercase font-black text-slate-500">
+                    <tr>
+                      <th className="py-2 px-3">Material</th>
+                      <th className="py-2 px-3 text-right">Available</th>
+                      <th className="py-2 px-3 text-right">Required</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-strokedark font-mono">
+                    {shortagePopupItems.map((s, idx) => (
+                      <tr key={idx}>
+                        <td className="py-2.5 px-3 font-sans font-bold text-slate-800 dark:text-white">
+                          {s.itemName}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
+                          {s.availableText}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-800 dark:text-slate-200">
+                          {s.requiredText}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="px-5 py-3.5 bg-slate-50 dark:bg-meta-4/30 border-t border-slate-100 dark:border-strokedark flex items-center justify-end gap-2">
+              {allowNegativeStock && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShortagePopupItems(null);
+                    executeCompletion();
+                  }}
+                  style={{ backgroundColor: 'var(--color-primary, #0D1540)' }}
+                  className="px-4 py-2 rounded-xl text-white text-xs font-bold hover:opacity-90 transition cursor-pointer shadow-xs"
+                >
+                  Complete Anyway (Negative Stock)
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShortagePopupItems(null)}
+                className={
+                  !allowNegativeStock
+                    ? 'px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition cursor-pointer shadow-xs'
+                    : 'px-4 py-2 rounded-xl border border-slate-300 dark:border-strokedark bg-white dark:bg-boxdark text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-100 transition cursor-pointer'
+                }
+              >
+                {!allowNegativeStock ? 'Cannot Complete — Purchase Stock First' : 'Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
