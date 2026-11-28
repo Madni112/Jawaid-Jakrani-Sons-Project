@@ -14,6 +14,7 @@ export interface WarehouseBreakdown {
   opening: number;
   purchased: number;
   manufactured: number;
+  manufacturedOut?: number;
   sold: number;
   salesReturned: number;
   purchaseReturned: number;
@@ -73,7 +74,7 @@ function balancesMatch(name: string, wh: string) {
 
 function zeroBreakdown(available: number): WarehouseBreakdown {
   return {
-    opening: 0, purchased: 0, manufactured: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
+    opening: 0, purchased: 0, manufactured: 0, manufacturedOut: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
     rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0, purchaseHold: 0,
     available, onHand: available,
   };
@@ -94,6 +95,7 @@ async function fetchAllStockData() {
     { data: pReturns },
     { data: stockTransfers },
     { data: deliveryChallans },
+    { data: productionOrders },
   ] = await Promise.all([
     fetchAllPages(supabase.from('opening_stocks').select('product_name, itemname, quantity, qty, location, item_code, skucode')),
     fetchAllPages(supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse')),
@@ -104,6 +106,7 @@ async function fetchAllStockData() {
     fetchAllPages(supabase.from('purchase_returns').select('items, status')),
     fetchAllPages(supabase.from('stock_transfers').select('items, from_location, to_location, status')),
     fetchAllPages(supabase.from('delivery_challans').select('items, status, dispatch_warehouse')),
+    fetchAllPages(supabase.from('production_orders').select('finished_product_name, finished_product_code, destination_warehouse, source_warehouse, completed_quantity, target_quantity, materials, status').eq('status', 'Completed')),
   ]);
 
   const itemsByGrn: Record<string, any[]> = {};
@@ -117,19 +120,19 @@ async function fetchAllStockData() {
     grn_items: itemsByGrn[String(g.id)] || []
   }));
 
-  return { openStocks, purchases, grnReceipts, sales, sReturns, pReturns, stockTransfers, deliveryChallans };
+  return { openStocks, purchases, grnReceipts, sales, sReturns, pReturns, stockTransfers, deliveryChallans, productionOrders };
 }
 
 function buildBreakdown(
   name: string,
-  { openStocks, purchases, grnReceipts, sales, sReturns, pReturns, stockTransfers, deliveryChallans }: any,
+  { openStocks, purchases, grnReceipts, sales, sReturns, pReturns, stockTransfers, deliveryChallans, productionOrders }: any,
   code?: string
 ): { totalAvailable: number; byWarehouse: Record<string, WarehouseBreakdown> } {
   const whBreakdowns: Record<string, any> = {};
   const getWh = (whName: string) => {
     const key = String(whName || 'Global / Unassigned').trim();
     if (!whBreakdowns[key]) {
-      whBreakdowns[key] = { opening: 0, purchased: 0, manufactured: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0, purchaseHold: 0 };
+      whBreakdowns[key] = { opening: 0, purchased: 0, manufactured: 0, manufacturedOut: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0, purchaseHold: 0 };
     }
     return whBreakdowns[key];
   };
@@ -333,8 +336,35 @@ function buildBreakdown(
     });
   });
 
-  const totalManufactured = 0;
-  const rawTotalAvail = (totalOpening + totalPurchased + totalManufactured + totalSalesReturned) - totalSold - totalPurchaseReturned - totalRejected;
+  let totalManufactured = 0;
+  let totalManufacturedOut = 0;
+  (productionOrders || []).forEach((po: any) => {
+    if (String(po.status || '').trim() !== 'Completed') return;
+    const fgName = String(po.finished_product_name || '').trim().toLowerCase();
+    const fgCode = String(po.finished_product_code || '').trim().toLowerCase();
+    if ((fgName && fgName === name) || (pCode && fgCode && fgCode === pCode)) {
+      const q = Number(po.completed_quantity || po.target_quantity || 0);
+      if (q > 0) {
+        totalManufactured += q;
+        getWh(po.destination_warehouse || 'Global / Unassigned').manufactured += q;
+      }
+    }
+
+    const mats = Array.isArray(po.materials) ? po.materials : [];
+    mats.forEach((m: any) => {
+      const mName = String(m.item_name || m.product_name || '').trim().toLowerCase();
+      const mCode = String(m.item_code || '').trim().toLowerCase();
+      if ((mName && mName === name) || (pCode && mCode && mCode === pCode)) {
+        const q = Number(m.consumed_qty || m.required_qty || 0);
+        if (q > 0) {
+          totalManufacturedOut += q;
+          getWh(po.source_warehouse || 'Global / Unassigned').manufacturedOut += q;
+        }
+      }
+    });
+  });
+
+  const rawTotalAvail = (totalOpening + totalPurchased + totalManufactured + totalSalesReturned) - totalSold - totalPurchaseReturned - totalRejected - totalManufacturedOut;
   const totalAvailable = Math.abs(rawTotalAvail) < 1e-10 ? 0 : Number(rawTotalAvail.toFixed(10));
 
   const byWarehouse: Record<string, WarehouseBreakdown> = {};
@@ -342,12 +372,13 @@ function buildBreakdown(
     const w = whBreakdowns[key];
     const tIn = w.transferredIn || 0;
     const tOut = w.transferredOut || 0;
-    const rawAvail = (w.opening + w.purchased + (w.manufactured || 0) + w.salesReturned + tIn) - w.sold - w.purchaseReturned - (w.rejected || 0) - tOut;
+    const rawAvail = (w.opening + w.purchased + (w.manufactured || 0) + w.salesReturned + tIn) - w.sold - w.purchaseReturned - (w.rejected || 0) - tOut - (w.manufacturedOut || 0);
     const avail = Math.abs(rawAvail) < 1e-10 ? 0 : Number(rawAvail.toFixed(10));
     byWarehouse[key] = {
       opening: Number((w.opening || 0).toFixed(10)),
       purchased: Number((w.purchased || 0).toFixed(10)),
       manufactured: Number((w.manufactured || 0).toFixed(10)),
+      manufacturedOut: Number((w.manufacturedOut || 0).toFixed(10)),
       sold: Number((w.sold || 0).toFixed(10)),
       salesReturned: Number((w.salesReturned || 0).toFixed(10)),
       purchaseReturned: Number((w.purchaseReturned || 0).toFixed(10)),
@@ -374,13 +405,14 @@ export async function getDetailedBreakdown(productName: string, productCode?: st
   const res = buildBreakdown(productName.trim().toLowerCase(), data, productCode);
 
   const agg = {
-    opening: 0, purchased: 0, manufactured: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
+    opening: 0, purchased: 0, manufactured: 0, manufacturedOut: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
     hold: 0, purchaseHold: 0, rejected: 0, transferredIn: 0, transferredOut: 0,
   };
   Object.values(res.byWarehouse).forEach((w: any) => {
     agg.opening += w.opening || 0;
     agg.purchased += w.purchased || 0;
     agg.manufactured += w.manufactured || 0;
+    agg.manufacturedOut += w.manufacturedOut || 0;
     agg.sold += w.sold || 0;
     agg.salesReturned += w.salesReturned || 0;
     agg.purchaseReturned += w.purchaseReturned || 0;

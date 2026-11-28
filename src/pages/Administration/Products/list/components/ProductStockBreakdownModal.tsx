@@ -440,6 +440,11 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                       {formatVal(bData.purchased || 0)}
                     </div>
 
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Manufactured (Produced)</span>
+                      {formatVal(bData.manufactured || 0)}
+                    </div>
+
                     {selectedModalWarehouse !== 'ALL' && (
                       <div className="flex justify-between items-center py-1 border-t border-slate-100 dark:border-strokedark/50 pt-2">
                         <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Transfer Received</span>
@@ -469,6 +474,11 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                         )}
                       </div>
                       {formatVal(bData.sold || 0)}
+                    </div>
+
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Used in Manufacturing</span>
+                      {formatVal(bData.manufacturedOut || 0)}
                     </div>
 
                     {selectedModalWarehouse !== 'ALL' && (
