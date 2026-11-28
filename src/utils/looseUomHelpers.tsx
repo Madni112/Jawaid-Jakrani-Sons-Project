@@ -146,7 +146,7 @@ export const decomposeStockIntoChain = (
   );
 
   const textComponents = activeParts.map((p, idx) => {
-    const prefix = idx > 0 ? '+ ' : '';
+    const prefix = idx > 0 ? (isNegative ? '- ' : '+ ') : '';
     return `${prefix}${p.qty.toLocaleString()} ${p.uom}`;
   });
 

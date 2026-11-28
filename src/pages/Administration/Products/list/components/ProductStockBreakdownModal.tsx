@@ -203,7 +203,7 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                         }`}
                       >
-                        {whAvail > 0 ? Number(whAvail).toLocaleString() : '0'}
+                        {whAvail !== 0 ? Number(whAvail).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'}
                       </span>
                     )}
                   </button>
@@ -308,7 +308,7 @@ export const ProductStockBreakdownModal: React.FC<ProductStockBreakdownModalProp
                             sp.qty === 0 ? 'opacity-65' : ''
                           }`}
                         >
-                          +{sp.qty.toLocaleString()} {sp.uom}
+                          {num < 0 && sp.qty > 0 ? '-' : '+'}{sp.qty.toLocaleString()} {sp.uom}
                         </span>
                       ))}
                     </div>

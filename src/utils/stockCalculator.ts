@@ -138,6 +138,32 @@ function buildBreakdown(
   };
 
   const pCode = String(code || '').trim().toLowerCase();
+  const aliasNames = new Set<string>();
+  if (name) aliasNames.add(name);
+
+  // Collect historical product names that share the same product code (handles renamed products in code-less tables like grn_items)
+  if (pCode) {
+    const collectAlias = (item: any) => {
+      const itemCode = String(item.item_code || item.item_sr_no || item.skuCode || item.sku || item.code || '').trim().toLowerCase();
+      const iName = String(item.product_name || item.itemName || item.item_name || item.item_details || item.pDescription || '').trim().toLowerCase();
+      if (itemCode && itemCode === pCode && iName) {
+        aliasNames.add(iName);
+      }
+    };
+    (purchases || []).forEach((p: any) => {
+      const items = Array.isArray(p.items) ? p.items : JSON.parse(p.items || '[]');
+      items.forEach(collectAlias);
+    });
+    (sales || []).forEach((s: any) => {
+      const items = Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]');
+      items.forEach(collectAlias);
+    });
+    (openStocks || []).forEach((os: any) => {
+      const osCode = String(os.item_code || os.item_sr_no || os.skucode || os.sku || os.code || '').trim().toLowerCase();
+      const osName = String(os.product_name || os.itemname || os.itemName || '').trim().toLowerCase();
+      if (osCode && osCode === pCode && osName) aliasNames.add(osName);
+    });
+  }
 
   const isMatch = (item: any) => {
     const itemCode = String(item.item_code || item.item_sr_no || item.skuCode || item.sku || item.code || '').trim().toLowerCase();
@@ -145,7 +171,7 @@ function buildBreakdown(
     if (pCode && itemCode && pCode === itemCode) {
       return true;
     }
-    if (name && iName && iName === name) {
+    if (iName && aliasNames.has(iName)) {
       return true;
     }
     return false;
@@ -342,7 +368,7 @@ function buildBreakdown(
     if (String(po.status || '').trim() !== 'Completed') return;
     const fgName = String(po.finished_product_name || '').trim().toLowerCase();
     const fgCode = String(po.finished_product_code || '').trim().toLowerCase();
-    if ((fgName && fgName === name) || (pCode && fgCode && fgCode === pCode)) {
+    if ((fgName && aliasNames.has(fgName)) || (pCode && fgCode && fgCode === pCode)) {
       const q = Number(po.completed_quantity || po.target_quantity || 0);
       if (q > 0) {
         totalManufactured += q;
@@ -354,7 +380,7 @@ function buildBreakdown(
     mats.forEach((m: any) => {
       const mName = String(m.item_name || m.product_name || '').trim().toLowerCase();
       const mCode = String(m.item_code || '').trim().toLowerCase();
-      if ((mName && mName === name) || (pCode && mCode && mCode === pCode)) {
+      if ((mName && aliasNames.has(mName)) || (pCode && mCode && mCode === pCode)) {
         const q = Number(m.consumed_qty || m.required_qty || 0);
         if (q > 0) {
           totalManufacturedOut += q;
